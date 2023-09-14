@@ -47,8 +47,7 @@ function Get-WorkflowStatus {
         Write-Error "Workflow failed!"
         return $true
     }
-    if ($output | Select-String -Pattern "Γ£ô Complete" -or
-        $output | Select-String -Pattern "✓ Complete") {
+    if (($output | Select-String -Pattern "Γ£ô Complete") -or ($output | Select-String -Pattern "✓ Complete")) {
         Write-Host "Workflow succeeded!"
         return $true
     }
