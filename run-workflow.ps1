@@ -17,7 +17,8 @@ $PSDefaultParameterValues['*:ErrorAction'] = 'Stop'
 
 function Start-Workflow {
     param([string]$pat, [string]$name, [string]$ref, [string]$sha)
-    $Headers = @{
+    $url = "https://api.github.com/repos/microsoft/netperf/dispatches"
+    $headers = @{
         "Accept" = "application/vnd.github+json"
         "Authorization" = "Bearer $pat"
         "X-GitHub-Api-Version" = "2022-11-28"
@@ -30,7 +31,8 @@ function Start-Workflow {
             name = $name
         }
     } | ConvertTo-Json
-    Invoke-WebRequest -Uri "https://api.github.com/repos/microsoft/netperf/dispatches" -Method POST -Headers $Headers -Body $body
+    Write-Debug "Posting $body to $url"
+    Invoke-WebRequest -Uri $url -Method POST -Headers $headers -Body $body
 }
 
 function Get-WorkflowRunId {
