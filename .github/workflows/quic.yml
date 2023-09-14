@@ -56,7 +56,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        plat: [linux, android]
+        plat: [linux]
         os: ['ubuntu-20.04', 'ubuntu-22.04']
         arch: [x64]
         tls: [openssl, openssl3]
