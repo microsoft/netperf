@@ -1,9 +1,6 @@
 name: QUIC
 
 on:
-  push:
-    branches:
-    - main
   workflow_dispatch:
     inputs:
       ref:
@@ -14,7 +11,9 @@ on:
     types: [run-quic]
       # Args: { ref, sha, name }
 
-# TODO - Figure out concurrency
+concurrency:
+  group: quic-${{ ${{ github.event.client_payload.sha }} || github.sha }}
+  cancel-in-progress: true
 
 permissions: read-all
 
