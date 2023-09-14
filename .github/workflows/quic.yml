@@ -34,7 +34,7 @@ jobs:
         arch: [x64]
         tls: [schannel, openssl, openssl3]
         xdp: ['', '-UseXdp']
-    uses: microsoft/msquic/.github/workflows/build-reuse-win.yml@nibanks/specify-checkout-repo
+    uses: microsoft/msquic/.github/workflows/build-reuse-win.yml@main
     with:
       os: ${{ matrix.os }}
       arch: ${{ matrix.arch }}
@@ -51,7 +51,7 @@ jobs:
         os: ['windows-2022']
         arch: [x64]
         tls: [schannel]
-    uses: microsoft/msquic/.github/workflows/build-reuse-winkernel.yml@nibanks/specify-checkout-repo
+    uses: microsoft/msquic/.github/workflows/build-reuse-winkernel.yml@main
     with:
       os: ${{ matrix.os }}
       arch: ${{ matrix.arch }}
@@ -68,7 +68,7 @@ jobs:
         os: ['ubuntu-20.04']
         arch: [x64]
         tls: [openssl, openssl3]
-    uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml@nibanks/specify-checkout-repo
+    uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml@main
     with:
       plat: ${{ matrix.plat }}
       os: ${{ matrix.os }}
