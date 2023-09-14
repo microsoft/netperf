@@ -77,10 +77,3 @@ jobs:
       arch: ${{ matrix.arch }}
       tls: ${{ matrix.tls }}
       ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
-
-  complete:
-    name: Complete
-    needs: [build-windows, build-windows-kernel, build-ubuntu]
-    runs-on: ubuntu-20.04
-    steps:
-    - run: echo "All Done"
