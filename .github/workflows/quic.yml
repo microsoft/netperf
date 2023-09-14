@@ -20,4 +20,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Build
-        uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml
+        uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml@${{ github.event.client_payload.ref || inputs.ref || main }}
