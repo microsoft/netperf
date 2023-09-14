@@ -43,6 +43,10 @@ function Get-WorkflowRunIdWithRetry {
 function Get-WorkflowStatus {
     param([string]$id)
     $output = gh run view -R microsoft/netperf $id --exit-status
+    if ($LastExitCode) {
+        Write-Error "Workflow failed!"
+        return $true
+    }
     if ($output | Select-String -Pattern "X Complete") {
         Write-Error "Workflow failed!"
         return $true
