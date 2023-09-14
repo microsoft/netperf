@@ -1,6 +1,6 @@
 param (
     [Parameter(Mandatory = $true)]
-    [string]$pat,
+    [string]$type,
 
     [Parameter(Mandatory = $true)]
     [string]$name,
@@ -9,7 +9,10 @@ param (
     [string]$ref,
 
     [Parameter(Mandatory = $true)]
-    [string]$sha
+    [string]$sha,
+    
+    [Parameter(Mandatory = $true)]
+    [string]$pat
 )
 
 Set-StrictMode -Version 'Latest'
@@ -24,7 +27,7 @@ function Start-Workflow {
         "X-GitHub-Api-Version" = "2022-11-28"
     }
     $body = @{
-        event_type = "run-quic"
+        event_type = "run-$type"
         client_payload = @{
             ref = $ref
             sha = $sha
