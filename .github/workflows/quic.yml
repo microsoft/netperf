@@ -16,5 +16,54 @@ on:
 permissions: read-all
 
 jobs:
-  Build:
-    uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml@nibanks/specify-checkout-repo # ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
+  build-windows:
+    name: WinUser
+    needs: []
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ['windows-2022']
+        arch: [x64]
+        tls: [schannel, openssl, openssl3]
+        xdp: ['', '-UseXdp']
+    uses: microsoft/msquic/.github/workflows/build-reuse-win.yml@nibanks/specify-checkout-repo
+    with:
+      os: ${{ matrix.os }}
+      arch: ${{ matrix.arch }}
+      tls: ${{ matrix.tls }}
+      xdp: ${{ matrix.xdp }}
+      # ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
+
+  build-windows-kernel:
+    name: WinKernel
+    needs: []
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ['windows-2022']
+        arch: [x64]
+        tls: [schannel]
+    uses: microsoft/msquic/.github/workflows/build-reuse-winkernel.yml@nibanks/specify-checkout-repo
+    with:
+      os: ${{ matrix.os }}
+      arch: ${{ matrix.arch }}
+      tls: ${{ matrix.tls }}
+      # ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
+
+  build-ubuntu:
+    name: Ubuntu
+    needs: []
+    strategy:
+      fail-fast: false
+      matrix:
+        plat: [linux, android]
+        os: ['ubuntu-20.04', 'ubuntu-22.04']
+        arch: [x64]
+        tls: [openssl, openssl3]
+    uses: ./.github/workflows/build-reuse-unix.yml
+    with:
+      plat: ${{ matrix.plat }}
+      os: ${{ matrix.os }}
+      arch: ${{ matrix.arch }}
+      tls: ${{ matrix.tls }}
+      # ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
