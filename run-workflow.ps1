@@ -18,14 +18,15 @@ param (
 Set-StrictMode -Version 'Latest'
 $PSDefaultParameterValues['*:ErrorAction'] = 'Stop'
 
+$headers = @{
+    "Accept" = "application/vnd.github+json"
+    "Authorization" = "Bearer $pat"
+    "X-GitHub-Api-Version" = "2022-11-28"
+}
+
 function Start-Workflow {
-    param([string]$pat, [string]$name, [string]$ref, [string]$sha)
+    param([string]$headers, [string]$name, [string]$ref, [string]$sha)
     $url = "https://api.github.com/repos/microsoft/netperf/dispatches"
-    $headers = @{
-        "Accept" = "application/vnd.github+json"
-        "Authorization" = "Bearer $pat"
-        "X-GitHub-Api-Version" = "2022-11-28"
-    }
     $body = @{
         event_type = "run-$type"
         client_payload = @{
@@ -34,81 +35,97 @@ function Start-Workflow {
             name = $name
         }
     } | ConvertTo-Json
-    Write-Debug "Posting $body to $url"
+    Write-Debug "POST $body to $url"
     Invoke-WebRequest -Uri $url -Method POST -Headers $headers -Body $body
 }
 
-function Get-WorkflowRunId {
-    param([string]$name, [string]$sha)
-    $results =
-      gh run list -R microsoft/netperf -e repository_dispatch `
-        | Select-String -Pattern 'repository_dispatch\s+(\d+)' -AllMatches ` # TODO - Limit to top N
-        | Foreach-Object { $_.Matches } `
-        | Foreach-Object { $_.Groups[1].Value }
-    foreach ($result in $results) {
-      if (gh run view -R microsoft/netperf $result | Select-String -Pattern "$name-$sha") {
-          return $result
-      }
+function Get-Runs {
+    param([string]$headers)
+    $url = "https://api.github.com/repos/microsoft/netperf/actions/runs?event=repository_dispatch"
+    Write-Debug "GET $url"
+    return ((Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json).workflow_runs
+}
+
+function Get-Run {
+    param([string]$headers, [string]$runId)
+    $url = "https://api.github.com/repos/microsoft/netperf/actions/runs/$runId"
+    Write-Debug "GET $url"
+    return (Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json
+}
+
+function Get-Jobs {
+    param([string]$headers, [string]$runId)
+    $url = "https://api.github.com/repos/microsoft/netperf/actions/runs/$runId/jobs"
+    Write-Debug "GET $url"
+    return ((Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json).jobs
+}
+
+function Get-RunId {
+    param([string]$headers, [string]$name, [string]$sha)
+    $workflows = Get-Runs $headers
+    foreach ($workflow in $workflows) {
+        $jobs = Get-Jobs $header $workflow.id
+        foreach ($job in $jobs) {
+            if ($job.name.Contains("$name-$sha")) {
+                return $workflow.id
+            }
+        }
     }
     return $null
 }
 
-function Get-WorkflowRunIdWithRetry {
-    param([string]$name, [string]$sha)
+function Get-RunIdWithRetry {
+    param([string]$headers, [string]$name, [string]$sha)
     $i = 0
     while ($i -lt 3) {
-        $id = Get-WorkflowRunId $name $sha
+        $id = Get-RunId headers $name $sha
         if ($null -ne $id) {
             return $id
         }
-        Write-Host "Workflow not found, retrying in 1 second..."
+        Write-Host "Run not found, retrying in 1 second..."
         Start-Sleep -Seconds 1
         $i++
     }
-    Write-Error "Workflow not found!"
+    Write-Error "Run not found!"
     return $null
 }
 
-function Get-WorkflowStatus {
-    param([string]$id)
-    $output = gh run view -R microsoft/netperf $id --exit-status
-    if ($LastExitCode) {
-        Write-Error "Workflow failed!"
+function Get-RunStatus {
+    param([string]$headers, [string]$id)
+    $run = Get-Run $headers $id
+    if ($run.status -ne "completed") {
+        return $false
+    }
+    if ($run.conclusion -ne "success") {
+        Write-Error "Run completed with status $($run.conclusion)!"
         return $true
     }
-    if ($output | Select-String -Pattern "X Complete") {
-        Write-Error "Workflow failed!"
-        return $true
-    }
-    if (($output | Select-String -Pattern "Γ£ô Complete") -or ($output | Select-String -Pattern "✓ Complete")) {
-        Write-Host "Workflow succeeded!"
-        return $true
-    }
-    return $false
+    Write-Host "Run succeeded!"
+    return $true
 }
 
 function Wait-ForWorkflow {
-    param([string]$id)
+    param([string]$headers, [string]$id)
     $i = 0
     while ($i -lt 120) { # 120 * 30 sec = 1 hour
-        if (Get-WorkflowStatus $id) {
+        if (Get-RunStatus $headers $id) {
             return
         }
         Start-Sleep -Seconds 30
         $i++
     }
-    Write-Error "Workflow timed out!"
+    Write-Error "Run timed out!"
 }
 
 # Get the workflow run id
 Write-Host "Triggering new workflow..."
-Start-Workflow $pat $name $ref $sha
+Start-Workflow $headers $name $ref $sha
 
 # Get the workflow run id
 Write-Host "Looking for workflow run..."
-$id = Get-WorkflowRunIdWithRetry $name $sha
+$id = Get-RunIdWithRetry $headers $name $sha
 Write-Host "Workflow found: https://github.com/microsoft/netperf/actions/runs/$id"
 
-# Wait for the workflow to complete
-Write-Host "Waiting for workflow to complete..."
-Wait-ForWorkflow $id
+# Wait for the run to complete
+Write-Host "Waiting for run to complete..."
+Wait-ForWorkflow $headers $id
