@@ -30,4 +30,4 @@ jobs:
       - shell: pwsh
         run: dir msquic
       - name: Build
-        uses: msquic/.github/workflows/build-reuse-unix.yml
+        uses: ./msquic/.github/workflows/build-reuse-unix.yml
