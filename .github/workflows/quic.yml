@@ -14,11 +14,14 @@ on:
     types: [run-quic]
       # Args: { ref, sha, name }
 
+# TODO - Figure out concurrency
+
 permissions: read-all
 
 jobs:
+  # For automated identification of the workflow.
   name:
-    name: ${{ github.event.client_payload.name }}-${{ github.event.client_payload.sha }}
+    name: For ${{ github.event.client_payload.name }}-${{ github.event.client_payload.sha }}
     needs: []
     runs-on: ubuntu-20.04
     steps:
