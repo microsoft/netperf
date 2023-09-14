@@ -35,7 +35,7 @@ function Start-Workflow {
             name = $name
         }
     } | ConvertTo-Json
-    Write-Debug "POST $body to $url with $headers"
+    Write-Debug "POST $body to $url"
     Invoke-WebRequest -Uri $url -Method POST -Headers $headers -Body $body
 }
 
