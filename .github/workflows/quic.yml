@@ -32,7 +32,7 @@ jobs:
       arch: ${{ matrix.arch }}
       tls: ${{ matrix.tls }}
       xdp: ${{ matrix.xdp }}
-      # ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
+      ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
 
   build-windows-kernel:
     name: WinKernel
@@ -48,7 +48,7 @@ jobs:
       os: ${{ matrix.os }}
       arch: ${{ matrix.arch }}
       tls: ${{ matrix.tls }}
-      # ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
+      ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
 
   build-ubuntu:
     name: Ubuntu
@@ -66,4 +66,4 @@ jobs:
       os: ${{ matrix.os }}
       arch: ${{ matrix.arch }}
       tls: ${{ matrix.tls }}
-      # ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
+      ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
