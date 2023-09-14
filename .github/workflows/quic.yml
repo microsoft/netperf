@@ -12,7 +12,7 @@ on:
       # Args: { ref, sha, name }
 
 concurrency:
-  group: quic-${{ ${{ github.event.client_payload.sha }} || github.sha }}
+  group: quic-${{ github.event.client_payload.sha || github.sha }}
   cancel-in-progress: true
 
 permissions: read-all
