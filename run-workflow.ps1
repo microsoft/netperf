@@ -25,7 +25,7 @@ $headers = @{
 }
 
 function Start-Workflow {
-    param([string]$headers, [string]$name, [string]$ref, [string]$sha)
+    param($headers, [string]$name, [string]$ref, [string]$sha)
     $url = "https://api.github.com/repos/microsoft/netperf/dispatches"
     $body = @{
         event_type = "run-$type"
@@ -40,28 +40,28 @@ function Start-Workflow {
 }
 
 function Get-Runs {
-    param([string]$headers)
+    param($headers)
     $url = "https://api.github.com/repos/microsoft/netperf/actions/runs?event=repository_dispatch"
     Write-Debug "GET $url"
     return ((Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json).workflow_runs
 }
 
 function Get-Run {
-    param([string]$headers, [string]$runId)
+    param($headers, [string]$runId)
     $url = "https://api.github.com/repos/microsoft/netperf/actions/runs/$runId"
     Write-Debug "GET $url"
     return (Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json
 }
 
 function Get-Jobs {
-    param([string]$headers, [string]$runId)
+    param($headers, [string]$runId)
     $url = "https://api.github.com/repos/microsoft/netperf/actions/runs/$runId/jobs"
     Write-Debug "GET $url"
     return ((Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json).jobs
 }
 
 function Get-RunId {
-    param([string]$headers, [string]$name, [string]$sha)
+    param($headers, [string]$name, [string]$sha)
     $workflows = Get-Runs $headers
     foreach ($workflow in $workflows) {
         $jobs = Get-Jobs $header $workflow.id
@@ -75,7 +75,7 @@ function Get-RunId {
 }
 
 function Get-RunIdWithRetry {
-    param([string]$headers, [string]$name, [string]$sha)
+    param($headers, [string]$name, [string]$sha)
     $i = 0
     while ($i -lt 3) {
         $id = Get-RunId headers $name $sha
@@ -91,7 +91,7 @@ function Get-RunIdWithRetry {
 }
 
 function Get-RunStatus {
-    param([string]$headers, [string]$id)
+    param($headers, [string]$id)
     $run = Get-Run $headers $id
     if ($run.status -ne "completed") {
         return $false
@@ -105,7 +105,7 @@ function Get-RunStatus {
 }
 
 function Wait-ForWorkflow {
-    param([string]$headers, [string]$id)
+    param($headers, [string]$id)
     $i = 0
     while ($i -lt 120) { # 120 * 30 sec = 1 hour
         if (Get-RunStatus $headers $id) {
