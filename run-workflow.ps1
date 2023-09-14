@@ -18,15 +18,15 @@ param (
 Set-StrictMode -Version 'Latest'
 $PSDefaultParameterValues['*:ErrorAction'] = 'Stop'
 
+$headers = @{
+    "Accept" = "application/vnd.github+json"
+    "Authorization" = "Bearer $pat"
+    "X-GitHub-Api-Version" = "2022-11-28"
+}
 
 function Start-Workflow {
     param([string]$name, [string]$ref, [string]$sha)
     $url = "https://api.github.com/repos/microsoft/netperf/dispatches"
-    $headers = @{
-        "Accept" = "application/vnd.github+json"
-        "Authorization" = "Bearer $pat"
-        "X-GitHub-Api-Version" = "2022-11-28"
-    }
     $body = @{
         event_type = "run-$type"
         client_payload = @{
@@ -35,17 +35,12 @@ function Start-Workflow {
             name = $name
         }
     } | ConvertTo-Json
-    Write-Debug "POST $body to $url"
+    Write-Debug "POST $body to $url with $headers"
     Invoke-WebRequest -Uri $url -Method POST -Headers $headers -Body $body
 }
 
 function Get-Runs {
     $url = "https://api.github.com/repos/microsoft/netperf/actions/runs?event=repository_dispatch"
-    $headers = @{
-        "Accept" = "application/vnd.github+json"
-        "Authorization" = "Bearer $pat"
-        "X-GitHub-Api-Version" = "2022-11-28"
-    }
     Write-Debug "GET $url"
     return ((Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json).workflow_runs
 }
@@ -53,11 +48,6 @@ function Get-Runs {
 function Get-Run {
     param([string]$runId)
     $url = "https://api.github.com/repos/microsoft/netperf/actions/runs/$runId"
-    $headers = @{
-        "Accept" = "application/vnd.github+json"
-        "Authorization" = "Bearer $pat"
-        "X-GitHub-Api-Version" = "2022-11-28"
-    }
     Write-Debug "GET $url"
     return (Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json
 }
@@ -65,11 +55,6 @@ function Get-Run {
 function Get-Jobs {
     param([string]$runId)
     $url = "https://api.github.com/repos/microsoft/netperf/actions/runs/$runId/jobs"
-    $headers = @{
-        "Accept" = "application/vnd.github+json"
-        "Authorization" = "Bearer $pat"
-        "X-GitHub-Api-Version" = "2022-11-28"
-    }
     Write-Debug "GET $url"
     return ((Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json).jobs
 }
