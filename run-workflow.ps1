@@ -97,7 +97,7 @@ function Wait-ForWorkflow {
 
 # Get the workflow run id
 Write-Host "Triggering new workflow..."
-Start-Workflow
+Start-Workflow $pat $name $ref $sha
 
 # Get the workflow run id
 Write-Host "Looking for workflow run..."
