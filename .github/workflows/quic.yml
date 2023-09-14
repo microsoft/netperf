@@ -1,6 +1,9 @@
 name: QUIC
 
 on:
+  push:
+    branches:
+    - main
   workflow_dispatch:
     inputs:
       ref:
@@ -23,8 +26,8 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.event.client_payload.ref }}
           repository: microsoft/msquic
-          path: '../msquic'
+          path: msquic
       - shell: pwsh
-        run: dir ../msquic
+        run: dir msquic
       - name: Build
-        uses: '../msquic/.github/workflows/build-reuse-unix.yml'
+        uses: msquic/.github/workflows/build-reuse-unix.yml
