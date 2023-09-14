@@ -61,29 +61,18 @@ function Get-Jobs {
 
 function Get-RunId {
     param([string]$name, [string]$sha)
-    $workflows = Get-Runs
-    foreach ($workflow in $workflows) {
-        $jobs = Get-Jobs $workflow.id
-        foreach ($job in $jobs) {
-            if ($job.name.Contains("$name-$sha")) {
-                return $workflow.id
+    for ($i = 0; $i -lt 3; $i++) { # Try up to 3 times
+        $workflows = Get-Runs
+        foreach ($workflow in $workflows) {
+            $jobs = Get-Jobs $workflow.id
+            foreach ($job in $jobs) {
+                if ($job.name.Contains("$name-$sha")) {
+                    return $workflow.id
+                }
             }
-        }
-    }
-    return $null
-}
-
-function Get-RunIdWithRetry {
-    param([string]$name, [string]$sha)
-    $i = 0
-    while ($i -lt 3) {
-        $id = Get-RunId $name $sha
-        if ($null -ne $id) {
-            return $id
         }
         Write-Host "Run not found, retrying in 1 second..."
         Start-Sleep -Seconds 1
-        $i++
     }
     Write-Error "Run not found!"
     return $null
@@ -97,34 +86,31 @@ function Get-RunStatus {
     }
     if ($run.conclusion -ne "success") {
         Write-Error "Run completed with status $($run.conclusion)!"
-        return $true
     }
-    Write-Host "Run succeeded!"
     return $true
 }
 
-function Wait-ForWorkflow {
+function Wait-FoRun {
     param([string]$id)
-    $i = 0
-    while ($i -lt 120) { # 120 * 30 sec = 1 hour
+    for ($i = 0; $i -lt 120; $i++) { # 120 * 30 sec = 1 hour
         if (Get-RunStatus $id) {
             return
         }
         Start-Sleep -Seconds 30
-        $i++
     }
     Write-Error "Run timed out!"
 }
 
-# Get the workflow run id
+# Get the workflow run id.
 Write-Host "Triggering new workflow..."
 Start-Workflow $name $ref $sha
 
-# Get the workflow run id
+# Get the workflow run id.
 Write-Host "Looking for workflow run..."
-$id = Get-RunIdWithRetry $name $sha
-Write-Host "Workflow found: https://github.com/microsoft/netperf/actions/runs/$id"
+$id = Get-RunId $name $sha
+Write-Host "Found: https://github.com/microsoft/netperf/actions/runs/$id"
 
-# Wait for the run to complete
+# Wait for the run to complete.
 Write-Host "Waiting for run to complete..."
-Wait-ForWorkflow $id
+Wait-ForRun $id
+Write-Host "Run succeeded!"
