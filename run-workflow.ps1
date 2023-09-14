@@ -36,7 +36,7 @@ function Start-Workflow {
         }
     } | ConvertTo-Json
     Write-Debug "POST $body to $url"
-    Invoke-WebRequest -Uri $url -Method POST -Headers $headers -Body $body
+    $result = Invoke-WebRequest -Uri $url -Method POST -Headers $headers -Body $body
 }
 
 function Get-Runs {
