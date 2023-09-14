@@ -1,0 +1,76 @@
+name: XDP
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        required: false
+        default: ''
+        type: string
+  repository_dispatch:
+    types: [run-xdp]
+      # Args: { ref, sha, name }
+
+concurrency:
+  group: xdp-${{ github.event.client_payload.sha || github.sha }}
+  cancel-in-progress: true
+
+permissions: read-all
+
+jobs:
+  # For automated identification of the workflow.
+  name:
+    name: For ${{ github.event.client_payload.name }}-${{ github.event.client_payload.sha }}
+    needs: []
+    runs-on: ubuntu-20.04
+    steps:
+    - run: echo "no op"
+
+  build:
+    name: Windows
+    needs: []
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ['windows-2022']
+        arch: [x64]
+        tls: [schannel, openssl, openssl3]
+        xdp: ['', '-UseXdp']
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac
+      with:
+        repository: microsoft/xdp-for-windows
+        ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
+        submodules: recursive
+    - name: Setup MSBuild.exe
+      uses: microsoft/setup-msbuild@ab534842b4bdf384b8aaf93765dc6f721d9f5fab
+    - name: Prepare Machine
+      shell: PowerShell
+      run: tools/prepare-machine.ps1 -ForBuild -Verbose
+    - name: Install LLVM 11.0
+      run: |
+        choco install -y llvm --version 11.0.1 --allow-downgrade
+        echo "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+    - name: Nuget Restore
+      run: nuget.exe restore xdp.sln -ConfigFile src/nuget.config
+    - name: Prepare for compiling eBPF programs
+      run: tools/prepare-machine.ps1 -ForEbpfBuild -Verbose
+    - name: Build
+      run: msbuild xdp.sln /m /p:configuration=${{ matrix.configuration }} /p:platform=${{ matrix.platform }}
+    - name: Sign Binaries
+      shell: PowerShell
+      run: tools/sign.ps1 -Config ${{ matrix.configuration }} -Arch ${{ matrix.platform }}
+    - name: Build Installer
+      shell: PowerShell
+      run: tools/create-installer.ps1 -Config ${{ matrix.configuration }} -Platform ${{ matrix.platform }}
+    - name: Upload Artifacts
+      if: matrix.os == 2022
+      uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
+      with:
+        name: bin_${{ matrix.configuration }}_${{ matrix.platform }}
+        path: |
+          artifacts/bin
+          !artifacts/bin/**/*.ilk
+          !artifacts/bin/**/*.exp
+          !artifacts/bin/**/*.lastcodeanalysissucceeded
