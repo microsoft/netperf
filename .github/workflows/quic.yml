@@ -70,8 +70,8 @@ jobs:
       ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
 
   complete:
-    name: Complete ${{ github.event.client_payload.name }}
+    name: Complete ${{ github.event.client_payload.name }}-${{ github.event.client_payload.sha }}
     needs: [build-windows, build-windows-kernel, build-ubuntu]
     runs-on: ubuntu-20.04
     steps:
-      run: echo "All Done"
+    - run: echo "All Done"
