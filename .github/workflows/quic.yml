@@ -57,7 +57,7 @@ jobs:
       fail-fast: false
       matrix:
         plat: [linux]
-        os: ['ubuntu-20.04', 'ubuntu-22.04']
+        os: ['ubuntu-20.04']
         arch: [x64]
         tls: [openssl, openssl3]
     uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml@nibanks/specify-checkout-repo
