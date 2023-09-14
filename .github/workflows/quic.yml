@@ -17,6 +17,13 @@ on:
 permissions: read-all
 
 jobs:
+  name:
+    name: ${{ github.event.client_payload.name }}-${{ github.event.client_payload.sha }}
+    needs: []
+    runs-on: ubuntu-20.04
+    steps:
+    - run: echo "no op"
+
   build-windows:
     name: WinUser
     needs: []
@@ -70,7 +77,7 @@ jobs:
       ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
 
   complete:
-    name: Complete ${{ github.event.client_payload.name }}-${{ github.event.client_payload.sha }}
+    name: Complete
     needs: [build-windows, build-windows-kernel, build-ubuntu]
     runs-on: ubuntu-20.04
     steps:
