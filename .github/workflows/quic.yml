@@ -60,7 +60,7 @@ jobs:
         os: ['ubuntu-20.04', 'ubuntu-22.04']
         arch: [x64]
         tls: [openssl, openssl3]
-    uses: ./.github/workflows/build-reuse-unix.yml
+    uses: microsoft/msquic/./.github/workflows/build-reuse-unix.yml@nibanks/specify-checkout-repo
     with:
       plat: ${{ matrix.plat }}
       os: ${{ matrix.os }}
