@@ -12,6 +12,7 @@ on:
         type: string
   repository_dispatch:
     types: [run-quic]
+      # Args: { ref, sha, name }
 
 permissions: read-all
 
@@ -67,3 +68,10 @@ jobs:
       arch: ${{ matrix.arch }}
       tls: ${{ matrix.tls }}
       ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
+
+  complete:
+    name: Complete ${{ github.event.client_payload.name }}
+    needs: [build-windows, build-windows-kernel, build-ubuntu]
+    runs-on: ubuntu-20.04
+    steps:
+      run: echo "All Done"
