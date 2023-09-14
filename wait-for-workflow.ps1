@@ -13,7 +13,7 @@ function Get-WorkflowRunId {
     param([string]$name, [string]$sha)
     $results =
       gh run list -R microsoft/netperf -e repository_dispatch `
-        | Select-String -Pattern 'repository_dispatch\s+(\d+)' -AllMatches `
+        | Select-String -Pattern 'repository_dispatch\s+(\d+)' -AllMatches ` # TODO - Limit to top N
         | Foreach-Object { $_.Matches } `
         | Foreach-Object { $_.Groups[1].Value }
     foreach ($result in $results) {
@@ -57,7 +57,7 @@ function Get-WorkflowStatus {
 function Wait-ForWorkflow {
     param([string]$id)
     $i = 0
-    while ($i -lt 30) {
+    while ($i -lt 120) { # 120 * 30 sec = 1 hour
         if (Get-WorkflowStatus $id) {
             return
         }
