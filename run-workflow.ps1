@@ -25,7 +25,7 @@ $headers = @{
 }
 
 function Start-Workflow {
-    param($headers, [string]$name, [string]$ref, [string]$sha)
+    param([string]$name, [string]$ref, [string]$sha)
     $url = "https://api.github.com/repos/microsoft/netperf/dispatches"
     $body = @{
         event_type = "run-$type"
@@ -40,31 +40,30 @@ function Start-Workflow {
 }
 
 function Get-Runs {
-    param($headers)
     $url = "https://api.github.com/repos/microsoft/netperf/actions/runs?event=repository_dispatch"
     Write-Debug "GET $url"
     return ((Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json).workflow_runs
 }
 
 function Get-Run {
-    param($headers, [string]$runId)
+    param([string]$runId)
     $url = "https://api.github.com/repos/microsoft/netperf/actions/runs/$runId"
     Write-Debug "GET $url"
     return (Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json
 }
 
 function Get-Jobs {
-    param($headers, [string]$runId)
+    param([string]$runId)
     $url = "https://api.github.com/repos/microsoft/netperf/actions/runs/$runId/jobs"
     Write-Debug "GET $url"
     return ((Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json).jobs
 }
 
 function Get-RunId {
-    param($headers, [string]$name, [string]$sha)
-    $workflows = Get-Runs $headers
+    param([string]$name, [string]$sha)
+    $workflows = Get-Runs
     foreach ($workflow in $workflows) {
-        $jobs = Get-Jobs $header $workflow.id
+        $jobs = Get-Jobs $workflow.id
         foreach ($job in $jobs) {
             if ($job.name.Contains("$name-$sha")) {
                 return $workflow.id
@@ -75,10 +74,10 @@ function Get-RunId {
 }
 
 function Get-RunIdWithRetry {
-    param($headers, [string]$name, [string]$sha)
+    param([string]$name, [string]$sha)
     $i = 0
     while ($i -lt 3) {
-        $id = Get-RunId headers $name $sha
+        $id = Get-RunId $name $sha
         if ($null -ne $id) {
             return $id
         }
@@ -91,8 +90,8 @@ function Get-RunIdWithRetry {
 }
 
 function Get-RunStatus {
-    param($headers, [string]$id)
-    $run = Get-Run $headers $id
+    param([string]$id)
+    $run = Get-Run $id
     if ($run.status -ne "completed") {
         return $false
     }
@@ -105,10 +104,10 @@ function Get-RunStatus {
 }
 
 function Wait-ForWorkflow {
-    param($headers, [string]$id)
+    param([string]$id)
     $i = 0
     while ($i -lt 120) { # 120 * 30 sec = 1 hour
-        if (Get-RunStatus $headers $id) {
+        if (Get-RunStatus $id) {
             return
         }
         Start-Sleep -Seconds 30
@@ -119,13 +118,13 @@ function Wait-ForWorkflow {
 
 # Get the workflow run id
 Write-Host "Triggering new workflow..."
-Start-Workflow $headers $name $ref $sha
+Start-Workflow $name $ref $sha
 
 # Get the workflow run id
 Write-Host "Looking for workflow run..."
-$id = Get-RunIdWithRetry $headers $name $sha
+$id = Get-RunIdWithRetry $name $sha
 Write-Host "Workflow found: https://github.com/microsoft/netperf/actions/runs/$id"
 
 # Wait for the run to complete
 Write-Host "Waiting for run to complete..."
-Wait-ForWorkflow $headers $id
+Wait-ForWorkflow $id
