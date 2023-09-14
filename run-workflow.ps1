@@ -101,11 +101,11 @@ function Wait-ForRun {
     Write-Error "Run timed out!"
 }
 
-# Get the workflow run id.
+# Start the new workflow run.
 Write-Host "Triggering new workflow..."
 Start-Workflow $name $ref $sha
 
-# Get the workflow run id.
+# Find the workflow run.
 Write-Host "Looking for workflow run..."
 $id = Get-RunId $name $sha
 Write-Host "Found: https://github.com/microsoft/netperf/actions/runs/$id"
