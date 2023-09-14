@@ -90,7 +90,7 @@ function Get-RunStatus {
     return $true
 }
 
-function Wait-FoRun {
+function Wait-ForRun {
     param([string]$id)
     for ($i = 0; $i -lt 120; $i++) { # 120 * 30 sec = 1 hour
         if (Get-RunStatus $id) {
