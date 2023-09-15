@@ -1,0 +1,101 @@
+# Copyright (c) Microsoft Corporation
+# SPDX-License-Identifier: MIT
+
+# This workflow will download the latest ebpf-for-windows MSI installer and run
+# the BPF performance tests. The results will be uploaded as an artifact.
+
+name: ebpf-for-windows
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        required: false
+        default: ''
+        type: string
+  repository_dispatch:
+    types: [run-ebpf]
+      # Args: { ref, sha, name, run_id }
+
+concurrency:
+  group: ebpf-${{ github.event.client_payload.sha || github.sha }}
+  cancel-in-progress: true
+
+permissions: read-all
+
+jobs:
+  # For automated identification of the workflow.
+  name:
+    name: For ${{ github.event.client_payload.name }}-${{ github.event.client_payload.sha }}
+    needs: []
+    runs-on: ubuntu-20.04
+    steps:
+    - run: echo "no op"
+
+  windows-perf:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ['windows-2022', 'windows-2019']
+        arch: [x64]
+
+    env:
+      SCRIPT_URI: "https://raw.githubusercontent.com/microsoft/bpf_performance/ee798c5b299ea7e798503106e9d3d3884bec2833/scripts/Fetch-LatestArtifacts.ps1"
+      SCRIPT_HASH: "9D357E166FCC53736FC7C87D87FF4CAA11CB7EB6CB1825C2440913E320273195"
+      ARTIFACTS_TO_DOWNLOAD: "ebpf-for-windows - MSI installer (Build-x64_Release)"
+      ARTIFACTS_PATH: "${{ github.workspace }}/local_packages"
+      RUN_ID: "${{ github.event.client_payload.run_id }}"
+      BPF_PERFORMANCE_URI: "https://github.com/microsoft/bpf_performance/releases/download/v0.0.3/build-Release-windows-2022.zip"
+      BPF_PERFORMANCE_HASH: "34E0279711F5450282CBA6FE894E6FB5E21683A801FD60E748717AFCEE63F991"
+
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+      - name: Get script
+        working-directory: ${{ github.workspace }}
+        run: |
+          Invoke-WebRequest -Uri ${{env.SCRIPT_URI}} -OutFile Fetch-LatestArtifacts.ps1
+          $hash = Get-FileHash -Algorithm SHA256 -Path "Fetch-LatestArtifacts.ps1"
+          if ($hash -ne ${{env.SCRIPT_HASH}}) 
+          {
+            Write-Error "Hash mismatch for Fetch-LatestArtifacts.ps1"
+            exit 1
+          }
+
+      - name: Fetch latest artifacts
+        working-directory: ${{ github.workspace }}
+        run: |
+          $token = ConvertTo-SecureString -String ${{secrets.github_token}} -AsPlainText -Force
+          $artifactsToDownload = @()
+          $artifactsToDownload += ${{env.ARTIFACTS_TO_DOWNLOAD}}
+          New-Item -Path $artifactPath -ItemType Directory -Force -ErrorAction SilentlyContinue
+          ./Fetch-LatestArtifacts.ps1 -ArtifactsToDownload $artifactsToDownload -OutputPath ${{env.ARTIFACTS_PATH}} -RunId ${{env.RUN_ID}} -GitHubToken $token
+
+      - name: Install ebpf-for-windows
+        working-directory: ${{env.ARTIFACTS_PATH}}
+        run: |
+          Start-Process msiexec.exe -Wait -ArgumentList '/i ebpf-for-windows.msi /quiet /qn /norestart /log install.log ADDLOCAL=ALL'
+          echo "C:\Program Files\ebpf-for-windows" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Download BPF performance release
+        working-directory: ${{ github.workspace }}
+        run: |
+          Invoke-WebRequest ${{env.BPF_PERFORMANCE_URI}} -OutFile bpf_performance.zip
+          $hash = Get-FileHash -Algorithm SHA256 -Path "bpf_performance.zip"
+          if ($hash -ne ${{env.BPF_PERFORMANCE_HASH}})
+          {
+            Write-Error "Hash mismatch for bpf_performance.zip"
+            exit 1
+          }
+          Expand-Archive -Path bpf_performance.zip -DestinationPath bpf_performance
+
+      - name: Run BPF performance
+        working-directory: ${{ github.workspace }}\bpf_performance
+        run: |
+          Release\bpf_performance_runner.exe -i tests.yml -e .sys -r | Tee-Object -FilePath $WorkingDirectory\bpf_performance_native.csv
+
+      - name: Upload BPF performance results
+        uses: actions/upload-artifact@v2
+        with:
+          name: bpf_performance_native-${{ matrix.os }}-${{ matrix.arch }}
+          path: bpf_performance_native.csv
