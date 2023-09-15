@@ -9,10 +9,11 @@ name: ebpf-for-windows
 on:
   workflow_dispatch:
     inputs:
-      ref:
+      run_id:
         required: false
         default: ''
         type: string
+      
   repository_dispatch:
     types: [run-ebpf]
       # Args: { ref, sha, name, run_id }
@@ -69,6 +70,11 @@ jobs:
           $token = ConvertTo-SecureString -String ${{secrets.github_token}} -AsPlainText -Force
           $artifactsToDownload = @()
           $artifactsToDownload += "${{env.ARTIFACTS_TO_DOWNLOAD}}"
+          if ($run_id -eq "")
+          {
+            $run_id = ${{inputs.run_id}}
+          }
+
           New-Item -Path $artifactPath -ItemType Directory -Force -ErrorAction SilentlyContinue
           ./Fetch-LatestArtifacts.ps1 -ArtifactsToDownload $artifactsToDownload -OutputPath "${{env.ARTIFACTS_PATH}}" -RunId "${{env.RUN_ID}}" -GitHubToken $token
 
