@@ -41,7 +41,7 @@ jobs:
 
     env:
       SCRIPT_URI: "https://raw.githubusercontent.com/microsoft/bpf_performance/ee798c5b299ea7e798503106e9d3d3884bec2833/scripts/Fetch-LatestArtifacts.ps1"
-      SCRIPT_HASH: "9D357E166FCC53736FC7C87D87FF4CAA11CB7EB6CB1825C2440913E320273195"
+      SCRIPT_HASH: "471119F0F66CDF2A9BC35D109CDBED74713C9FC53169C15A2D836EB3FEE75DAB"
       ARTIFACTS_TO_DOWNLOAD: "ebpf-for-windows - MSI installer (Build-x64_Release)"
       ARTIFACTS_PATH: "${{ github.workspace }}/local_packages"
       RUN_ID: "${{ github.event.client_payload.run_id }}"
@@ -59,6 +59,7 @@ jobs:
           if ($hash -ne "${{env.SCRIPT_HASH}}")
           {
             Write-Error "Hash mismatch for Fetch-LatestArtifacts.ps1"
+            Write-Error "Expected ${{env.SCRIPT_HASH}} but got $hash"
             exit 1
           }
 
@@ -85,6 +86,7 @@ jobs:
           if ($hash -ne "${{env.BPF_PERFORMANCE_HASH}}")
           {
             Write-Error "Hash mismatch for bpf_performance.zip"
+            Write-Error "Expected ${{env.BPF_PERFORMANCE_HASH}} but got $hash"
             exit 1
           }
           Expand-Archive -Path bpf_performance.zip -DestinationPath bpf_performance
