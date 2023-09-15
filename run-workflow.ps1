@@ -10,12 +10,12 @@ param (
 
     [Parameter(Mandatory = $true)]
     [string]$sha,
-    
+
     [Parameter(Mandatory = $true)]
     [string]$pat,
 
     [Parameter(Mandatory = $false)]
-    [string]$run_id
+    [string]$run_id = ""
 )
 
 Set-StrictMode -Version 'Latest'

@@ -49,14 +49,14 @@ jobs:
       BPF_PERFORMANCE_HASH: "34E0279711F5450282CBA6FE894E6FB5E21683A801FD60E748717AFCEE63F991"
 
     runs-on: ${{ matrix.os }}
-    
+
     steps:
       - name: Get script
         working-directory: ${{ github.workspace }}
         run: |
           Invoke-WebRequest -Uri ${{env.SCRIPT_URI}} -OutFile Fetch-LatestArtifacts.ps1
           $hash = Get-FileHash -Algorithm SHA256 -Path "Fetch-LatestArtifacts.ps1"
-          if ($hash -ne ${{env.SCRIPT_HASH}}) 
+          if ($hash -ne ${{env.SCRIPT_HASH}})
           {
             Write-Error "Hash mismatch for Fetch-LatestArtifacts.ps1"
             exit 1
