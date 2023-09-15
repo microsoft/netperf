@@ -54,9 +54,9 @@ jobs:
       - name: Get script
         working-directory: ${{ github.workspace }}
         run: |
-          Invoke-WebRequest -Uri ${{env.SCRIPT_URI}} -OutFile Fetch-LatestArtifacts.ps1
+          Invoke-WebRequest -Uri "${{env.SCRIPT_URI}}" -OutFile Fetch-LatestArtifacts.ps1
           $hash = Get-FileHash -Algorithm SHA256 -Path "Fetch-LatestArtifacts.ps1"
-          if ($hash -ne ${{env.SCRIPT_HASH}})
+          if ($hash -ne "${{env.SCRIPT_HASH}}")
           {
             Write-Error "Hash mismatch for Fetch-LatestArtifacts.ps1"
             exit 1
@@ -67,9 +67,9 @@ jobs:
         run: |
           $token = ConvertTo-SecureString -String ${{secrets.github_token}} -AsPlainText -Force
           $artifactsToDownload = @()
-          $artifactsToDownload += ${{env.ARTIFACTS_TO_DOWNLOAD}}
+          $artifactsToDownload += "${{env.ARTIFACTS_TO_DOWNLOAD}}"
           New-Item -Path $artifactPath -ItemType Directory -Force -ErrorAction SilentlyContinue
-          ./Fetch-LatestArtifacts.ps1 -ArtifactsToDownload $artifactsToDownload -OutputPath ${{env.ARTIFACTS_PATH}} -RunId ${{env.RUN_ID}} -GitHubToken $token
+          ./Fetch-LatestArtifacts.ps1 -ArtifactsToDownload $artifactsToDownload -OutputPath "${{env.ARTIFACTS_PATH}}" -RunId "${{env.RUN_ID}}" -GitHubToken $token
 
       - name: Install ebpf-for-windows
         working-directory: ${{env.ARTIFACTS_PATH}}
@@ -80,9 +80,9 @@ jobs:
       - name: Download BPF performance release
         working-directory: ${{ github.workspace }}
         run: |
-          Invoke-WebRequest ${{env.BPF_PERFORMANCE_URI}} -OutFile bpf_performance.zip
+          Invoke-WebRequest "${{env.BPF_PERFORMANCE_URI}}" -OutFile bpf_performance.zip
           $hash = Get-FileHash -Algorithm SHA256 -Path "bpf_performance.zip"
-          if ($hash -ne ${{env.BPF_PERFORMANCE_HASH}})
+          if ($hash -ne "${{env.BPF_PERFORMANCE_HASH}}")
           {
             Write-Error "Hash mismatch for bpf_performance.zip"
             exit 1
