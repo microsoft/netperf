@@ -10,9 +10,12 @@ param (
 
     [Parameter(Mandatory = $true)]
     [string]$sha,
-    
+
     [Parameter(Mandatory = $true)]
-    [string]$pat
+    [string]$pat,
+
+    [Parameter(Mandatory = $false)]
+    [string]$run_id = ""
 )
 
 Set-StrictMode -Version 'Latest'
@@ -33,6 +36,7 @@ function Start-Workflow {
             ref = $ref
             sha = $sha
             name = $name
+            run_id = $run_id
         }
     } | ConvertTo-Json
     Write-Debug "POST $body to $url"
