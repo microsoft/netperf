@@ -9,7 +9,7 @@ on:
         type: string
   repository_dispatch:
     types: [run-xdp]
-      # Args: { ref, sha, name }
+      # Args: { guid, ref, sha }
 
 concurrency:
   group: xdp-${{ github.event.client_payload.sha || github.sha }}
@@ -20,7 +20,7 @@ permissions: read-all
 jobs:
   # For automated identification of the workflow.
   name:
-    name: For ${{ github.event.client_payload.name }}-${{ github.event.client_payload.sha }}
+    name: For ${{ github.event.client_payload.guid }}
     needs: []
     runs-on: ubuntu-20.04
     steps:

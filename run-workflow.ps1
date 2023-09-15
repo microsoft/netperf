@@ -3,7 +3,7 @@ param (
     [string]$type,
 
     [Parameter(Mandatory = $true)]
-    [string]$name,
+    [string]$name, # Deprecated, no longer used
 
     [Parameter(Mandatory = $true)]
     [string]$ref,
@@ -27,15 +27,16 @@ $headers = @{
     "X-GitHub-Api-Version" = "2022-11-28"
 }
 
+$guid = (New-Guid).ToString()
+
 function Start-Workflow {
-    param([string]$name, [string]$ref, [string]$sha)
     $url = "https://api.github.com/repos/microsoft/netperf/dispatches"
     $body = @{
         event_type = "run-$type"
         client_payload = @{
+            guid = $guid
             ref = $ref
             sha = $sha
-            name = $name
             run_id = $run_id
         }
     } | ConvertTo-Json
@@ -64,13 +65,12 @@ function Get-Jobs {
 }
 
 function Get-RunId {
-    param([string]$name, [string]$sha)
     for ($i = 0; $i -lt 3; $i++) { # Try up to 3 times
         $workflows = Get-Runs
         foreach ($workflow in $workflows) {
             $jobs = Get-Jobs $workflow.id
             foreach ($job in $jobs) {
-                if ($job.name.Contains("$name-$sha")) {
+                if ($job.name.Contains($guid)) {
                     return $workflow.id
                 }
             }
@@ -106,12 +106,12 @@ function Wait-ForRun {
 }
 
 # Start the new workflow run.
-Write-Host "Triggering new workflow..."
-Start-Workflow $name $ref $sha
+Write-Host "Triggering new workflow ($guid)..."
+Start-Workflow
 
 # Find the workflow run.
 Write-Host "Looking for workflow run..."
-$id = Get-RunId $name $sha
+$id = Get-RunId
 Write-Host "Found: https://github.com/microsoft/netperf/actions/runs/$id"
 
 # Wait for the run to complete.
