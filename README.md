@@ -7,11 +7,14 @@ The repo is the common place other Mirosoft owned networking projects (including
 - [microsoft/ebpf-for-Windows](https://github.com/microsoft/ebpf-for-windows)
 - [Windows Server](https://www.microsoft.com/en-us/windows-server/)
 
-## Architecture
+## Goal
 
-![](docs/arch.png)
+Historically, networking performance testing has been spotty, inconsistent, not reproducable, and not easily accessible.  Different groups or projects test performance in different ways, on different hardware.  They even have different definitions of things like throughput and latency.  This repo aims to fix that by providing a common, open place to run, store, and visualize networking performance testing.  The end result is ultimately a set of dashboards summarizing the performance of the various projects, across various scenarios, and across various platforms.
 
-This repository maintains a GitHub Action for each different test scenario, [quic.yml](./.github/workflows/quic.yml) for MsQuic, that can be triggered by any project with the appropriate access (controlled via PAT).  When a project needs performance testing to be run, it uses the [run-workflow.ps1](./run-workflow.ps1) script to trigger the appropriate test and wait for it to complete.
+## Documentation
+
+- [Hardware](./docs/hardware.md)
+- [Architecture](./docs/arch.md)
 
 ## Contributing
 
