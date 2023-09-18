@@ -7,7 +7,7 @@ if ($null -eq $Session) {
     exit
 }
 $RemoteAddress = $Session.ComputerName
-Write-Output "Successfully conencted to peer: $RemoteAddress)"
+Write-Output "Successfully conencted to peer: $RemoteAddress"
 
 # Make sure nothing is running from a previous run.
 Invoke-Command -Session $Session -ScriptBlock {
@@ -17,8 +17,7 @@ Invoke-Command -Session $Session -ScriptBlock {
 # Copy the artifacts to the peer.
 Write-Output "Copying files to peer..."
 Invoke-Command -Session $Session -ScriptBlock {
-    Remove-Item -Force -Recurse "C:\_work\quic" -ErrorAction Ignore
-    New-Item "C:\_work\quic"
+    Remove-Item -Force -Recurse "C:\_work" -ErrorAction Ignore
 }
 Copy-Item -ToSession $Session .\artifacts -Destination C:\_work\quic\artifacts -Recurse
 
