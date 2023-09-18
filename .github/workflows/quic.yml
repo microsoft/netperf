@@ -27,7 +27,7 @@ jobs:
     - run: echo "no op"
 
   build-windows:
-    name: WinUser
+    name: Build WinUser
     needs: []
     strategy:
       fail-fast: false
@@ -43,7 +43,7 @@ jobs:
       ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
 
   build-windows-kernel:
-    name: WinKernel
+    name: Build WinKernel
     needs: []
     strategy:
       fail-fast: false
@@ -55,7 +55,7 @@ jobs:
       ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
 
   build-ubuntu:
-    name: Ubuntu
+    name: Build Ubuntu
     needs: []
     strategy:
       fail-fast: false
@@ -69,7 +69,7 @@ jobs:
       ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
 
   test-windows:
-    name: Windows Perf
+    name: Test Windows
     needs: [build-windows]
     strategy:
       fail-fast: false
@@ -91,7 +91,7 @@ jobs:
       with:
         name: ${{ matrix.vec.config }}-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}${{ matrix.vec.xdp }}
         path: artifacts
-    - name: Prepare Machine
+    - name: Connect to Peer
       run: |
         $Session = New-PSSession -ComputerName "netperf-peer"
         $RemoteAddress = $Session.ComputerName
