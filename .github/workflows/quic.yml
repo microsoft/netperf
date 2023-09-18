@@ -87,19 +87,6 @@ jobs:
       with:
         name: ${{ matrix.vec.config }}-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}${{ matrix.vec.xdp }}
         path: artifacts
-    - name: Connect to Peer
+    - name: Run secnetperf
       shell: pwsh
-      run: |
-        $Session = New-PSSession -ComputerName "netperf-peer" -ConfigurationName PowerShell.7
-        if ($null -eq $Session) {
-            Write-Error "Failed to create remote session"
-            exit
-        }
-        $RemoteAddress = $Session.ComputerName
-        Write-Output "Connected to: $RemoteAddress"
-        $out = Invoke-Command -Session $Session -ScriptBlock {
-          rm -Force -Recurse "C:\_work\quic" -ErrorAction Ignore
-          mkdir "C:\_work\quic"
-        }
-        Write-Output "Copying files to peer"
-        Copy-Item -ToSession $Session .\artifacts -Destination C:\_work\quic\artifacts -Recurse
+      run: secnetperf.ps1
