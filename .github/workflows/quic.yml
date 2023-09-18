@@ -82,29 +82,23 @@ jobs:
     - "Windows"
     - "azure"
     - "X64"
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac
-      with:
-        fetch-depth: 0
     - uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
       with:
         name: ${{ matrix.vec.config }}-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}${{ matrix.vec.xdp }}
         path: artifacts
-    - name: Debug State
-      shell: pwsh
-      run: |
-        whoami /priv
-        whoami /groups
     - name: Connect to Peer
       shell: pwsh
       run: |
         $Session = New-PSSession -ComputerName "netperf-peer" -ConfigurationName PowerShell.7
-        $RemoteAddress = $Session.ComputerName
         if ($null -eq $Session) {
             Write-Error "Failed to create remote session"
             exit
         }
+        $RemoteAddress = $Session.ComputerName
         Write-Output "Connected to: $RemoteAddress"
-        $out = Invoke-Command -Session $Session -ScriptBlock { return Get-Location }
-        Write-Output "Peer location is: $out"
+        $out = Invoke-Command -Session $Session -ScriptBlock {
+          rm -Force -Recurse "C:\_work\quic" -ErrorAction Ignore
+          mkdir "C:\_work\quic"
+        }
+        Write-Output "Copying files to peer"
+        Copy-Item -ToSession $Session .\artifacts -Destination C:\_work\quic\artifacts -Recurse
