@@ -89,4 +89,4 @@ jobs:
         path: artifacts
     - name: Run secnetperf
       shell: pwsh
-      run: secnetperf.ps1
+      run: .\.github\workflows\secnetperf.ps1
