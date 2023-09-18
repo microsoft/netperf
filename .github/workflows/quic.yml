@@ -105,7 +105,6 @@ jobs:
             Write-Error "Failed to create remote session"
             exit
         }
-        $LocalAddress = Get-LocalAddress -RemoteAddress $RemoteAddress
         Write-Output "Connected to: $RemoteAddress"
-        Write-Output "Local IP Connection $LocalAddress"
-        Invoke-Command -Session $Session -ScriptBlock { dir }
+        $out = Invoke-Command -Session $Session -ScriptBlock { return dir }
+        Write-Output $out
