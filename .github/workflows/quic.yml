@@ -102,6 +102,4 @@ jobs:
         $LocalAddress = Get-LocalAddress -RemoteAddress $RemoteAddress
         Write-Output "Connected to: $RemoteAddress"
         Write-Output "Local IP Connection $LocalAddress"
-        Invoke-TestCommand -Session $Session -ScriptBlock {
-            dir
-        }
+        Invoke-Command -Session $Session -ScriptBlock { dir }
