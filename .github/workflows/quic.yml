@@ -106,5 +106,5 @@ jobs:
             exit
         }
         Write-Output "Connected to: $RemoteAddress"
-        $out = Invoke-Command -Session $Session -ScriptBlock { return dir }
-        Write-Output $out
+        $out = Invoke-Command -Session $Session -ScriptBlock { return Get-Location }
+        Write-Output "Peer location is: $out"
