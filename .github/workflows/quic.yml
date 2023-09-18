@@ -34,8 +34,8 @@ jobs:
       matrix:
         os: ['windows-2022']
         arch: [x64]
-        tls: [schannel, openssl, openssl3]
-        xdp: ['', '-UseXdp']
+        tls: [schannel] # , openssl, openssl3]
+        xdp: [''] # , '-UseXdp']
     uses: microsoft/msquic/.github/workflows/build-reuse-win.yml@main
     with:
       os: ${{ matrix.os }}
@@ -77,3 +77,41 @@ jobs:
       arch: ${{ matrix.arch }}
       tls: ${{ matrix.tls }}
       ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
+
+  test-windows:
+    name: Windows Perf
+    needs: [build-windows]
+    strategy:
+      fail-fast: false
+      matrix:
+        vec: [
+          { config: "Release", plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel" },
+        ]
+    runs-on:
+    - self-hosted
+    - "Windows"
+    - "azure"
+    - "X64"
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac
+      with:
+        fetch-depth: 0
+    - uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
+      with:
+        name: ${{ matrix.vec.config }}-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}${{ matrix.vec.xdp }}
+        path: artifacts
+    - name: Prepare Machine
+      run: |
+        $Session = New-PSSession -ComputerName "netperf-peer"
+        $RemoteAddress = $Session.ComputerName
+        if ($null -eq $Session) {
+            Write-Error "Failed to create remote session"
+            exit
+        }
+        $LocalAddress = Get-LocalAddress -RemoteAddress $RemoteAddress
+        Write-Output "Connected to: $RemoteAddress"
+        Write-Output "Local IP Connection $LocalAddress"
+        Invoke-TestCommand -Session $Session -ScriptBlock {
+            dir
+        }
