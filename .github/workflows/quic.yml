@@ -92,8 +92,9 @@ jobs:
         name: ${{ matrix.vec.config }}-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}${{ matrix.vec.xdp }}
         path: artifacts
     - name: Connect to Peer
+      shell: pwsh
       run: |
-        $Session = New-PSSession -ComputerName "netperf-peer"
+        $Session = New-PSSession -ComputerName "netperf-peer" -ConfigurationName PowerShell.7
         $RemoteAddress = $Session.ComputerName
         if ($null -eq $Session) {
             Write-Error "Failed to create remote session"
