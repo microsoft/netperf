@@ -91,6 +91,11 @@ jobs:
       with:
         name: ${{ matrix.vec.config }}-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}${{ matrix.vec.xdp }}
         path: artifacts
+    - name: Debug State
+      shell: pwsh
+      run: |
+        whoami /priv
+        whoami /groups
     - name: Connect to Peer
       shell: pwsh
       run: |
