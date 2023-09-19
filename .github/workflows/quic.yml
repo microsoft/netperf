@@ -51,7 +51,7 @@ jobs:
       run: |
         New-Item -Path artifacts -ItemType Directory -Force -ErrorAction SilentlyContinue
         $ArtifactName = "${{ matrix.vec.config }}-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}${{ matrix.vec.xdp }}"
-        gh run download ${{ github.event.client_payload.run_id }} -R microsoft/msquic -n $ArtifactName -D artifacts
+        gh run download ${{ github.event.client_payload.run_id }} -R microsoft/msquic -n "$ArtifactName" -D artifacts
     - name: Run secnetperf
       shell: pwsh
       run: scripts/secnetperf.ps1
