@@ -28,7 +28,6 @@ jobs:
 
   test-windows:
     name: Test Windows
-    needs: [build-windows]
     strategy:
       fail-fast: false
       matrix:
