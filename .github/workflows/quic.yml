@@ -49,9 +49,9 @@ jobs:
       env:
           GH_TOKEN: ${{ github.token }}
       run: |
-        New-Item -Path artifacts -ItemType Directory -Force -ErrorAction SilentlyContinue
-        $ArtifactName = "${{ matrix.vec.config }}-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}${{ matrix.vec.xdp }}"
-        gh run download ${{ github.event.client_payload.run_id }} -R microsoft/msquic -n "$ArtifactName" -D artifacts
+        New-Item -Path artifacts -ItemType Directory -Force -ErrorAction SilentlyContinue | Out-Null
+        Write-Host "Downloading ${{ matrix.vec.config }}-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}${{ matrix.vec.xdp }} from run ${{ github.event.client_payload.run_id }}"
+        gh run download "${{ github.event.client_payload.run_id }}" -R microsoft/msquic -n "${{ matrix.vec.config }}-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}${{ matrix.vec.xdp }}" -D artifacts
     - name: Run secnetperf
       shell: pwsh
       run: scripts/secnetperf.ps1
