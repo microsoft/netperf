@@ -3,6 +3,10 @@ name: QUIC
 on:
   workflow_dispatch:
     inputs:
+      run_id:
+        required: true
+        default: ''
+        type: string
       ref:
         required: false
         default: ''
@@ -26,19 +30,19 @@ jobs:
     steps:
     - run: echo "no op"
 
-  test-windows:
-    name: Test Windows
+  test:
+    name: Test Performance
     strategy:
       fail-fast: false
       matrix:
         vec: [
-          { config: "Release", plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel" },
+          { plat: "windows", arch: "x64", os: "windows-2022", tls: "schannel" },
         ]
     runs-on:
     - self-hosted
-    - "Windows"
+    - "${{ matrix.vec.plat }}"
+    - "${{ matrix.vec.arch }}"
     - "azure"
-    - "X64"
     steps:
     - name: Checkout MsQuic
       uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac
@@ -47,11 +51,12 @@ jobs:
         ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
     - name: Download MsQuic Artifacts
       env:
-          GH_TOKEN: ${{ github.token }}
+        GH_TOKEN: ${{ github.token }}
+        run: ${{ github.event.client_payload.run_id }}
+        artifact: Release-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
       run: |
-        New-Item -Path artifacts -ItemType Directory -Force -ErrorAction SilentlyContinue | Out-Null
-        Write-Host "Downloading ${{ matrix.vec.config }}-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}${{ matrix.vec.xdp }} from run ${{ github.event.client_payload.run_id }}"
-        gh run download "${{ github.event.client_payload.run_id }}" -R microsoft/msquic -n "${{ matrix.vec.config }}-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}${{ matrix.vec.xdp }}" -D artifacts
+        Write-Host "Downloading ${{ env.artifact }} from run ${{ env.run }}"
+        gh run download ${{ env.run }} -R microsoft/msquic -n ${{ env.artifact }} -D artifacts
     - name: Run secnetperf
       shell: pwsh
       run: scripts/secnetperf.ps1
