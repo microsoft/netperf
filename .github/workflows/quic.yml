@@ -61,8 +61,8 @@ jobs:
         }
         Write-Host "Downloading ${{ env.artifact }} from run ${{ env.run }}"
         $url = "https://api.github.com/repos/microsoft/msquic/actions/runs/${{ env.run }}/artifacts?name=${{ env.artifact }}"
-        $download_url = ((Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json).artifacts[0].archive_download_url
-        Invoke-WebRequest -Uri $download_url -Method GET -Headers $headers -OutFile "${{ env.artifact }}.zip"
+        $download_url = ((Invoke-WebRequest -Uri $url -Method GET -Headers $headers -UserAgent '%26actions/artifact-2.0.0').Content | ConvertFrom-Json).artifacts[0].archive_download_url
+        Invoke-WebRequest -Uri $download_url -Method GET -Headers $headers -UserAgent '%26actions/artifact-2.0.0' -OutFile "${{ env.artifact }}.zip"
         Expand-Archive -Path "${{ env.artifact }}.zip" -DestinationPath "artifacts" -Force
         Remove-Item "${{ env.artifact }}.zip"
     - name: Run secnetperf
