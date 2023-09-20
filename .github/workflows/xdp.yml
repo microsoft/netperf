@@ -40,7 +40,7 @@ jobs:
       uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac
       with:
         repository: microsoft/xdp-for-windows
-        ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
+        ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
         submodules: recursive
     - name: Setup MSBuild.exe
       uses: microsoft/setup-msbuild@ab534842b4bdf384b8aaf93765dc6f721d9f5fab
@@ -72,3 +72,37 @@ jobs:
           !artifacts/bin/**/*.ilk
           !artifacts/bin/**/*.exp
           !artifacts/bin/**/*.lastcodeanalysissucceeded
+
+  test:
+    name: Windows
+    needs: [build]
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64]
+    runs-on:
+    - self-hosted
+    - "windows"
+    - ${{ matrix.arch }}
+    - "azure"
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac
+      with:
+        repository: microsoft/xdp-for-windows
+        ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+        sparse-checkout: tools
+    - name: Check Drivers
+      shell: PowerShell
+      run: tools/check-drivers.ps1 -Config Release -Arch ${{ matrix.arch }} -Verbose
+    - name: Prepare Machine
+      shell: PowerShell
+      run: tools/prepare-machine.ps1 -ForPerfTest -NoReboot -Verbose
+    - name: Download Artifacts
+      uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
+      with:
+        name: bin_Release_${{ matrix.arch }}
+        path: artifacts/bin
+    - name: Run Tests
+      shell: PowerShell
+      run: tools/two-machine-perf.ps1 -Config Release -Arch ${{ matrix.arch }}
