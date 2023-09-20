@@ -33,6 +33,17 @@ The current jobs we execute on these machines have the following dependencies:
 
 Once the dependencies have been installed the following configuration must be made:
 
+### Enable Test Signing
+
+```cmd
+bcdedit /set testsigning on
+```
+
+> **Note** - You may have to disable Secure Boot first.
+
+> **Note** - You will have to reboot after disabling test signing.
+
+
 ### Enable PowerShell Remoting to Peer
 
 ```PowerShell
