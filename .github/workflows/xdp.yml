@@ -79,6 +79,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        os: ['2022']
         arch: [x64]
     runs-on:
     - self-hosted
@@ -95,7 +96,7 @@ jobs:
     - name: Download Artifacts
       uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
       with:
-        name: bin_Release_${{ matrix.arch }}
+        name: bin_Release_${{ matrix.os }}_${{ matrix.arch }}
         path: artifacts/bin
     - name: Run Tests
       shell: PowerShell
