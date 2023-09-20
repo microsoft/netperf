@@ -27,7 +27,7 @@ jobs:
     - run: echo "no op"
 
   build:
-    name: Windows
+    name: Build Windows
     needs: []
     strategy:
       fail-fast: false
@@ -74,7 +74,7 @@ jobs:
           !artifacts/bin/**/*.lastcodeanalysissucceeded
 
   test:
-    name: Windows
+    name: Test Windows
     needs: [build]
     strategy:
       fail-fast: false
