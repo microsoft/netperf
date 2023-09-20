@@ -92,12 +92,6 @@ jobs:
         repository: microsoft/xdp-for-windows
         ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
         sparse-checkout: tools
-    - name: Check Drivers
-      shell: PowerShell
-      run: tools/check-drivers.ps1 -Config Release -Arch ${{ matrix.arch }} -Verbose
-    - name: Prepare Machine
-      shell: PowerShell
-      run: tools/prepare-machine.ps1 -ForPerfTest -NoReboot -Verbose
     - name: Download Artifacts
       uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
       with:
