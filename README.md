@@ -13,7 +13,7 @@ Historically, networking performance testing has been spotty, inconsistent, not 
 
 ## Documentation
 
-- [Hardware](./docs/hardware.md)
+- [Machines](./docs/machines.md)
 - [Architecture](./docs/arch.md)
 
 ## Contributing

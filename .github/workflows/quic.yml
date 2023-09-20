@@ -34,13 +34,11 @@ jobs:
       matrix:
         os: ['windows-2022']
         tls: [schannel] # , openssl, openssl3]
-        xdp: [''] # , '-UseXdp']
     uses: microsoft/msquic/.github/workflows/build-reuse-win.yml@main
     with:
       os: ${{ matrix.os }}
       tls: ${{ matrix.tls }}
-      xdp: ${{ matrix.xdp }}
-      ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
+      ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
   build-windows-kernel:
     name: Build WinKernel
@@ -52,7 +50,7 @@ jobs:
     uses: microsoft/msquic/.github/workflows/build-reuse-winkernel.yml@main
     with:
       os: ${{ matrix.os }}
-      ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
+      ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
   build-ubuntu:
     name: Build Ubuntu
@@ -66,7 +64,7 @@ jobs:
     with:
       os: ${{ matrix.os }}
       tls: ${{ matrix.tls }}
-      ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
+      ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
   test-windows:
     name: Test Windows
