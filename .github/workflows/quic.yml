@@ -3,10 +3,6 @@ name: QUIC
 on:
   workflow_dispatch:
     inputs:
-      run_id:
-        required: true
-        default: ''
-        type: string
       ref:
         required: false
         default: ''
@@ -30,31 +26,70 @@ jobs:
     steps:
     - run: echo "no op"
 
-  test:
-    name: Test Performance
+  build-windows:
+    name: Build WinUser
+    needs: []
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ['windows-2022']
+        tls: [schannel] # , openssl, openssl3]
+        xdp: [''] # , '-UseXdp']
+    uses: microsoft/msquic/.github/workflows/build-reuse-win.yml@main
+    with:
+      os: ${{ matrix.os }}
+      tls: ${{ matrix.tls }}
+      xdp: ${{ matrix.xdp }}
+      ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
+
+  build-windows-kernel:
+    name: Build WinKernel
+    needs: []
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ['windows-2022']
+    uses: microsoft/msquic/.github/workflows/build-reuse-winkernel.yml@main
+    with:
+      os: ${{ matrix.os }}
+      ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
+
+  build-ubuntu:
+    name: Build Ubuntu
+    needs: []
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ['ubuntu-20.04']
+        tls: [openssl, openssl3]
+    uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml@main
+    with:
+      os: ${{ matrix.os }}
+      tls: ${{ matrix.tls }}
+      ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
+
+  test-windows:
+    name: Test Windows
+    needs: [build-windows]
     strategy:
       fail-fast: false
       matrix:
         vec: [
-          { plat: "windows", arch: "x64", os: "windows-2022", tls: "schannel" },
+          { plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel" },
         ]
     runs-on:
     - self-hosted
-    - "${{ matrix.vec.plat }}"
-    - "${{ matrix.vec.arch }}"
+    - ${{ matrix.vec.plat }}
+    - ${{ matrix.vec.arch }}
     - "azure"
     steps:
-    - name: Checkout MsQuic
+    - name: Checkout repository
       uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac
       with:
         repository: microsoft/msquic
         ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
-    - name: Download MsQuic Artifacts
-      uses: dawidd6/action-download-artifact@v2
+    - uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
       with:
-        github_token: ${{secrets.GITHUB_TOKEN}}
-        repo: microsoft/msquic
-        run_id: ${{ github.event.client_payload.run_id }}
         name: Release-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
         path: artifacts
     - name: Run secnetperf
