@@ -99,5 +99,5 @@ jobs:
         name: bin_Release_${{ matrix.os }}_${{ matrix.arch }}
         path: artifacts/bin
     - name: Run Tests
-      shell: PowerShell
+      shell: pwsh
       run: tools/two-machine-perf.ps1 -Config Release -Arch ${{ matrix.arch }}
