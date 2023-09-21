@@ -66,7 +66,7 @@ function Get-Jobs {
 }
 
 function Get-RunId {
-    for ($i = 0; $i -lt 3; $i++) { # Try up to 3 times
+    for ($i = 0; $i -lt 10; $i++) { # Try up to 10 times
         $workflows = Get-Runs
         foreach ($workflow in $workflows) {
             $jobs = Get-Jobs $workflow.id
