@@ -9,10 +9,10 @@ on:
         type: string
   repository_dispatch:
     types: [run-xdp]
-      # Args: { guid, ref, sha }
+      # Args: { guid, sha, ref, pr }
 
 concurrency:
-  group: xdp-${{ github.event.client_payload.sha || github.sha }}
+  group: xdp-${{ github.event.client_payload.pr || github.event.client_payload.sha }}
   cancel-in-progress: true
 
 permissions: read-all

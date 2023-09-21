@@ -1,18 +1,18 @@
 param (
     [Parameter(Mandatory = $true)]
+    [string]$pat,
+
+    [Parameter(Mandatory = $true)]
     [string]$type,
 
-    [Parameter(Mandatory = $true)]
-    [string]$name, # Deprecated, no longer used
+    [Parameter(Mandatory = $false)]
+    [string]$sha = "",
 
-    [Parameter(Mandatory = $true)]
-    [string]$ref,
+    [Parameter(Mandatory = $false)]
+    [string]$ref = "",
 
-    [Parameter(Mandatory = $true)]
-    [string]$sha,
-
-    [Parameter(Mandatory = $true)]
-    [string]$pat,
+    [Parameter(Mandatory = $false)]
+    [string]$pr = "",
 
     [Parameter(Mandatory = $false)]
     [string]$run_id = ""
@@ -35,8 +35,9 @@ function Start-Workflow {
         event_type = "run-$type"
         client_payload = @{
             guid = $guid
-            ref = $ref
             sha = $sha
+            ref = $ref
+            pr = $pr
             run_id = $run_id
         }
     } | ConvertTo-Json

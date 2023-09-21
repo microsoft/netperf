@@ -9,10 +9,10 @@ name: ebpf-for-windows
 on:
   repository_dispatch:
     types: [run-ebpf]
-      # Args: { guid, ref, sha, run_id }
+      # Args: { guid, sha, ref, pr, run_id }
 
 concurrency:
-  group: ebpf-${{ github.event.client_payload.sha || github.sha }}
+  group: ebpf-${{ github.event.client_payload.pr || github.event.client_payload.sha }}
   cancel-in-progress: true
 
 permissions: read-all

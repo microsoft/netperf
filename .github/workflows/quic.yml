@@ -9,10 +9,10 @@ on:
         type: string
   repository_dispatch:
     types: [run-quic]
-      # Args: { guid, ref, sha, run_id }
+      # Args: { guid, sha, ref, pr }
 
 concurrency:
-  group: quic-${{ github.event.client_payload.sha || inputs.ref }}
+  group: quic-${{ github.event.client_payload.pr || github.event.client_payload.sha }}
   cancel-in-progress: true
 
 permissions: read-all
