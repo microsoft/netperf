@@ -68,7 +68,7 @@ jobs:
       run: |
         $src = "artifacts/bin/${{ matrix.platform }}_Release"
         $dest = "artifacts/bin2/${{ matrix.platform }}_Release"
-        mkdir $dest, $dest/xdp, $dest/xdpinstaller | Out-Null
+        mkdir $dest | Out-Null
         copy -Recurse $src/xdp $dest
         copy -Recurse $src/xdpinstaller $dest
         copy $src/xdppcw.man $dest
