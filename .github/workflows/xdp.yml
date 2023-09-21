@@ -66,8 +66,8 @@ jobs:
     - name: Filter Artifacts
       shell: pwsh
       run: |
-        $src = artifacts/bin/${{ matrix.os }}_${{ matrix.platform }}
-        $dest = artifacts/bin2/${{ matrix.os }}_${{ matrix.platform }}
+        $src = "artifacts/bin/${{ matrix.os }}_${{ matrix.platform }}"
+        $dest = "artifacts/bin2/${{ matrix.os }}_${{ matrix.platform }}"
         mkdir $dest
         copy -Recurse $src/xdp $dest/xdp
         copy -Recurse $src/xdpinstaller $dest/xdpinstaller
