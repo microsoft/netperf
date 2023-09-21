@@ -63,15 +63,24 @@ jobs:
     - name: Build Installer
       shell: PowerShell
       run: tools/create-installer.ps1 -Config Release -Platform ${{ matrix.platform }}
+    - name: Filter Artifacts
+      shell: pwsh
+      run: |
+        $src = artifacts/bin/${{ matrix.os }}_${{ matrix.platform }}
+        $dest = artifacts/bin2/${{ matrix.os }}_${{ matrix.platform }}
+        mkdir $dest
+        copy -Recurse $src/xdp $dest/xdp
+        copy -Recurse $src/xdpinstaller $dest/xdpinstaller
+        copy $src/xdppcw.man $dest/xdppcw.man
+        copy $src/xdp.pdb $dest/xdp.pdb
+        copy $src/xdpapi.pdb $dest/xdpapi.pdb
+        copy $src/xskbench.exe $dest/xskbench.exe
+        copy $src/xskbench.pdb $dest/xskbench.pdb
     - name: Upload Artifacts
       uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
       with:
         name: bin_Release_${{ matrix.os }}_${{ matrix.platform }}
-        path: |
-          artifacts/bin
-          !artifacts/bin/**/*.ilk
-          !artifacts/bin/**/*.exp
-          !artifacts/bin/**/*.lastcodeanalysissucceeded
+        path: artifacts/bin2
 
   test:
     name: Test Windows
