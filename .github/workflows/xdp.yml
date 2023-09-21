@@ -68,14 +68,14 @@ jobs:
       run: |
         $src = "artifacts/bin/${{ matrix.platform }}_Release"
         $dest = "artifacts/bin2/${{ matrix.platform }}_Release"
-        mkdir $dest, $dest/xdp, $dest/xdpinstaller
-        copy -Recurse $src/xdp $dest/xdp
-        copy -Recurse $src/xdpinstaller $dest/xdpinstaller
-        copy $src/xdppcw.man $dest/xdppcw.man
-        copy $src/xdp.pdb $dest/xdp.pdb
-        copy $src/xdpapi.pdb $dest/xdpapi.pdb
-        copy $src/xskbench.exe $dest/xskbench.exe
-        copy $src/xskbench.pdb $dest/xskbench.pdb
+        mkdir $dest, $dest/xdp, $dest/xdpinstaller | Out-Null
+        copy -Recurse $src/xdp $dest
+        copy -Recurse $src/xdpinstaller $dest
+        copy $src/xdppcw.man $dest
+        copy $src/xdp.pdb $dest
+        copy $src/xdpapi.pdb $dest
+        copy $src/xskbench.exe $dest
+        copy $src/xskbench.pdb $dest
     - name: Upload Artifacts
       uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
       with:
