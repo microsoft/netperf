@@ -74,6 +74,8 @@ jobs:
         copy $src/xdppcw.man $dest
         copy $src/xdp.pdb $dest
         copy $src/xdpapi.pdb $dest
+        copy $src/pktcmd.exe $dest
+        copy $src/pktcmd.pdb $dest
         copy $src/xskbench.exe $dest
         copy $src/xskbench.pdb $dest
     - name: Upload Artifacts
