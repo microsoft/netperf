@@ -12,6 +12,10 @@ steps:
   shell: pwsh
   run: |
     $url = "https://raw.githubusercontent.com/microsoft/netperf/main/run-workflow.ps1"
+    if ('${{ secrets.NET_PERF_TRIGGER }}' -eq '') {
+        Write-Host "Not able to run because no secrets are available!"
+        return
+    }
     iex "& { $(irm $url) } ${{ secrets.NET_PERF_TRIGGER }} quic ${{ github.sha }} ${{ github.ref }} ${{ github.event.pull_request.number }}"
 ```
 
