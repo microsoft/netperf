@@ -16,6 +16,8 @@ Eventually, a subset of these questions will be prioritized and answered by the 
     - For multi-connection/stream scenarios?
         - At large scale?
     - Upload? Download?
+    - Is there a delta between **throughput** (e.g. measured at the NIC/NDIS) vs. **goodput** as seen by the app?
+        - or are we defining **throughput** as seen from the app?
 
 - What is the **latency** of a given protocol for a request/response type exchange on Windows and Linux?
     - For single connection/stream scenarios?
@@ -25,6 +27,8 @@ Eventually, a subset of these questions will be prioritized and answered by the 
     - What do the percentile curves look like?
         - What percentiles do we care about most?
 - What is the **jitter** detected across the measured latency in request/respose protocol exchanges on Windows and Linux?
+- What is the curve in **datagram loss rates** vs. **datagram goodput**?
+    - Measuring UDP is difficult at scale - tracking loss vs. goodput has been effective.
 - What is the total **transactions** over a period of time for a given protocol + workload on Windows and Linux?
     - "transaction" defined as the application's work, from creating the socket to closing the socket
     - Could also be defined at the protocol's definition of 'start' and 'end' (protocol being one above TCP or UDP)
