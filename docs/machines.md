@@ -29,7 +29,7 @@ The current jobs we execute on these machines have the following dependencies:
 
 - PowerShell 7
 
-## Configuration
+## Configuration (Windows)
 
 Once the dependencies have been installed the following configuration must be made:
 
@@ -93,3 +93,7 @@ sc.exe config "actions.runner.microsoft-netperf.$name" obj= ".\netperf" password
 sc.exe stop "actions.runner.microsoft-netperf.$name"
 sc.exe start "actions.runner.microsoft-netperf.$name"
 ```
+
+## Configuration (Linux)
+
+TODO
