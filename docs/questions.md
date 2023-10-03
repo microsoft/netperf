@@ -11,20 +11,20 @@ Eventually, a subset of these questions will be prioritized and answered by the 
 
 > **Note** - Considering modern day network usage is almost always secured, we measure the performance of the secure variants of the protocols (e.g. TCP/TLS, QUIC, etc.) instead of the insecure variants (e.g. TCP, UDP, etc.).
 
-- What is the **throughput** of a given protocol (e.g. TCP/TLS, QUIC, etc.) on Windows and Linux?
+- What is the **throughput** of a given protocol on Windows and Linux?
     - For single connection/stream scenarios?
     - For multi-connection/stream scenarios?
         - At large scale?
     - Upload? Download?
-- What is the **latency** of a given protocol (e.g. TCP/TLS, QUIC, etc.) for a request/response type exchange on Windows and Linux?
+- What is the **latency** of a given protocol for a request/response type exchange on Windows and Linux?
     - For single connection/stream scenarios?
     - For multi-connection/stream scenarios?
         - At large scale?
     - For multiple request/response IO sizes?
     - What do the percentile curves look like?
         - What percentiles do we care about most?
-- What is the **maximum requests/sec** of a given protocol (e.g. TCP/TLS, QUIC, etc.) for a request/response type exchange on Windows and Linux?
-- What is the **maximum handshakes/sec** of a given protocol (e.g. TCP/TLS, QUIC, etc.) for a request/response type exchange on Windows and Linux?
+- What is the **maximum requests/sec** of a given protocol for a request/response type exchange on Windows and Linux?
+- What is the **maximum handshakes/sec** of a given protocol for a request/response type exchange on Windows and Linux?
 
 ## XDP
 
