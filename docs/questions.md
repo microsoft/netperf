@@ -16,6 +16,7 @@ Eventually, a subset of these questions will be prioritized and answered by the 
     - For multi-connection/stream scenarios?
         - At large scale?
     - Upload? Download?
+
 - What is the **latency** of a given protocol for a request/response type exchange on Windows and Linux?
     - For single connection/stream scenarios?
     - For multi-connection/stream scenarios?
@@ -23,6 +24,10 @@ Eventually, a subset of these questions will be prioritized and answered by the 
     - For multiple request/response IO sizes?
     - What do the percentile curves look like?
         - What percentiles do we care about most?
+- What is the **jitter** detected across the measured latency in request/respose protocol exchanges on Windows and Linux?
+- What is the total **transactions** over a period of time for a given protocol + workload on Windows and Linux?
+    - "transaction" defined as the application's work, from creating the socket to closing the socket
+    - Could also be defined at the protocol's definition of 'start' and 'end' (protocol being one above TCP or UDP)
 - What is the **maximum requests/sec** of a given protocol for a request/response type exchange on Windows and Linux?
 - What is the **maximum handshakes/sec** of a given protocol for a request/response type exchange on Windows and Linux?
 
@@ -39,7 +44,10 @@ Eventually, a subset of these questions will be prioritized and answered by the 
 **AF_XDP Alternatives**
 - Windows sockets w/ IOCP
 - Windows RIO w/ IOCP and polling
-- Linux traditional sockets
+- Windows sockets w/ notifications instead of async/IOCP (ProcessSocketNotifications, WSAPoll)
+- Windows blocking vs Linux blocking
+- Windows TransmitFile vs. a Linux similar API (an API that doesn't need to roundtrip to usermode)
+- Linux traditional sockets (Epoll? blocking calls?)
 - Linux io_uring
 - Linux XDP (native (w/ and w/o zerocopy) vs generic)
 - DPDK?
