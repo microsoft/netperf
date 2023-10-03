@@ -1,6 +1,6 @@
 # Questions
 
-The high-level reason for this repo is to answer questions that various internal and external teams have about the performance of networking across various different scenarios.
+The high-level reason for this project is to answer questions that various internal and external groups have about the performance of networking across various different scenarios.
 The final output of this project is a dashboard that is meant to answer these questions.
 Below is a list of all the questions we could come up with that might be interesting to answer.
 Eventually, a subset of these questions will be prioritized and answered by the dashboard.
