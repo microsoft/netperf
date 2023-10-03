@@ -9,7 +9,7 @@ Eventually, a subset of these questions will be prioritized and answered by the 
 
 ## Transports
 
-> **Note** - Considering modern day network usage is generally always secured, we measure the performance of the secure variants of the protocols (e.g. TCP/TLS, QUIC, etc.) instead of the insecure variants (e.g. TCP, UDP, etc.).
+> **Note** - Considering modern day network usage is almost always secured, we measure the performance of the secure variants of the protocols (e.g. TCP/TLS, QUIC, etc.) instead of the insecure variants (e.g. TCP, UDP, etc.).
 
 - What is the **throughput** of a given protocol (e.g. TCP/TLS, QUIC, etc.) on Windows and Linux?
     - For single connection/stream scenarios?
