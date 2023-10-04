@@ -62,4 +62,5 @@ Eventually, a subset of these questions will be prioritized and answered by the 
 
 ## eBPF
 
-TODO
+For partners/customers that uses something like [Cilium](https://github.com/cilium/cilium) for added observability, they might want to know how 
+that added observability impacts **packets/sec** in all the scenarios listed above. 
