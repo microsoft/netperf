@@ -6,9 +6,9 @@ st.title("Draft Idea #2")
 
 chart_data = pd.DataFrame(
    {
-       "col1": list(range(20)) * 3,
-       "col2": np.random.randn(60),
-       "col3": ["A"] * 20 + ["B"] * 20 + ["C"] * 20,
+       "column1": list(range(20)) * 3,
+       "column2": np.random.randn(60),
+       "column3": ["A"] * 20 + ["B"] * 20 + ["C"] * 20,
    }
 )
 
