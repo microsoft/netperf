@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from datetime import datetime
+import os
+from PIL import Image
 
 st.sidebar.image("msft.png", width=200)
 st.sidebar.title("NetPerf Hightlight")
@@ -22,7 +24,9 @@ st.text("Data as of July 2023")
 
 # st.subheader("With Windows:")
 col0, col1, col2, col3, col4 = st.columns(5)
-col0.image("windows.png", width=75)
+current_directory = os.path.dirname(os.path.abspath(__file__))
+image_path = os.path.join(current_directory, "windows.png")
+col0.image(Image.open(image_path), width=75)
 col1.metric("TCP/TLS \n \n Single Connection", "5 GB/s", "1 Gb/s")
 col2.metric("TCP/TLS \n \n Muliple Connections", "5 GB/s", "1 Gb/s")
 col3.metric("QUIC \n \n Single Connection", "5 GB/s", "-1 Gb/s")
@@ -30,7 +34,8 @@ col4.metric("QUIC \n \n Multiple Connections", "5 GB/s", "1 Gb/s")
 
 # st.subheader("With Linux:")
 col0, col1, col2, col3, col4 = st.columns(5)
-col0.image("linux.png", width=75)
+image_path_linux = os.path.join(current_directory, "linux.png")
+col0.image(Image.open(image_path_linux), width=75)
 col1.metric("TCP/TLS \n \n Single Connection", "4 GB/s", "-1 Gb/s")
 col2.metric("TCP/TLS \n \n Muliple Connections", "4 GB/s", "-1 Gb/s")
 col3.metric("QUIC \n \n Single Connection", "6 GB/s", "1 Gb/s")
@@ -67,7 +72,7 @@ st.header("Latency Comparison [Lower is better]")
 
 # st.subheader("With Windows:")
 col0, col1, col2, col3, col4 = st.columns(5)
-col0.image("windows.png", width=75)
+col0.image(Image.open(image_path), width=75)
 col1.metric("TCP/TLS \n \n Single Connection", "5 ns", "1 ns", delta_color="inverse")
 col2.metric("TCP/TLS \n \n Muliple Connections", "5 ns", "1 ns", delta_color="inverse")
 col3.metric("QUIC \n \n Single Connection", "5 ns", "-1 ns", delta_color="inverse")
@@ -75,7 +80,7 @@ col4.metric("QUIC \n \n Multiple Connections", "5 ns", "1 ns", delta_color="inve
 
 # st.subheader("With Linux:")
 col0, col1, col2, col3, col4 = st.columns(5)
-col0.image("linux.png", width=75)
+col0.image(Image.open(image_path_linux), width=75)
 col1.metric("TCP/TLS \n \n Single Connection", "4 ns", "-1 ns", delta_color="inverse")
 col2.metric("TCP/TLS \n \n Muliple Connections", "4 ns", "-1 ns", delta_color="inverse")
 col3.metric("QUIC \n \n Single Connection", "6 ns", "1 ns", delta_color="inverse")
