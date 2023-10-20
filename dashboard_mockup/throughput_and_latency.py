@@ -5,7 +5,8 @@ from datetime import datetime
 import os
 from PIL import Image
 
-st.sidebar.image("msft.png", width=200)
+current_directory = os.path.dirname(os.path.abspath(__file__))
+st.sidebar.image(Image.open(os.path.join(current_directory, "msft.png")), width=200)
 st.sidebar.title("NetPerf Hightlight")
 st.sidebar.text("""
  Did you know that Windows + TCP/TLS is
@@ -24,7 +25,6 @@ st.text("Data as of July 2023")
 
 # st.subheader("With Windows:")
 col0, col1, col2, col3, col4 = st.columns(5)
-current_directory = os.path.dirname(os.path.abspath(__file__))
 image_path = os.path.join(current_directory, "windows.png")
 col0.image(Image.open(image_path), width=75)
 col1.metric("TCP/TLS \n \n Single Connection", "5 GB/s", "1 Gb/s")
