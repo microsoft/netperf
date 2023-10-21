@@ -61,7 +61,7 @@ Did you know that Windows + TCP/TLS is
 
 
 
-current_directory = os.path.dirname(os.path.abspath(__file__))
+current_directory = os.path.dirname(os.path.abspath(__file__)) + "/../"
 st.sidebar.image(Image.open(os.path.join(current_directory, "msft.png")), width=200)
 st.sidebar.title("NetPerf Hightlight")
 st.sidebar.text(HIGHLIGHT_STRING)
@@ -70,7 +70,7 @@ st.sidebar.button("Learn more")
 # DATA:
 
 
-st.header("Single Connection")
+st.header("Multiple Connections")
 st.subheader("Throughput Comparison [Higher is better]")
 st.text("Data as of " + THROUGHPUT_DATA["Date"][0])
 
