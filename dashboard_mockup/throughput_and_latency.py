@@ -6,22 +6,19 @@ from PIL import Image
 import webbrowser
 
 
-# - Expected Data: Single Connection Throughput and Latency. *Optional: Highlight string.
+# - Expected Data: Multiple Connection Throughput and Latency. *Optional: Highlight string.
 
 # - Format:
 
 #     > Throughput = A table-like dataframe with columns like:
 
 #     MsQuic Commit Sequence Number         | Windows+TCP/TLS | Linux+TCP/TLS | Windows+QUIC | Linux+QUIC
-#     2023-10-01   | 5 GB/s          | 4 GB/s        | 5 GB/s      | 4 GB/s
-#     2023-10-02   | 5 GB/s          | 4 GB/s        | 5 GB/s      | 4 GB/s
+#     <github link>   | 5 GB/s          | 4 GB/s        | 5 GB/s      | 4 GB/s
+#     ...             | 5 GB/s          | 4 GB/s        | 5 GB/s      | 4 GB/s
 #     ...
 
-#     > Latency = A table-like dataframe with columns like:
+#     > Latency = Similar to throughput table.
 
-#     MsQuic Commit Sequence Number         | Windows+TCP/TLS | Linux+TCP/TLS | Windows+QUIC | Linux+QUIC
-#     2023-10-01   | 1 ns            | 1 ns          | 1 ns        | 1 ns
-#     2023-10-02   | 1 ns            | 1 ns          | 1 ns        | 1 ns
 #     ...
 
 
