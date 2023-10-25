@@ -60,8 +60,9 @@ st.sidebar.title("NetPerf Hightlight")
 st.sidebar.text(HIGHLIGHT_STRING)
 st.sidebar.button("Learn more")
 
-st.header("Multiple Connections")
-st.subheader("Throughput Comparison [Higher is better]")
+st.title("Throughput and Latency")
+st.subheader("[Multiple Connections (40)]")
+st.header("Throughput Comparison [Higher is better]")
 st.text(f"Data as of the latest commit (Commit Sequence Number {len(THROUGHPUT_DATA['MsQuic Commit Sequence Number'])})")
 
 latest_windows_tcp_t =  THROUGHPUT_DATA["Windows+TCP/TLS"][0]
@@ -87,11 +88,9 @@ st.line_chart(
            "#000000", "#00FF00"]
 )
 
-highlighted_idx = st.number_input("Find A Commit By Sequence Number", min_value=1, max_value=20, value=1)
-if st.button("Find Commit"):
-    webbrowser.open(EXAMPLE_GITHUB_COMMIT_LINKS[highlighted_idx - 1])
+st.markdown("<span style='color:red'> // DEV NOTE: The above line graph should be clickable. Clicking the graph will open a new tab to the commit itself on Github</span>", unsafe_allow_html=True)
 
-st.subheader("Latency Comparison [Lower is better]")
+st.header("Latency Comparison [Lower is better]")
 st.text(f"Data as of the latest commit (Commit Sequence Number {len(LATENCY_DATA['MsQuic Commit Sequence Number'])})")
 
 p50, p90, p95 = st.columns(3)
