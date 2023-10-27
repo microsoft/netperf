@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import os
 from PIL import Image
-
+from util import dev_note
 
 # - Expected Data: Multiple Connection Throughput and Latency. *Optional: Highlight string.
 
@@ -87,7 +87,8 @@ st.line_chart(
 )
 
 
-st.markdown("<span style='color:red'> // DEV NOTE: The above line graph should be clickable. Clicking the graph will open a new tab to the commit itself on Github</span>", unsafe_allow_html=True)
+
+dev_note("The above line graph should be clickable. Clicking the graph will open a new tab to the commit itself on Github</span>")
 
 
 st.subheader("[Multiple Connections (40)]")
