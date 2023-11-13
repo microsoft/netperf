@@ -8,15 +8,30 @@ const icon = (name) => (
 
 const navConfig = [
   {
-    title: 'dashboard',
+    title: 'Overview',
     path: '/',
     icon: icon('ic_analytics'),
   },
-  // {
-  //   title: 'user',
-  //   path: '/user',
-  //   icon: icon('ic_user'),
-  // },
+  {
+    title: 'detailed throughput',
+    path: '/throughput',
+    icon: icon('ic_analytics'),
+  },
+  {
+    title: 'detailed latency',
+    path: '/latency',
+    icon: icon('ic_analytics'),
+  },
+  {
+    title: 'Requests Per Second',
+    path: '/rps',
+    icon: icon('ic_analytics'),
+  },
+  {
+    title: 'Handshakes Per Second',
+    path: '/hps',
+    icon: icon('ic_analytics'),
+  }
   // {
   //   title: 'product',
   //   path: '/products',

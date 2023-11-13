@@ -17,14 +17,15 @@ import AppWidgetSummary from '../app-widget-summary';
 
 // ----------------------------------------------------------------------
 
-export default function AppView() {
+export default function GraphView(props) {
+  const { title } = props;
   return (
     <Container maxWidth="xl">
       <Typography variant="h3" sx={{ mb: 5 }}>
-        Network Performance Overview
+       { title }
       </Typography>
 
-      <p>Data as of 10/10/2023 (Latest Commit)</p>
+      {/* <p>Data as of 10/10/2023 (Latest Commit)</p> */}
       {/* <Typography variant="h6" sx={{ mb: 5 }}>
         Network Performance Overview
       </Typography> */}
@@ -57,7 +58,7 @@ export default function AppView() {
           />
         </Grid> */}
 
-        <Grid xs={12} sm={6} md={3}>
+        {/* <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
             title="Throughput Performance Score."
             total={107}
@@ -107,8 +108,9 @@ export default function AppView() {
               </div>
             }
           />
-        </Grid>
-        <Grid xs={12} sm={6} md={3}>
+        </Grid> */}
+
+        {/* <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
             title="Latency Performance Score."
             total={80}
@@ -152,9 +154,9 @@ export default function AppView() {
               </div>
             }
           />
-        </Grid>
+        </Grid> */}
 
-        <Grid xs={12} md={6} lg={6}>
+        {/* <Grid xs={12} md={6} lg={6}>
           <AppWebsiteVisits
             title="Throughput Comparison (GB / s)"
             subheader="Tested using Windows 11 build 22000.282, Linux Ubuntu 20.04.3 LTS"
@@ -176,7 +178,7 @@ export default function AppView() {
               ],
             }}
           />
-        </Grid>
+        </Grid> */}
         {/*
         <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
@@ -214,24 +216,48 @@ export default function AppView() {
           />
         </Grid> */}
 
-        <Grid xs={12} md={6} lg={6}>
+        <Grid xs={12} md={6} lg={12}>
           <AppWebsiteVisits
-            title="Latency Comparison (nanoseconds)"
+            title="Download Throughput"
             subheader="Tested using Windows 11 build 22000.282, Linux Ubuntu 20.04.3 LTS"
             chart={{
-              labels: ['Windows + OpenSSL', 'Windows + Schannel', 'Linux + OpenSSL'],
+              labels: ['Commit 1', 'Commit 2', 'Commit 3', 'Commit 4', 'Commit 5', 'Commit 6'],
               series: [
                 {
                   name: 'TCP',
-                  type: 'column',
+                  type: 'line',
                   fill: 'solid',
-                  data: [23, 30, 22],
+                  data: [23, 30, 22, 43, 32, 44],
                 },
                 {
                   name: 'QUIC',
-                  type: 'column',
+                  type: 'line',
                   fill: 'solid',
-                  data: [10, 5, 21],
+                  data: [10, 5, 21, 12, 32, 44],
+                },
+              ],
+            }}
+          />
+        </Grid>
+
+        <Grid xs={12} md={6} lg={12}>
+          <AppWebsiteVisits
+            title="Upload Throughput"
+            subheader="Tested using Windows 11 build 22000.282, Linux Ubuntu 20.04.3 LTS"
+            chart={{
+              labels: ['Commit 1', 'Commit 2', 'Commit 3', 'Commit 4', 'Commit 5', 'Commit 6'],
+              series: [
+                {
+                  name: 'Linux + TCP',
+                  type: 'line',
+                  fill: 'solid',
+                  data: [23, 30, 22, 43, 32, 44],
+                },
+                {
+                  name: 'Windows + TCP',
+                  type: 'line',
+                  fill: 'solid',
+                  data: [10, 5, 21, 12, 32, 44],
                 },
               ],
             }}
