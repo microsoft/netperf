@@ -1,5 +1,7 @@
 // import { faker } from '@faker-js/faker';
-import Button from '@mui/material/Button';
+// import Button from '@mui/material/Button';
+import PropTypes from 'prop-types';
+
 import Container from '@mui/material/Container';
 import Grid from '@mui/material/Unstable_Grid2';
 import Typography from '@mui/material/Typography';
@@ -10,14 +12,14 @@ import Typography from '@mui/material/Typography';
 // import AppOrderTimeline from '../app-order-timeline';
 // import AppCurrentVisits from '../app-current-visits';
 import AppWebsiteVisits from '../app-website-visits';
-import AppWidgetSummary from '../app-widget-summary';
+
+// import AppWidgetSummary from '../app-widget-summary';
 // import AppTrafficBySite from '../app-traffic-by-site';
 // import AppCurrentSubject from '../app-current-subject';
 // import AppConversionRates from '../app-conversion-rates';
 
 // ----------------------------------------------------------------------
-
-export default function GraphView(props) {
+function GraphView(props) {
   const { title } = props;
   return (
     <Container maxWidth="xl">
@@ -69,15 +71,15 @@ export default function GraphView(props) {
                 <Button
                   onClick={() =>
                     alert(`
-                This score is computed as: 
-                
-                X = Windows throughput on OpenSSL 
-                Y = Windows throughput on Schannel 
+                This score is computed as:
+
+                X = Windows throughput on OpenSSL
+                Y = Windows throughput on Schannel
                 Z = Linux throughput on OpenSSL
 
                 performance score = [(X + Y) / (2 * Z)] * 100.
 
-                Essentially, it is a proportion of windows throughput in terms of linux. 
+                Essentially, it is a proportion of windows throughput in terms of linux.
               `)
                   }
                 >
@@ -96,12 +98,12 @@ export default function GraphView(props) {
             icon={
               <div>
                 <img alt="icon" src="/assets/icons/glass/Ubuntu-Logo.png" />
-                <Button 
+                <Button
                 onClick={() =>
                   alert(`
-              This score is computed as: 
+              This score is computed as:
 
-              
+
             `)
                 }
                 >?</Button>
@@ -121,7 +123,7 @@ export default function GraphView(props) {
                 <Button
                   onClick={() =>
                     alert(`
-                  This score is computed as: 
+                  This score is computed as:
 
 
                 `)
@@ -145,9 +147,9 @@ export default function GraphView(props) {
                 <Button
                 onClick={() =>
                   alert(`
-              This score is computed as: 
+              This score is computed as:
 
-              
+
             `)
                 }
                 >?</Button>
@@ -388,3 +390,9 @@ export default function GraphView(props) {
     </Container>
   );
 }
+
+GraphView.propTypes = {
+  title: PropTypes.string.isRequired
+}
+
+export default GraphView;
