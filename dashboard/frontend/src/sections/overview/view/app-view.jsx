@@ -59,24 +59,26 @@ export default function AppView() {
 
         <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
-            title="Throughput Performance Score."
+            title="Windows Throughput Performance Score."
             total={107}
             color="primary"
             icon={
               <div>
-                <img alt="icon" src="/assets/icons/glass/windows.png" />
+                <img alt="icon" src="/netperf/dist/assets/icons/glass/windows.png" />
                 <Button
                   onClick={() =>
                     alert(`
-                This score is computed as: 
-                
-                X = Windows throughput on OpenSSL 
-                Y = Windows throughput on Schannel 
+                This score is computed as:
+
+                X = Windows throughput on OpenSSL
+                Y = Windows throughput on Schannel
                 Z = Linux throughput on OpenSSL
 
-                performance score = [(X + Y) / (2 * Z)] * 100.
+                performance score = [(AVERAGE(X, Y)) / (Z)] * 100.
 
-                Essentially, it is a proportion of windows throughput in terms of linux. 
+                Essentially, proportionally,
+                Windows Throughput
+                in terms of Linux.
               `)
                   }
                 >
@@ -89,18 +91,18 @@ export default function AppView() {
 
         <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
-            title="Throughput Performance Score."
+            title="Linux Throughput Performance Score."
             total={78}
             color="primary"
             icon={
               <div>
-                <img alt="icon" src="/assets/icons/glass/Ubuntu-Logo.png" />
-                <Button 
+                <img alt="icon" src="/netperf/dist/assets/icons/glass/Ubuntu-Logo.png" />
+                <Button
                 onClick={() =>
                   alert(`
-              This score is computed as: 
+              This score is computed as:
 
-              
+
             `)
                 }
                 >?</Button>
@@ -110,16 +112,16 @@ export default function AppView() {
         </Grid>
         <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
-            title="Latency Performance Score."
+            title="Windows Latency Performance Score."
             total={80}
             color="primary"
             icon={
               <div>
-                <img alt="icon" src="/assets/icons/glass/windows.png" />
+                <img alt="icon" src="/netperf/dist/assets/icons/glass/windows.png" />
                 <Button
                   onClick={() =>
                     alert(`
-                  This score is computed as: 
+                  This score is computed as:
 
 
                 `)
@@ -134,18 +136,18 @@ export default function AppView() {
 
         <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
-            title="Latency Performance Score."
+            title="Linux Latency Performance Score."
             total={79}
             color="primary"
             icon={
               <div>
-                <img alt="icon" src="/assets/icons/glass/Ubuntu-Logo.png" />
+                <img alt="icon" src="/netperf/dist/assets/icons/glass/Ubuntu-Logo.png" />
                 <Button
                 onClick={() =>
                   alert(`
-              This score is computed as: 
+              This score is computed as:
 
-              
+
             `)
                 }
                 >?</Button>
