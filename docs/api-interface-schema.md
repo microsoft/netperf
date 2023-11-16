@@ -10,6 +10,34 @@
 - Served through a REST Api.
 
 
+## Raw Data Format:
+
+```
+{
+    "Connections" : [
+        {
+            "Streams" : [
+                {
+                    "events" : [
+                        {
+                            start_timestamp: "...",
+                            end_timestamp: "...",
+                            bytes_sent: 0,
+                            bytes_recv: 1000,
+                        }
+                    ]
+                },
+
+                ...
+            ]
+        },
+
+        ...
+    ]
+}
+```
+
+
 
 Pages based on the mockup design here: [Mockup](https://mockup2.streamlit.app)
 

@@ -1,36 +1,32 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# Logs
+logs
+*.log
+npm-debug.log*
 
-# dependencies
-node_modules
-.pnp
-.pnp.js
+# Dependencies
+node_modules/
 
-# testing
+# Coverage
 coverage
 
-# production
-.next
-.swc
-_static
-out
-dist
-build
+# Transpiled files
+build/
 
-# environment variables
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# misc
-.DS_Store
-.vercel
-.netlify
-.unimportedrc.json
-tsconfig.tsbuildinfo
+# VS Code
 .vscode
+!.vscode/tasks.js
 
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# JetBrains IDEs
+.idea/
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Misc
+.DS_Store
+
+# Ignore production frontend
+dist/

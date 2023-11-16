@@ -1,7 +1,5 @@
 // import { faker } from '@faker-js/faker';
-// import Button from '@mui/material/Button';
-import PropTypes from 'prop-types';
-
+import Button from '@mui/material/Button';
 import Container from '@mui/material/Container';
 import Grid from '@mui/material/Unstable_Grid2';
 import Typography from '@mui/material/Typography';
@@ -12,22 +10,21 @@ import Typography from '@mui/material/Typography';
 // import AppOrderTimeline from '../app-order-timeline';
 // import AppCurrentVisits from '../app-current-visits';
 import AppWebsiteVisits from '../app-website-visits';
-
-// import AppWidgetSummary from '../app-widget-summary';
+import AppWidgetSummary from '../app-widget-summary';
 // import AppTrafficBySite from '../app-traffic-by-site';
 // import AppCurrentSubject from '../app-current-subject';
 // import AppConversionRates from '../app-conversion-rates';
 
 // ----------------------------------------------------------------------
-function GraphView(props) {
-  const { title } = props;
+
+export default function AppView() {
   return (
     <Container maxWidth="xl">
       <Typography variant="h3" sx={{ mb: 5 }}>
-       { title }
+        Network Performance Overview
       </Typography>
 
-      {/* <p>Data as of 10/10/2023 (Latest Commit)</p> */}
+      <p>Data as of 10/10/2023 (Latest Commit)</p>
       {/* <Typography variant="h6" sx={{ mb: 5 }}>
         Network Performance Overview
       </Typography> */}
@@ -60,14 +57,14 @@ function GraphView(props) {
           />
         </Grid> */}
 
-        {/* <Grid xs={12} sm={6} md={3}>
+        <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
-            title="Throughput Performance Score."
+            title="Windows Throughput Performance Score."
             total={107}
             color="primary"
             icon={
               <div>
-                <img alt="icon" src="/assets/icons/glass/windows.png" />
+                <img alt="icon" src="/netperf/dist/assets/icons/glass/windows.png" />
                 <Button
                   onClick={() =>
                     alert(`
@@ -77,9 +74,11 @@ function GraphView(props) {
                 Y = Windows throughput on Schannel
                 Z = Linux throughput on OpenSSL
 
-                performance score = [(X + Y) / (2 * Z)] * 100.
+                performance score = [(AVERAGE(X, Y)) / (Z)] * 100.
 
-                Essentially, it is a proportion of windows throughput in terms of linux.
+                Essentially, proportionally,
+                Windows Throughput
+                in terms of Linux.
               `)
                   }
                 >
@@ -92,12 +91,12 @@ function GraphView(props) {
 
         <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
-            title="Throughput Performance Score."
+            title="Linux Throughput Performance Score."
             total={78}
             color="primary"
             icon={
               <div>
-                <img alt="icon" src="/assets/icons/glass/Ubuntu-Logo.png" />
+                <img alt="icon" src="/netperf/dist/assets/icons/glass/Ubuntu-Logo.png" />
                 <Button
                 onClick={() =>
                   alert(`
@@ -110,16 +109,15 @@ function GraphView(props) {
               </div>
             }
           />
-        </Grid> */}
-
-        {/* <Grid xs={12} sm={6} md={3}>
+        </Grid>
+        <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
-            title="Latency Performance Score."
+            title="Windows Latency Performance Score."
             total={80}
             color="primary"
             icon={
               <div>
-                <img alt="icon" src="/assets/icons/glass/windows.png" />
+                <img alt="icon" src="/netperf/dist/assets/icons/glass/windows.png" />
                 <Button
                   onClick={() =>
                     alert(`
@@ -138,12 +136,12 @@ function GraphView(props) {
 
         <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
-            title="Latency Performance Score."
+            title="Linux Latency Performance Score."
             total={79}
             color="primary"
             icon={
               <div>
-                <img alt="icon" src="/assets/icons/glass/Ubuntu-Logo.png" />
+                <img alt="icon" src="/netperf/dist/assets/icons/glass/Ubuntu-Logo.png" />
                 <Button
                 onClick={() =>
                   alert(`
@@ -156,9 +154,9 @@ function GraphView(props) {
               </div>
             }
           />
-        </Grid> */}
+        </Grid>
 
-        {/* <Grid xs={12} md={6} lg={6}>
+        <Grid xs={12} md={6} lg={6}>
           <AppWebsiteVisits
             title="Throughput Comparison (GB / s)"
             subheader="Tested using Windows 11 build 22000.282, Linux Ubuntu 20.04.3 LTS"
@@ -180,7 +178,7 @@ function GraphView(props) {
               ],
             }}
           />
-        </Grid> */}
+        </Grid>
         {/*
         <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
@@ -218,48 +216,24 @@ function GraphView(props) {
           />
         </Grid> */}
 
-        <Grid xs={12} md={6} lg={12}>
+        <Grid xs={12} md={6} lg={6}>
           <AppWebsiteVisits
-            title="Download Throughput"
+            title="Latency Comparison (nanoseconds)"
             subheader="Tested using Windows 11 build 22000.282, Linux Ubuntu 20.04.3 LTS"
             chart={{
-              labels: ['Commit 1', 'Commit 2', 'Commit 3', 'Commit 4', 'Commit 5', 'Commit 6'],
+              labels: ['Windows + OpenSSL', 'Windows + Schannel', 'Linux + OpenSSL'],
               series: [
                 {
                   name: 'TCP',
-                  type: 'line',
+                  type: 'column',
                   fill: 'solid',
-                  data: [23, 30, 22, 43, 32, 44],
+                  data: [23, 30, 22],
                 },
                 {
                   name: 'QUIC',
-                  type: 'line',
+                  type: 'column',
                   fill: 'solid',
-                  data: [10, 5, 21, 12, 32, 44],
-                },
-              ],
-            }}
-          />
-        </Grid>
-
-        <Grid xs={12} md={6} lg={12}>
-          <AppWebsiteVisits
-            title="Upload Throughput"
-            subheader="Tested using Windows 11 build 22000.282, Linux Ubuntu 20.04.3 LTS"
-            chart={{
-              labels: ['Commit 1', 'Commit 2', 'Commit 3', 'Commit 4', 'Commit 5', 'Commit 6'],
-              series: [
-                {
-                  name: 'Linux + TCP',
-                  type: 'line',
-                  fill: 'solid',
-                  data: [23, 30, 22, 43, 32, 44],
-                },
-                {
-                  name: 'Windows + TCP',
-                  type: 'line',
-                  fill: 'solid',
-                  data: [10, 5, 21, 12, 32, 44],
+                  data: [10, 5, 21],
                 },
               ],
             }}
@@ -390,9 +364,3 @@ function GraphView(props) {
     </Container>
   );
 }
-
-GraphView.propTypes = {
-  title: PropTypes.string.isRequired
-}
-
-export default GraphView;
