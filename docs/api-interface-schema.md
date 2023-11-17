@@ -12,7 +12,85 @@
 
 ## Raw Data Format:
 
+The format of this data is encoded in JSON, but may change if we choose a relational database model.
+
+Also, the specific fields and keys will likely be updated to optimize the access patterns.
+
+Both MsQuic and TCP/TLS uses SecNetPerf for testing, thus the data model for both are similar.
+
+
+Idea schema:
 ```
+{
+    <Protocol / Technology> : {
+        <OS + OS metadata> : [
+            <test run information>
+            ...
+        ]
+        ...
+    }
+    ...
+}
+```
+Example:
+```
+{
+
+    QUIC : {
+
+        # NOTE: I assume information about when an OS was built is encoded in the os metadata.
+        #       Thus, to fetch the most recent Windows or Linux build, we can use the JSON key.
+
+        Linux_<os metadata> : [
+            {
+                Test_Run_On : "12-31-2023",
+
+                Commit : "Commit hash of MsQuic. Left empty for TCP + TLS."
+
+                CPU_Affinity_On : True,
+
+                ...Other Test Run Metadata...
+
+                Connections : [
+                    {
+                        Streams : [
+                            {
+                                Events : [
+                                    {
+                                        Type: "StreamSend",
+                                        Start: "<timestamp>",
+                                        End: "<timestamp>",
+                                        Payload: 1002033 (Number of bytes)
+                                    }
+                                    ...
+                                ]
+                            }
+                            ...
+                        ]
+                    }
+                    ...
+                ]
+            }
+            ...
+        ]
+
+        Windows_<os metadata> : {
+            ... same as above ...
+        }
+
+        ... more OS flavors ...
+    }
+
+    TCP_TLS : {
+        ...Schema same as QUIC...
+    }
+
+    eBPF : { ... }
+
+    XDP : { ... }
+}
+
+
 {
     "Connections" : [
         {
@@ -35,6 +113,7 @@
         ...
     ]
 }
+
 ```
 
 
