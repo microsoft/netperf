@@ -17,7 +17,24 @@ TODO
 
 ## Azure VMs
 
-TODO
+Follows a very similar setup below.
+
+## For Windows Testing
+TLDR;
+
+1. Create 2 VMs and hook them up to the same VNet.
+2. Make sure you can ping the other VM and that your host file contains the private IP of the other VM as "netperf-peer"
+3. Automation setup:
+  a. For MsQuic, we will use a combination of Powershell and a Github Actions workflow.
+
+     Essentially, the goal is, we want to trigger a Github Actions workflow after making new commits to the QUIC repo.
+     The workflow file will kickoff a process in the NetPerf repo.
+
+     The netperf repo will essentially first BUILD from the latest commit after checking out the repo, then UPLOAD the artifacts.
+     After uploading, the "quic.yml" workflow will then download those built artifacts, and run secnetperf (assume the latest commit is baked into the binary.)
+
+  b. For XDP, very similar to QUIC. BUILD, upload artifacts, download artifacts, then run the various tests / benchmarks.
+
 
 # Set up
 
