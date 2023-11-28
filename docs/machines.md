@@ -22,7 +22,7 @@ Follows a very similar setup below.
 ## For Windows Testing
 TLDR;
 
-1. Create 2 VMs and hook them up to the same VNet.
+1. Create 2 VMs and hook them up to the same VNet. MAKE SURE YOU CREATE THE 2 VMS WITH THE SAME USERNAME AND PASSWORD.
 2. Make sure you can ping the other VM and that your host file contains the private IP of the other VM as "netperf-peer"
 3. Automation setup:
   a. For MsQuic, we will use a combination of Powershell and a Github Actions workflow.
