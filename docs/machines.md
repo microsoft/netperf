@@ -103,6 +103,8 @@ https://github.com/microsoft/netperf/settings/actions/runners/new?arch=x64
 
 Then, configure the service to run as the user:
 
+IMPORTANT: The below command assumes you setup your Github service under the .\netperf directory, and that your VM / machine has $name and $password.
+
 ```PowerShell
 $name = "netperf-win1"
 $password = "****************"
