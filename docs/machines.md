@@ -17,23 +17,34 @@ TODO
 
 ## Azure VMs
 
-Follows a very similar setup below.
-
-## For Windows Testing
+### For Windows Testing
 TLDR;
 
 1. Create 2 VMs and hook them up to the same VNet. MAKE SURE YOU CREATE THE 2 VMS WITH THE SAME USERNAME AND PASSWORD.
-2. Make sure you can ping the other VM and that your host file contains the private IP of the other VM as "netperf-peer"
-3. Automation setup:
+2. Make sure you can ping the other VM and that your host file contains the private IP of the other VM as "netperf-peer". You will need to disable firewall and enable powershell remoting (More details below)
+
+3. Setup your VM as a self-hosted runner on Github. To do this, you can follow:
+
+https://github.com/microsoft/netperf/settings/actions/runners/new?arch=x64
+
+> **Note** - Install as a service.
+
+> **Note** - Enter your VM admin account credentials in the setup prompt
+
+> **Note** - Configure appropriate tags.
+
+> **Note** - Once you complete the setup wizard by providing your Azure admin account credentials, you do not need to use  `sc.exe` and mess around with configuring services. Azure VMs + Github runner agent is enough and trying to do so will introduce weird behavior.
+
+4. Automation setup:
   a. For MsQuic, we will use a combination of Powershell and a Github Actions workflow.
 
      Essentially, the goal is, we want to trigger a Github Actions workflow after making new commits to the QUIC repo.
      The workflow file will kickoff a process in the NetPerf repo.
 
-     The netperf repo will essentially first BUILD from the latest commit after checking out the repo, then UPLOAD the artifacts.
-     After uploading, the "quic.yml" workflow will then download those built artifacts, and run secnetperf (assume the latest commit is baked into the binary.)
+     The netperf repo will essentially first BUILD from the latest commit after checking out the repo, then UPLOAD the built artifacts.
+     After uploading, the "quic.yml" workflow will then download those built artifacts, and run secnetperf.
 
-  b. For XDP, very similar to QUIC. BUILD, upload artifacts, download artifacts, then run the various tests / benchmarks.
+  For XDP, very similar to QUIC. BUILD, upload artifacts, download artifacts, then run the various tests / benchmarks.
 
 
 # Set up
@@ -103,7 +114,7 @@ https://github.com/microsoft/netperf/settings/actions/runners/new?arch=x64
 
 Then, configure the service to run as the user:
 
-IMPORTANT: The below command assumes you setup your Github service under the .\netperf directory, and that your VM / machine has $name and $password.
+IMPORTANT: The below command assumes you setup your Github service under the .\netperf directory, and that your self hosted BM machine has $name and $password.
 
 ```PowerShell
 $name = "netperf-win1"
