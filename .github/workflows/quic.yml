@@ -3,6 +3,10 @@ name: QUIC
 on:
   workflow_dispatch:
     inputs:
+      logprofile:
+        required: false
+        default: ''
+        type: string
       ref:
         required: false
         default: ''
@@ -92,7 +96,7 @@ jobs:
         path: artifacts
     - name: Run secnetperf
       shell: pwsh
-      run: scripts/secnetperf.ps1
+      run: scripts/secnetperf.ps1 -LogProfile ${{ github.event.client_payload.logprofile || inputs.logprofile || '' }}
     - name: Upload Logs
       if: ${{ always() }}
       uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
