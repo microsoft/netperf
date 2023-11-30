@@ -97,6 +97,12 @@ jobs:
     - name: Run secnetperf
       shell: pwsh
       run: scripts/secnetperf.ps1 -LogProfile ${{ github.event.client_payload.logprofile || inputs.logprofile || 'NULL' }}
+    - name: Upload Test Results
+      if: ${{ always() }}
+      uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
+      with:
+        name: test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
+        path: test_result.json
     - name: Upload Logs
       if: ${{ always() }}
       uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
