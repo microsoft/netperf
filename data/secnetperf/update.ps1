@@ -5,7 +5,7 @@ param(
 
 $Date = Get-Date -Format "yyyy-MM-dd-HH-mm-ss"
 
-$RunName = "$Date-$ref"
+$RunName = "$Date._.$ref"
 
 $env:GIT_REDIRECT_STDERR = '2>&1'
 
