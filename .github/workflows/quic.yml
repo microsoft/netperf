@@ -111,6 +111,7 @@ jobs:
         path: artifacts/logs
 
   save-test-results-windows: # NOTE: We can tweak this job to change the way we save perf data (orphan branch vs. database solution)
+    permissions: write-all
     name: Save test results windows
     needs: [test-windows]
     strategy:
