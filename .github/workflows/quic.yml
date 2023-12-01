@@ -130,11 +130,7 @@ jobs:
       with:
         name: test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
         path: test_result.json
+    - run: chmod +x ./data/secnetperf/update.ps1
     - name: Commit test results
-      run: |
-          mv test_result.json data/secnetperf/${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}.json
-          git config user.email "quicdev@microsoft.com"
-          git config user.name "QUIC Dev[bot]"
-          git add data
-          git commit -m "Add test results for ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}"
-          git push
+      run: ./data/secnetperf/update.ps1 -ref ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'manual' }}
+      shell: pwsh
