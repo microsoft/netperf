@@ -109,3 +109,32 @@ jobs:
       with:
         name: logs_Release_${{ matrix.vec.plat }}_${{ matrix.vec.arch }}
         path: artifacts/logs
+
+  save-test-results-windows: # NOTE: We can tweak this job to change the way we save perf data (orphan branch vs. database solution)
+    name: Save test results windows
+    needs: [test-windows]
+    strategy:
+      fail-fast: false
+      matrix:
+        vec: [
+          { plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel" },
+        ]
+    runs-on: windows-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac
+      with:
+        repository: microsoft/netperf
+        ref: deploy
+    - uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
+      with:
+        name: test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
+        path: test_result.json
+    - name: Commit test results
+      run: |
+          mv test_result.json /data/secnetperf/${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}_$(Get-Date -Format "yyyy-MM-dd-HH-mm-ss").json
+          git config user.email "quicdev@microsoft.com"
+          git config user.name "QUIC Dev[bot]"
+          git add data
+          git commit -m "Add test results for ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}"
+          git push
