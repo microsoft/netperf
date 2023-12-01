@@ -132,7 +132,7 @@ jobs:
         path: test_result.json
     - name: Commit test results
       run: |
-          mv test_result.json /data/secnetperf/${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}_$(Get-Date -Format "yyyy-MM-dd-HH-mm-ss").json
+          mv test_result.json data/secnetperf/${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}.json
           git config user.email "quicdev@microsoft.com"
           git config user.name "QUIC Dev[bot]"
           git add data
