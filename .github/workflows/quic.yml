@@ -96,7 +96,7 @@ jobs:
         path: artifacts
     - name: Run secnetperf
       shell: pwsh
-      run: scripts/secnetperf.ps1 -LogProfile ${{ github.event.client_payload.logprofile || inputs.logprofile || 'NULL' }}
+      run: scripts/secnetperf.ps1 -LogProfile ${{ github.event.client_payload.logprofile || inputs.logprofile || 'NULL' }} -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'manual' }}
     - name: Upload Test Results
       if: ${{ always() }}
       uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
@@ -134,4 +134,7 @@ jobs:
     - run: chmod +x ./data/secnetperf/update.ps1
     - name: Commit test results
       run: ./data/secnetperf/update.ps1 -ref ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'manual' }}
+      shell: pwsh
+    - name: Merge Data
+      run: ./data/secnetperf/merge.ps1
       shell: pwsh
