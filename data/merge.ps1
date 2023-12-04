@@ -18,7 +18,7 @@ if ($Tool -eq 'secnetperf') {
     $parentDirectory = "./data/secnetperf"
 
     # Get all directories in the parent directory and sort them lexicographically
-    $directories = Get-ChildItem -Path $parentDirectory -Directory | Sort-Object Name
+    $directories = Get-ChildItem -Path $parentDirectory -Directory | Sort-Object Name -Descending
 
     $i = 0
 
