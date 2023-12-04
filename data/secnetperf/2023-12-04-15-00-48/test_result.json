@@ -1,0 +1,36 @@
+{
+  "MachineName": "netperf-secnetp",
+  "RunDate": "2023-12-04-14-59-24",
+  "TestConfig": {
+    "MsQuicCommit": "12345678",
+    "PerfTool": "secnetperf"
+  },
+  "TestEnv": {
+    "Client": {
+      "NIC": "Mellanox ConnectX-5",
+      "Arch": "x64",
+      "OS": "Windows Server 2022",
+      "CPU": "Intel(R) Xeon(R) Platinum 8272CL CPU @ 2.60GHz"
+    },
+    "Server": {
+      "NIC": "Mellanox ConnectX-5",
+      "Arch": "x64",
+      "OS": "Windows Server 2022",
+      "CPU": "Intel(R) Xeon(R) Platinum 8272CL CPU @ 2.60GHz"
+    }
+  },
+  "TestRuns": {
+    "Max throughput test using TCP protocol with -upload:10000, -timed:1": [
+      "Started!",
+      "",
+      "Result: 1176436736 bytes @ 934353 kbps (10072.732 ms).",
+      "App Main returning status 0"
+    ],
+    "Max throughput test using QUIC protocol with -upload:10000, -timed:1": [
+      "Started!",
+      "",
+      "Result: 1264517120 bytes @ 908442 kbps (11135.697 ms).",
+      "App Main returning status 0"
+    ]
+  }
+}
