@@ -66,3 +66,13 @@ if ($Tool -eq 'secnetperf') {
 } else {
     throw "Unknown tool: $Tool"
 }
+
+$env:GIT_REDIRECT_STDERR = '2>&1'
+
+git config user.email "quicdev@microsoft.com"
+git config user.name "QUIC Dev[bot]"
+git add ./data
+git status
+git commit -m "Merge latest test results"
+git pull
+git push
