@@ -1,4 +1,5 @@
 import { Helmet } from 'react-helmet-async';
+import { useState, useEffect } from 'react';
 
 import Grid from '@mui/material/Unstable_Grid2';
 import Container from '@mui/material/Container';
@@ -10,6 +11,45 @@ import { GraphView } from 'src/sections/overview/graphing';
 // ----------------------------------------------------------------------
 
 export default function ThroughputPage() {
+
+  // TODO: Once you have the pipeline to auto-update based on the last ~20 commits, update this URL.
+  const URL = "https://microsoft.github.io/netperf/data/secnetperf/2023-12-01-20-25-09._.67ee09354f52d014ad4e9ec85fcb6b9260890134.json/test_result.json";
+
+  const [data, setData] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+
+  useEffect(() => {
+    fetch(URL)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
+        .then(json => {
+            setData(json);
+            setIsLoading(false);
+        })
+        .catch(err => {
+            setError(err);
+            setIsLoading(false);
+        });
+  }, []);
+
+  if (isLoading) {
+    console.log("Loading...");
+  }
+
+  if (error) {
+    console.log("Error!");
+  }
+
+  if (data) {
+    console.log(data);
+  }
+
   return (
     <>
       <Helmet>
