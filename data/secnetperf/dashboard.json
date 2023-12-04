@@ -28,5 +28,21 @@
       "Max throughput test using TCP protocol with -upload:10000, -timed:1": "Started!  Result: 1176436736 bytes @ 934353 kbps (10072.732 ms). App Main returning status 0",
       "Max throughput test using QUIC protocol with -upload:10000, -timed:1": "Started!  Result: 1264517120 bytes @ 908442 kbps (11135.697 ms). App Main returning status 0"
     }
+  },
+  {
+    "TestRuns": {
+      "Max throughput test using TCP protocol with -upload:10000, -timed:1": "Started!  Result: 1172439040 bytes @ 934493 kbps (10037.006 ms). App Main returning status 0",
+      "Max throughput test using QUIC protocol with -upload:10000, -timed:1": "Started!  Result: 1264713728 bytes @ 908461 kbps (11137.188 ms). App Main returning status 0"
+    },
+    "TestEnv": {
+      "Client": "@{NIC=Mellanox ConnectX-5; CPU=Intel(R) Xeon(R) Platinum 8272CL CPU @ 2.60GHz; OS=Windows Server 2022; Arch=x64}",
+      "Server": "@{NIC=Mellanox ConnectX-5; CPU=Intel(R) Xeon(R) Platinum 8272CL CPU @ 2.60GHz; OS=Windows Server 2022; Arch=x64}"
+    },
+    "RunDate": "2023-12-04-15-15-27",
+    "MachineName": "netperf-secnetp",
+    "TestConfig": {
+      "MsQuicCommit": "5a6975e82f6ab97b83d10abf92f862e24910bf03",
+      "PerfTool": "secnetperf"
+    }
   }
 ]
