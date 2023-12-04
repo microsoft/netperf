@@ -132,9 +132,10 @@ jobs:
         name: test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
         path: test_result.json
     - run: chmod +x ./data/secnetperf/update.ps1
+    - run: chmod +x ./data/merge.ps1
     - name: Commit test results
       run: ./data/secnetperf/update.ps1 -ref ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'manual' }}
       shell: pwsh
     - name: Merge Data
-      run: ./data/secnetperf/merge.ps1
+      run: ./data/merge.ps1
       shell: pwsh
