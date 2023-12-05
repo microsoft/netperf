@@ -5,6 +5,7 @@ import Grid from '@mui/material/Unstable_Grid2';
 import Typography from '@mui/material/Typography';
 // import Iconify from 'src/components/iconify';
 
+import useFetchData from 'src/hooks/use-fetch-data';
 // import AppTasks from '../app-tasks';
 // import AppNewsUpdate from '../app-news-update';
 // import AppOrderTimeline from '../app-order-timeline';
@@ -15,9 +16,27 @@ import AppWidgetSummary from '../app-widget-summary';
 // import AppCurrentSubject from '../app-current-subject';
 // import AppConversionRates from '../app-conversion-rates';
 
+
+
 // ----------------------------------------------------------------------
 
 export default function AppView() {
+
+  const URL = "https://microsoft.github.io/netperf/data/secnetperf/dashboard.json";
+  const { data, isLoading, error } = useFetchData(URL);
+
+  if (isLoading) {
+    console.log("Loading...");
+  }
+
+  if (error) {
+    console.log("Error!");
+  }
+
+  if (data) {
+    console.log(data);
+  }
+
   return (
     <Container maxWidth="xl">
       <Typography variant="h3" sx={{ mb: 5 }}>
