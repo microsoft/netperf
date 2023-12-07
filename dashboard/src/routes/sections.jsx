@@ -16,7 +16,13 @@ export const Page404 = lazy(() => import('src/pages/page-not-found'));
 
 // ----------------------------------------------------------------------
 
-export default function Router() {
+export default function Router(props) {
+
+  const { db } = props 
+  let value = db.exec("SELECT * FROM Album")
+  for (let val of value.values()) {
+    console.log(val)
+  }
   const routes = useRoutes([
     {
       element: (
