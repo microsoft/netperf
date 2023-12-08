@@ -30,15 +30,18 @@ jobs:
       with:
         repository: microsoft/netperf
         ref: main
-    - run: cd dashboard
-    - run: npm install
-    - run: npm run build
+    - name: NPM install
+      working-directory: dashboard
+      run: npm install
+    - name: NPM build
+      working-directory: dashboard
+      run: npm run build
     - name: Upload Dist
       if: ${{ always() }}
       uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
       with:
         name: dist
-        path: dist
+        path: dashboard/dist
 
   update-react:
     permissions: write-all
@@ -57,7 +60,7 @@ jobs:
     - uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
       with:
         name: dist
-        path: dist
+        path: dashboard/dist
 
     - name: Commit changes
       if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch')
