@@ -144,10 +144,12 @@ jobs:
       run: python sql.py
 
     - name: Commit and merge data
+       env:
+        COMMIT_REF: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
        run: |
         git config user.name 'QUIC Dev[bot]'
         git config user.email 'quicdev@microsoft.com'
         git add *
         git status
-        git commit -m "Update SQLite database. Secnetperf Commit used: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}"
+        git commit -m "Update SQLite database. Secnetperf Commit used: $COMMIT_REF"
         git push
