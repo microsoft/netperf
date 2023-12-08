@@ -90,7 +90,7 @@ jobs:
       uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac
       with:
         repository: microsoft/msquic
-        ref: 'main'
+        ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
     - uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
       with:
         name: Release-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
@@ -143,13 +143,11 @@ jobs:
     - name: Run sql.py script
       run: python sql.py
 
-    # - name: Commit and merge data
-    #    env:
-    #     COMMIT_REF: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
-    #    run: |
-    #     git config user.name 'QUIC Dev[bot]'
-    #     git config user.email 'quicdev@microsoft.com'
-    #     git add *
-    #     git status
-    #     git commit -m "Update SQLite database. Secnetperf Commit used: $COMMIT_REF"
-    #     git push
+    - name: Commit
+       run: |
+        git config user.name 'QUIC Dev[bot]'
+        git config user.email 'quicdev@microsoft.com'
+        git add *
+        git status
+        git commit -m "Update SQLite database."
+        git push
