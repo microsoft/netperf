@@ -1,4 +1,4 @@
-name: QUIC
+name: Secnetperf
 
 on:
   workflow_dispatch:
