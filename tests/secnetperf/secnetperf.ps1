@@ -10,29 +10,13 @@ This script assumes the latest MsQuic commit is built and downloaded as artifact
 .PARAMETER MsQuicCommit
     The MsQuic commit to use for the test. Defaults to "manual" which means the latest commit built and downloaded as artifacts in the current session.
 
-.PARAMETER ClientOS
-    The OS of the client machine. Defaults to "Windows Server 2022".
+.PARAMETER plat
 
-.PARAMETER ClientArch
-    The architecture of the client machine. Defaults to "x64".
+.PARAMETER os
 
-.PARAMETER ClientCpu
-    The CPU of the client machine. Defaults to "Intel(R) Xeon(R) Platinum 8272CL CPU @ 2.60GHz".
+.PARAMETER arch
 
-.PARAMETER ClientNic
-    The NIC of the client machine. Defaults to "Mellanox ConnectX-5".
-
-.PARAMETER ServerOS
-    The OS of the server machine. Defaults to "Windows Server 2022".
-
-.PARAMETER ServerArch
-    The architecture of the server machine. Defaults to "x64".
-
-.PARAMETER ServerCpu
-    The CPU of the server machine. Defaults to "Intel(R) Xeon(R) Platinum 8272CL CPU @ 2.60GHz".
-
-.PARAMETER ServerNic
-    The NIC of the server machine. Defaults to "Mellanox ConnectX-5".
+.PARAMETER tls
 
 #>
 
@@ -41,6 +25,14 @@ param (
     [string]$LogProfile = "",
 
     [string]$MsQuicCommit = "manual",
+
+    [string]$plat = "windows",
+
+    [string]$os = "windows server 2022",
+
+    [string]$arch = "x64",
+
+    [string]$tls = "schannel"
 )
 
 # Set up the connection to the peer over remote powershell.
@@ -97,28 +89,61 @@ Start-Sleep -Seconds 10
 # Run secnetperf on the client.
 Write-Output "Running tests on the client..."
 
-$SQLitePowershell = @"
-
-"@
-
 ####################################################################################################
 
     # TEST EXECUTION
 
 ####################################################################################################
 
+# TODO:
+
+$SQL = @"
+
+INSERT OR IGNORE INTO Secnetperf_builds (Secnetperf_Commit, Build_date_time, TLS_enabled, Advanced_build_config)
+VALUES ('$MsQuicCommit', '$(Get-Date -Format "yyyy-MM-dd HH:mm:ss")', 1, 'TODO');
+
+INSERT OR IGNORE INTO Secnetperf_tests (Secnetperf_test_ID, Secnetperf_build_ID, Kernel_mode, Run_arguments, Test_name)
+VALUES (throughput-upload-quic-'$MsQuicCommit', '$MsQuicCommit', 0, '-target:netperf-peer -exec:maxtput -test:tput -upload:10000 -timed:1', 'throughput-upload-quic');
+
+INSERT OR IGNORE INTO Secnetperf_tests (Secnetperf_test_ID, Secnetperf_build_ID, Kernel_mode, Run_arguments, Test_name)
+VALUES (throughput-upload-tcp-'$MsQuicCommit', '$MsQuicCommit', 0, '-target:netperf-peer -exec:maxtput -test:tput -upload:10000 -timed:1 -tcp:1', 'throughput-upload-tcp');
+
+INSERT OR IGNORE INTO Secnetperf_tests (Secnetperf_test_ID, Secnetperf_build_ID, Kernel_mode, Run_arguments, Test_name)
+VALUES (throughput-download-quic-'$MsQuicCommit', '$MsQuicCommit', 0, '-target:netperf-peer -exec:maxtput -test:tput -download:10000 -timed:1', 'throughput-download-quic');
+
+INSERT OR IGNORE INTO Secnetperf_tests (Secnetperf_test_ID, Secnetperf_build_ID, Kernel_mode, Run_arguments, Test_name)
+VALUES (throughput-download-tcp-'$MsQuicCommit', '$MsQuicCommit', 0, '-target:netperf-peer -exec:maxtput -test:tput -download:10000 -timed:1 -tcp:1', 'throughput-download-tcp');
+
+"@
+
 # TODO: Make a more elaborate execution strategy instead of just a list of commands. Also add more tests.
+
+$testIds = @(
+    "throughput-upload-quic-'$MsQuicCommit'",
+    "throughput-upload-tcp-'$MsQuicCommit'",
+    "throughput-download-quic-'$MsQuicCommit'",
+    "throughput-download-tcp-'$MsQuicCommit'",
+)
 
 $commands = @(
     ".\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -target:netperf-peer -exec:maxtput -test:tput -upload:10000 -timed:1",
-    ".\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -target:netperf-peer -exec:maxtput -test:tput -upload:10000 -timed:1 -tcp:1"
+    ".\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -target:netperf-peer -exec:maxtput -test:tput -upload:10000 -timed:1 -tcp:1",
+    ".\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -target:netperf-peer -exec:maxtput -test:tput -download:10000 -timed:1",
+    ".\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -target:netperf-peer -exec:maxtput -test:tput -download:10000 -timed:1 -tcp: 1",
 )
 
 for ($i = 0; $i -lt $commands.Count; $i++) {
     Write-Output "Running test: $($commandMetadata[$i])"
     $Output = Invoke-Expression $commands[$i]
+    $Output = @($Output -match '\d+')
 
-    # Generate powershell SQL statement
+    # Generate SQL statement
+    $SQL += @"
+
+        INSERT INTO Secnetperf_test_runs (Secnetperf_test_ID, Client_environment_ID, Server_environment_ID, Result, Latency_stats_ID)
+        VALUES ('$($testIds[$i])', azure_vm, azure_vm, '$Output', NULL);
+
+"@
 
     Start-Sleep -Seconds 1
 }
@@ -162,9 +187,11 @@ Write-Output Wait-ForRemote $Job
 
 # Save the test results.
 Write-Output "Saving test results..."
-$ThisTest["TestRuns"] = $ConsoleOutput
-$jsonString = $ThisTest | ConvertTo-Json -Depth 10
-Set-Content -Path 'test_result.json' -Value $jsonString
+
+# Save as a .sql file
+$FileName = "test-results-$plat-$os-$arch-$tls.sql"
+
+Set-Content -Path $FileName -Value $SQL
 
 } finally {
     # TODO: Do any further book keeping here.
