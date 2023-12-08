@@ -42,7 +42,7 @@ After all the enumerations are done, the `secnetperf.yml` workflow will:
 
 3. Use powershell to connect to the `netperf.sqlite` database, and execute the downloaded artifacts, which should populate the relevant tables.
 
-4. Git commit the modified `netperf.sqlite` file while re-writing its history in the process, and upload to Github artifacts a copy of the `netperf.sqlite` database.
+4. Git commit the modified `netperf.sqlite` file while re-writing its history in the process, and upload to Github artifacts a copy of the `netperf.sqlite` database. Also handles updating the intermediate JSON for the landing page.
 
 Note: `secnetperf.ps1` will be responsible for parsing the console output of running the tests, and saving a `.sql or .ps1` file to upload later.
 
