@@ -1,4 +1,4 @@
-name: Secnetperf
+name: QUIC
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ on:
         default: ''
         type: string
   repository_dispatch:
-    types: [run-secnetperf]
+    types: [run-quic]
       # Args: { guid, sha, ref, pr }
 
 concurrency:
