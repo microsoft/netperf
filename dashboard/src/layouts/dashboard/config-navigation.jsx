@@ -31,6 +31,11 @@ const navConfig = [
     title: 'Handshakes Per Second',
     path: '/hps',
     icon: icon('ic_analytics'),
+  },
+  {
+    title: 'Detailed Analysis',
+    path: '/detailed',
+    icon: icon('ic_analytics'),
   }
   // {
   //   title: 'product',

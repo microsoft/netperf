@@ -13,10 +13,12 @@ export const UserPage = lazy(() => import('src/pages/user'));
 export const LoginPage = lazy(() => import('src/pages/login'));
 export const ProductsPage = lazy(() => import('src/pages/products'));
 export const Page404 = lazy(() => import('src/pages/page-not-found'));
+export const DetailedPage = lazy(() => import('src/pages/detailed'))
 
 // ----------------------------------------------------------------------
 
-export default function Router() {
+export default function Router(props) {
+  const { db } = props 
   const routes = useRoutes([
     {
       element: (
@@ -43,6 +45,10 @@ export default function Router() {
         {
           path: 'hps', 
           element: <HpsPage />,
+        },
+        {
+          path: 'Detailed', 
+          element: <DetailedPage db = {db} />,
         }
       ],
     },
