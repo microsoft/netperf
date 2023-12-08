@@ -2,14 +2,18 @@
 
 ## What is this?
 
-- The data contract between the backend (orphan branch) and dashboard.
-- Each page would have its own interface.
+- How we store the performance data, and query subsets of performance tests to run.
 
-## How is it implemented?
-- Serialized using JSON.
-- Served through a REST Api.
+## Storage approach:
+
+- We leverage Sqlite and version it with Github Artifacts (good for 90 days). The database itself is stored as a .sqlite file, in the sqlite branch.
+- Each time we make an update to the database, we make a new git commit to the sqlite branch with the updated file, and overwrite its history.
+
+## Sqlite Schema:
+
+[ image in sqlite studio ]
 
 
-## Raw Data Format:
+## Netperf API:
 
 TBD.
