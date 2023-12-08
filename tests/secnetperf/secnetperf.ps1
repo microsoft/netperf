@@ -122,7 +122,7 @@ $testIds = @(
     "throughput-upload-quic-'$MsQuicCommit'",
     "throughput-upload-tcp-'$MsQuicCommit'",
     "throughput-download-quic-'$MsQuicCommit'",
-    "throughput-download-tcp-'$MsQuicCommit'",
+    "throughput-download-tcp-'$MsQuicCommit'"
 )
 
 $commands = @(
