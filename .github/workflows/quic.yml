@@ -124,7 +124,7 @@ jobs:
     needs: [test-windows] # TODO: Make dynamic as CTS determines the dependencies here. We'd have to wait for multiple test jobs to finish.
     strategy:
       fail-fast: false
-      matrix: # Fill dynamically from CTS?
+      matrix: # Fill dynamically from CTS
         vec: [
           { plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel" },
         ]
@@ -138,8 +138,8 @@ jobs:
     - uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # TODO: Download all uploaded .sql files.
       with:
         name: test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
-        path: test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}.sql
+        path: ./
 
+    - run: mv test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}/*.sql .
     - run: python sql.py
-
     - run: 'git config user.name "QUIC Dev[bot]" && git config user.email "quicdev@microsoft.com" && git add netperf.sqlite && git commit -m "Update SQLite" && git push'
