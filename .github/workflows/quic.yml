@@ -144,10 +144,4 @@ jobs:
       run: python sql.py
 
     - name: Commit
-       run: |
-        git config user.name 'QUIC Dev[bot]'
-        git config user.email 'quicdev@microsoft.com'
-        git add *
-        git status
-        git commit -m "Update SQLite database."
-        git push
+       run: 'git config user.name "QUIC Dev[bot]" && git config user.email "quicdev@microsoft.com" && git add netperf.sqlite && git commit -m "Update SQLite" && git push'
