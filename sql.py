@@ -8,6 +8,8 @@ cursor = conn.cursor()
 # Iterate over all .sql files in the current directory
 for sql_file_path in glob.glob('*.sql'):
     with open(sql_file_path, 'r') as sql_file:
+        print("Processing file: {}".format(sql_file_path))
+
         sql_script = sql_file.read()
 
         # Execute SQL script
