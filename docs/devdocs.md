@@ -1,7 +1,8 @@
 
 # SecNetPerf + Netperf "good to know"
 
-How it works is, all the powershell scripts and metadata required for performance testing is located in `tests/secnetperf`.
+How it should works is, all the powershell scripts and metadata required for performance testing is located in `tests/secnetperf`.
+Currently, those scripts are exposed by MsQuic via: https://github.com/microsoft/msquic/pull/3974
 
 When a project (MsQuic, Windows Engineering System) calls into netperf to trigger secnetperf tests, they have the option to pass in
 a bunch of parameters in the HTTP query.
