@@ -5,6 +5,7 @@ import Grid from '@mui/material/Unstable_Grid2';
 import Typography from '@mui/material/Typography';
 // import Iconify from 'src/components/iconify';
 
+import useFetchData from 'src/hooks/use-fetch-data';
 // import AppTasks from '../app-tasks';
 // import AppNewsUpdate from '../app-news-update';
 // import AppOrderTimeline from '../app-order-timeline';
@@ -20,6 +21,29 @@ import AppWidgetSummary from '../app-widget-summary';
 // ----------------------------------------------------------------------
 
 export default function AppView() {
+
+  const { data, isLoading, error } = useFetchData("https://raw.githubusercontent.com/projectsbyjackhe/netperf/deploy/landing_page.json");
+
+  const windowsPerfScore = 0
+  const linuxPerfScore = 0
+
+  const windowsPerfScoreLatency = 0
+  const linuxPerfScoreLatency = 0
+
+  let windowsUploadThroughputQuic = 0
+  let windowsUploadThroughputTcp = 0
+  let windowsDownloadThroughputQuic = 0
+  let windowsDownloadThroughputTcp = 0
+  let windowsType = ""
+  const linuxType = ""
+
+  if (data) {
+    windowsType = data.windows.type;
+    windowsDownloadThroughputQuic = data.windows.download_throughput_quic;
+    windowsDownloadThroughputTcp = data.windows.download_throughput_tcp;
+    windowsUploadThroughputQuic = data.windows.upload_throughput_quic;
+    windowsUploadThroughputTcp = data.windows.upload_throughput_tcp;
+  }
 
   return (
     <Container maxWidth="xl">
@@ -63,7 +87,7 @@ export default function AppView() {
         <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
             title="Windows Throughput Performance Score."
-            total={107}
+            total={windowsPerfScore}
             color="primary"
             icon={
               <div>
@@ -95,7 +119,7 @@ export default function AppView() {
         <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
             title="Linux Throughput Performance Score."
-            total={78}
+            total={linuxPerfScore}
             color="primary"
             icon={
               <div>
@@ -116,7 +140,7 @@ export default function AppView() {
         <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
             title="Windows Latency Performance Score."
-            total={80}
+            total={windowsPerfScoreLatency}
             color="primary"
             icon={
               <div>
@@ -140,7 +164,7 @@ export default function AppView() {
         <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
             title="Linux Latency Performance Score."
-            total={79}
+            total={linuxPerfScoreLatency}
             color="primary"
             icon={
               <div>
@@ -162,21 +186,21 @@ export default function AppView() {
         <Grid xs={12} md={6} lg={6}>
           <AppWebsiteVisits
             title="Throughput Comparison (GB / s)"
-            subheader="Tested using Windows 11 build 22000.282, Linux Ubuntu 20.04.3 LTS"
+            subheader={`Tested using ${windowsType}, ${linuxType}`}
             chart={{
-              labels: ['Windows + OpenSSL', 'Windows + Schannel', 'Linux + OpenSSL'],
+              labels: ['Windows Download', 'Windows Upload', 'Linux Upload', 'Linux Download'],
               series: [
                 {
                   name: 'TCP',
                   type: 'column',
                   fill: 'solid',
-                  data: [23, 30, 22],
+                  data: [windowsDownloadThroughputTcp, windowsUploadThroughputTcp, 0, 0],
                 },
                 {
                   name: 'QUIC',
                   type: 'column',
                   fill: 'solid',
-                  data: [44, 55, 41],
+                  data: [windowsDownloadThroughputQuic, windowsUploadThroughputQuic, 0, 0],
                 },
               ],
             }}
@@ -230,13 +254,13 @@ export default function AppView() {
                   name: 'TCP',
                   type: 'column',
                   fill: 'solid',
-                  data: [23, 30, 22],
+                  data: [0, 0, 0],
                 },
                 {
                   name: 'QUIC',
                   type: 'column',
                   fill: 'solid',
-                  data: [10, 5, 21],
+                  data: [0, 0, 0],
                 },
               ],
             }}

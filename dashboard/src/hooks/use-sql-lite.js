@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
 import initSqlJs from 'sql.js';
+import { useState, useEffect } from 'react';
+
 
 const useSQLite = (dbUrl) => {
   const [db, setDb] = useState(null);
@@ -34,7 +35,7 @@ const useSQLite = (dbUrl) => {
         dbInstance.close();
       }
     };
-  }, []);
+  }, [dbUrl]);
 
   return { db, loading, error };
 };
