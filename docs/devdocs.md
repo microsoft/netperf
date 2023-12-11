@@ -1,7 +1,8 @@
 
 # SecNetPerf + Netperf "good to know"
 
-How it works is, all the powershell scripts and metadata required for performance testing is located in `tests/secnetperf`.
+How it should works is, all the powershell scripts and metadata required for performance testing is located in `tests/secnetperf`.
+Currently, those scripts are exposed by MsQuic via: https://github.com/microsoft/msquic/pull/3974
 
 When a project (MsQuic, Windows Engineering System) calls into netperf to trigger secnetperf tests, they have the option to pass in
 a bunch of parameters in the HTTP query.
@@ -30,21 +31,22 @@ the workflow will enumerate each environment, and in each enumeration:
 
 3. Run `tests/secnetperf/secnetperf.ps1` while passing in any relevant top-level arguments to control which tests we are interested in.
 
-4. Upload the data artifact produced by `secnetperf.ps1`, which will be a `.sql or .ps1` script that we execute later.
+4. Upload the data artifact produced by `secnetperf.ps1`, which will be a `.sql` script that we execute later.
 
 After all the enumerations are done, the `secnetperf.yml` workflow will:
 
-(Run this job on dedicated Azure VM with environment pre-configured manually with the dependencies necessary for SQLite)
-
 1. Checkout this repository with --branch = sqlite
 
-2. Download all the `.sql or .ps1` artifacts uploaded by the previous enumerations
+2. Download all the `.sql` artifacts uploaded by the previous enumerations
 
-3. Use powershell to connect to the `netperf.sqlite` database, and execute the downloaded artifacts, which should populate the relevant tables.
+3. Use python to connect to the `netperf.sqlite` database, and execute the downloaded sql files, which should populate the relevant tables.
 
-4. Git commit the modified `netperf.sqlite` file while re-writing its history in the process, and upload to Github artifacts a copy of the `netperf.sqlite` database. Also handles updating the intermediate JSON for the landing page.
+4. Git commit the modified `netperf.sqlite` file, (we can choose to re-write its history manually or automatically if the .sqlite file gets huge) and upload to Github artifacts a copy of the `netperf.sqlite` database. Also handles updating the intermediate JSON for the landing page.
 
-Note: `secnetperf.ps1` will be responsible for parsing the console output of running the tests, and saving a `.sql or .ps1` file to upload later.
+Note: `secnetperf.ps1` will be responsible for parsing the console output of running the tests, and saving a `.sql` file.
+
+Note: The dashboard will consume an intermediate JSON file (for performance reasons). The creation / update of this is the final job after saving the data to the database. By default, the triggering project (MsQuic, XDP, windows ES)... can choose to use the current run as the most recent to display
+onto the dashboard. Otherwise, they could specify a SQL query for what data they want populated in the intermediate file. 
 
 # XDP + Netperf "good to know"
 
