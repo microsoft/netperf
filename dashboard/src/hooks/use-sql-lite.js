@@ -1,4 +1,3 @@
-import { func } from 'prop-types';
 import { useEffect, useState } from 'react';
 
 const function_table = {};
@@ -12,7 +11,8 @@ const useSQLiteWorker = (dbUrl) => {
   const [err, setError] = useState(null);
 
   useEffect(() => {
-    const worker = new Worker('dist/wasm_worker.js');
+    const workerUrl = 'https://microsoft.github.io/netperf/wasm_worker.js' // DevURL = 'dist/wasm_worker.js'
+    const worker = new Worker(workerUrl);
     worker.onmessage = (e) => {
       const { type, error, results, id } = e.data;
       switch (type) {
