@@ -56,11 +56,19 @@ jobs:
       with:
         repository: microsoft/netperf
         ref: deploy
-    - run: rm -rf dist
+    - name: Remove 'dist' directory if it exists
+      run: |
+        if [[ -d dist ]]; then
+          echo "Removing 'dist' directory..."
+          rm -rf dist
+        else
+          echo "'dist' directory does not exist. Skipping removal."
+        fi
+
     - uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
       with:
         name: dist
-        path: dashboard/dist
+        path: ./
 
     - name: Commit changes
       if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch')
