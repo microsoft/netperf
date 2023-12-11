@@ -70,9 +70,12 @@ jobs:
         name: dist
         path: ./
 
+    - run: ls
+
     - name: Commit changes
       if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch')
       run: |
+        git status
         git config user.name 'QUIC Dev[bot]'
         git config user.email 'quicdev@microsoft.com'
         git add dist 
