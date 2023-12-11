@@ -12,7 +12,7 @@ const useSQLiteWorker = (dbUrl) => {
   const [err, setError] = useState(null);
 
   useEffect(() => {
-    const worker = new Worker('dist/wasm_worker.js'); // TODO: don't forget to put a wasm worker in the /deploy branch of github pages.
+    const worker = new Worker('dist/wasm_worker.js');
     worker.onmessage = (e) => {
       const { type, error, results, id } = e.data;
       switch (type) {
