@@ -1,42 +1,60 @@
-import { useState, useEffect } from 'react';
-import initSqlJs from 'sql.js';
+import { func } from 'prop-types';
+import { useEffect, useState } from 'react';
 
-const useSQLite = (dbUrl) => {
+const function_table = {};
+let call_id = 0;
+
+
+const useSQLiteWorker = (dbUrl) => {
+  const [dbWorker, setDbWorker] = useState(null);
+  const [isReady, setIsReady] = useState(false);
   const [db, setDb] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [err, setError] = useState(null);
 
   useEffect(() => {
-    let dbInstance = null;
-
-    const loadDatabase = async () => {
-      try {
-        const SQL = await initSqlJs({
-          locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.9.0/${file}`
-        });
-
-        const response = await fetch(dbUrl);
-        const buf = await response.arrayBuffer();
-        dbInstance = new SQL.Database(new Uint8Array(buf));
-        setDb(dbInstance);
-      } catch (err) {
-        setError(err);
-      } finally {
-        setLoading(false);
+    const worker = new Worker('dist/wasm_worker.js');
+    worker.onmessage = (e) => {
+      const { type, error, results, id } = e.data;
+      switch (type) {
+        case 'ready':
+          setIsReady(true);
+          setDb(results);
+          break;
+        case 'error':
+          setError(error);
+          break;
+        case 'execResult':
+          // Handle execution results here
+          // console.log(function_table);
+          function_table[id](results);
+          break;
+        default:
+          break;
       }
     };
 
-    loadDatabase();
+    worker.postMessage({ type: 'init', url: dbUrl });
+    setDbWorker(worker);
 
-    // Cleanup function to close the db when the component unmounts
+    // Cleanup
     return () => {
-      if (dbInstance) {
-        dbInstance.close();
-      }
+      worker.terminate();
     };
-  }, []);
+  }, [dbUrl]);
 
-  return { db, loading, error };
+  const exec = (sql, setState) => {
+
+    call_id += 1;
+    function_table[call_id] = setState;
+
+    if (dbWorker && isReady) {
+      dbWorker.postMessage({ type: 'exec', sql, call_id });
+    } else {
+      console.error('Database is not ready or worker is not set up');
+    }
+  };
+
+  return { exec, isReady, db, err };
 };
 
-export default useSQLite;
+export default useSQLiteWorker;

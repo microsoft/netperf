@@ -17,8 +17,7 @@ export const DetailedPage = lazy(() => import('src/pages/detailed'))
 
 // ----------------------------------------------------------------------
 
-export default function Router(props) {
-  const { db } = props 
+export default function Router() {
   const routes = useRoutes([
     {
       element: (
@@ -46,10 +45,10 @@ export default function Router(props) {
           path: 'hps', 
           element: <HpsPage />,
         },
-        {
-          path: 'Detailed', 
-          element: <DetailedPage db = {db} />,
-        }
+        // {
+        //   path: 'Detailed', 
+        //   element: <DetailedPage db = {db} />,
+        // }
       ],
     },
     {

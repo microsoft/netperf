@@ -2,14 +2,14 @@ import React, { useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 
 export default function DetailedPage(props) {
-   const { db } = props;
+   // const { db } = props;
    const [query, setQuery] = useState('');
 
-   const executeQuery = (query) => {
-      let values = db.exec(query);
-      for (let val of values.values()) {
-         console.log(val);
-      }
+   const executeQuery = (q) => {
+      // const values = db.exec(q);
+      // for (const val of values.values()) {
+      //    console.log(val);
+      // }
    };
 
    const handleInputChange = (event) => {
@@ -33,12 +33,12 @@ export default function DetailedPage(props) {
                onChange={handleInputChange} 
                placeholder="Enter SQL query" 
             />
-            <br></br>
-            <button onClick={handleQuerySubmit}>Execute Query</button>
-            <button>Download sqlite file</button>
-            <br></br>
-            Look in the browser console for the output. (Right click, select option 'inspect element', navigate to the console tab)
-            <br></br>
+            <br />
+            {/* <button onClick={handleQuerySubmit}>Execute Query</button> */}
+            {/* <button>Download sqlite file</button> */}
+            <br />
+            Look in the browser console for the output. (Right click, select option inspect element, navigate to the console tab)
+            <br />
          </div>
       </>
    );
