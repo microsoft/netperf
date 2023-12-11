@@ -68,15 +68,15 @@ jobs:
     - uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
       with:
         name: dist
-        path: ./
+        path: ./dist
 
     - run: ls
 
+    - run: pwd
+
     - name: Commit changes
-      working-directory: netperf
       if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch')
       run: |
-        pwd
         git status
         git config user.name 'QUIC Dev[bot]'
         git config user.email 'quicdev@microsoft.com'
