@@ -1,5 +1,9 @@
 <#
 
+TODO: Once we migrate off of quic.yml to remove the test execution dependency on MsQuic, update the Test Logic of this script.
+
+For now, just work off of quic.yml and MsQuic.
+
 NOTE:
 
 This script assumes the latest MsQuic commit is built and downloaded as artifacts in the current session.
@@ -55,8 +59,8 @@ Write-Output "Copying files to peer..."
 Invoke-Command -Session $Session -ScriptBlock {
     Remove-Item -Force -Recurse "C:\_work" -ErrorAction Ignore
 }
-Copy-Item -ToSession $Session .\artifacts -Destination C:\_work\quic\artifacts -Recurse
-Copy-Item -ToSession $Session .\scripts -Destination C:\_work\quic\scripts -Recurse
+Copy-Item -ToSession $Session .\artifacts -Destination C:\_work\secnetperf\artifacts -Recurse
+Copy-Item -ToSession $Session .\msquic\scripts -Destination C:\_work\secnetperf\msquic\scripts -Recurse
 
 try {
 
@@ -64,22 +68,22 @@ mkdir .\artifacts\logs | Out-Null
 
 # Prepare the machines for the testing.
 Write-Output "Preparing machines for testing..."
-.\scripts\prepare-machine.ps1 -ForTest
+.\msquic\scripts\prepare-machine.ps1 -ForTest
 Invoke-Command -Session $Session -ScriptBlock {
-    C:\_work\quic\scripts\prepare-machine.ps1 -ForTest
+    C:\_work\secnetperf\msquic\scripts\prepare-machine.ps1 -ForTest
 }
 
 # Logging to collect quic traces while running the tests.
 
 if ($LogProfile -ne "" -and $LogProfile -ne "NULL") {
     Write-Output "Starting logging with log profile: $LogProfile..."
-    .\scripts\log.ps1 -Start -Profile $LogProfile
+    .\msquic\scripts\log.ps1 -Start -Profile $LogProfile
 }
 
 # Run secnetperf on the server.
 Write-Output "Starting secnetperf server..."
 $Job = Invoke-Command -Session $Session -ScriptBlock {
-    C:\_work\quic\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -exec:maxtput
+    C:\_work\secnetperf\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -exec:maxtput
 } -AsJob
 
 # Wait for the server to start.
@@ -96,57 +100,7 @@ Write-Output "Running tests on the client..."
 ####################################################################################################
 
 # TODO:
-
-$SQL = @"
-
-INSERT OR IGNORE INTO Secnetperf_builds (Secnetperf_Commit, Build_date_time, TLS_enabled, Advanced_build_config)
-VALUES ('$MsQuicCommit', '$(Get-Date -Format "yyyy-MM-dd HH:mm:ss")', 1, 'TODO');
-
-INSERT OR IGNORE INTO Secnetperf_tests (Secnetperf_test_ID, Secnetperf_build_ID, Kernel_mode, Run_arguments, Test_name)
-VALUES (throughput-upload-quic-'$MsQuicCommit', '$MsQuicCommit', 0, '-target:netperf-peer -exec:maxtput -test:tput -upload:10000 -timed:1', 'throughput-upload-quic');
-
-INSERT OR IGNORE INTO Secnetperf_tests (Secnetperf_test_ID, Secnetperf_build_ID, Kernel_mode, Run_arguments, Test_name)
-VALUES (throughput-upload-tcp-'$MsQuicCommit', '$MsQuicCommit', 0, '-target:netperf-peer -exec:maxtput -test:tput -upload:10000 -timed:1 -tcp:1', 'throughput-upload-tcp');
-
-INSERT OR IGNORE INTO Secnetperf_tests (Secnetperf_test_ID, Secnetperf_build_ID, Kernel_mode, Run_arguments, Test_name)
-VALUES (throughput-download-quic-'$MsQuicCommit', '$MsQuicCommit', 0, '-target:netperf-peer -exec:maxtput -test:tput -download:10000 -timed:1', 'throughput-download-quic');
-
-INSERT OR IGNORE INTO Secnetperf_tests (Secnetperf_test_ID, Secnetperf_build_ID, Kernel_mode, Run_arguments, Test_name)
-VALUES (throughput-download-tcp-'$MsQuicCommit', '$MsQuicCommit', 0, '-target:netperf-peer -exec:maxtput -test:tput -download:10000 -timed:1 -tcp:1', 'throughput-download-tcp');
-
-"@
-
-# TODO: Make a more elaborate execution strategy instead of just a list of commands. Also add more tests.
-
-$testIds = @(
-    "throughput-upload-quic-'$MsQuicCommit'",
-    "throughput-upload-tcp-'$MsQuicCommit'",
-    "throughput-download-quic-'$MsQuicCommit'",
-    "throughput-download-tcp-'$MsQuicCommit'"
-)
-
-$commands = @(
-    ".\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -target:netperf-peer -exec:maxtput -test:tput -upload:10000 -timed:1",
-    ".\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -target:netperf-peer -exec:maxtput -test:tput -upload:10000 -timed:1 -tcp:1",
-    ".\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -target:netperf-peer -exec:maxtput -test:tput -download:10000 -timed:1",
-    ".\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -target:netperf-peer -exec:maxtput -test:tput -download:10000 -timed:1 -tcp: 1"
-)
-
-for ($i = 0; $i -lt $commands.Count; $i++) {
-    Write-Output "Running test: $($commandMetadata[$i])"
-    $Output = Invoke-Expression $commands[$i]
-    $Output = @($Output -match '\d+')
-
-    # Generate SQL statement
-    $SQL += @"
-
-        INSERT INTO Secnetperf_test_runs (Secnetperf_test_ID, Client_environment_ID, Server_environment_ID, Result, Latency_stats_ID)
-        VALUES ('$($testIds[$i])', azure_vm, azure_vm, '$Output', NULL);
-
-"@
-
-    Start-Sleep -Seconds 1
-}
+.\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -target:netperf-peer -exec:maxtput -test:tput -upload:10000 -timed:1
 
 ####################################################################################################
 
@@ -157,7 +111,7 @@ for ($i = 0; $i -lt $commands.Count; $i++) {
 
 if ($LogProfile -ne "" -and $LogProfile -ne "NULL") {
     Write-Output "Stopping logging..."
-    .\scripts\log.ps1 -Stop -OutputPath .\artifacts\logs\quic
+    .\msquic\scripts\log.ps1 -Stop -OutputPath .\artifacts\logs\quic
 }
 #Get-Content .\artifacts\logs\quic.log
 
