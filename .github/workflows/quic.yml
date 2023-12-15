@@ -71,13 +71,13 @@ jobs:
       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
   test-ubuntu: # This would be 1 enumeration, after CTS has setup the environment with the correct OS type and version.
-    name: Test Windows Server 2022 X64
+    name: Test Ubuntu Server 20.04
     needs: [build-ubuntu]
     strategy:
       fail-fast: false
       matrix:
         vec: [
-          { plat: "linux", os: "ubuntu-20.0.4", arch: "x64", tls: "openssl" },
+          { plat: "linux", os: "ubuntu-20.04", arch: "x64", tls: "openssl" },
         ]
     runs-on:
     - self-hosted
