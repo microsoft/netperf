@@ -70,6 +70,60 @@ jobs:
       tls: ${{ matrix.tls }}
       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
+  test-ubuntu: # This would be 1 enumeration, after CTS has setup the environment with the correct OS type and version.
+    name: Test Windows Server 2022 X64
+    needs: [build-ubuntu]
+    strategy:
+      fail-fast: false
+      matrix:
+        vec: [
+          { plat: "linux", os: "ubuntu-20.0.4", arch: "x64", tls: "openssl" },
+        ]
+    runs-on:
+    - self-hosted
+    - ${{ matrix.vec.arch }}
+    - "secnetperf"
+    - ${{ matrix.vec.plat }}
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac
+      with:
+        repository: microsoft/msquic
+        ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+    - uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
+      with:
+        name: Release-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
+        path: artifacts
+    - name: Run secnetperf
+      shell: pwsh
+      run: ./scripts/secnetperf.ps1 \
+          -LogProfile ${{ github.event.client_payload.logprofile || inputs.logprofile || 'NULL' }} \
+          -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} \
+          -plat ${{ matrix.vec.plat }} \
+          -os ${{ matrix.vec.os }} \
+          -arch ${{ matrix.vec.arch }} \
+          -tls ${{ matrix.vec.tls }}
+
+    - name: Upload Test Results SQL
+      if: ${{ always() }}
+      uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
+      with:
+        name: test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
+        path: test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}.sql
+    - name: Upload Test Results JSON # Data to populate the various pages of the dashboard. Callers of the Netperf API should specify if we want to update this or not.
+      if: ${{ always() }}
+      uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
+      with:
+        name: json-test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
+        path: json-test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}.json
+    - name: Upload Logs
+      if: ${{ always() }}
+      uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
+      with:
+        name: logs_Release_${{ matrix.vec.plat }}_${{ matrix.vec.arch }}
+        path: artifacts/logs
+
 
   test-windows: # This would be 1 enumeration, after CTS has setup the environment with the correct OS type and version.
     name: Test Windows Server 2022 X64
@@ -127,7 +181,7 @@ jobs:
   save-test-results:
     permissions: write-all
     name: Save test results to sqlite
-    needs: [test-windows] # TODO: Make dynamic as CTS determines the dependencies here. We'd have to wait for multiple test jobs to finish.
+    needs: [test-windows, test-ubuntu] # TODO: Make dynamic as CTS determines the dependencies here. We'd have to wait for multiple test jobs to finish.
     strategy:
       fail-fast: false
       matrix: # Fill dynamically from CTS
