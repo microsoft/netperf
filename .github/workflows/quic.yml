@@ -84,7 +84,7 @@ jobs:
     - ${{ matrix.vec.arch }}
     - "secnetperf"
     - ${{ matrix.vec.plat }}
-    
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac
@@ -181,10 +181,10 @@ jobs:
   save-test-results:
     permissions: write-all
     name: Save test results to sqlite
-    needs: [test-windows, test-ubuntu] # TODO: Make dynamic as CTS determines the dependencies here. We'd have to wait for multiple test jobs to finish.
+    needs: [test-windows, test-ubuntu] # TODO: Might be able to skip a few of these steps depending on the parameters set
     strategy:
       fail-fast: false
-      matrix: # Fill dynamically from CTS
+      matrix: #  TODO; remove by uploading to a shared directory
         vec: [
           { plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel" },
         ]
@@ -203,3 +203,28 @@ jobs:
     - run: ls
     - run: python sql.py
     - run: 'git config user.name "QUIC Dev[bot]" && git config user.email "quicdev@microsoft.com" && git add netperf.sqlite && git commit -m "Update SQLite" && git push'
+
+  update-intermediary-dashboard-json:
+    permissions: write-all
+    name: Updates any intermediary JSON generated
+    needs: [test-windows, test-ubuntu]
+    strategy:
+      fail-fast: false
+      matrix: # TODO; remove by uploading to a shared directory
+        vec: [
+          { plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel" },
+          { plat: "linux", os: "ubuntu-20.04", arch: "x64", tls: "openssl" },
+        ]
+    runs-on: 'ubuntu-20.04'
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac
+      with:
+        repository: microsoft/netperf
+        ref: deploy
+    - run: '[ -f json-test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}.json ] && rm json-test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}.json'
+    - uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # TODO: Download all uploaded .sql files.
+      with:
+        name: test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
+        path: ./
+    - run: 'git config user.name "QUIC Dev[bot]" && git config user.email "quicdev@microsoft.com" && git add *.json && git commit -m "Update intermediary dashboard files'
