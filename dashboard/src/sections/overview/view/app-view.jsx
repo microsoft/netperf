@@ -22,10 +22,10 @@ import AppWidgetSummary from '../app-widget-summary';
 
 export default function AppView() {
 
-  const { data, isLoading, error } = useFetchData("https://raw.githubusercontent.com/projectsbyjackhe/netperf/deploy/landing_page.json");
+  const { data, isLoading, error } = useFetchData("https://raw.githubusercontent.com/microsoft/netperf/deploy/landing_page.json");
 
-  const windowsPerfScore = 0
-  const linuxPerfScore = 0
+  let windowsPerfScore = 0
+  let linuxPerfScore = 0
 
   const windowsPerfScoreLatency = 0
   const linuxPerfScoreLatency = 0
@@ -34,15 +34,30 @@ export default function AppView() {
   let windowsUploadThroughputTcp = 0
   let windowsDownloadThroughputQuic = 0
   let windowsDownloadThroughputTcp = 0
+
+  let linuxDownloadThroughputQuic = 0
+  let linuxDownloadThroughputTcp = 0
+  let linuxUploadThroughputQuic = 0
+  let linuxUploadThroughputTcp = 0
+
   let windowsType = ""
-  const linuxType = ""
+  let linuxType = ""
 
   if (data) {
     windowsType = data.windows.type;
+    linuxType = data.linux.type;
     windowsDownloadThroughputQuic = data.windows.download_throughput_quic;
     windowsDownloadThroughputTcp = data.windows.download_throughput_tcp;
     windowsUploadThroughputQuic = data.windows.upload_throughput_quic;
     windowsUploadThroughputTcp = data.windows.upload_throughput_tcp;
+
+    linuxDownloadThroughputQuic = data.linux.download_throughput_quic;
+    linuxDownloadThroughputTcp = data.linux.download_throughput_tcp;
+    linuxUploadThroughputQuic = data.linux.upload_throughput_quic;
+    linuxUploadThroughputTcp = data.linux.upload_throughput_tcp;
+
+    windowsPerfScore = ((windowsDownloadThroughputQuic + windowsUploadThroughputQuic) / (linuxDownloadThroughputQuic + linuxUploadThroughputQuic)) * 100;
+    linuxPerfScore = ((linuxDownloadThroughputQuic + linuxUploadThroughputQuic) / (windowsDownloadThroughputQuic + windowsUploadThroughputQuic)) * 100;
   }
 
   return (
@@ -97,11 +112,10 @@ export default function AppView() {
                     alert(`
                 This score is computed as:
 
-                X = Windows throughput on OpenSSL
-                Y = Windows throughput on Schannel
-                Z = Linux throughput on OpenSSL
+                X = Windows throughput download + upload
+                Y = Linux throughput download + upload
 
-                performance score = [(AVERAGE(X, Y)) / (Z)] * 100.
+                performance score = [X / Y] * 100.
 
                 Essentially, proportionally,
                 Windows Throughput
@@ -127,8 +141,16 @@ export default function AppView() {
                 <Button
                 onClick={() =>
                   alert(`
-              This score is computed as:
+                  This score is computed as:
 
+                  X = Windows throughput download + upload
+                  Y = Linux throughput download + upload
+
+                  performance score = [Y / X] * 100.
+
+                  Essentially, proportionally,
+                  Linux Throughput
+                  in terms of Windows.
 
             `)
                 }
@@ -188,19 +210,19 @@ export default function AppView() {
             title="Throughput Comparison (GB / s)"
             subheader={`Tested using ${windowsType}, ${linuxType}`}
             chart={{
-              labels: ['Windows Download', 'Windows Upload', 'Linux Upload', 'Linux Download'],
+              labels: ['Windows Download', 'Windows Upload', 'Linux Download', 'Linux Upload'],
               series: [
                 {
                   name: 'TCP',
                   type: 'column',
                   fill: 'solid',
-                  data: [windowsDownloadThroughputTcp, windowsUploadThroughputTcp, 0, 0],
+                  data: [windowsDownloadThroughputTcp, windowsUploadThroughputTcp, linuxDownloadThroughputTcp, linuxUploadThroughputTcp],
                 },
                 {
                   name: 'QUIC',
                   type: 'column',
                   fill: 'solid',
-                  data: [windowsDownloadThroughputQuic, windowsUploadThroughputQuic, 0, 0],
+                  data: [windowsDownloadThroughputQuic, windowsUploadThroughputQuic, linuxDownloadThroughputQuic, linuxUploadThroughputQuic],
                 },
               ],
             }}

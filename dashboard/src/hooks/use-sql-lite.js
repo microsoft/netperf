@@ -11,7 +11,11 @@ const useSQLiteWorker = (dbUrl) => {
   const [err, setError] = useState(null);
 
   useEffect(() => {
-    const workerUrl = 'https://microsoft.github.io/netperf/wasm_worker.js' // DevURL = 'dist/wasm_worker.js'
+    const devMode = false;
+    let workerUrl = 'https://microsoft.github.io/netperf/wasm_worker.js' // DevURL = 'dist/wasm_worker.js'
+    if (devMode) {
+      workerUrl = 'dist/wasm_worker.js';
+    }
     const worker = new Worker(workerUrl);
     worker.onmessage = (e) => {
       const { type, error, results, id } = e.data;
