@@ -207,7 +207,7 @@ export default function AppView() {
 
         <Grid xs={12} md={6} lg={6}>
           <AppWebsiteVisits
-            title="Throughput Comparison (GB / s)"
+            title="Throughput Comparison (kbps)"
             subheader={`Tested using ${windowsType}, ${linuxType}`}
             chart={{
               labels: ['Windows Download', 'Windows Upload', 'Linux Download', 'Linux Upload'],
