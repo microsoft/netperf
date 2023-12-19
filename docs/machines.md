@@ -46,6 +46,15 @@ https://github.com/microsoft/netperf/settings/actions/runners/new?arch=x64
 
   For XDP, very similar to QUIC. BUILD, upload artifacts, download artifacts, then run the various tests / benchmarks.
 
+### For Linux Testing
+
+TLDR;
+
+1. On Azure, create your 2 VMs on Ubuntu 20.04.
+
+2. Change powershell remoting to use SSH instead of WinRM.
+
+3. Link client as a Github self-hosted runner.
 
 # Set up
 
