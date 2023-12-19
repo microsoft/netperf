@@ -195,7 +195,7 @@ jobs:
       with:
         repository: microsoft/netperf
         ref: sqlite
-    - uses: actions/download-artifact@v4 # v2 ? use a another stable commit.
+    - uses: actions/download-artifact@v4 # TODO: download all .sql from shared directory.
       with:
         name: test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
         path: ./
@@ -223,7 +223,7 @@ jobs:
         repository: microsoft/netperf
         ref: deploy
     - run: '[ -f json-test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}.json ] && rm json-test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}.json'
-    - uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a # TODO: Download all uploaded .sql files.
+    - uses: actions/download-artifact@v4 # TODO: download all json from shared directory.
       with:
         name: test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
         path: ./
