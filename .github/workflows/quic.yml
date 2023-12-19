@@ -222,9 +222,9 @@ jobs:
       with:
         repository: microsoft/netperf
         ref: deploy
-    - run: '[ -f json-test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}.json ] && rm json-test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}.json'
+    - run: 'rm -f json-test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}.json'
     - uses: actions/download-artifact@v4 # TODO: download all json from shared directory.
       with:
-        name: test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
+        name: json-test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
         path: ./
     - run: 'git config user.name "QUIC Dev[bot]" && git config user.email "quicdev@microsoft.com" && git add *.json && git commit -m "Update intermediary dashboard files'
