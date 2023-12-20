@@ -1,26 +1,26 @@
 {
-  "throughput-upload-quic-d3b10e6075a128c814c475d769ef3c287200b112": "909439",
-  "throughput-download-tcp-d3b10e6075a128c814c475d769ef3c287200b112": "937510",
   "rps-1conn-1stream-tcp-d3b10e6075a128c814c475d769ef3c287200b112": [
-    "140",
-    "185",
-    "242",
-    "405",
-    "1312",
-    "4530",
-    "5737",
-    "5737"
+    "151",
+    "190",
+    "250",
+    "416",
+    "1428",
+    "5041",
+    "8569",
+    "8569"
   ],
-  "throughput-upload-tcp-d3b10e6075a128c814c475d769ef3c287200b112": "937527",
-  "throughput-download-quic-d3b10e6075a128c814c475d769ef3c287200b112": "915620",
+  "throughput-download-tcp-d3b10e6075a128c814c475d769ef3c287200b112": "937560",
+  "throughput-download-quic-d3b10e6075a128c814c475d769ef3c287200b112": "909833",
+  "throughput-upload-tcp-d3b10e6075a128c814c475d769ef3c287200b112": "936184",
   "rps-1conn-1stream-quic-d3b10e6075a128c814c475d769ef3c287200b112": [
-    "186",
-    "240",
-    "335",
-    "540",
-    "1468",
-    "3958",
-    "6835",
-    "6835"
-  ]
+    "185",
+    "244",
+    "341",
+    "555",
+    "2157",
+    "5118",
+    "7357",
+    "7357"
+  ],
+  "throughput-upload-quic-d3b10e6075a128c814c475d769ef3c287200b112": "910359"
 }
