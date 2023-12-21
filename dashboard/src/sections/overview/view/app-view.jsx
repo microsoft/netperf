@@ -1,3 +1,5 @@
+/* eslint-disable no-restricted-syntax */
+
 // import { faker } from '@faker-js/faker';
 import Button from '@mui/material/Button';
 import Container from '@mui/material/Container';
@@ -23,9 +25,9 @@ function throughputPerformance(download, upload, dweight, uweight) {
 }
 
 function latencyPerformance(latencies) {
-  let weighting = [0.05, 0.1, 0.2, 0.3, 0.1, 0.1, 0.1, 0.05]
+  const weighting = [0.05, 0.1, 0.2, 0.3, 0.1, 0.1, 0.1, 0.05]
   let sum = 1.0
-  for (let i = 0; i < latencies.length; i++) {
+  for (let i = 0; i < latencies.length; i += 1) {
     sum += weighting[i] * latencies[i]
   }
   return (1 / sum) * 100000
@@ -60,8 +62,8 @@ export default function AppView() {
   let linuxLatencyQuic = [0, 0, 0, 0, 0, 0, 0, 0]
   let linuxLatencyTcp = [0, 0, 0, 0, 0, 0, 0, 0]
 
-  let windowsType = "Windows Server 2022";
-  let linuxType = "Linux Ubuntu 20.04 LTS"
+  const windowsType = "Windows Server 2022";
+  const linuxType = "Linux Ubuntu 20.04 LTS"
 
   if (windows.data && linux.data) {
     for (const key of Object.keys(windows.data)) {
