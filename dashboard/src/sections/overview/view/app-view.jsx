@@ -18,47 +18,109 @@ import AppWidgetSummary from '../app-widget-summary';
 
 
 
+function throughputPerformance(download, upload, dweight, uweight) {
+  return ((download * dweight) + (upload * uweight)) / 10000;
+}
+
+function latencyPerformance(latencies) {
+  let weighting = [0.05, 0.1, 0.2, 0.3, 0.1, 0.1, 0.1, 0.05]
+  let sum = 1.0
+  for (let i = 0; i < latencies.length; i++) {
+    sum += weighting[i] * latencies[i]
+  }
+  return (1 / sum) * 100000
+}
+
+
 // ----------------------------------------------------------------------
 
 export default function AppView() {
+  const windows = useFetchData("https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-windows-windows-2022-x64-schannel.json");
+  const linux = useFetchData("https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-linux-ubuntu-20.04-x64-openssl.json");
 
-  const { data, isLoading, error } = useFetchData("https://raw.githubusercontent.com/microsoft/netperf/deploy/landing_page.json");
 
   let windowsPerfScore = 0
   let linuxPerfScore = 0
 
-  const windowsPerfScoreLatency = 0
-  const linuxPerfScoreLatency = 0
+  let windowsPerfScoreLatency = 0
+  let linuxPerfScoreLatency = 0
 
-  let windowsUploadThroughputQuic = 0
-  let windowsUploadThroughputTcp = 0
-  let windowsDownloadThroughputQuic = 0
-  let windowsDownloadThroughputTcp = 0
+  let windowsUploadThroughputQuic = 1
+  let windowsUploadThroughputTcp = 1
+  let windowsDownloadThroughputQuic = 1
+  let windowsDownloadThroughputTcp = 1
 
-  let linuxDownloadThroughputQuic = 0
-  let linuxDownloadThroughputTcp = 0
-  let linuxUploadThroughputQuic = 0
-  let linuxUploadThroughputTcp = 0
+  let linuxDownloadThroughputQuic = 1
+  let linuxDownloadThroughputTcp = 1
+  let linuxUploadThroughputQuic = 1
+  let linuxUploadThroughputTcp = 1
 
-  let windowsType = ""
-  let linuxType = ""
+  let windowsLatencyQuic = [0, 0, 0, 0, 0, 0, 0, 0]
+  let windowsLatencyTcp = [0, 0, 0, 0, 0, 0, 0, 0]
+  let linuxLatencyQuic = [0, 0, 0, 0, 0, 0, 0, 0]
+  let linuxLatencyTcp = [0, 0, 0, 0, 0, 0, 0, 0]
 
-  if (data) {
-    windowsType = data.windows.type;
-    linuxType = data.linux.type;
-    windowsDownloadThroughputQuic = data.windows.download_throughput_quic;
-    windowsDownloadThroughputTcp = data.windows.download_throughput_tcp;
-    windowsUploadThroughputQuic = data.windows.upload_throughput_quic;
-    windowsUploadThroughputTcp = data.windows.upload_throughput_tcp;
+  let windowsType = "Windows Server 2022";
+  let linuxType = "Linux Ubuntu 20.04 LTS"
 
-    linuxDownloadThroughputQuic = data.linux.download_throughput_quic;
-    linuxDownloadThroughputTcp = data.linux.download_throughput_tcp;
-    linuxUploadThroughputQuic = data.linux.upload_throughput_quic;
-    linuxUploadThroughputTcp = data.linux.upload_throughput_tcp;
+  if (windows.data && linux.data) {
+    for (const key of Object.keys(windows.data)) {
+      if (key.includes("download") && key.includes("quic")) {
+        windowsDownloadThroughputQuic = windows.data[key];
+      }
+      if (key.includes("download") && key.includes("tcp")) {
+        windowsDownloadThroughputTcp = windows.data[key];
+      }
+      if (key.includes("upload") && key.includes("quic")) {
+        windowsUploadThroughputQuic = windows.data[key];
+      }
+      if (key.includes("upload") && key.includes("tcp")) {
+        windowsUploadThroughputTcp = windows.data[key];
+      }
+      if (key.includes("rps") && key.includes("quic")) {
+        windowsLatencyQuic = windows.data[key];
+      }
+      if (key.includes("rps") && key.includes("tcp")) {
+        windowsLatencyTcp = windows.data[key];
+      }
+    }
 
-    windowsPerfScore = ((windowsDownloadThroughputQuic + windowsUploadThroughputQuic) / (linuxDownloadThroughputQuic + linuxUploadThroughputQuic)) * 100;
-    linuxPerfScore = ((linuxDownloadThroughputQuic + linuxUploadThroughputQuic) / (windowsDownloadThroughputQuic + windowsUploadThroughputQuic)) * 100;
+    for (const key of Object.keys(linux.data)) {
+      if (key.includes("download") && key.includes("quic")) {
+        linuxDownloadThroughputQuic = linux.data[key];
+      }
+      if (key.includes("download") && key.includes("tcp")) {
+        linuxDownloadThroughputTcp = linux.data[key];
+      }
+      if (key.includes("upload") && key.includes("quic")) {
+        linuxUploadThroughputQuic = linux.data[key];
+      }
+      if (key.includes("upload") && key.includes("tcp")) {
+        linuxUploadThroughputTcp = linux.data[key];
+      }
+      if (key.includes("rps") && key.includes("quic")) {
+        linuxLatencyQuic = linux.data[key];
+      }
+      if (key.includes("rps") && key.includes("tcp")) {
+        linuxLatencyTcp = linux.data[key];
+      }
+    }
+
+    windowsPerfScore = throughputPerformance(windowsDownloadThroughputQuic, windowsUploadThroughputQuic, 0.8, 0.2);
+    linuxPerfScore = throughputPerformance(linuxDownloadThroughputQuic, linuxUploadThroughputQuic, 0.8, 0.2);
+    
+    windowsPerfScoreLatency = latencyPerformance(windowsLatencyQuic);
+    linuxPerfScoreLatency = latencyPerformance(linuxLatencyQuic);
+    console.log(windowsPerfScoreLatency)
+    console.log(linuxPerfScoreLatency)
   }
+
+
+  // LATENCY ARRAY: [0th, 50th, 90th, 99th, 99.9th, 99.99th, 99.999th, 99.9999th]
+  // console.log(linuxLatencyQuic)
+  // console.log(linuxLatencyTcp)
+  // console.log(windowsLatencyQuic)
+  // console.log(windowsLatencyTcp)
 
   return (
     <Container maxWidth="xl">
@@ -66,7 +128,7 @@ export default function AppView() {
         Network Performance Overview
       </Typography>
 
-      <p>Data as of 10/10/2023 (Latest Commit)</p>
+      {/* <p>Data as of 10/10/2023 (Latest Commit)</p> */}
       {/* <Typography variant="h6" sx={{ mb: 5 }}>
         Network Performance Overview
       </Typography> */}
@@ -112,14 +174,14 @@ export default function AppView() {
                     alert(`
                 This score is computed as:
 
-                X = Windows throughput download + upload
-                Y = Linux throughput download + upload
+                WINDOWS = download_speed * download_weight + upload_speed * upload_weight
+                
+                SCORE = WINDOWS / 10000,
 
-                performance score = [X / Y] * 100.
+                where download_weight = 0.8, upload_weight = 0.2
 
-                Essentially, proportionally,
-                Windows Throughput
-                in terms of Linux.
+                Essentially, we weigh download speed more than upload speed, since most internet users
+                are using download a lot more often than upload.
               `)
                   }
                 >
@@ -141,16 +203,16 @@ export default function AppView() {
                 <Button
                 onClick={() =>
                   alert(`
-                  This score is computed as:
+                This score is computed as:
 
-                  X = Windows throughput download + upload
-                  Y = Linux throughput download + upload
+                LINUX = download_speed * download_weight + upload_speed * upload_weight
+                
+                SCORE = LINUX / 10000,
 
-                  performance score = [Y / X] * 100.
+                where download_weight = 0.8, upload_weight = 0.2
 
-                  Essentially, proportionally,
-                  Linux Throughput
-                  in terms of Windows.
+                Essentially, we weigh download speed more than upload speed, since most internet users
+                are using download a lot more often than upload.
 
             `)
                 }
@@ -171,8 +233,17 @@ export default function AppView() {
                   onClick={() =>
                     alert(`
                   This score is computed as:
+                  
+                  We give a weighting to how important each percentile is:
 
+                  0th percentile, 50th percentile, 90th percentile, 99th percentile, 99.99th percentile, 99.999th percentile, 99.9999th percentile
+                  
+                  The weights we used are weightings = [0.05, 0.1, 0.2, 0.3, 0.1, 0.1, 0.1, 0.05].
 
+                  We think its important that in the 90th - 99.999th percentiles, we optimize it the most, since most
+                  power users (Azure customers) will experience these latencies. 
+
+                  Therefore, we give less weighting to the perfect case (0th percentile). 
                 `)
                   }
                 >
@@ -195,7 +266,19 @@ export default function AppView() {
                 onClick={() =>
                   alert(`
               This score is computed as:
+              
+              This score is computed as:
+                  
+              We give a weighting to how important each percentile is:
 
+              0th percentile, 50th percentile, 90th percentile, 99th percentile, 99.99th percentile, 99.999th percentile, 99.9999th percentile
+              
+              The weights we used are weightings = [0.05, 0.1, 0.2, 0.3, 0.1, 0.1, 0.1, 0.05].
+
+              We think its important that in the 90th - 99.999th percentiles, we optimize it the most, since most
+              power users (Azure customers) will experience these latencies. 
+
+              Therefore, we give less weighting to the perfect case (0th percentile). 
 
             `)
                 }
@@ -207,7 +290,7 @@ export default function AppView() {
 
         <Grid xs={12} md={6} lg={6}>
           <AppWebsiteVisits
-            title="Throughput Comparison (kbps)"
+            title="Throughput Comparison (kbps), higher the better."
             subheader={`Tested using ${windowsType}, ${linuxType}`}
             chart={{
               labels: ['Windows Download', 'Windows Upload', 'Linux Download', 'Linux Upload'],
@@ -267,22 +350,34 @@ export default function AppView() {
 
         <Grid xs={12} md={6} lg={6}>
           <AppWebsiteVisits
-            title="Latency Comparison (nanoseconds)"
+            title="Latency Comparison (ms), lower the better."
             subheader="Tested using Windows 11 build 22000.282, Linux Ubuntu 20.04.3 LTS"
             chart={{
-              labels: ['Windows + OpenSSL', 'Windows + Schannel', 'Linux + OpenSSL'],
+              labels: ['Windows QUIC', 'Windows TCP', 'Linux QUIC', 'Linux TCP'],
               series: [
                 {
-                  name: 'TCP',
+                  name: '50th percentile',
                   type: 'column',
                   fill: 'solid',
-                  data: [0, 0, 0],
+                  data: [windowsLatencyQuic[1], windowsLatencyTcp[1], linuxLatencyQuic[1], linuxLatencyTcp[1]],
                 },
                 {
-                  name: 'QUIC',
+                  name: '90th percentile',
                   type: 'column',
                   fill: 'solid',
-                  data: [0, 0, 0],
+                  data: [windowsLatencyQuic[2], windowsLatencyTcp[2], linuxLatencyQuic[2], linuxLatencyTcp[2]],
+                },
+                {
+                  name: '99th percentile',
+                  type: 'column',
+                  fill: 'solid',
+                  data: [windowsLatencyQuic[3], windowsLatencyTcp[3], linuxLatencyQuic[3], linuxLatencyTcp[3]],
+                },
+                {
+                  name: '99.99th percentile',
+                  type: 'column',
+                  fill: 'solid',
+                  data: [windowsLatencyQuic[4], windowsLatencyTcp[4], linuxLatencyQuic[4], linuxLatencyTcp[4]],
                 },
               ],
             }}
