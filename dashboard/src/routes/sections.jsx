@@ -8,10 +8,6 @@ export const ThroughputPage = lazy(() => import('src/pages/throughput'));
 export const LatencyPage = lazy(() => import('src/pages/latency'));
 export const HpsPage = lazy(() => import('src/pages/hps'));
 export const RpsPage = lazy(() => import('src/pages/rps'));
-export const BlogPage = lazy(() => import('src/pages/blog'));
-export const UserPage = lazy(() => import('src/pages/user'));
-export const LoginPage = lazy(() => import('src/pages/login'));
-export const ProductsPage = lazy(() => import('src/pages/products'));
 export const Page404 = lazy(() => import('src/pages/page-not-found'));
 export const DetailedPage = lazy(() => import('src/pages/detailed'))
 

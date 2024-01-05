@@ -1,3 +1,5 @@
+[Link to performance dashboard](https://microsoft.github.io/netperf/dist)
+
 # Network Perfomance Testing
 
 The repo is the common place other Microsoft owned networking projects (including Windows itself) use to run, store and visualize networking performance testing. Currently, the following projects (will) use this:
