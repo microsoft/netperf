@@ -1,4 +1,4 @@
-[Link to performance dashboard](https://microsoft.github.io/netperf/dist)
+[Dashboard](https://microsoft.github.io/netperf/dist)
 
 # Network Perfomance Testing
 
