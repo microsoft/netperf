@@ -202,12 +202,14 @@ jobs:
 
     - run: ls
     - run: python sql.py
-    - run: 'git config user.name "QUIC Dev[bot]" && git config user.email "quicdev@microsoft.com" && git add netperf.sqlite && git commit -m "Update SQLite" && git push'
+    - name: Git commit
+      if: github.event_name != 'pull_request'
+      run: 'git config user.name "QUIC Dev[bot]" && git config user.email "quicdev@microsoft.com" && git add netperf.sqlite && git commit -m "Update SQLite" && git push'
 
   update-intermediary-dashboard-json:
     permissions: write-all
     name: Updates any intermediary JSON generated
-    needs: [test-windows, test-ubuntu]
+    needs: [test-windows, test-ubuntu, save-test-results]
     strategy:
       fail-fast: false
       matrix: # TODO; remove by uploading to a shared directory
@@ -227,4 +229,6 @@ jobs:
       with:
         name: json-test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
         path: ./
-    - run: 'git config user.name "QUIC Dev[bot]" && git config user.email "quicdev@microsoft.com" && git add *.json && git commit -m "Update intermediary dashboard files" && git pull && git push'
+    - name: Git commit
+      if: github.event_name != 'pull_request'
+      run: 'git config user.name "QUIC Dev[bot]" && git config user.email "quicdev@microsoft.com" && git add *.json && git commit -m "Update intermediary dashboard files" && git pull && git push'
