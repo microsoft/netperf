@@ -25,5 +25,5 @@ jobs:
             try { logman query profsvc -ets } catch {}
             C:\_work\quic\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe
             try { logman stop profsvc -ets } catch {}
-            dir %WINDIR%\System32\LogFiles\WMI\profsvc*
+            dir $env:WINDIR\System32\LogFiles\WMI\profsvc*
         }
