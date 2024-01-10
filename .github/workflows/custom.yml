@@ -30,6 +30,10 @@ jobs:
         mkdir .\artifacts\logs | Out-Null
         Write-Host 'Copying out log files'
         Copy-Item -FromSession $Session C:\Windows\System32\LogFiles\WMI\profsvc.etl.* .\artifacts\logs
+        Write-Host 'Deleting log files from remote'
+        Invoke-Command -Session $Session -ScriptBlock {
+            del $env:WINDIR\System32\LogFiles\WMI\profsvc*
+        }
     - name: Upload Logs
       if: ${{ always() }}
       uses: actions/upload-artifact@v4
