@@ -34,6 +34,10 @@ jobs:
     steps:
     - run: echo "no op"
 
+  #
+  # Build Jobs
+  #
+
   build-windows:
     name: Build WinUser
     needs: []
@@ -74,6 +78,10 @@ jobs:
       tls: ${{ matrix.tls }}
       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
+  #
+  # Test Jobs
+  #
+
   test-ubuntu: # This would be 1 enumeration, after CTS has setup the environment with the correct OS type and version.
     name: Test Ubuntu Server 20.04
     needs: [build-ubuntu]
@@ -88,7 +96,6 @@ jobs:
     - ${{ matrix.vec.arch }}
     - "secnetperf"
     - ${{ matrix.vec.plat }}
-
     steps:
     - name: Checkout repository
       uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac
@@ -108,7 +115,6 @@ jobs:
           -os ${{ matrix.vec.os }} \
           -arch ${{ matrix.vec.arch }} \
           -tls ${{ matrix.vec.tls }}
-
     - name: Upload Test Results SQL
       if: ${{ always() }}
       uses: actions/upload-artifact@v4
@@ -127,7 +133,6 @@ jobs:
       with:
         name: logs_Release_${{ matrix.vec.plat }}_${{ matrix.vec.arch }}
         path: artifacts/logs
-
 
   test-windows: # This would be 1 enumeration, after CTS has setup the environment with the correct OS type and version.
     name: Test Windows Server 2022 X64
@@ -162,7 +167,6 @@ jobs:
           -os ${{ matrix.vec.os }} \
           -arch ${{ matrix.vec.arch }} \
           -tls ${{ matrix.vec.tls }}
-
     - name: Upload Test Results SQL
       if: ${{ always() }}
       uses: actions/upload-artifact@v4
@@ -181,6 +185,10 @@ jobs:
       with:
         name: logs_Release_${{ matrix.vec.plat }}_${{ matrix.vec.arch }}
         path: artifacts/logs
+
+  #
+  # Post Processing Jobs
+  #
 
   save-test-results:
     permissions: write-all
@@ -203,7 +211,6 @@ jobs:
       with:
         name: test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
         path: ./
-
     - run: ls
     - run: python sql.py
     - name: Git commit
