@@ -20,6 +20,8 @@ jobs:
         Write-Host 'Connecting to netperf-peer'
         $Session = New-PSSession -ComputerName "netperf-peer" -ConfigurationName PowerShell.7
         Invoke-Command -Session $Session -ScriptBlock {
+            reg query HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\WMI\Autologger
+            reg query HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\WMI\Autologger\profsvc
             C:\_work\quic\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe
             logman flush profsvc -ets
             dir %WINDIR%\System32\LogFiles\WMI\profsvc*
