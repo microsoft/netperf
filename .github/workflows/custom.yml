@@ -19,6 +19,9 @@ jobs:
       run: |
         Write-Host 'Connecting to netperf-peer'
         $Session = New-PSSession -ComputerName "netperf-peer" -ConfigurationName PowerShell.7
+        if ($null -eq $Session) {
+            Write-Host 'Failed to connect'
+        }
         Write-Host 'Enabling logs'
         Invoke-Command -Session $Session -ScriptBlock {      
         @"
