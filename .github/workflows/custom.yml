@@ -20,15 +20,15 @@ jobs:
         Write-Host 'Connecting to netperf-peer'
         $Session = New-PSSession -ComputerName "netperf-peer" -ConfigurationName PowerShell.7
         Invoke-Command -Session $Session -ScriptBlock {
-            reg query HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\WMI\Autologger
-            reg query HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\WMI\Autologger\profsvc
             try { logman query profsvc -ets } catch {}
             C:\_work\quic\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe
             try { logman stop profsvc -ets } catch {}
             dir $env:WINDIR\System32\LogFiles\WMI\profsvc*
         }
-        Remove-Item .\artifacts\logs -Force -Recursive -ErrorAction Ignore
+        Write-Host 'Setting up log folder'
+        Remove-Item .\artifacts\logs -Force -Recursive -ErrorAction Continue | Out-Null
         mkdir .\artifacts\logs | Out-Null
+        Write-Host 'Copying out log files'
         Copy-Item -FromSession $Session C:\Windows\System32\LogFiles\WMI\profsvc.etl.* .\artifacts\logs
     - name: Upload Logs
       if: ${{ always() }}
