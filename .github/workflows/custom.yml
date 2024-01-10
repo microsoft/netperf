@@ -27,7 +27,7 @@ jobs:
             try { logman stop profsvc -ets } catch {}
             dir $env:WINDIR\System32\LogFiles\WMI\profsvc*
         }
-        Remove-Item .\artifacts\logs -ErrorAction Ignore
+        Remove-Item .\artifacts\logs -Force -Recursive -ErrorAction Ignore
         mkdir .\artifacts\logs | Out-Null
         Copy-Item -FromSession $Session C:\Windows\System32\LogFiles\WMI\profsvc.etl.* .\artifacts\logs
     - name: Upload Logs
