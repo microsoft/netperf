@@ -22,7 +22,8 @@ jobs:
         Invoke-Command -Session $Session -ScriptBlock {
             reg query HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\WMI\Autologger
             reg query HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\WMI\Autologger\profsvc
+            try { logman query profsvc -ets } catch {}
             C:\_work\quic\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe
-            logman stop profsvc -ets
+            try { logman stop profsvc -ets } catch {}
             dir %WINDIR%\System32\LogFiles\WMI\profsvc*
         }
