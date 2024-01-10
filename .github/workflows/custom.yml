@@ -24,12 +24,23 @@ jobs:
         if ($null -eq $Session) {
             Write-Host 'Failed to connect'
         }
-        Write-Host 'Copy reg to peer'
-        Copy-Item -ToSession $Session .\.github\workflows\profsvc.reg -Destination C:\_work\quic\scripts -ErrorAction Continue
         Write-Host 'Enabling logs'
         Invoke-Command -Session $Session -ScriptBlock {
-            dir C:\_work\quic\scripts\profsvc.reg
-            reg import C:\_work\quic\scripts\profsvc.reg
+            REG ADD "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\WinLogon" /v "TracingControlLevel" /t REG_DWORD /d "4294967295" /f
+            REG ADD "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\WinInit" /v "TracingControlLevel" /t REG_DWORD /d "4294967295" /f
+            REG ADD "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\WMI\Autologger\profsvc" /v "Status" /t REG_DWORD /d "0" /f
+            REG ADD "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\WMI\Autologger\profsvc" /v "Guid" /t REG_SZ /d "{390a19f2-169e-403d-9a2f-58adf2d37296}" /f
+            REG ADD "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\WMI\Autologger\profsvc" /v "Start" /t REG_DWORD /d "1" /f
+            REG ADD "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\WMI\Autologger\profsvc" /v "FlushTimer" /t REG_DWORD /d "16" /f
+            REG ADD "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\WMI\Autologger\profsvc" /v "MaxFile" /t REG_DWORD /d "5" /f
+            REG ADD "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\WMI\Autologger\profsvc" /v "FileMax" /t REG_DWORD /d "8" /f
+            REG ADD "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\WMI\Autologger\profsvc\{9891e0a7-f966-547f-eb21-d98616bf72ee}" /v "Enabled" /t REG_DWORD /d "1" /f
+            REG ADD "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\WMI\Autologger\profsvc\{9959adbd-b5ac-5758-3ffa-ee0da5b8fe4b}" /v "Enabled" /t REG_DWORD /d "1" /f
+            REG ADD "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\WMI\Autologger\profsvc\{7f1bd045-965d-4f47-b3a7-acdbcfb11ca6}" /v "Enabled" /t REG_DWORD /d "1" /f
+            REG ADD "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\WMI\Autologger\profsvc\{40654520-7460-5c90-3c10-e8b6c8b430c1}" /v "Enabled" /t REG_DWORD /d "1" /f
+            REG ADD "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\WMI\Autologger\profsvc\{d5ee9312-a511-4c0e-8b35-b6d980f6ba25}" /v "Enabled" /t REG_DWORD /d "1" /f
+            REG ADD "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\WMI\Autologger\profsvc\{04a241e7-cea7-466d-95a1-87dcf755f1b0}" /v "Enabled" /t REG_DWORD /d "1" /f
+            REG ADD "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\WMI\Autologger\profsvc\{9aed307f-a41d-40e7-9539-b8d2742578f6}" /v "Enabled" /t REG_DWORD /d "1" /f
         } -ErrorAction Continue
         Write-Host 'Restarting netperf-peer'
         Invoke-Command -Session $Session -ScriptBlock {    
