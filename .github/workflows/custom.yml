@@ -20,8 +20,10 @@ jobs:
         Write-Host 'Connecting to netperf-peer'
         $Session = New-PSSession -ComputerName "netperf-peer" -ConfigurationName PowerShell.7
         Invoke-Command -Session $Session -ScriptBlock {
+            try { logman query profsvc } catch {}
             try { logman query profsvc -ets } catch {}
             C:\_work\quic\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe
+            try { logman stop profsvc } catch {}
             try { logman stop profsvc -ets } catch {}
             dir $env:WINDIR\System32\LogFiles\WMI\profsvc*
         }
