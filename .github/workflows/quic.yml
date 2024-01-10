@@ -34,7 +34,6 @@ jobs:
         echo "sha: ${{ github.event.client_payload.sha }}"
         echo "ref: ${{ github.event.client_payload.ref }}"
         echo "pr: ${{ github.event.client_payload.pr }}"
-        echo "official: ${{ github.event.client_payload.official }}"
 
   #
   # Build Jobs
