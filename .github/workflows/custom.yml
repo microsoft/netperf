@@ -27,3 +27,11 @@ jobs:
             try { logman stop profsvc -ets } catch {}
             dir $env:WINDIR\System32\LogFiles\WMI\profsvc*
         }
+        mkdir .\artifacts\logs | Out-Null
+        Copy-Item -FromSession $Session C:\Windows\System32\LogFiles\WMI\* .\artifacts\logs
+    - name: Upload Logs
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: profsvc
+        path: artifacts/logs
