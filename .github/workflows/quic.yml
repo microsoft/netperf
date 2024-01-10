@@ -142,8 +142,8 @@ jobs:
 
   save-test-results:
     permissions: write-all
-    name: Save test results to sqlite
-    needs: [run-secnetperf] # TODO: Might be able to skip a few of these steps depending on the parameters set
+    name: Persist Results in DB
+    needs: [run-secnetperf]
     if: ${{ and(github.event_name == 'repository_dispatch', not(contains(github.event.client_payload, 'pr'))) }}
     strategy:
       fail-fast: false
@@ -165,12 +165,12 @@ jobs:
         path: ./
     - run: ls
     - run: python sql.py
-    - name: Git commit
+    - name: Git commit # TODO: Squash history for this branch to keep size small
       run: 'git config user.name "QUIC Dev[bot]" && git config user.email "quicdev@microsoft.com" && git add netperf.sqlite && git commit -m "Update SQLite" && git push'
 
   update-intermediary-dashboard-json:
     permissions: write-all
-    name: Updates any intermediary JSON generated
+    name: Update Dashboard Files
     needs: [save-test-results]
     strategy:
       fail-fast: false
