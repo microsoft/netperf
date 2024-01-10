@@ -30,7 +30,7 @@ jobs:
         Invoke-Command -Session $Session -ScriptBlock {
             dir C:\_work\quic\scripts\profsvc.reg
             reg import C:\_work\quic\scripts\profsvc.reg
-        }
+        } -ErrorAction Continue
         Write-Host 'Restarting netperf-peer'
         Invoke-Command -Session $Session -ScriptBlock {    
             shutdown /r /t 0
