@@ -1,8 +1,14 @@
 {
-  "rps-1conn-1stream-tcp-fd4938f0286704c29044c3ae994ccced8be311a3": null,
-  "throughput-upload-tcp-fd4938f0286704c29044c3ae994ccced8be311a3": "187793",
-  "throughput-download-tcp-fd4938f0286704c29044c3ae994ccced8be311a3": "1922",
-  "throughput-download-quic-fd4938f0286704c29044c3ae994ccced8be311a3": "154440",
-  "rps-1conn-1stream-quic-fd4938f0286704c29044c3ae994ccced8be311a3": null,
-  "throughput-upload-quic-fd4938f0286704c29044c3ae994ccced8be311a3": "109439"
+  "throughput-upload": "952954",
+  "rps-1conn-1stream": [
+    "157",
+    "197",
+    "246",
+    "404",
+    "2439",
+    "5510",
+    "41821",
+    "41821"
+  ],
+  "throughput-download": "952989"
 }
