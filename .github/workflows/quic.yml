@@ -13,7 +13,7 @@ on:
         type: string
   repository_dispatch:
     types: [run-quic]
-      # Args: { guid, sha, ref, pr, official }
+      # Args: { guid, sha, ref, pr }
 
 concurrency:
   group: quic-${{ github.event.client_payload.pr || github.event.client_payload.sha }}
@@ -145,7 +145,7 @@ jobs:
     permissions: write-all
     name: Save test results to sqlite
     needs: [run-secnetperf] # TODO: Might be able to skip a few of these steps depending on the parameters set
-    if: ${{ contains(github.event.client_payload, 'official') }}
+    if: ${{ and(github.event_name == 'repository_dispatch', not(contains(github.event.client_payload, 'pr'))) }}
     strategy:
       fail-fast: false
       matrix: #  TODO; remove by uploading to a shared directory
@@ -173,7 +173,6 @@ jobs:
     permissions: write-all
     name: Updates any intermediary JSON generated
     needs: [save-test-results]
-    if: ${{ contains(github.event.client_payload, 'official') }}
     strategy:
       fail-fast: false
       matrix: # TODO; remove by uploading to a shared directory
