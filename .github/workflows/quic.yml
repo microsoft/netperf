@@ -64,14 +64,14 @@ jobs:
       os: ${{ matrix.os }}
       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
-  build-ubuntu:
-    name: Build Ubuntu
+  build-unix:
+    name: Build Unix
     needs: []
     strategy:
       fail-fast: false
       matrix:
         os: ['ubuntu-20.04']
-        tls: [openssl, openssl3]
+        tls: [openssl] # , openssl3]
     uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml@main
     with:
       os: ${{ matrix.os }}
@@ -82,72 +82,21 @@ jobs:
   # Test Jobs
   #
 
-  test-ubuntu: # This would be 1 enumeration, after CTS has setup the environment with the correct OS type and version.
-    name: Test Ubuntu Server 20.04
-    needs: [build-ubuntu]
+  run-secnetperf: # This would be 1 enumeration, after CTS has setup the environment with the correct OS type and version.
+    name: Run secnetperf
+    needs: [build-unix, build-windows] # , build-windows-kernel]
     strategy:
       fail-fast: false
       matrix:
         vec: [
           { plat: "linux", os: "ubuntu-20.04", arch: "x64", tls: "openssl" },
-        ]
-    runs-on:
-    - self-hosted
-    - ${{ matrix.vec.arch }}
-    - "secnetperf"
-    - ${{ matrix.vec.plat }}
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac
-      with:
-        repository: microsoft/msquic
-        ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
-    - uses: actions/download-artifact@v4
-      with:
-        name: Release-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
-        path: artifacts
-    - name: Run secnetperf
-      shell: pwsh
-      run: ./scripts/secnetperf.ps1 \
-          -LogProfile ${{ github.event.client_payload.logprofile || inputs.logprofile || 'NULL' }} \
-          -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} \
-          -plat ${{ matrix.vec.plat }} \
-          -os ${{ matrix.vec.os }} \
-          -arch ${{ matrix.vec.arch }} \
-          -tls ${{ matrix.vec.tls }}
-    - name: Upload Test Results SQL
-      if: ${{ always() }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
-        path: test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}.sql
-    - name: Upload Test Results JSON # Data to populate the various pages of the dashboard. Callers of the Netperf API should specify if we want to update this or not.
-      if: ${{ always() }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: json-test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
-        path: json-test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}.json
-    - name: Upload Logs
-      if: ${{ always() }}
-      uses: actions/upload-artifact@v4
-      with:
-        name: logs_Release_${{ matrix.vec.plat }}_${{ matrix.vec.arch }}
-        path: artifacts/logs
-
-  test-windows: # This would be 1 enumeration, after CTS has setup the environment with the correct OS type and version.
-    name: Test Windows Server 2022 X64
-    needs: [build-windows]
-    strategy:
-      fail-fast: false
-      matrix:
-        vec: [
           { plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel" },
         ]
     runs-on:
     - self-hosted
-    - ${{ matrix.vec.plat }}
     - ${{ matrix.vec.arch }}
     - "secnetperf"
+    - ${{ matrix.vec.plat }}
     steps:
     - name: Checkout repository
       uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac
@@ -193,12 +142,14 @@ jobs:
   save-test-results:
     permissions: write-all
     name: Save test results to sqlite
-    needs: [test-windows, test-ubuntu] # TODO: Might be able to skip a few of these steps depending on the parameters set
+    needs: [run-secnetperf] # TODO: Might be able to skip a few of these steps depending on the parameters set
+    if: ${{ contains(github.event.client_payload, 'commit') || inputs.commit }}
     strategy:
       fail-fast: false
       matrix: #  TODO; remove by uploading to a shared directory
         vec: [
           { plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel" },
+          # { plat: "linux", os: "ubuntu-20.04", arch: "x64", tls: "openssl" },
         ]
     runs-on: 'ubuntu-20.04'
     steps:
@@ -214,13 +165,13 @@ jobs:
     - run: ls
     - run: python sql.py
     - name: Git commit
-      if: ${{ contains(github.event.client_payload, 'commit') || inputs.commit }}
       run: 'git config user.name "QUIC Dev[bot]" && git config user.email "quicdev@microsoft.com" && git add netperf.sqlite && git commit -m "Update SQLite" && git push'
 
   update-intermediary-dashboard-json:
     permissions: write-all
     name: Updates any intermediary JSON generated
-    needs: [test-windows, test-ubuntu, save-test-results]
+    needs: [save-test-results]
+    if: ${{ contains(github.event.client_payload, 'commit') || inputs.commit }}
     strategy:
       fail-fast: false
       matrix: # TODO; remove by uploading to a shared directory
@@ -241,5 +192,4 @@ jobs:
         name: json-test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
         path: ./
     - name: Git commit
-      if: ${{ contains(github.event.client_payload, 'commit') || inputs.commit }}
       run: 'git config user.name "QUIC Dev[bot]" && git config user.email "quicdev@microsoft.com" && git add *.json && git commit -m "Update intermediary dashboard files" && git pull && git push'
