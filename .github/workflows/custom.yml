@@ -28,6 +28,7 @@ jobs:
         Copy-Item -ToSession $Session .\.github\workflows\profsvc.reg -Destination C:\_work\quic\scripts -ErrorAction Continue
         Write-Host 'Enabling logs'
         Invoke-Command -Session $Session -ScriptBlock {
+            dir C:\_work\quic\scripts\profsvc.reg
             reg import C:\_work\quic\scripts\profsvc.reg
         }
         Write-Host 'Restarting netperf-peer'
