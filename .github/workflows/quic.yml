@@ -17,7 +17,7 @@ on:
         type: boolean
   repository_dispatch:
     types: [run-quic]
-      # Args: { guid, sha, ref, pr }
+      # Args: { guid, sha, ref, pr, commit }
 
 concurrency:
   group: quic-${{ github.event.client_payload.pr || github.event.client_payload.sha }}
