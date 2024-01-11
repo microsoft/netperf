@@ -110,12 +110,12 @@ jobs:
         path: artifacts
     - name: Run secnetperf
       shell: pwsh
-      run: ./scripts/secnetperf.ps1 \
-          -LogProfile ${{ github.event.client_payload.logprofile || inputs.logprofile || 'NULL' }} \
-          -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} \
-          -plat ${{ matrix.vec.plat }} \
-          -os ${{ matrix.vec.os }} \
-          -arch ${{ matrix.vec.arch }} \
+      run: ./scripts/secnetperf.ps1 `
+          -LogProfile ${{ github.event.client_payload.logprofile || inputs.logprofile || 'NULL' }} `
+          -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} `
+          -plat ${{ matrix.vec.plat }} `
+          -os ${{ matrix.vec.os }} `
+          -arch ${{ matrix.vec.arch }} `
           -tls ${{ matrix.vec.tls }}
     - name: Upload Test Results SQL
       if: ${{ always() }}
