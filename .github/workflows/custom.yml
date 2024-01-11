@@ -20,11 +20,10 @@ jobs:
         Write-Host 'Connecting to netperf-peer'
         $Session = New-PSSession -ComputerName "netperf-peer" -ConfigurationName PowerShell.7
         Invoke-Command -Session $Session -ScriptBlock {
-            REG ADD "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\WinLogon" /v "TracingControlLevel" /t REG_DWORD /d "0" /f
-            REG ADD "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\WinInit" /v "TracingControlLevel" /t REG_DWORD /d "0" /f
-            REG DELETE "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\WMI\Autologger\profsvc" /f
+            # Kill any previous instance
+            Get-Process | Where-Object { $_.Name -eq "secnetperf.exe" } | Stop-Process
             C:\_work\quic\scripts\log.ps1 -Start -Profile Full.Verbose
-            C:\_work\quic\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe
+            C:\_work\quic\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -maxruntime 1000
             C:\_work\quic\scripts\log.ps1 -Stop -OutputPath C:\_work\quic\logs\quic -RawLogOnly
         }
         Write-Host 'Setting up log folder'
