@@ -25,7 +25,7 @@ jobs:
         }
         Write-Host 'Starting logs'
         Invoke-Command -Session $Session -ScriptBlock {
-            C:\_work\quic\scripts\log.ps1 -Start -Profile Full.Verbose
+            C:\_work\quic\scripts\log.ps1 -Start -Profile Full.Verbose -ProfileInScriptDirectory
         }
         Write-Host 'Starting secnetperf'
         $Job = Invoke-Command -Session $Session -ScriptBlock {
