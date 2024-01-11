@@ -20,25 +20,25 @@ jobs:
         Write-Host 'Connecting to netperf-peer'
         $Session = New-PSSession -ComputerName "netperf-peer" -ConfigurationName PowerShell.7
         Invoke-Command -Session $Session -ScriptBlock {
-            try { logman query profsvc } catch {}
-            try { logman query profsvc -ets } catch {}
+            REG ADD "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\WinLogon" /v "TracingControlLevel" /t REG_DWORD /d "0" /f
+            REG ADD "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\WinInit" /v "TracingControlLevel" /t REG_DWORD /d "0" /f
+            REG DELETE "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\WMI\Autologger\profsvc" /f
+            C:\_work\quic\scripts\log.ps1 -Start -Profile Full.Verbose
             C:\_work\quic\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe
-            try { logman stop profsvc } catch {}
-            try { logman stop profsvc -ets } catch {}
-            dir $env:WINDIR\System32\LogFiles\WMI\profsvc*
+            C:\_work\quic\scripts\log.ps1 -Stop -OutputPath C:\_work\quic\logs\quic -RawLogOnly
         }
         Write-Host 'Setting up log folder'
         Remove-Item .\artifacts\logs -Force -Recurse -ErrorAction Continue | Out-Null
         mkdir .\artifacts\logs | Out-Null
         Write-Host 'Copying out log files'
-        Copy-Item -FromSession $Session C:\Windows\System32\LogFiles\WMI\profsvc.etl.* .\artifacts\logs
+        Copy-Item -FromSession $Session C:\_work\quic\logs\ .\artifacts\logs
         Write-Host 'Deleting log files from remote'
         Invoke-Command -Session $Session -ScriptBlock {
-            del $env:WINDIR\System32\LogFiles\WMI\profsvc*
+            del C:\_work\quic\logs\*
         }
     - name: Upload Logs
       if: ${{ always() }}
       uses: actions/upload-artifact@v4
       with:
-        name: profsvc
+        name: logs
         path: artifacts/logs
