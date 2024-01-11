@@ -19,13 +19,24 @@ jobs:
       run: |
         Write-Host 'Connecting to netperf-peer'
         $Session = New-PSSession -ComputerName "netperf-peer" -ConfigurationName PowerShell.7
+        Write-Host 'Killing any previous secnetperf'
         Invoke-Command -Session $Session -ScriptBlock {
-            # Kill any previous instance
             Get-Process | Where-Object { $_.Name -eq "secnetperf.exe" } | Stop-Process
+        }
+        Write-Host 'Starting logs'
+        Invoke-Command -Session $Session -ScriptBlock {
             C:\_work\quic\scripts\log.ps1 -Start -Profile Full.Verbose
-            C:\_work\quic\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -maxruntime 1000
+        }
+        Write-Host 'Starting secnetperf'
+        $Job = Invoke-Command -Session $Session -ScriptBlock {
+            C:\_work\quic\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe
+        } -AsJob
+        Write-Host 'Killing secnetperf (if running) and stopping logs'
+        Invoke-Command -Session $Session -ScriptBlock {
+            Get-Process | Where-Object { $_.Name -eq "secnetperf.exe" } | Stop-Process
             C:\_work\quic\scripts\log.ps1 -Stop -OutputPath C:\_work\quic\logs\quic -RawLogOnly
         }
+        Start-Sleep 1
         Write-Host 'Setting up log folder'
         Remove-Item .\artifacts\logs -Force -Recurse -ErrorAction Continue | Out-Null
         mkdir .\artifacts\logs | Out-Null
