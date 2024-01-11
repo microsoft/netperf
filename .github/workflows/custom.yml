@@ -21,7 +21,7 @@ jobs:
         $Session = New-PSSession -ComputerName "netperf-peer" -ConfigurationName PowerShell.7
         Write-Host 'Killing any previous secnetperf'
         Invoke-Command -Session $Session -ScriptBlock {
-            Get-Process | Where-Object { $_.Name -eq "secnetperf.exe" } | Stop-Process
+            Get-Process | Where-Object { $_.Name -eq "secnetperf" } | Stop-Process
         }
         Write-Host 'Starting logs'
         Invoke-Command -Session $Session -ScriptBlock {
