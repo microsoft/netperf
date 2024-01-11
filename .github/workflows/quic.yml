@@ -144,7 +144,7 @@ jobs:
     permissions: write-all
     name: Persist Results in DB
     needs: [run-secnetperf]
-    if: ${{ github.event_name == 'repository_dispatch' && !contains(github.event.client_payload, 'pr') }}
+    if: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.pr == '' }}
     strategy:
       fail-fast: false
       matrix: #  TODO; remove by uploading to a shared directory
