@@ -55,7 +55,6 @@ jobs:
     with:
       os: ${{ matrix.os }}
       tls: ${{ matrix.tls }}
-      build: -Perf
       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
   build-windows-kernel:
@@ -82,7 +81,6 @@ jobs:
     with:
       os: ${{ matrix.os }}
       tls: ${{ matrix.tls }}
-      build: -Perf
       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
   #
@@ -112,7 +110,7 @@ jobs:
         ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
     - uses: actions/download-artifact@v4
       with:
-        name: Release-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-Perf
+        name: Release-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
         path: artifacts
     - name: Run secnetperf
       shell: pwsh
