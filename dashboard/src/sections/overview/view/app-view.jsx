@@ -69,10 +69,10 @@ export default function AppView() {
       if (key.includes('upload') && key.includes('tcp')) {
         windowsUploadThroughputTcp = windows.data[key];
       }
-      if (key.includes('rps') && key.includes('quic')) {
+      if (key.includes('latency') && key.includes('quic')) {
         windowsLatencyQuic = windows.data[key];
       }
-      if (key.includes('rps') && key.includes('tcp')) {
+      if (key.includes('latency') && key.includes('tcp')) {
         windowsLatencyTcp = windows.data[key];
       }
     }
@@ -90,10 +90,10 @@ export default function AppView() {
       if (key.includes('upload') && key.includes('tcp')) {
         linuxUploadThroughputTcp = linux.data[key];
       }
-      if (key.includes('rps') && key.includes('quic')) {
+      if (key.includes('latency') && key.includes('quic')) {
         linuxLatencyQuic = linux.data[key];
       }
-      if (key.includes('rps') && key.includes('tcp')) {
+      if (key.includes('latency') && key.includes('tcp')) {
         linuxLatencyTcp = linux.data[key];
       }
     }
@@ -143,7 +143,7 @@ export default function AppView() {
                 This score is computed as:
 
                 WINDOWS = download_speed * download_weight + upload_speed * upload_weight
-                
+
                 SCORE = WINDOWS / 10000,
 
                 where download_weight = 0.8, upload_weight = 0.2
@@ -174,7 +174,7 @@ export default function AppView() {
                 This score is computed as:
 
                 LINUX = download_speed * download_weight + upload_speed * upload_weight
-                
+
                 SCORE = LINUX / 10000,
 
                 where download_weight = 0.8, upload_weight = 0.2
@@ -203,17 +203,17 @@ export default function AppView() {
                   onClick={() =>
                     alert(`
                   This score is computed as:
-                  
+
                   We give a weighting to how important each percentile is:
 
                   0th percentile, 50th percentile, 90th percentile, 99th percentile, 99.99th percentile, 99.999th percentile, 99.9999th percentile
-                  
+
                   The weights we used are weightings = [0.05, 0.1, 0.2, 0.3, 0.1, 0.1, 0.1, 0.05].
 
                   We think its important that in the 90th - 99.999th percentiles, we optimize it the most, since most
-                  power users (Azure customers) will experience these latencies. 
+                  power users (Azure customers) will experience these latencies.
 
-                  Therefore, we give less weighting to the perfect case (0th percentile). 
+                  Therefore, we give less weighting to the perfect case (0th percentile).
                 `)
                   }
                 >
@@ -236,19 +236,19 @@ export default function AppView() {
                   onClick={() =>
                     alert(`
               This score is computed as:
-              
+
               This score is computed as:
-                  
+
               We give a weighting to how important each percentile is:
 
               0th percentile, 50th percentile, 90th percentile, 99th percentile, 99.99th percentile, 99.999th percentile, 99.9999th percentile
-              
+
               The weights we used are weightings = [0.05, 0.1, 0.2, 0.3, 0.1, 0.1, 0.1, 0.05].
 
               We think its important that in the 90th - 99.999th percentiles, we optimize it the most, since most
-              power users (Azure customers) will experience these latencies. 
+              power users (Azure customers) will experience these latencies.
 
-              Therefore, we give less weighting to the perfect case (0th percentile). 
+              Therefore, we give less weighting to the perfect case (0th percentile).
 
             `)
                   }
