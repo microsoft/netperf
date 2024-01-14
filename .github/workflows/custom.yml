@@ -32,10 +32,9 @@ jobs:
         Copy-Item -ToSession $Session -Path .\.github\workflows\stop_ngc_tracing_public.cmd -Destination C:\_work\quic\scripts
 
         Write-Host 'Starting logs'
-        Invoke-Command -Session $Session -ScriptBlock {
-            dir C:\_work\quic\scripts
-            C:\_work\quic\scripts\start_ngc_tracing_public.cmd
-        }
+        #Invoke-Command -Session $Session -ScriptBlock {
+        #    try { C:\_work\quic\scripts\start_ngc_tracing_public.cmd } catch { }
+        #}
 
         Write-Host 'Starting secnetperf'
         $Job = Invoke-Command -Session $Session -ScriptBlock {
@@ -49,8 +48,8 @@ jobs:
         Write-Host 'Killing secnetperf (if running) and stopping logs'
         Invoke-Command -Session $Session -ScriptBlock {
             Get-Process | Where-Object { $_.Name -eq "secnetperf" } | Stop-Process
-            C:\_work\quic\scripts\stop_ngc_tracing_public.cmd
-            dir C:\_work\quic\logs
+            try { C:\_work\quic\scripts\stop_ngc_tracing_public.cmd } catch { }
+            dir C:\_work\quic\dpapi
         }
 
         Write-Host 'Setting up log folder'
