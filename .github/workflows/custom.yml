@@ -41,20 +41,23 @@ jobs:
             C:\_work\quic\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe
         } -AsJob
         Start-Sleep 1
-        Stop-Job -Job $Job
 
-        Write-Host 'Killing secnetperf (if running) and stopping logs'
+        Write-Host 'Killing secnetperf (if running)'
         Invoke-Command -Session $Session -ScriptBlock {
             Get-Process | Where-Object { $_.Name -eq "secnetperf" } | Stop-Process
+        }
+        Stop-Job -Job $Job
+        $RemoteResult = Receive-Job -Job $Job
+        Write-Host ($RemoteResult -join "`n")
+
+        Write-Host 'Stopping logs'
+        Invoke-Command -Session $Session -ScriptBlock {
             try { C:\_work\quic\scripts\stop_ngc_tracing_public.cmd 2>&1 } catch { }
         }
 
-        Write-Host 'Setting up log folder'
-        Remove-Item .\artifacts\dpapi -Force -Recurse -ErrorAction Ignore | Out-Null
-        mkdir .\artifacts\dpapi | Out-Null
-
         Write-Host 'Copying out log files'
-        Copy-Item -FromSession $Session C:\_work\quic\dpapi .\artifacts\dpapi -Recurse
+        Remove-Item .\artifacts\dpapi -Force -Recurse -ErrorAction Ignore | Out-Null
+        Copy-Item -FromSession $Session C:\_work\quic\dpapi .\artifacts -Recurse
         dir .\artifacts\dpapi
 
         Write-Host 'Deleting log files from remote'
