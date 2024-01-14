@@ -24,8 +24,9 @@ jobs:
             Get-Process | Where-Object { $_.Name -eq "secnetperf" } | Stop-Process
         }
         Write-Host 'Starting logs'
+        Copy-Item -ToSession $Session -Path .\.github\workflows\*.cmd -Destination C:\_work\quic\scripts
         Invoke-Command -Session $Session -ScriptBlock {
-            C:\_work\quic\scripts\log.ps1 -Start -Profile Full.Verbose -ProfileInScriptDirectory
+            C:\_work\quic\scripts\start_ngc_tracing_public.cmd
         }
         Write-Host 'Starting secnetperf'
         $Job = Invoke-Command -Session $Session -ScriptBlock {
@@ -38,21 +39,21 @@ jobs:
         Write-Host 'Killing secnetperf (if running) and stopping logs'
         Invoke-Command -Session $Session -ScriptBlock {
             Get-Process | Where-Object { $_.Name -eq "secnetperf" } | Stop-Process
-            C:\_work\quic\scripts\log.ps1 -Stop -OutputPath C:\_work\quic\logs\quic -RawLogOnly
+            C:\_work\quic\scripts\stop_ngc_tracing_public.cmd
             dir C:\_work\quic\logs
         }
         Write-Host 'Setting up log folder'
         Remove-Item .\artifacts\logs -Force -Recurse -ErrorAction Continue | Out-Null
-        mkdir .\artifacts\logs | Out-Null
+        mkdir .\artifacts\dpapi | Out-Null
         Write-Host 'Copying out log files'
-        Copy-Item -FromSession $Session C:\_work\quic\logs\* .\artifacts\logs
+        Copy-Item -FromSession $Session C:\_work\quic\dpapi\* .\artifacts\dpapi
         Write-Host 'Deleting log files from remote'
         Invoke-Command -Session $Session -ScriptBlock {
-            del C:\_work\quic\logs\*
+            del C:\_work\quic\dpapi\*
         }
     - name: Upload Logs
       if: ${{ always() }}
       uses: actions/upload-artifact@v4
       with:
         name: logs
-        path: artifacts/logs
+        path: artifacts/dpapi
