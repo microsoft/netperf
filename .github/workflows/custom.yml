@@ -32,9 +32,9 @@ jobs:
         Copy-Item -ToSession $Session -Path .\.github\workflows\stop_ngc_tracing_public.cmd -Destination C:\_work\quic\scripts
 
         Write-Host 'Starting logs'
-        #Invoke-Command -Session $Session -ScriptBlock {
-        #    try { C:\_work\quic\scripts\start_ngc_tracing_public.cmd } catch { }
-        #}
+        Invoke-Command -Session $Session -ScriptBlock {
+            try { C:\_work\quic\scripts\start_ngc_tracing_public.cmd 2>&1 } catch { }
+        }
 
         Write-Host 'Starting secnetperf'
         $Job = Invoke-Command -Session $Session -ScriptBlock {
@@ -42,14 +42,11 @@ jobs:
         } -AsJob
         Start-Sleep 1
         Stop-Job -Job $Job
-        #$RemoteResult = Receive-Job -Job $Job
-        #Write-Host ($RemoteResult -join "`n")
 
         Write-Host 'Killing secnetperf (if running) and stopping logs'
         Invoke-Command -Session $Session -ScriptBlock {
             Get-Process | Where-Object { $_.Name -eq "secnetperf" } | Stop-Process
             try { C:\_work\quic\scripts\stop_ngc_tracing_public.cmd 2>&1 } catch { }
-            #dir C:\_work\quic\dpapi
         }
 
         Write-Host 'Setting up log folder'
@@ -58,6 +55,7 @@ jobs:
 
         Write-Host 'Copying out log files'
         Copy-Item -FromSession $Session C:\_work\quic\dpapi .\artifacts\dpapi -Recurse
+        dir .\artifacts\dpapi
 
         Write-Host 'Deleting log files from remote'
         Invoke-Command -Session $Session -ScriptBlock {
