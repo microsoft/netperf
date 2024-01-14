@@ -49,19 +49,19 @@ jobs:
         Invoke-Command -Session $Session -ScriptBlock {
             Get-Process | Where-Object { $_.Name -eq "secnetperf" } | Stop-Process
             try { C:\_work\quic\scripts\stop_ngc_tracing_public.cmd } catch { }
-            dir C:\_work\quic\dpapi
+            #dir C:\_work\quic\dpapi
         }
 
         Write-Host 'Setting up log folder'
-        Remove-Item .\artifacts\logs -Force -Recurse -ErrorAction Continue | Out-Null
+        Remove-Item .\artifacts\dpapi -Force -Recurse -ErrorAction Ignore | Out-Null
         mkdir .\artifacts\dpapi | Out-Null
 
         Write-Host 'Copying out log files'
-        Copy-Item -FromSession $Session C:\_work\quic\dpapi\* .\artifacts\dpapi
+        Copy-Item -FromSession $Session C:\_work\quic\dpapi .\artifacts\dpapi -Recurse
 
         Write-Host 'Deleting log files from remote'
         Invoke-Command -Session $Session -ScriptBlock {
-            del C:\_work\quic\dpapi\*
+            del C:\_work\quic\dpapi -Force -Recurse -ErrorAction Ignore | Out-Null
         }
     - name: Upload Logs
       if: ${{ always() }}
