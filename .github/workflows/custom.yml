@@ -48,7 +48,7 @@ jobs:
         Write-Host 'Killing secnetperf (if running) and stopping logs'
         Invoke-Command -Session $Session -ScriptBlock {
             Get-Process | Where-Object { $_.Name -eq "secnetperf" } | Stop-Process
-            try { C:\_work\quic\scripts\stop_ngc_tracing_public.cmd } catch { }
+            try { C:\_work\quic\scripts\stop_ngc_tracing_public.cmd 2>&1 } catch { }
             #dir C:\_work\quic\dpapi
         }
 
