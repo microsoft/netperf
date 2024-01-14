@@ -42,8 +42,8 @@ jobs:
         } -AsJob
         Start-Sleep 1
         Stop-Job -Job $Job
-        $RemoteResult = Receive-Job -Job $Job
-        Write-Host ($RemoteResult -join "`n")
+        #$RemoteResult = Receive-Job -Job $Job
+        #Write-Host ($RemoteResult -join "`n")
 
         Write-Host 'Killing secnetperf (if running) and stopping logs'
         Invoke-Command -Session $Session -ScriptBlock {
