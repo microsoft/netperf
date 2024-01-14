@@ -42,18 +42,16 @@ jobs:
         } -AsJob
         Start-Sleep 1
 
-        Write-Host 'Killing secnetperf (if running)'
+        Write-Host 'Killing secnetperf (if running) and stopping logs'
         Invoke-Command -Session $Session -ScriptBlock {
             Get-Process | Where-Object { $_.Name -eq "secnetperf" } | Stop-Process
-        }
-        Stop-Job -Job $Job
-        $RemoteResult = Receive-Job -Job $Job
-        Write-Host ($RemoteResult -join "`n")
-
-        Write-Host 'Stopping logs'
-        Invoke-Command -Session $Session -ScriptBlock {
             try { C:\_work\quic\scripts\stop_ngc_tracing_public.cmd 2>&1 } catch { }
         }
+        Stop-Job -Job $Job
+        try {
+            $RemoteResult = Receive-Job -Job $Job
+            Write-Host ($RemoteResult -join "`n")
+        } catch { }
 
         Write-Host 'Copying out log files'
         Remove-Item .\artifacts\dpapi -Force -Recurse -ErrorAction Ignore | Out-Null
