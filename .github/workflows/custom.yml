@@ -34,6 +34,7 @@ jobs:
         Write-Host 'Starting logs'
         Invoke-Command -Session $Session -ScriptBlock {
             try { C:\_work\quic\scripts\start_ngc_tracing_public.cmd 2>&1 } catch { }
+            try { logman start dpapi_trace -p "{89fe8f40-cdce-464e-8217-15ef97d4c7c3}" 0xffffffff -o C:\_work\quic\dpapi\dpapi.etl -ets -ln dpapi } catch { }
         }
 
         function Wait-ForRemote {
@@ -70,6 +71,7 @@ jobs:
         Write-Host 'Stopping logs'
         Invoke-Command -Session $Session -ScriptBlock {
             Get-Process | Where-Object { $_.Name -eq "secnetperf" } | Stop-Process
+            try { logman stop dpapi_trace -ets } catch { }
             try { C:\_work\quic\scripts\stop_ngc_tracing_public.cmd 2>&1 } catch { }
         }
 
