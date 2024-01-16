@@ -128,13 +128,13 @@ jobs:
       if: ${{ always() }}
       uses: actions/upload-artifact@v4
       with:
-        name: test-results-sql
+        name: test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}.sql
         path: test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}.sql
     - name: Upload Test Results JSON # Data to populate the various pages of the dashboard. Callers of the Netperf API should specify if we want to update this or not.
       if: ${{ always() }}
       uses: actions/upload-artifact@v4
       with:
-        name: test-result-json
+        name: json-test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}.json
         path: json-test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}.json
     - name: Upload Logs
       if: ${{ always() }}
@@ -161,10 +161,7 @@ jobs:
       with:
         repository: microsoft/netperf
         ref: sqlite
-    - uses: actions/download-artifact@v4
-      with:
-        name: test-results-sql
-        path: ./
+    - uses: actions/download-artifact@v4 # Specify no 'name' to download all uploaded artifacts
     - run: ls
     - run: python sql.py
     - name: Git commit # TODO: Squash history for this branch to keep size small
@@ -184,9 +181,6 @@ jobs:
         repository: microsoft/netperf
         ref: deploy
     - run: 'rm -f *.json'
-    - uses: actions/download-artifact@v4
-      with:
-        name: test-results-json
-        path: ./
+    - uses: actions/download-artifact@v4 # Specify no 'name' to download all uploaded artifacts
     - name: Git commit
       run: 'git config user.name "QUIC Dev[bot]" && git config user.email "quicdev@microsoft.com" && git pull && git add *.json && git commit -m "Update intermediary dashboard files" && git push'
