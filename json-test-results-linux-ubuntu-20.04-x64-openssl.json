@@ -1,10 +1,10 @@
 {
-  "hps-tcp": "1115",
-  "throughput-upload-quic": "945660",
-  "hps-quic": "927",
-  "throughput-download-tcp": "952964",
-  "latency-quic": "11450",
-  "latency-tcp": "41278",
-  "throughput-download-quic": "951715",
-  "throughput-upload-tcp": "953015"
+  "hps-quic": "1062",
+  "latency-tcp": "44488",
+  "latency-quic": "3108",
+  "throughput-download-tcp": "952871",
+  "throughput-download-quic": "951933",
+  "throughput-upload-quic": "945630",
+  "throughput-upload-tcp": "952963",
+  "hps-tcp": "1080"
 }
