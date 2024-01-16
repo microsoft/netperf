@@ -6,7 +6,7 @@ on:
 permissions: read-all
 
 jobs:
-  enable-logs: # This would be 1 enumeration, after CTS has setup the environment with the correct OS type and version.
+  enable-logs:
     name: Enable Logs
     runs-on:
     - self-hosted
