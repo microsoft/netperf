@@ -1,0 +1,10 @@
+{
+  "hps-tcp": "371",
+  "throughput-upload-quic": "909745",
+  "throughput-download-tcp": "937711",
+  "latency-quic": "5604",
+  "latency-tcp": "7588",
+  "throughput-download-quic": "917136",
+  "hps-quic": "370",
+  "throughput-upload-tcp": "937592"
+}
