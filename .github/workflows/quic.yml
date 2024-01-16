@@ -128,13 +128,13 @@ jobs:
       if: ${{ always() }}
       uses: actions/upload-artifact@v4
       with:
-        name: test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
+        name: test-results-sql
         path: test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}.sql
     - name: Upload Test Results JSON # Data to populate the various pages of the dashboard. Callers of the Netperf API should specify if we want to update this or not.
       if: ${{ always() }}
       uses: actions/upload-artifact@v4
       with:
-        name: json-test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
+        name: test-result-json
         path: json-test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}.json
     - name: Upload Logs
       if: ${{ always() }}
@@ -154,11 +154,6 @@ jobs:
     if: ${{ (github.event_name == 'repository_dispatch' && github.event.client_payload.pr == '') || inputs.commit }}
     strategy:
       fail-fast: false
-      matrix: #  TODO; remove by uploading to a shared directory
-        vec: [
-          # { plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel" },
-          { plat: "linux", os: "ubuntu-20.04", arch: "x64", tls: "openssl" },
-        ]
     runs-on: 'ubuntu-20.04'
     steps:
     - name: Checkout repository
@@ -166,9 +161,9 @@ jobs:
       with:
         repository: microsoft/netperf
         ref: sqlite
-    - uses: actions/download-artifact@v4 # TODO: download all .sql from shared directory.
+    - uses: actions/download-artifact@v4
       with:
-        name: test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
+        name: test-results-sql
         path: ./
     - run: ls
     - run: python sql.py
@@ -181,11 +176,6 @@ jobs:
     needs: [save-test-results]
     strategy:
       fail-fast: false
-      matrix: # TODO; remove by uploading to a shared directory
-        vec: [
-          # { plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel" },
-          { plat: "linux", os: "ubuntu-20.04", arch: "x64", tls: "openssl" },
-        ]
     runs-on: 'ubuntu-20.04'
     steps:
     - name: Checkout repository
@@ -193,10 +183,10 @@ jobs:
       with:
         repository: microsoft/netperf
         ref: deploy
-    - run: 'rm -f json-test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}.json'
-    - uses: actions/download-artifact@v4 # TODO: download all json from shared directory.
+    - run: 'rm -f *.json'
+    - uses: actions/download-artifact@v4
       with:
-        name: json-test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
+        name: test-results-json
         path: ./
     - name: Git commit
       run: 'git config user.name "QUIC Dev[bot]" && git config user.email "quicdev@microsoft.com" && git pull && git add *.json && git commit -m "Update intermediary dashboard files" && git push'
