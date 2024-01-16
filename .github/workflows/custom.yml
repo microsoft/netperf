@@ -58,7 +58,20 @@ jobs:
           return $RetVal -join "`n"
         }
 
-        Write-Host 'Starting secnetperf'
+        Write-Host 'Running secnetperf'
+        $Job = Invoke-Command -Session $Session -ScriptBlock {
+            C:\_work\quic\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe
+        } -AsJob
+        Start-Sleep 1
+        try {
+            $RemoteResult = Wait-ForRemote $Job
+            Write-Host $RemoteResult
+        } catch { }
+
+        Write-Host 'Sleeping for 2 minutes to wait for RDP log in'
+        Start-Sleep 120
+
+        Write-Host 'Running secnetperf (again)'
         $Job = Invoke-Command -Session $Session -ScriptBlock {
             C:\_work\quic\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe
         } -AsJob
