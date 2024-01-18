@@ -70,7 +70,7 @@ jobs:
         } catch { }
 
         Write-Host 'Remotely logging in user'
-        Invoke-Command -ScriptBlock {
+        Invoke-Command -Session $Session -ScriptBlock {
           net user secnetperf
           net user secnetperf ${{ secrets.NETPERF_MACHINE_PW }}
         }
