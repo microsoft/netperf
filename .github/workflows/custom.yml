@@ -71,8 +71,10 @@ jobs:
 
         Write-Host 'Remotely logging in user'
         Invoke-Command -Session $Session -ScriptBlock {
-          net user secnetperf
-          net user secnetperf ${{ secrets.NETPERF_MACHINE_PW }}
+          $securePassword = ConvertTo-SecureString ${{ secrets.NETPERF_MACHINE_PW }} -AsPlainText -Force
+          $credential = New-Object System.Management.Automation.PSCredential ("secnetperf", $securePassword)
+          $command = 'rundll32.exe user32.dll, LockWorkStation'
+          Start-Process -FilePath 'cmd.exe' -ArgumentList '/c',$command -Credential $credential -WindowStyle Hidden
         }
 
         Write-Host '=== Running secnetperf (again) ==='
