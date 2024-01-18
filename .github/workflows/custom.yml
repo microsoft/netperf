@@ -69,12 +69,7 @@ jobs:
         } catch { }
 
         Write-Host 'Remotely logging in user'
-        Invoke-Command -ScriptBlock {
-            $securePassword = ConvertTo-SecureString ${{ secrets.NETPERF_MACHINE_PW }} -AsPlainText -Force
-            $credential = New-Object System.Management.Automation.PSCredential ("secnetperf", $securePassword)
-            $command = 'tscon.exe 1 /dest:console'
-            Start-Process -FilePath 'cmd.exe' -ArgumentList '/c',$command -Credential $credential -WindowStyle Hidden
-        }
+        mstsc /v:netperf-peer
 
         Write-Host 'Running secnetperf (again)'
         $Job = Invoke-Command -Session $Session -ScriptBlock {
