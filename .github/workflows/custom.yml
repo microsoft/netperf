@@ -58,7 +58,8 @@ jobs:
           return $RetVal -join "`n"
         }
 
-        Write-Host '`n=== Running secnetperf ==='
+        Write-Host ''
+        Write-Host '=== Running secnetperf ==='
         $Job = Invoke-Command -Session $Session -ScriptBlock {
             C:\_work\quic\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe
         } -AsJob
@@ -70,6 +71,7 @@ jobs:
 
         Write-Host 'Remotely logging in user'
         Invoke-Command -ScriptBlock {
+          net user secnetperf
           net user secnetperf ${{ secrets.NETPERF_MACHINE_PW }}
         }
 
