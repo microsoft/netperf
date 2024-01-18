@@ -26,7 +26,7 @@ jobs:
         $credential = New-Object System.Management.Automation.PSCredential ("secnetperf", $securePassword)
 
         Write-Host 'Connecting to netperf-peer'
-        $Session = New-PSSession -ComputerName "netperf-peer" -ConfigurationName PowerShell.7 -Credential $credential -Authentication CredSSP
+        $Session = New-PSSession -ComputerName "netperf-peer" -ConfigurationName PowerShell.7 -Credential $credential
 
         #Write-Host 'Killing any previous secnetperf'
         #Invoke-Command -Session $Session -ScriptBlock {
