@@ -69,7 +69,7 @@ jobs:
             Write-Host $RemoteResult
         } catch { }
 
-        $password = ${{ secrets.NETPERF_MACHINE_PW }}
+        $password = '${{ secrets.NETPERF_MACHINE_PW }}'
         Write-Host 'Remotely logging in user secnetperf (pwlen = $($password.Length))'
         Invoke-Command -Session $Session -ScriptBlock {
           $securePassword = ConvertTo-SecureString $Using:password -AsPlainText -Force
