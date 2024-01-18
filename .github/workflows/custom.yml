@@ -58,7 +58,7 @@ jobs:
           return $RetVal -join "`n"
         }
 
-        Write-Host 'Running secnetperf'
+        Write-Host '`n=== Running secnetperf ==='
         $Job = Invoke-Command -Session $Session -ScriptBlock {
             C:\_work\quic\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe
         } -AsJob
@@ -69,9 +69,11 @@ jobs:
         } catch { }
 
         Write-Host 'Remotely logging in user'
-        mstsc /v:netperf-peer
+        Invoke-Command -ScriptBlock {
+          net user secnetperf ${{ secrets.NETPERF_MACHINE_PW }}
+        }
 
-        Write-Host 'Running secnetperf (again)'
+        Write-Host '=== Running secnetperf (again) ==='
         $Job = Invoke-Command -Session $Session -ScriptBlock {
             C:\_work\quic\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe
         } -AsJob
