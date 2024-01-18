@@ -19,23 +19,29 @@ jobs:
     - name: Capture Logs
       shell: pwsh
       run: |
+        $password = '${{ secrets.NETPERF_MACHINE_PW }}'
+        $len = $password.Length
+        Write-Host $len
+        $securePassword = ConvertTo-SecureString $Using:password -AsPlainText -Force
+        $credential = New-Object System.Management.Automation.PSCredential ("secnetperf", $securePassword)
+
         Write-Host 'Connecting to netperf-peer'
-        $Session = New-PSSession -ComputerName "netperf-peer" -ConfigurationName PowerShell.7
+        $Session = New-PSSession -ComputerName "netperf-peer" -ConfigurationName PowerShell.7 -Credential $credential -Authentication CredSSP
 
         Write-Host 'Killing any previous secnetperf'
         Invoke-Command -Session $Session -ScriptBlock {
             Get-Process | Where-Object { $_.Name -eq "secnetperf" } | Stop-Process
         }
 
-        Write-Host 'Copying log scripts to peer'
-        Copy-Item -ToSession $Session -Path .\.github\workflows\start_ngc_tracing_public.cmd -Destination C:\_work\quic\scripts
-        Copy-Item -ToSession $Session -Path .\.github\workflows\stop_ngc_tracing_public.cmd -Destination C:\_work\quic\scripts
+        #Write-Host 'Copying log scripts to peer'
+        #Copy-Item -ToSession $Session -Path .\.github\workflows\start_ngc_tracing_public.cmd -Destination C:\_work\quic\scripts
+        #Copy-Item -ToSession $Session -Path .\.github\workflows\stop_ngc_tracing_public.cmd -Destination C:\_work\quic\scripts
 
-        Write-Host 'Starting logs'
-        Invoke-Command -Session $Session -ScriptBlock {
-            try { C:\_work\quic\scripts\start_ngc_tracing_public.cmd 2>&1 } catch { }
-            try { logman start dpapi_trace -p "{89fe8f40-cdce-464e-8217-15ef97d4c7c3}" 0xffffffff -o C:\_work\quic\dpapi\dpapi.etl -ets -ln dpapi } catch { }
-        }
+        #Write-Host 'Starting logs'
+        #Invoke-Command -Session $Session -ScriptBlock {
+        #    try { C:\_work\quic\scripts\start_ngc_tracing_public.cmd 2>&1 } catch { }
+        #    try { logman start dpapi_trace -p "{89fe8f40-cdce-464e-8217-15ef97d4c7c3}" 0xffffffff -o C:\_work\quic\dpapi\dpapi.etl -ets -ln dpapi } catch { }
+        #}
 
         function Wait-ForRemote {
           param ($Job)
@@ -69,13 +75,10 @@ jobs:
             Write-Host $RemoteResult
         } catch { }
 
-        $password = '${{ secrets.NETPERF_MACHINE_PW }}'
-        Write-Host 'Remotely logging in user secnetperf (pwlen = $($password.Length))'
+        Write-Host 'Remotely logging in user secnetperf'
         Invoke-Command -Session $Session -ScriptBlock {
-          $securePassword = ConvertTo-SecureString $Using:password -AsPlainText -Force
-          $credential = New-Object System.Management.Automation.PSCredential ("secnetperf", $securePassword)
-          $command = 'rundll32.exe user32.dll, LockWorkStation'
-          Start-Process -FilePath 'cmd.exe' -ArgumentList '/c',$command -Credential $credential -WindowStyle Hidden
+            $command = 'rundll32.exe user32.dll, LockWorkStation'
+            Start-Process -FilePath 'cmd.exe' -ArgumentList '/c',$command -WindowStyle Hidden
         }
 
         Write-Host '=== Running secnetperf (again) ==='
@@ -88,22 +91,22 @@ jobs:
             Write-Host $RemoteResult
         } catch { }
 
-        Write-Host 'Stopping logs'
-        Invoke-Command -Session $Session -ScriptBlock {
-            Get-Process | Where-Object { $_.Name -eq "secnetperf" } | Stop-Process
-            try { logman stop dpapi_trace -ets } catch { }
-            try { C:\_work\quic\scripts\stop_ngc_tracing_public.cmd 2>&1 } catch { }
-        }
+        #Write-Host 'Stopping logs'
+        #Invoke-Command -Session $Session -ScriptBlock {
+        #    Get-Process | Where-Object { $_.Name -eq "secnetperf" } | Stop-Process
+        #    try { logman stop dpapi_trace -ets } catch { }
+        #    try { C:\_work\quic\scripts\stop_ngc_tracing_public.cmd 2>&1 } catch { }
+        #}
 
-        Write-Host 'Copying out log files'
-        Remove-Item .\artifacts\dpapi -Force -Recurse -ErrorAction Ignore | Out-Null
-        Copy-Item -FromSession $Session C:\_work\quic\dpapi .\artifacts\dpapi -Recurse
-        dir .\artifacts\dpapi
+        #Write-Host 'Copying out log files'
+        #Remove-Item .\artifacts\dpapi -Force -Recurse -ErrorAction Ignore | Out-Null
+        #Copy-Item -FromSession $Session C:\_work\quic\dpapi .\artifacts\dpapi -Recurse
+        #dir .\artifacts\dpapi
 
-        Write-Host 'Deleting log files from remote'
-        Invoke-Command -Session $Session -ScriptBlock {
-            del C:\_work\quic\dpapi -Force -Recurse -ErrorAction Ignore | Out-Null
-        }
+        #Write-Host 'Deleting log files from remote'
+        #Invoke-Command -Session $Session -ScriptBlock {
+        #    del C:\_work\quic\dpapi -Force -Recurse -ErrorAction Ignore | Out-Null
+        #}
     - name: Upload Logs
       if: ${{ always() }}
       uses: actions/upload-artifact@v4
