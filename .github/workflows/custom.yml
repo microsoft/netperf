@@ -22,16 +22,16 @@ jobs:
         $password = '${{ secrets.NETPERF_MACHINE_PW }}'
         $len = $password.Length
         Write-Host $len
-        $securePassword = ConvertTo-SecureString $Using:password -AsPlainText -Force
+        $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
         $credential = New-Object System.Management.Automation.PSCredential ("secnetperf", $securePassword)
 
         Write-Host 'Connecting to netperf-peer'
         $Session = New-PSSession -ComputerName "netperf-peer" -ConfigurationName PowerShell.7 -Credential $credential -Authentication CredSSP
 
-        Write-Host 'Killing any previous secnetperf'
-        Invoke-Command -Session $Session -ScriptBlock {
-            Get-Process | Where-Object { $_.Name -eq "secnetperf" } | Stop-Process
-        }
+        #Write-Host 'Killing any previous secnetperf'
+        #Invoke-Command -Session $Session -ScriptBlock {
+        #    Get-Process | Where-Object { $_.Name -eq "secnetperf" } | Stop-Process
+        #}
 
         #Write-Host 'Copying log scripts to peer'
         #Copy-Item -ToSession $Session -Path .\.github\workflows\start_ngc_tracing_public.cmd -Destination C:\_work\quic\scripts
