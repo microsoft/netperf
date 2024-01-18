@@ -6,7 +6,7 @@ on:
 permissions: read-all
 
 jobs:
-  enable-logs:
+  enable-logs: # This would be 1 enumeration, after CTS has setup the environment with the correct OS type and version.
     name: Enable Logs
     runs-on:
     - self-hosted
@@ -14,44 +14,45 @@ jobs:
     - "secnetperf"
     - "windows"
     steps:
-    #- name: Checkout repository
-    #  uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac
     - name: Capture Logs
       shell: pwsh
       run: |
         Write-Host 'Connecting to netperf-peer'
         $Session = New-PSSession -ComputerName "netperf-peer" -ConfigurationName PowerShell.7
-
-        Write-Host 'Remotely logging in user secnetperf'
-        mstsc /v:netperf-peer /admin /u:secnetperf /p:${{ secrets.NETPERF_MACHINE_PW }}
-
-        function Wait-ForRemote {
-          param ($Job)
-          # Ping sidechannel socket on 9999 to tell the app to die
-          $Socket = New-Object System.Net.Sockets.UDPClient
-          $BytesToSend = @(
-              0x57, 0xe6, 0x15, 0xff, 0x26, 0x4f, 0x0e, 0x57,
-              0x88, 0xab, 0x07, 0x96, 0xb2, 0x58, 0xd1, 0x1c
-          )
-          for ($i = 0; $i -lt 5; $i++) {
-              $Socket.Send($BytesToSend, $BytesToSend.Length, "netperf-peer", 9999) | Out-Null
-              $Completed = Wait-Job -Job $Job -Timeout 1
-              if ($null -ne $Completed) {
-                  break;
-              }
-          }
-
-          Stop-Job -Job $Job | Out-Null
-          $RetVal = Receive-Job -Job $Job -ErrorAction "Stop"
-          return $RetVal -join "`n"
+        Write-Host 'Killing any previous secnetperf'
+        Invoke-Command -Session $Session -ScriptBlock {
+            Get-Process | Where-Object { $_.Name -eq "secnetperf" } | Stop-Process
         }
-
-        Write-Host '=== Running secnetperf ==='
+        Write-Host 'Starting logs'
+        Invoke-Command -Session $Session -ScriptBlock {
+            C:\_work\quic\scripts\log.ps1 -Start -Profile Full.Verbose -ProfileInScriptDirectory
+        }
+        Write-Host 'Starting secnetperf'
         $Job = Invoke-Command -Session $Session -ScriptBlock {
             C:\_work\quic\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe
         } -AsJob
         Start-Sleep 1
-        try {
-            $RemoteResult = Wait-ForRemote $Job
-            Write-Host $RemoteResult
-        } catch { }
+        Stop-Job -Job $Job
+        $RemoteResult = Receive-Job -Job $Job
+        Write-Host ($RemoteResult -join "`n")
+        Write-Host 'Killing secnetperf (if running) and stopping logs'
+        Invoke-Command -Session $Session -ScriptBlock {
+            Get-Process | Where-Object { $_.Name -eq "secnetperf" } | Stop-Process
+            C:\_work\quic\scripts\log.ps1 -Stop -OutputPath C:\_work\quic\logs\quic -RawLogOnly
+            dir C:\_work\quic\logs
+        }
+        Write-Host 'Setting up log folder'
+        Remove-Item .\artifacts\logs -Force -Recurse -ErrorAction Continue | Out-Null
+        mkdir .\artifacts\logs | Out-Null
+        Write-Host 'Copying out log files'
+        Copy-Item -FromSession $Session C:\_work\quic\logs\* .\artifacts\logs
+        Write-Host 'Deleting log files from remote'
+        Invoke-Command -Session $Session -ScriptBlock {
+            del C:\_work\quic\logs\*
+        }
+    - name: Upload Logs
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: logs
+        path: artifacts/logs
