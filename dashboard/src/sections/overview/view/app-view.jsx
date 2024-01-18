@@ -25,10 +25,10 @@ function latencyPerformance(latencies) {
 
 export default function AppView() {
   const windows = useFetchData(
-    'https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-windows-windows-2022-x64-schannel.json'
+    'https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-windows-windows-2022-x64-schannel.json/json-test-results-windows-windows-2022-x64-schannel.json'
   );
   const linux = useFetchData(
-    'https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-linux-ubuntu-20.04-x64-openssl.json'
+    'https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-linux-ubuntu-20.04-x64-openssl.json/json-test-results-linux-ubuntu-20.04-x64-openssl.json'
   );
 
   let windowsPerfScore = 0;
@@ -58,16 +58,16 @@ export default function AppView() {
   if (windows.data && linux.data) {
     for (const key of Object.keys(windows.data)) {
       if (key.includes('download') && key.includes('quic')) {
-        windowsDownloadThroughputQuic = windows.data[key];
+        windowsDownloadThroughputQuic = windows.data[key][0];
       }
       if (key.includes('download') && key.includes('tcp')) {
-        windowsDownloadThroughputTcp = windows.data[key];
+        windowsDownloadThroughputTcp = windows.data[key][0];
       }
       if (key.includes('upload') && key.includes('quic')) {
-        windowsUploadThroughputQuic = windows.data[key];
+        windowsUploadThroughputQuic = windows.data[key][0];
       }
       if (key.includes('upload') && key.includes('tcp')) {
-        windowsUploadThroughputTcp = windows.data[key];
+        windowsUploadThroughputTcp = windows.data[key][0];
       }
       if (key.includes('latency') && key.includes('quic')) {
         windowsLatencyQuic = windows.data[key];
@@ -79,16 +79,16 @@ export default function AppView() {
 
     for (const key of Object.keys(linux.data)) {
       if (key.includes('download') && key.includes('quic')) {
-        linuxDownloadThroughputQuic = linux.data[key];
+        linuxDownloadThroughputQuic = linux.data[key][0];
       }
       if (key.includes('download') && key.includes('tcp')) {
-        linuxDownloadThroughputTcp = linux.data[key];
+        linuxDownloadThroughputTcp = linux.data[key][0];
       }
       if (key.includes('upload') && key.includes('quic')) {
-        linuxUploadThroughputQuic = linux.data[key];
+        linuxUploadThroughputQuic = linux.data[key][0];
       }
       if (key.includes('upload') && key.includes('tcp')) {
-        linuxUploadThroughputTcp = linux.data[key];
+        linuxUploadThroughputTcp = linux.data[key][0];
       }
       if (key.includes('latency') && key.includes('quic')) {
         linuxLatencyQuic = linux.data[key];
