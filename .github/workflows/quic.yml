@@ -20,7 +20,7 @@ on:
       # Args: { guid, sha, ref, pr }
 
 concurrency:
-  group: quic-${{ github.event.client_payload.pr || github.event.client_payload.sha }}
+  group: quic-${{ github.event.client_payload.pr || github.event.client_payload.sha || inputs.ref || 'main' }}
   cancel-in-progress: true
 
 permissions: read-all
@@ -96,8 +96,9 @@ jobs:
       fail-fast: false
       matrix:
         vec: [
-          { plat: "linux", os: "ubuntu-20.04", arch: "x64", tls: "openssl" },
-          { plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel" },
+          { plat: "linux", os: "ubuntu-20.04", arch: "x64", tls: "openssl", io: "epoll" },
+          { plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "iocp" },
+          { plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "xdp" },
         ]
     runs-on:
     - self-hosted
@@ -123,24 +124,25 @@ jobs:
           -plat ${{ matrix.vec.plat }} `
           -os ${{ matrix.vec.os }} `
           -arch ${{ matrix.vec.arch }} `
-          -tls ${{ matrix.vec.tls }}
+          -tls ${{ matrix.vec.tls }} `
+          -io ${{ matrix.vec.io }}
     - name: Upload Test Results SQL
       if: ${{ always() }}
       uses: actions/upload-artifact@v4
       with:
-        name: test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}.sql
-        path: test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}.sql
+        name: test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}.sql
+        path: test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}.sql
     - name: Upload Test Results JSON # Data to populate the various pages of the dashboard. Callers of the Netperf API should specify if we want to update this or not.
       if: ${{ always() }}
       uses: actions/upload-artifact@v4
       with:
-        name: json-test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}.json
-        path: json-test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}.json
+        name: json-test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}.json
+        path: json-test-results-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}.json
     - name: Upload Logs
       if: ${{ always() }}
       uses: actions/upload-artifact@v4
       with:
-        name: logs_Release_${{ matrix.vec.plat }}_${{ matrix.vec.arch }}
+        name: logs-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}
         path: artifacts/logs
 
   #
