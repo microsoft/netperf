@@ -21,10 +21,15 @@ jobs:
   # For automated identification of the workflow.
   name:
     name: For ${{ github.event.client_payload.guid }}
+    if: ${{ github.event_name == 'repository_dispatch' }}
     needs: []
     runs-on: ubuntu-20.04
     steps:
-    - run: echo "no op"
+    - run: |
+        echo "guid: ${{ github.event.client_payload.guid }}"
+        echo "sha: ${{ github.event.client_payload.sha }}"
+        echo "ref: ${{ github.event.client_payload.ref }}"
+        echo "pr: ${{ github.event.client_payload.pr }}"
 
   windows-perf:
     strategy:
