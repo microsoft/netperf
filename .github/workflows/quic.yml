@@ -180,7 +180,7 @@ jobs:
       with:
         repository: microsoft/netperf
         ref: deploy
-    - run: 'rm -f *.json'
+    - run: 'rm -rf *.json'
     - uses: actions/download-artifact@v4 # Specify no 'name' to download all uploaded artifacts
     - name: Git commit
       run: 'git config user.name "QUIC Dev[bot]" && git config user.email "quicdev@microsoft.com" && git pull && git add *.json && git commit -m "Update intermediary dashboard files" && git push'
