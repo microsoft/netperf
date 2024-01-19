@@ -46,6 +46,13 @@ https://github.com/microsoft/netperf/settings/actions/runners/new?arch=x64
 
   For XDP, very similar to QUIC. BUILD, upload artifacts, download artifacts, then run the various tests / benchmarks.
 
+
+5. Enable auto-login:
+
+REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v AutoAdminLogon /t REG_SZ /d 1 /f
+REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v DefaultUserName /t REG_SZ /d secnetperf /f
+REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v DefaultPassword /t REG_SZ /d Securenetworkperf! /f
+
 ### For Linux Testing
 
 TLDR;
