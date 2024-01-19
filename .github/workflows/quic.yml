@@ -119,7 +119,7 @@ jobs:
     - uses: actions/download-artifact@v4 # Kernel mode binaries are needed for WSK
       if: ${{ matrix.vec.io == 'wsk' }}
       with:
-        name: Release-winkernel-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-Perf
+        name: Release-winkernel-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
         path: artifacts
     - name: Run secnetperf
       shell: pwsh
