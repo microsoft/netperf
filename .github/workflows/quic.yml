@@ -96,15 +96,16 @@ jobs:
       fail-fast: false
       matrix:
         vec: [
-          { plat: "linux", os: "ubuntu-20.04", arch: "x64", tls: "openssl", io: "epoll" },
-          { plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "iocp" },
-          { plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "xdp" },
+          { env: "azure", plat: "linux",   os: "ubuntu-20.04", arch: "x64", tls: "openssl",  io: "epoll" },
+          { env: "azure", plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "iocp" },
+          { env: "azure", plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "xdp" },
+          { env: "azure", plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "wsk" },
         ]
     runs-on:
     - self-hosted
-    - ${{ matrix.vec.arch }}
-    - "secnetperf"
+    - ${{ matrix.vec.env }}
     - ${{ matrix.vec.plat }}
+    - ${{ matrix.vec.arch }}
     steps:
     - name: Checkout repository
       uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac
@@ -114,6 +115,11 @@ jobs:
     - uses: actions/download-artifact@v4
       with:
         name: Release-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-Perf
+        path: artifacts
+    - uses: actions/download-artifact@v4 # Kernel mode binaries are needed for WSK
+      if: ${{ matrix.vec.io == 'wsk' }}
+      with:
+        name: Release-winkernel-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-Perf
         path: artifacts
     - name: Run secnetperf
       shell: pwsh
