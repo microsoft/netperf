@@ -107,7 +107,7 @@ jobs:
     - ${{ matrix.vec.plat }}
     steps:
     - name: Checkout repository
-      uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       with:
         repository: microsoft/msquic
         ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
@@ -160,7 +160,7 @@ jobs:
     runs-on: 'ubuntu-20.04'
     steps:
     - name: Checkout repository
-      uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       with:
         repository: microsoft/netperf
         ref: sqlite
@@ -179,7 +179,7 @@ jobs:
     runs-on: 'ubuntu-20.04'
     steps:
     - name: Checkout repository
-      uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       with:
         repository: microsoft/netperf
         ref: deploy
