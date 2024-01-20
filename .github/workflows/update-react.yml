@@ -16,12 +16,12 @@ concurrency:
   # Allow running concurrently with any other commits.
   group: update-react-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
-  
+
 jobs:
   npm-build:
     name: Npm build
     needs: []
-    strategy: 
+    strategy:
       fail-fast: false
     runs-on: ubuntu-20.04
     steps:
@@ -47,7 +47,7 @@ jobs:
     permissions: write-all
     name: Update React
     needs: [npm-build]
-    strategy: 
+    strategy:
       fail-fast: false
     runs-on: ubuntu-20.04
     steps:
@@ -64,23 +64,30 @@ jobs:
         else
           echo "'dist' directory does not exist. Skipping removal."
         fi
-
+    - name: Remove 404 html file if it exists
+      run: |
+        if [[ -f 404.html ]]; then
+          echo "Removing 404.html file..."
+          rm 404.html
+        else
+          echo "404.html file does not exist. Skipping removal."
+        fi
     - uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
       with:
         name: dist
         path: ./dist
 
     - run: ls
-
     - run: pwd
-
+    - run: cp dist/index.html 404.html
     - name: Commit changes
       if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch')
       run: |
         git status
         git config user.name 'QUIC Dev[bot]'
         git config user.email 'quicdev@microsoft.com'
-        git add dist 
+        git add dist
+        git add 404.html
         git status
         git commit -m "Update React"
         git push
