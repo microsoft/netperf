@@ -3,15 +3,32 @@ name: QUIC
 on:
   workflow_dispatch:
     inputs:
-      logprofile:
-        required: false
-        default: ''
-        type: string
       ref:
+        description: 'Build Reference'
         required: false
         default: ''
         type: string
+      logprofile:
+        description: 'Log Profile'
+        required: false
+        default: "NULL"
+        type: choice
+        options:
+          - "NULL"
+          - Stacks.Light
+          - Stacks.Verbose
+          - Basic.Light
+          - Basic.Verbose
+          - Performance.Light
+          - Performance.Verbose
+          - RPS.Light
+          - RPS.Verbose
+          - Datapath.Light
+          - Datapath.Verbose
+          - Full.Light
+          - Full.Verbose
       commit:
+        description: 'Commit Results'
         required: false
         default: false
         type: boolean
