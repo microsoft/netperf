@@ -8,7 +8,7 @@ import Chart, { useChart } from 'src/components/chart';
 
 // ----------------------------------------------------------------------
 
-export default function AppWebsiteVisits({ title, subheader, chart, ...other }) {
+export default function AppWebsiteVisits({ title, subheader, chart, map, ...other }) {
   const { labels, colors, series, options } = chart;
 
   const chartOptions = useChart({
@@ -37,6 +37,25 @@ export default function AppWebsiteVisits({ title, subheader, chart, ...other }) 
     ...options,
   });
 
+  const customChartOptions = useChart({
+    colors,
+    plotOptions: {
+      bar: {
+        columnWidth: '16%',
+      },
+    },
+    fill: {
+      type: series.map((i) => i.fill),
+    },
+    labels,
+    tooltip: {
+      shared: true,
+      intersect: false,
+      custom: ({ dataPointIndex }) => map(dataPointIndex),
+    },
+    ...options,
+  });
+
   return (
     <Card {...other}>
       <CardHeader title={title} subheader={subheader} />
@@ -46,7 +65,7 @@ export default function AppWebsiteVisits({ title, subheader, chart, ...other }) 
           dir="ltr"
           type="line"
           series={series}
-          options={chartOptions}
+          options={map === undefined || map === null ? chartOptions : customChartOptions}
           width="100%"
           height={364}
         />
@@ -59,4 +78,5 @@ AppWebsiteVisits.propTypes = {
   chart: PropTypes.object,
   subheader: PropTypes.string,
   title: PropTypes.string,
+  map: PropTypes.func,
 };

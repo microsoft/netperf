@@ -1,121 +1,134 @@
-import { Helmet } from 'react-helmet-async';
+/* eslint-disable */
 
+import { Helmet } from 'react-helmet-async';
 import Grid from '@mui/material/Unstable_Grid2';
 import Container from '@mui/material/Container';
 import Typography from '@mui/material/Typography';
-
 import useFetchData from 'src/hooks/use-fetch-data';
-
 import { GraphView } from 'src/sections/overview/graphing';
 
-// import {
-//   parseLinuxDownloadQuic,
-//   parseLinuxDownloadTcp,
-//   parseLinuxUploadQuic,
-//   parseLinuxUploadTcp,
-//   parseWindowsDownloadQuic,
-//   parseWindowsDownloadTcp,
-//   parseWindowsUploadQuic,
-//   parseWindowsUploadTcp,
-//   parseCommitsList,
-//   parseRunDates,
-// } from './util/parser';
+let isMouseDown = false;
 
+document.addEventListener('mousedown', function() {
+    isMouseDown = true;
+});
 
+document.addEventListener('mouseup', function() {
+    isMouseDown = false;
+});
 
 // ----------------------------------------------------------------------
 
 export default function ThroughputPage() {
 
-  // const URL = "https://microsoft.github.io/netperf/data/secnetperf/dashboard.json";
-  // const { data, isLoading, error } = useFetchData(URL);
+  const URL = "https://raw.githubusercontent.com/microsoft/netperf/deploy/throughput.json";
+  const { data } = useFetchData(URL);
+  let uploadThroughput = <div />
+  let downloadThroughput = <div />
 
-  const uploadThroughput = <div />
-  // let downloadThroughput = <div />
+  if (data) {
+    const indices = []
+    for (let i = 0; i < data["linuxTcpUploadThroughput"].length; i++) {
+      indices.push(i + 1)
+    }
+    data["linuxTcpUploadThroughput"].reverse()
+    uploadThroughput =
+      <GraphView title="Upload Throughput"
+    subheader='Tested using Windows Server 2022 (Client and Server). Linux Ubuntu 20.04.3 LTS (Client and Server). WIP, NOTE: each datapoint is the max of 3 runs.'
+    labels={indices}
+    map={(index) => {
+      if (isMouseDown) {
+        window.location.href = `https://github.com/microsoft/msquic/commit/${data["linuxTcpUploadThroughput"][index][2]}`
+      }
+      return `<div style = "margin: 10px">
 
-  // if (isLoading) {
-  //   console.log("Loading...");
-  // }
+          NOTE: still a WIP, data is the max of 3 runs.
 
-  // if (error) {
-  //   console.log("Error!");
-  // }
+         <p> <b> Build date: </b> ${data["linuxTcpUploadThroughput"][index][1]} </p>
+         <p> <b> Commit hash: </b> <a href="google.com"> ${data["linuxTcpUploadThroughput"][index][2]} </a> </p>
 
-  // if (data) {
-  //   console.log(data);
-  //   const commits = parseCommitsList(data);
-  //   const runDates = parseRunDates(data);
-  //   const windowsTcpUpload = parseWindowsUploadTcp(data);
-  //   const windowsTcpDownload = parseWindowsDownloadTcp(data);
-  //   const windowsQuicUpload = parseWindowsUploadQuic(data);
-  //   const windowsQuicDownload = parseWindowsDownloadQuic(data);
-  //   const linuxTcpUpload = parseLinuxUploadTcp(data);
-  //   const linuxTcpDownload = parseLinuxDownloadTcp(data);
-  //   const linuxQuicUpload = parseLinuxUploadQuic(data);
-  //   const linuxQuicDownload = parseLinuxDownloadQuic(data);
+         <p> <b> Linux TCP: </b> ${data["linuxTcpUploadThroughput"][index][0]} </p>
+         <p> <b> Windows TCP: </b> ${data["windowsTcpUploadThroughput"][index][0]} </p>
+         <p> <b> Linux QUIC: </b> ${data["linuxQuicUploadThroughput"][index][0]} </p>
+         <p> <b> Windows QUIC: </b> ${data["windowsQuicUploadThroughput"][index][0]} </p>
 
-  //   uploadThroughput = <GraphView title="Upload Throughput"
-  //   subheader='Tested using Windows Server 2022 (Client and Server). Linux Ubuntu 20.04.3 LTS (Client and Server)'
-  //   labels={commits}
-  //   series={[
-  //     {
-  //       name: 'Linux + TCP',
-  //       type: 'line',
-  //       fill: 'solid',
-  //       data: linuxTcpUpload,
+      </div>`
+    }}
+    series={[
+      {
+        name: 'Linux + TCP',
+        type: 'line',
+        fill: 'solid',
+        data: data["linuxTcpUploadThroughput"].map((x) => x[0])
+      },
+      {
+        name: 'Windows + TCP',
+        type: 'line',
+        fill: 'solid',
+        data: data["windowsTcpUploadThroughput"].map((x) => x[0]),
+      },
+      {
+        name: 'Linux + QUIC',
+        type: 'line',
+        fill: 'solid',
+        data: data["linuxQuicUploadThroughput"].map((x) => x[0]),
+      },
+      {
+        name: 'Windows + QUIC',
+        type: 'line',
+        fill: 'solid',
+        data: data["windowsQuicUploadThroughput"].map((x) => x[0]),
+      },
+    ]} />
 
-  //     },
-  //     {
-  //       name: 'Windows + TCP',
-  //       type: 'line',
-  //       fill: 'solid',
-  //       data: windowsTcpUpload,
-  //     },
-  //     {
-  //       name: 'Linux + QUIC',
-  //       type: 'line',
-  //       fill: 'solid',
-  //       data: linuxQuicUpload,
-  //     },
-  //     {
-  //       name: 'Windows + QUIC',
-  //       type: 'line',
-  //       fill: 'solid',
-  //       data: windowsQuicUpload,
-  //     },
-  //   ]} />
-  //   downloadThroughput = <GraphView title="Download Throughput"
-  //   subheader='Tested using Windows 11 build 22000.282, Linux Ubuntu 20.04.3 LTS'
-  //   labels={commits}
-  //   series={[
-  //     {
-  //       name: 'Linux + TCP',
-  //       type: 'line',
-  //       fill: 'solid',
-  //       data: linuxTcpDownload,
+    downloadThroughput =  <GraphView title="Download Throughput"
+    subheader='Tested using Windows Server 2022 (Client and Server). Linux Ubuntu 20.04.3 LTS (Client and Server). WIP, NOTE: each datapoint is the max of 3 runs.'
+    labels={indices}
+    map={(index) => {
+      if (isMouseDown) {
+        window.location.href = `https://github.com/microsoft/msquic/commit/${data["linuxTcpDownloadThroughput"][index][2]}`
+      }
+      return `<div style = "margin: 10px">
 
-  //     },
-  //     {
-  //       name: 'Windows + TCP',
-  //       type: 'line',
-  //       fill: 'solid',
-  //       data: windowsTcpDownload,
-  //     },
-  //     {
-  //       name: 'Linux + QUIC',
-  //       type: 'line',
-  //       fill: 'solid',
-  //       data: linuxQuicDownload,
-  //     },
-  //     {
-  //       name: 'Windows + QUIC',
-  //       type: 'line',
-  //       fill: 'solid',
-  //       data: windowsQuicDownload,
-  //     },
-  //   ]}
-  // />
-  // }
+          NOTE: still a WIP, data is the max of 3 runs.
+
+         <p> <b> Build date: </b> ${data["linuxTcpDownloadThroughput"][index][1]} </p>
+         <p> <b> Commit hash: </b> <a href="google.com"> ${data["linuxTcpDownloadThroughput"][index][2]} </a> </p>
+
+         <p> <b> Linux TCP: </b> ${data["linuxTcpDownloadThroughput"][index][0]} </p>
+         <p> <b> Windows TCP: </b> ${data["windowsTcpDownloadThroughput"][index][0]} </p>
+         <p> <b> Linux QUIC: </b> ${data["linuxQuicDownloadThroughput"][index][0]} </p>
+         <p> <b> Windows QUIC: </b> ${data["windowsQuicDownloadThroughput"][index][0]} </p>
+
+      </div>`
+    }}
+    series={[
+      {
+        name: 'Linux + TCP',
+        type: 'line',
+        fill: 'solid',
+        data: data["linuxTcpDownloadThroughput"].map((x) => x[0])
+      },
+      {
+        name: 'Windows + TCP',
+        type: 'line',
+        fill: 'solid',
+        data: data["windowsTcpDownloadThroughput"].map((x) => x[0]),
+      },
+      {
+        name: 'Linux + QUIC',
+        type: 'line',
+        fill: 'solid',
+        data: data["linuxQuicDownloadThroughput"].map((x) => x[0]),
+      },
+      {
+        name: 'Windows + QUIC',
+        type: 'line',
+        fill: 'solid',
+        data: data["windowsQuicDownloadThroughput"].map((x) => x[0]),
+      },
+    ]} />
+  }
 
   return (
     <>
@@ -129,6 +142,7 @@ export default function ThroughputPage() {
         </Typography>
         <Grid container spacing={3}>
           {uploadThroughput}
+          {downloadThroughput}
         </Grid>
       </Container>
     </>
