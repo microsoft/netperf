@@ -1,0 +1,16 @@
+{
+    "windows" : {
+        "type" : "windows server 2022",
+        "upload_throughput_quic" :  912995.0,
+        "upload_throughput_tcp" : 937631.0,
+        "download_throughput_quic" :  909234.0,
+        "download_throughput_tcp" : 935619.0
+    },
+    "linux" : {
+        "type" : "ubuntu 20.04.3 lts",
+        "upload_throughput_quic" :  945597.0,
+        "upload_throughput_tcp" : 953133.0,
+        "download_throughput_quic" :  951923.0,
+        "download_throughput_tcp" : 952907.0
+    }
+}
