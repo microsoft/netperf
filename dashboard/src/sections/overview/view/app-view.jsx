@@ -15,7 +15,7 @@ function throughputPerformance(download, upload, dweight, uweight) {
 function latencyPerformance(latencies) {
   const weighting = [0.05, 0.1, 0.2, 0.3, 0.1, 0.1, 0.1, 0.05];
   let sum = 1.0;
-  for (let i = 0; i < latencies.length; i += 1) {
+  for (let i = 0; i < 8; i += 1) {
     sum += weighting[i] * latencies[i];
   }
   return (1 / sum) * 100000;
@@ -58,16 +58,16 @@ export default function AppView() {
   if (windows.data && linux.data) {
     for (const key of Object.keys(windows.data)) {
       if (key.includes('download') && key.includes('quic')) {
-        windowsDownloadThroughputQuic = windows.data[key][0];
+        windowsDownloadThroughputQuic = Math.max(...windows.data[key]);
       }
       if (key.includes('download') && key.includes('tcp')) {
-        windowsDownloadThroughputTcp = windows.data[key][0];
+        windowsDownloadThroughputTcp = Math.max(...windows.data[key]);
       }
       if (key.includes('upload') && key.includes('quic')) {
-        windowsUploadThroughputQuic = windows.data[key][0];
+        windowsUploadThroughputQuic = Math.max(...windows.data[key]);
       }
       if (key.includes('upload') && key.includes('tcp')) {
-        windowsUploadThroughputTcp = windows.data[key][0];
+        windowsUploadThroughputTcp = Math.max(...windows.data[key]);
       }
       if (key.includes('latency') && key.includes('quic')) {
         windowsLatencyQuic = windows.data[key];
@@ -79,16 +79,16 @@ export default function AppView() {
 
     for (const key of Object.keys(linux.data)) {
       if (key.includes('download') && key.includes('quic')) {
-        linuxDownloadThroughputQuic = linux.data[key][0];
+        linuxDownloadThroughputQuic = Math.max(...linux.data[key]);
       }
       if (key.includes('download') && key.includes('tcp')) {
-        linuxDownloadThroughputTcp = linux.data[key][0];
+        linuxDownloadThroughputTcp = Math.max(...linux.data[key]);
       }
       if (key.includes('upload') && key.includes('quic')) {
-        linuxUploadThroughputQuic = linux.data[key][0];
+        linuxUploadThroughputQuic = Math.max(...linux.data[key]);
       }
       if (key.includes('upload') && key.includes('tcp')) {
-        linuxUploadThroughputTcp = linux.data[key][0];
+        linuxUploadThroughputTcp = Math.max(...linux.data[key]);
       }
       if (key.includes('latency') && key.includes('quic')) {
         linuxLatencyQuic = linux.data[key];
@@ -116,12 +116,6 @@ export default function AppView() {
     console.log(windowsPerfScoreLatency);
     console.log(linuxPerfScoreLatency);
   }
-
-  // LATENCY ARRAY: [0th, 50th, 90th, 99th, 99.9th, 99.99th, 99.999th, 99.9999th]
-  // console.log(linuxLatencyQuic)
-  // console.log(linuxLatencyTcp)
-  // console.log(windowsLatencyQuic)
-  // console.log(windowsLatencyTcp)
 
   return (
     <Container maxWidth="xl">
