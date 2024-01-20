@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
     - name: Checkout repository
-      uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       with:
         repository: microsoft/netperf
         ref: main
@@ -38,7 +38,7 @@ jobs:
       run: npm run build
     - name: Upload Dist
       if: ${{ always() }}
-      uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32
+      uses: actions/upload-artifact@694cdabd8bdb0f10b2cea11669e1bf5453eed0a6
       with:
         name: dist
         path: dashboard/dist
@@ -52,7 +52,7 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
     - name: Checkout repository
-      uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       with:
         repository: microsoft/netperf
         ref: deploy
@@ -72,7 +72,7 @@ jobs:
         else
           echo "404.html file does not exist. Skipping removal."
         fi
-    - uses: actions/download-artifact@9bc31d5ccc31df68ecc42ccf4149144866c47d8a
+    - uses: actions/download-artifact@6b208ae046db98c579e8a3aa621ab581ff575935
       with:
         name: dist
         path: ./dist
