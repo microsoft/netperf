@@ -133,7 +133,7 @@ jobs:
       with:
         name: Release-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-Perf
         path: artifacts
-    - uses: actions/download-artifact@v4 # Kernel mode binaries are needed for WSK
+    - uses: actions/download-artifact@6b208ae046db98c579e8a3aa621ab581ff575935
       if: ${{ matrix.vec.io == 'wsk' }}
       with:
         name: Release-winkernel-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
