@@ -144,6 +144,7 @@ jobs:
       with:
         name: logs-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}
         path: artifacts/logs
+        if-no-files-found: ignore
 
   #
   # Post Processing Jobs
