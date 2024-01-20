@@ -46,13 +46,6 @@ https://github.com/microsoft/netperf/settings/actions/runners/new?arch=x64
 
   For XDP, very similar to QUIC. BUILD, upload artifacts, download artifacts, then run the various tests / benchmarks.
 
-
-5. Enable auto-login:
-
-REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v AutoAdminLogon /t REG_SZ /d 1 /f
-REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v DefaultUserName /t REG_SZ /d secnetperf /f
-REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v DefaultPassword /t REG_SZ /d Securenetworkperf! /f
-
 ### For Linux Testing
 
 TLDR;
@@ -87,7 +80,6 @@ bcdedit /set testsigning on
 
 > **Note** - You will have to reboot after disabling test signing.
 
-
 ### Enable PowerShell Remoting to Peer
 
 ```PowerShell
@@ -102,6 +94,16 @@ Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer'
 netsh.exe advfirewall set allprofiles state off
 Set-MpPreference -EnableNetworkProtection Disabled
 Set-MpPreference -DisableDatagramProcessing $True
+```
+
+### Configure Automatic Logon
+
+```PowerShell
+$username = "secnetperf"
+$password = "****************"
+REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v AutoAdminLogon /t REG_SZ /d 1 /f
+REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v DefaultUserName /t REG_SZ /d $username /f
+REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v DefaultPassword /t REG_SZ /d $password /f
 ```
 
 ### Give the User Service Logon Rights
