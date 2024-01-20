@@ -81,7 +81,7 @@ jobs:
           Release\bpf_performance_runner.exe -i tests.yml -e .sys -r | Tee-Object -FilePath $WorkingDirectory\bpf_performance_native.csv
 
       - name: Upload BPF performance results
-        uses: actions/upload-artifact@82c141cc518b40d92cc801eee768e7aafc9c2fa2
+        uses: actions/upload-artifact@694cdabd8bdb0f10b2cea11669e1bf5453eed0a6
         with:
           name: bpf_performance_native-${{ matrix.os }}-${{ matrix.arch }}
           path: bpf_performance_native.csv
