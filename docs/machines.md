@@ -17,6 +17,14 @@ TODO
 
 ## Azure VMs
 
+- Standard D2s v3
+- 2 vCPUs
+- 8 GB RAM
+- Standard SSD LRS Storage
+- Accelerated Networking Enabled
+
+They are running on the same VNet.
+
 ### For Windows Testing
 TLDR;
 
