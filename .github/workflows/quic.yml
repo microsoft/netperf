@@ -124,16 +124,18 @@ jobs:
     - ${{ matrix.vec.plat }}
     - ${{ matrix.vec.arch }}
     steps:
-    - name: Checkout repository
+    - name: Checkout microsoft/msquic
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       with:
         repository: microsoft/msquic
         ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
-    - uses: actions/download-artifact@6b208ae046db98c579e8a3aa621ab581ff575935
+    - name: Download Artifacts
+      uses: actions/download-artifact@6b208ae046db98c579e8a3aa621ab581ff575935
       with:
         name: Release-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-Perf
         path: artifacts
-    - uses: actions/download-artifact@6b208ae046db98c579e8a3aa621ab581ff575935
+    - name: Download Kernel Artifacts
+      uses: actions/download-artifact@6b208ae046db98c579e8a3aa621ab581ff575935
       if: ${{ matrix.vec.io == 'wsk' }}
       with:
         name: Release-winkernel-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
