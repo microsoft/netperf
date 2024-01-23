@@ -31,6 +31,10 @@ export default function AppView() {
     'https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-linux-ubuntu-20.04-x64-openssl.json/json-test-results-linux-ubuntu-20.04-x64-openssl.json'
   );
 
+  const windowsXdp = useFetchData(
+    'https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-windows-windows-2022-x64-schannel-xdp.json/json-test-results-windows-windows-2022-x64-schannel-xdp.json'
+  );
+
   let windowsPerfScore = 0;
   let linuxPerfScore = 0;
 
@@ -42,6 +46,9 @@ export default function AppView() {
   let windowsDownloadThroughputQuic = 1;
   let windowsDownloadThroughputTcp = 1;
 
+  let windowsXdpUploadThroughputQuic = 1;
+  let windowsXdpDownloadThroughputQuic = 1;
+
   let linuxDownloadThroughputQuic = 1;
   let linuxDownloadThroughputTcp = 1;
   let linuxUploadThroughputQuic = 1;
@@ -52,10 +59,12 @@ export default function AppView() {
   let linuxLatencyQuic = [0, 0, 0, 0, 0, 0, 0, 0];
   let linuxLatencyTcp = [0, 0, 0, 0, 0, 0, 0, 0];
 
+  let windowsXdpLatencyQuic = [0, 0, 0, 0, 0, 0, 0, 0];
+
   const windowsType = 'Windows Server 2022';
   const linuxType = 'Linux Ubuntu 20.04 LTS';
 
-  if (windows.data && linux.data) {
+  if (windows.data && linux.data && windowsXdp.data) {
     for (const key of Object.keys(windows.data)) {
       if (key.includes('download') && key.includes('quic')) {
         windowsDownloadThroughputQuic = Math.max(...windows.data[key]);
@@ -98,6 +107,22 @@ export default function AppView() {
       }
     }
 
+    for (const key of Object.keys(windowsXdp.data)) {
+      if (key.includes('download') && key.includes('quic')) {
+        windowsXdpDownloadThroughputQuic = Math.max(...windowsXdp.data[key]);
+      }
+      if (key.includes('upload') && key.includes('quic')) {
+        windowsXdpUploadThroughputQuic = Math.max(...windowsXdp.data[key]);
+      }
+      if (key.includes('latency') && key.includes('quic')) {
+        windowsXdpLatencyQuic = windowsXdp.data[key];
+      }
+    }
+
+    console.log(windowsXdpDownloadThroughputQuic);
+    console.log(windowsXdpUploadThroughputQuic);
+    console.log(windowsXdpLatencyQuic);
+
     windowsPerfScore = throughputPerformance(
       windowsDownloadThroughputQuic,
       windowsUploadThroughputQuic,
@@ -113,8 +138,6 @@ export default function AppView() {
 
     windowsPerfScoreLatency = latencyPerformance(windowsLatencyQuic);
     linuxPerfScoreLatency = latencyPerformance(linuxLatencyQuic);
-    console.log(windowsPerfScoreLatency);
-    console.log(linuxPerfScoreLatency);
   }
 
   return (
@@ -283,6 +306,18 @@ export default function AppView() {
                     linuxUploadThroughputQuic,
                   ],
                 },
+
+                {
+                  name: 'QUIC + XDP',
+                  type: 'column',
+                  fill: 'solid',
+                  data: [
+                    windowsXdpDownloadThroughputQuic,
+                    windowsXdpUploadThroughputQuic,
+                    0,
+                    0,
+                  ],
+                }
               ],
             }}
           />
@@ -349,6 +384,18 @@ export default function AppView() {
                     linuxLatencyTcp[4],
                   ],
                 },
+                {
+                  name: 'Windows QUIC + XDP',
+                  type: 'column',
+                  fill: 'solid',
+                  // Data based on Linux TCP for each percentile
+                  data: [
+                    windowsXdpLatencyQuic[1],
+                    windowsXdpLatencyQuic[2],
+                    windowsXdpLatencyQuic[3],
+                    windowsXdpLatencyQuic[4],
+                  ],
+                }
               ],
             }}
           />
