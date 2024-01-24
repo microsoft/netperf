@@ -3004,10 +3004,10 @@ source-map@^0.5.7:
   resolved "https://registry.npmjs.org/source-map/-/source-map-0.5.7.tgz"
   integrity sha512-LbrmJOMUSdEVxIKvdcJzQC+nQhe8FUZQTXQy6+I75skNgn3OoQ0DZA8YnFa7gp8tqtL3KPf1kmo0R5DoApeSGQ==
 
-sql.js@^1.9.0:
-  version "1.9.0"
-  resolved "https://registry.npmjs.org/sql.js/-/sql.js-1.9.0.tgz"
-  integrity sha512-+QMN8NU5KJxofT+lEaSLYdhh+Pdq7ZYS6X5bSbpmD+4SKFf+qBmr+coKT07LZ+keUNh1sf3Nz9dQwD8WNI2i/Q==
+sql.js@^1.10.2:
+  version "1.10.2"
+  resolved "https://registry.yarnpkg.com/sql.js/-/sql.js-1.10.2.tgz#3d0b5ddfecb37c1ea0ff9ae1250ca06af0e20e92"
+  integrity sha512-jnKFtdHxuVUNgu1vHwFoTjjwfTuVDVqzGpw7H05Zq3YMNMDOpLFyFGvpgTRIQGd/mqcYntuMy7iygYCytD62jQ==
 
 string.prototype.matchall@^4.0.8:
   version "4.0.10"
