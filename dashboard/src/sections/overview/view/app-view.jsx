@@ -314,8 +314,6 @@ export default function AppView() {
                   data: [
                     windowsXdpDownloadThroughputQuic,
                     windowsXdpUploadThroughputQuic,
-                    0,
-                    0,
                   ],
                 }
               ],
