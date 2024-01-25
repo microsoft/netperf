@@ -15,7 +15,13 @@ param (
     [string]$pr = "",
 
     [Parameter(Mandatory = $false)]
-    [string]$run_id = ""
+    [string]$run_id = "",
+
+    [Parameter(Mandatory = $false)]
+    [string]$logs = "",
+
+    [Parameter(Mandatory = $false)]
+    [string]$filter = ""
 )
 
 Set-StrictMode -Version 'Latest'
@@ -39,6 +45,8 @@ function Start-Workflow {
             ref = $ref
             pr = $pr
             run_id = $run_id
+            logs = $logs
+            filter = $filter
         }
     } | ConvertTo-Json
     Write-Debug "POST $body to $url"
