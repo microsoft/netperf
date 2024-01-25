@@ -25,10 +25,10 @@ function latencyPerformance(latencies) {
 
 export default function AppView() {
   const windows = useFetchData(
-    'https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-windows-windows-2022-x64-schannel.json/json-test-results-windows-windows-2022-x64-schannel.json'
+    'https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-windows-windows-2022-x64-schannel-iocp.json/json-test-results-windows-windows-2022-x64-schannel-iocp.json'
   );
   const linux = useFetchData(
-    'https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-linux-ubuntu-20.04-x64-openssl.json/json-test-results-linux-ubuntu-20.04-x64-openssl.json'
+    'https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-linux-ubuntu-20.04-x64-openssl-epoll.json/json-test-results-linux-ubuntu-20.04-x64-openssl-epoll.json'
   );
 
   const windowsXdp = useFetchData(
@@ -65,59 +65,23 @@ export default function AppView() {
   const linuxType = 'Linux Ubuntu 20.04 LTS';
 
   if (windows.data && linux.data && windowsXdp.data) {
-    for (const key of Object.keys(windows.data)) {
-      if (key.includes('download') && key.includes('quic')) {
-        windowsDownloadThroughputQuic = Math.max(...windows.data[key]);
-      }
-      if (key.includes('download') && key.includes('tcp')) {
-        windowsDownloadThroughputTcp = Math.max(...windows.data[key]);
-      }
-      if (key.includes('upload') && key.includes('quic')) {
-        windowsUploadThroughputQuic = Math.max(...windows.data[key]);
-      }
-      if (key.includes('upload') && key.includes('tcp')) {
-        windowsUploadThroughputTcp = Math.max(...windows.data[key]);
-      }
-      if (key.includes('latency') && key.includes('quic')) {
-        windowsLatencyQuic = windows.data[key];
-      }
-      if (key.includes('latency') && key.includes('tcp')) {
-        windowsLatencyTcp = windows.data[key];
-      }
-    }
+    windowsDownloadThroughputQuic = Math.max(...windows.data["tput-down-quic"]);
+    windowsDownloadThroughputTcp = Math.max(...windows.data["tput-down-tcp"]);
+    windowsUploadThroughputQuic = Math.max(...windows.data["tput-up-quic"]);
+    windowsUploadThroughputTcp = Math.max(...windows.data["tput-up-tcp"]);
+    windowsLatencyQuic = windows.data["rps-up-512-down-4000-quic"];
+    windowsLatencyTcp = windows.data["rps-up-512-down-4000-tcp"];
 
-    for (const key of Object.keys(linux.data)) {
-      if (key.includes('download') && key.includes('quic')) {
-        linuxDownloadThroughputQuic = Math.max(...linux.data[key]);
-      }
-      if (key.includes('download') && key.includes('tcp')) {
-        linuxDownloadThroughputTcp = Math.max(...linux.data[key]);
-      }
-      if (key.includes('upload') && key.includes('quic')) {
-        linuxUploadThroughputQuic = Math.max(...linux.data[key]);
-      }
-      if (key.includes('upload') && key.includes('tcp')) {
-        linuxUploadThroughputTcp = Math.max(...linux.data[key]);
-      }
-      if (key.includes('latency') && key.includes('quic')) {
-        linuxLatencyQuic = linux.data[key];
-      }
-      if (key.includes('latency') && key.includes('tcp')) {
-        linuxLatencyTcp = linux.data[key];
-      }
-    }
+    linuxDownloadThroughputQuic = Math.max(...linux.data["tput-down-quic"]);
+    linuxDownloadThroughputTcp = Math.max(...linux.data["tput-down-tcp"]);
+    linuxUploadThroughputQuic = Math.max(...linux.data["tput-up-quic"]);
+    linuxUploadThroughputTcp = Math.max(...linux.data["tput-up-tcp"]);
+    linuxLatencyQuic = linux.data["rps-up-512-down-4000-quic"];
+    linuxLatencyTcp = linux.data["rps-up-512-down-4000-tcp"];
 
-    for (const key of Object.keys(windowsXdp.data)) {
-      if (key.includes('download') && key.includes('quic')) {
-        windowsXdpDownloadThroughputQuic = Math.max(...windowsXdp.data[key]);
-      }
-      if (key.includes('upload') && key.includes('quic')) {
-        windowsXdpUploadThroughputQuic = Math.max(...windowsXdp.data[key]);
-      }
-      if (key.includes('latency') && key.includes('quic')) {
-        windowsXdpLatencyQuic = windowsXdp.data[key];
-      }
-    }
+    windowsXdpDownloadThroughputQuic = Math.max(...windowsXdp.data["tput-down-quic"]);
+    windowsXdpUploadThroughputQuic = Math.max(...windowsXdp.data["tput-up-quic"]);
+    windowsXdpLatencyQuic = windowsXdp.data["rps-up-512-down-4000-quic"];
 
     console.log(windowsXdpDownloadThroughputQuic);
     console.log(windowsXdpUploadThroughputQuic);
