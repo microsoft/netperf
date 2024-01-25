@@ -54,6 +54,19 @@ export default function AppView() {
   let linuxUploadThroughputQuic = 1;
   let linuxUploadThroughputTcp = 1;
 
+  let windowsHpsQuic = 1;
+  let windowsHpsTcp = 1;
+  let linuxHpsQuic = 1;
+  let linuxHpsTcp = 1;
+  let windowsXdpHpsQuic = 1;
+
+  let windowsRpsQuic = 1;
+  let windowsRpsTcp = 1;
+  let linuxRpsQuic = 1;
+  let linuxRpsTcp = 1;
+  let windowsXdpRpsQuic = 1;
+
+
   let windowsLatencyQuic = [0, 0, 0, 0, 0, 0, 0, 0];
   let windowsLatencyTcp = [0, 0, 0, 0, 0, 0, 0, 0];
   let linuxLatencyQuic = [0, 0, 0, 0, 0, 0, 0, 0];
@@ -65,28 +78,25 @@ export default function AppView() {
   const linuxType = 'Linux Ubuntu 20.04 LTS';
 
   if (windows.data && linux.data && windowsXdp.data) {
+
+    // Throughput
     windowsDownloadThroughputQuic = Math.max(...windows.data["tput-down-quic"]);
     windowsDownloadThroughputTcp = Math.max(...windows.data["tput-down-tcp"]);
     windowsUploadThroughputQuic = Math.max(...windows.data["tput-up-quic"]);
     windowsUploadThroughputTcp = Math.max(...windows.data["tput-up-tcp"]);
     windowsLatencyQuic = windows.data["rps-up-512-down-4000-quic"];
     windowsLatencyTcp = windows.data["rps-up-512-down-4000-tcp"];
-
     linuxDownloadThroughputQuic = Math.max(...linux.data["tput-down-quic"]);
     linuxDownloadThroughputTcp = Math.max(...linux.data["tput-down-tcp"]);
     linuxUploadThroughputQuic = Math.max(...linux.data["tput-up-quic"]);
     linuxUploadThroughputTcp = Math.max(...linux.data["tput-up-tcp"]);
     linuxLatencyQuic = linux.data["rps-up-512-down-4000-quic"];
     linuxLatencyTcp = linux.data["rps-up-512-down-4000-tcp"];
-
     windowsXdpDownloadThroughputQuic = Math.max(...windowsXdp.data["tput-down-quic"]);
     windowsXdpUploadThroughputQuic = Math.max(...windowsXdp.data["tput-up-quic"]);
     windowsXdpLatencyQuic = windowsXdp.data["rps-up-512-down-4000-quic"];
 
-    console.log(windowsXdpDownloadThroughputQuic);
-    console.log(windowsXdpUploadThroughputQuic);
-    console.log(windowsXdpLatencyQuic);
-
+    // Compute Scores
     windowsPerfScore = throughputPerformance(
       windowsDownloadThroughputQuic,
       windowsUploadThroughputQuic,
@@ -99,9 +109,22 @@ export default function AppView() {
       0.8,
       0.2
     );
-
     windowsPerfScoreLatency = latencyPerformance(windowsLatencyQuic);
     linuxPerfScoreLatency = latencyPerformance(linuxLatencyQuic);
+
+    // HPS
+    windowsHpsQuic = Math.max(...windows.data["hps-conns-100-quic"]);
+    windowsHpsTcp = Math.max(...windows.data["hps-conns-100-tcp"]);
+    linuxHpsQuic = Math.max(...linux.data["hps-conns-100-quic"]);
+    linuxHpsTcp = Math.max(...linux.data["hps-conns-100-tcp"]);
+    windowsXdpHpsQuic = Math.max(...windowsXdp.data["hps-conns-100-quic"]);
+
+    // RPS
+    windowsRpsQuic = windowsLatencyQuic[windowsLatencyQuic.length - 1]; // Average across all runs or not?
+    windowsRpsTcp = windowsLatencyTcp[windowsLatencyTcp.length - 1];
+    linuxRpsQuic = linuxLatencyQuic[linuxLatencyQuic.length - 1];
+    linuxRpsTcp = linuxLatencyTcp[linuxLatencyTcp.length - 1];
+    windowsXdpRpsQuic = windowsXdpLatencyQuic[windowsXdpLatencyQuic.length - 1];
   }
 
   return (
@@ -362,6 +385,161 @@ export default function AppView() {
             }}
           />
         </Grid>
+
+        <Grid xs={12} sm={6} md={3}>
+          <AppWidgetSummary
+            title="Windows RPS Performance Score."
+            total={0}
+            color="primary"
+            icon={
+              <div>
+                <img alt="icon" src="/netperf/dist/assets/icons/glass/windows.png" />
+                <Button
+                  onClick={() =>
+                    alert(`
+                  This score is computed as:
+                  ??? TODO
+                `)
+                  }
+                >
+                  ?
+                </Button>
+              </div>
+            }
+          />
+        </Grid>
+        <Grid xs={12} sm={6} md={3}>
+          <AppWidgetSummary
+            title="Linux RPS Performance Score."
+            total={0}
+            color="primary"
+            icon={
+              <div>
+                <img alt="icon" src="/netperf/dist/assets/icons/glass/Ubuntu-Logo.png" />
+                <Button
+                  onClick={() =>
+                    alert(`
+                This score is computed as:
+
+                ??? TODO
+            `)
+                  }
+                >
+                  ?
+                </Button>
+              </div>
+            }
+          />
+        </Grid>
+
+        <Grid xs={12} sm={6} md={3}>
+          <AppWidgetSummary
+            title="Windows HPS Performance Score."
+            total={0}
+            color="primary"
+            icon={
+              <div>
+                <img alt="icon" src="/netperf/dist/assets/icons/glass/windows.png" />
+                <Button
+                  onClick={() =>
+                    alert(`
+                  This score is computed as:
+                  ??? TODO
+                `)
+                  }
+                >
+                  ?
+                </Button>
+              </div>
+            }
+          />
+        </Grid>
+        <Grid xs={12} sm={6} md={3}>
+          <AppWidgetSummary
+            title="Linux HPS Performance Score."
+            total={0}
+            color="primary"
+            icon={
+              <div>
+                <img alt="icon" src="/netperf/dist/assets/icons/glass/Ubuntu-Logo.png" />
+                <Button
+                  onClick={() =>
+                    alert(`
+                This score is computed as:
+
+                ??? TODO
+            `)
+                  }
+                >
+                  ?
+                </Button>
+              </div>
+            }
+          />
+        </Grid>
+
+        <Grid xs={12} md={6} lg={6}>
+          <AppWebsiteVisits
+            title="RPS Comparison (requests per second), higher the better."
+            subheader={`Tested using ${windowsType}, ${linuxType}`}
+            chart={{
+              labels: ['TCP', 'QUIC', 'QUIC + XDP'],
+              series: [
+                {
+                  name: 'Windows',
+                  type: 'column',
+                  fill: 'solid',
+                  data: [
+                    windowsRpsTcp,
+                    windowsRpsQuic,
+                    windowsXdpRpsQuic,
+                  ],
+                },
+                {
+                  name: 'Linux',
+                  type: 'column',
+                  fill: 'solid',
+                  data: [
+                    linuxRpsTcp,
+                    linuxRpsQuic,
+                  ],
+                },
+              ],
+            }}
+          />
+        </Grid>
+
+        <Grid xs={12} md={6} lg={6}>
+          <AppWebsiteVisits
+            title="HPS Comparison (handshakes per second), higher the better."
+            subheader={`Tested using ${windowsType}, ${linuxType}`}
+            chart={{
+              labels: ['TCP', 'QUIC', 'QUIC + XDP'],
+              series: [
+                {
+                  name: 'Windows',
+                  type: 'column',
+                  fill: 'solid',
+                  data: [
+                    windowsHpsTcp,
+                    windowsHpsQuic,
+                    windowsXdpHpsQuic,
+                  ],
+                },
+                {
+                  name: 'Linux',
+                  type: 'column',
+                  fill: 'solid',
+                  data: [
+                    linuxHpsTcp,
+                    linuxHpsQuic,
+                  ],
+                },
+              ],
+            }}
+          />
+        </Grid>
+
       </Grid>
     </Container>
   );
