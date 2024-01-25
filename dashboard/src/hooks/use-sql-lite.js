@@ -14,7 +14,7 @@ const useSQLiteWorker = (dbUrl) => {
     const devMode = false;
     let workerUrl = 'https://microsoft.github.io/netperf/wasm_worker.js' // DevURL = 'dist/wasm_worker.js'
     if (devMode) {
-      workerUrl = 'dist/wasm_worker.js';
+      workerUrl = 'wasm_worker.js';
     }
     const worker = new Worker(workerUrl);
     worker.onmessage = (e) => {
