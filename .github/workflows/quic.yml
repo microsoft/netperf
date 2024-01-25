@@ -159,7 +159,7 @@ jobs:
           -arch ${{ matrix.vec.arch }} `
           -tls ${{ matrix.vec.tls }} `
           -io ${{ matrix.vec.io }} `
-          -filter ${{ github.event.client_payload.filter || inputs.filter || '' }}
+          -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
     - name: Upload Test Results SQL
       if: ${{ always() }}
       uses: actions/upload-artifact@26f96dfa697d77e81fd5907df203aa23a56210a8
