@@ -8,6 +8,11 @@ on:
         required: false
         default: ''
         type: string
+      filter:
+        description: 'Test Filter'
+        required: false
+        default: ''
+        type: string
       logprofile:
         description: 'Log Profile'
         required: false
@@ -153,7 +158,8 @@ jobs:
           -os ${{ matrix.vec.os }} `
           -arch ${{ matrix.vec.arch }} `
           -tls ${{ matrix.vec.tls }} `
-          -io ${{ matrix.vec.io }}
+          -io ${{ matrix.vec.io }} `
+          -filter ${{ github.event.client_payload.filter || inputs.filter || '' }}
     - name: Upload Test Results SQL
       if: ${{ always() }}
       uses: actions/upload-artifact@26f96dfa697d77e81fd5907df203aa23a56210a8
