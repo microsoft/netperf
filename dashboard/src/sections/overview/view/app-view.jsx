@@ -35,6 +35,10 @@ export default function AppView() {
     'https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-windows-windows-2022-x64-schannel-xdp.json/json-test-results-windows-windows-2022-x64-schannel-xdp.json'
   );
 
+  const windowsKernel = useFetchData(
+    'https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-windows-windows-2022-x64-schannel-wsk.json/json-test-results-windows-windows-2022-x64-schannel-wsk.json'
+  );
+
   let windowsPerfScore = 0;
   let linuxPerfScore = 0;
 
@@ -48,6 +52,9 @@ export default function AppView() {
 
   let windowsXdpUploadThroughputQuic = 1;
   let windowsXdpDownloadThroughputQuic = 1;
+
+  let windowsKernelUploadThroughputQuic = 1;
+  let windowsKernelDownloadThroughputQuic = 1;
 
   let linuxDownloadThroughputQuic = 1;
   let linuxDownloadThroughputTcp = 1;
@@ -65,6 +72,7 @@ export default function AppView() {
   let linuxRpsQuic = 1;
   let linuxRpsTcp = 1;
   let windowsXdpRpsQuic = 1;
+  let windowsKernelRpsQuic = 1;
 
 
   let windowsLatencyQuic = [0, 0, 0, 0, 0, 0, 0, 0];
@@ -74,10 +82,12 @@ export default function AppView() {
 
   let windowsXdpLatencyQuic = [0, 0, 0, 0, 0, 0, 0, 0];
 
+  let windowsKernelLatencyQuic = [0, 0, 0, 0, 0, 0, 0, 0];
+
   const windowsType = 'Windows Server 2022';
   const linuxType = 'Linux Ubuntu 20.04 LTS';
 
-  if (windows.data && linux.data && windowsXdp.data) {
+  if (windows.data && linux.data && windowsXdp.data && windowsKernel.data) {
 
     // Throughput
     windowsDownloadThroughputQuic = Math.max(...windows.data["tput-down-quic"]);
@@ -90,11 +100,17 @@ export default function AppView() {
     linuxDownloadThroughputTcp = Math.max(...linux.data["tput-down-tcp"]);
     linuxUploadThroughputQuic = Math.max(...linux.data["tput-up-quic"]);
     linuxUploadThroughputTcp = Math.max(...linux.data["tput-up-tcp"]);
+    windowsKernelDownloadThroughputQuic = Math.max(...windowsKernel.data["tput-down-quic"]);
+    windowsKernelUploadThroughputQuic = Math.max(...windowsKernel.data["tput-up-quic"]);
+
+    // Latency
     linuxLatencyQuic = linux.data["rps-up-512-down-4000-quic"];
     linuxLatencyTcp = linux.data["rps-up-512-down-4000-tcp"];
     windowsXdpDownloadThroughputQuic = Math.max(...windowsXdp.data["tput-down-quic"]);
     windowsXdpUploadThroughputQuic = Math.max(...windowsXdp.data["tput-up-quic"]);
     windowsXdpLatencyQuic = windowsXdp.data["rps-up-512-down-4000-quic"];
+    windowsKernelLatencyQuic = windowsKernel.data["rps-up-512-down-4000-quic"];
+
 
     // Compute Scores
     windowsPerfScore = throughputPerformance(
@@ -125,6 +141,7 @@ export default function AppView() {
     linuxRpsQuic = linuxLatencyQuic[linuxLatencyQuic.length - 1];
     linuxRpsTcp = linuxLatencyTcp[linuxLatencyTcp.length - 1];
     windowsXdpRpsQuic = windowsXdpLatencyQuic[windowsXdpLatencyQuic.length - 1];
+    windowsKernelRpsQuic = windowsKernelLatencyQuic[windowsKernelLatencyQuic.length - 1];
   }
 
   return (
@@ -263,7 +280,7 @@ export default function AppView() {
             }
           />
         </Grid>
-
+        {/* Throughput */}
         <Grid xs={12} md={6} lg={6}>
           <AppWebsiteVisits
             title="Throughput Comparison (kbps), higher the better."
@@ -302,12 +319,21 @@ export default function AppView() {
                     windowsXdpDownloadThroughputQuic,
                     windowsXdpUploadThroughputQuic,
                   ],
+                },
+                {
+                  name: 'QUIC + Kernel Mode (wsk)',
+                  type: 'column',
+                  fill: 'solid',
+                  data: [
+                    windowsKernelDownloadThroughputQuic,
+                    windowsKernelUploadThroughputQuic,
+                  ],
                 }
               ],
             }}
           />
         </Grid>
-
+        {/* Latency */}
         <Grid xs={12} md={6} lg={6}>
           <AppWebsiteVisits
             title="Latency Comparison (ms), lower the better."
@@ -379,6 +405,18 @@ export default function AppView() {
                     windowsXdpLatencyQuic[2],
                     windowsXdpLatencyQuic[3],
                     windowsXdpLatencyQuic[4],
+                  ],
+                },
+                {
+                  name: 'Windows QUIC + Wsk',
+                  type: 'column',
+                  fill: 'solid',
+                  // Data based on Linux TCP for each percentile
+                  data: [
+                    windowsKernelLatencyQuic[1],
+                    windowsKernelLatencyQuic[2],
+                    windowsKernelLatencyQuic[3],
+                    windowsKernelLatencyQuic[4],
                   ],
                 }
               ],
@@ -477,13 +515,13 @@ export default function AppView() {
             }
           />
         </Grid>
-
+        {/* RPS */}
         <Grid xs={12} md={6} lg={6}>
           <AppWebsiteVisits
             title="RPS Comparison (requests per second), higher the better."
             subheader={`Tested using ${windowsType}, ${linuxType}`}
             chart={{
-              labels: ['TCP', 'QUIC', 'QUIC + XDP'],
+              labels: ['TCP', 'QUIC', 'QUIC + XDP', 'QUIC + Wsk'],
               series: [
                 {
                   name: 'Windows',
@@ -493,6 +531,7 @@ export default function AppView() {
                     windowsRpsTcp,
                     windowsRpsQuic,
                     windowsXdpRpsQuic,
+                    windowsKernelRpsQuic,
                   ],
                 },
                 {
@@ -508,7 +547,7 @@ export default function AppView() {
             }}
           />
         </Grid>
-
+        {/* HPS */}
         <Grid xs={12} md={6} lg={6}>
           <AppWebsiteVisits
             title="HPS Comparison (handshakes per second), higher the better."
