@@ -32,11 +32,11 @@ const navConfig = [
     path: '/hps',
     icon: icon('ic_analytics'),
   },
-  // {
-  //   title: 'Detailed Analysis',
-  //   path: '/detailed',
-  //   icon: icon('ic_analytics'),
-  // }
+  {
+    title: 'Detailed Analysis',
+    path: '/detailed',
+    icon: icon('ic_analytics'),
+  },
   // {
   //   title: 'product',
   //   path: '/products',

@@ -26,25 +26,25 @@ export default function Router() {
       children: [
         { element: <IndexPage />, index: true },
         {
-          path: 'throughput', 
+          path: 'throughput',
           element: <ThroughputPage />,
         },
         {
-          path: 'latency', 
+          path: 'latency',
           element: <LatencyPage />,
         },
         {
-          path: 'rps', 
+          path: 'rps',
           element: <RpsPage />,
         },
         {
-          path: 'hps', 
+          path: 'hps',
           element: <HpsPage />,
         },
-        // {
-        //   path: 'Detailed', 
-        //   element: <DetailedPage db = {db} />,
-        // }
+        {
+          path: 'Detailed',
+          element: <DetailedPage />,
+        }
       ],
     },
     {

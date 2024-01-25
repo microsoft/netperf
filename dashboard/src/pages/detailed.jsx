@@ -1,39 +1,26 @@
-/* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable */
 import { Helmet } from 'react-helmet-async';
 import { useState, useEffect } from 'react';
 import useSQLiteWorker from 'src/hooks/use-sql-lite';
 
+// TODO: Make this more interesting :)
 export default function DetailedPage(props) {
 
    const { exec, isReady, error } = useSQLiteWorker("https://raw.githubusercontent.com/microsoft/netperf/sqlite/netperf.sqlite");
-   const [testData, setTestData] = useState(null);
-   const [testData2, setTestData2] = useState(null);
+   const [data, setData] = useState(null);
 
    useEffect(() => {
-     if (isReady) {
-       console.log("Database is ready");
-       exec("SELECT * FROM Environment", setTestData);
-       exec("SELECT * FROM sqlite_master", setTestData2);
-     }
-   }, [isReady]);
+     console.log("Data: ", data);
+   }, [data]);
 
-   if (testData) {
-     console.log("TEST DATA: ", testData);
-   }
-
-   if (testData2) {
-     console.log("TEST DATA 2: ", testData2);
-   }
-
-
-   // const { db } = props;
    const [query, setQuery] = useState('');
 
    const executeQuery = (q) => {
-      // const values = db.exec(q);
-      // for (const val of values.values()) {
-      //    console.log(val);
-      // }
+      if (!isReady) {
+         console.log("Database is not ready");
+         return;
+      }
+      exec(q, setData);
    };
 
    const handleInputChange = (event) => {
@@ -58,10 +45,10 @@ export default function DetailedPage(props) {
                placeholder="Enter SQL query"
             />
             <br />
-            {/* <button onClick={handleQuerySubmit}>Execute Query</button> */}
+            <button onClick={handleQuerySubmit}>Execute Query</button>
             {/* <button>Download sqlite file</button> */}
             <br />
-            Look in the browser console for the output. (Right click, select option inspect element, navigate to the console tab)
+            Look in the browser console for the full data output via inspect element.
             <br />
          </div>
       </>
