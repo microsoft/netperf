@@ -34,7 +34,7 @@ on:
         type: boolean
   repository_dispatch:
     types: [run-quic]
-      # Args: { guid, sha, ref, pr }
+      # Args: { guid, sha, ref, pr, logs, filter }
 
 concurrency:
   group: quic-${{ github.event.client_payload.pr || github.event.client_payload.sha || inputs.ref || 'main' }}
@@ -51,10 +51,13 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
     - run: |
+        echo "Parameters from repository_dispatch:"
         echo "guid: ${{ github.event.client_payload.guid }}"
         echo "sha: ${{ github.event.client_payload.sha }}"
         echo "ref: ${{ github.event.client_payload.ref }}"
         echo "pr: ${{ github.event.client_payload.pr }}"
+        echo "logs: ${{ github.event.client_payload.logs }}"
+        echo "filter: ${{ github.event.client_payload.filter }}"
 
   #
   # Build Jobs
@@ -144,7 +147,7 @@ jobs:
       shell: pwsh
       timeout-minutes: 15 # TODO: Increase as necessary
       run: ./scripts/secnetperf.ps1 `
-          -LogProfile ${{ github.event.client_payload.logprofile || inputs.logprofile || 'NULL' }} `
+          -LogProfile ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }} `
           -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} `
           -plat ${{ matrix.vec.plat }} `
           -os ${{ matrix.vec.os }} `
