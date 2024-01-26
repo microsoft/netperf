@@ -34,42 +34,16 @@ TODO
 
 ## Azure VMs
 
-- Standard D2s v3
-- 2 vCPUs
+- Standard F4s v2
+- 4 vCPUs
 - 8 GB RAM
-- Standard SSD LRS Storage
 - Accelerated Networking Enabled
 
 They are running on the same VNet.
 
 ### For Windows Testing
-TLDR;
 
-1. Create 2 VMs and hook them up to the same VNet. MAKE SURE YOU CREATE THE 2 VMS WITH THE SAME USERNAME AND PASSWORD.
-2. Make sure you can ping the other VM and that your host file contains the private IP of the other VM as "netperf-peer". You will need to disable firewall and enable powershell remoting (More details below)
-
-3. Setup your VM as a self-hosted runner on Github. To do this, you can follow:
-
-https://github.com/microsoft/netperf/settings/actions/runners/new?arch=x64
-
-> **Note** - Install as a service.
-
-> **Note** - Enter your VM admin account credentials in the setup prompt
-
-> **Note** - Configure appropriate tags.
-
-> **Note** - Once you complete the setup wizard by providing your Azure admin account credentials, you do not need to use  `sc.exe` and mess around with configuring services. Azure VMs + Github runner agent is enough and trying to do so will introduce weird behavior.
-
-4. Automation setup:
-  a. For MsQuic, we will use a combination of Powershell and a Github Actions workflow.
-
-     Essentially, the goal is, we want to trigger a Github Actions workflow after making new commits to the QUIC repo.
-     The workflow file will kickoff a process in the NetPerf repo.
-
-     The netperf repo will essentially first BUILD from the latest commit after checking out the repo, then UPLOAD the built artifacts.
-     After uploading, the "quic.yml" workflow will then download those built artifacts, and run secnetperf.
-
-  For XDP, very similar to QUIC. BUILD, upload artifacts, download artifacts, then run the various tests / benchmarks.
+Create the machines with the same username ('secnetperf') and password ('************').
 
 ### For Linux Testing
 
@@ -85,87 +59,29 @@ TLDR;
 
 The following instructions are required to set up each machine in the pool.
 
-## Dependencies
-
-The current jobs we execute on these machines have the following dependencies:
-
-- PowerShell 7
-
 ## Configuration (Windows)
 
-Once the dependencies have been installed the following configuration must be made:
-
-### Enable Test Signing
-
-```cmd
-bcdedit /set testsigning on
-```
-
-> **Note** - You may have to disable Secure Boot first.
-
-> **Note** - You will have to reboot after disabling test signing.
-
-### Enable PowerShell Remoting to Peer
+The following steps are required to set up each machine in the pool.
 
 ```PowerShell
-"$PeerIp netperf-peer" | Out-File -Encoding ASCII -Append "$env:SystemRoot\System32\drivers\etc\hosts"
-Enable-PSRemoting -Force
-Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer'
+$username = 'secnetperf'
+$password = '************'
+$token = '************'
+$machine1 = '10.1.0.8'
+$machine2 = '10.1.0.9'
+$url = "https://raw.githubusercontent.com/microsoft/netperf/main/setup-runner.ps1"
+
+# Install on Github runner machine
+iex "& { $(irm $url) } $username $password $machine2 $token"
+
+# Install on peer machine
+iex "& { $(irm $url) } $username $password $machine1"
 ```
 
-### Disable Windows Defender / Firewall
+**Note:**
 
-```PowerShell
-netsh.exe advfirewall set allprofiles state off
-Set-MpPreference -EnableNetworkProtection Disabled
-Set-MpPreference -DisableDatagramProcessing $True
-```
-
-### Configure Automatic Logon
-
-```PowerShell
-$username = "secnetperf"
-$password = "****************"
-REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v AutoAdminLogon /t REG_SZ /d 1 /f
-REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v DefaultUserName /t REG_SZ /d $username /f
-REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v DefaultPassword /t REG_SZ /d $password /f
-```
-
-### Give the User Service Logon Rights
-
-```PowerShell
-function Add-ServiceLogonRight ($Username) {
-  Write-Host "Enable ServiceLogonRight for $Username"
-  $tmp = New-TemporaryFile
-  secedit /export /cfg "$tmp.inf" | Out-Null
-  (Get-Content -Encoding ascii "$tmp.inf") -replace '^SeServiceLogonRight .+', "`$0,$Username" | Set-Content -Encoding ascii "$tmp.inf"
-  secedit /import /cfg "$tmp.inf" /db "$tmp.sdb" | Out-Null
-  secedit /configure /db "$tmp.sdb" /cfg "$tmp.inf" | Out-Null
-  Remove-Item $tmp* -ErrorAction SilentlyContinue
-}
-
-Add-ServiceLogonRight -Username netperf
-```
-
-### Install the GitHub Runner Agent
-
-https://github.com/microsoft/netperf/settings/actions/runners/new?arch=x64
-
-> **Note** - Install as a service.
-
-> **Note** - Configure appropriate tags.
-
-Then, configure the service to run as the user:
-
-IMPORTANT: The below command assumes you setup your Github service under the .\netperf directory, and that your self hosted BM machine has $name and $password.
-
-```PowerShell
-$name = "netperf-win1"
-$password = "****************"
-sc.exe config "actions.runner.microsoft-netperf.$name" obj= ".\netperf" password= $password type= own
-sc.exe stop "actions.runner.microsoft-netperf.$name"
-sc.exe start "actions.runner.microsoft-netperf.$name"
-```
+- Ask for the password to use.
+- Get the token from https://github.com/microsoft/netperf/settings/actions/runners/new?arch=x64&os=win
 
 ## Configuration (Linux)
 
