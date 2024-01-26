@@ -8,7 +8,7 @@ param (
     [Parameter(Mandatory = $true)]
     [string]$PeerIP,
 
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $false)]
     [string]$GitHubToken,
 
     [Parameter(Mandatory = $false)]
@@ -22,7 +22,7 @@ $RebootRequired = $false
 
 # Install the latest version of PowerShell.
 Write-Host "Installing latest PowerShell."
-iex "& { $ (irm https://aka.ms/install-powershell.ps1) } -UseMSI"
+iex "& { $(irm https://aka.ms/install-powershell.ps1) } -UseMSI" # TODO - Get silent install working
 
 # Check to see if test signing is enabled.
 $HasTestSigning = $false
@@ -66,16 +66,17 @@ REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v AutoAdmi
 REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v DefaultUserName /t REG_SZ /d $Username /f
 REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v DefaultPassword /t REG_SZ /d $Password /f
 
-# Download and install the GitHub runner.
-Write-Host "Installling GitHub Runner."
-mkdir C:\actions-runner
-set-Location C:\actions-runner
-$RunnerVersion = "2.312.0"
-$RunnerName = "actions-runner-win-x64-$RunnerVersion.zip"
-Invoke-WebRequest -Uri "https://github.com/actions/runner/releases/download/v$RunnerVersion/$RunnerName" -OutFile $RunnerName
-Add-Type -AssemblyName System.IO.Compression.FileSystem ; [System.IO.Compression.ZipFile]::ExtractToDirectory("$PWD/$RunnerName", "$PWD")
-#./config.cmd --url https://github.com/microsoft/netperf --token $GitHubToken
-#./run.cmd
+if ($GitHubToken) {
+    # Download and install the GitHub runner.
+    Write-Host "Installling GitHub Runner."
+    mkdir C:\actions-runner | Out-Null
+    Set-Location C:\actions-runner
+    $RunnerVersion = "2.312.0"
+    $RunnerName = "actions-runner-win-x64-$RunnerVersion.zip"
+    Invoke-WebRequest -Uri "https://github.com/actions/runner/releases/download/v$RunnerVersion/$RunnerName" -OutFile $RunnerName
+    Add-Type -AssemblyName System.IO.Compression.FileSystem ; [System.IO.Compression.ZipFile]::ExtractToDirectory("$PWD/$RunnerName", "$PWD")
+    ./config.cmd --url https://github.com/microsoft/netperf --token $GitHubToken --runasservice --windowslogonaccount $Username --windowslogonpassword $Password --unattended
+}
 
 # Reboot if necessary.
 if ($RebootRequired) {
