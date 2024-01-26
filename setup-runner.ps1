@@ -39,7 +39,7 @@ if (!$HasTestSigning) {
 # Enable PowerShell remoting to peer.
 Write-Host "Enabling Remote PowerShell."
 "$PeerIp netperf-peer" | Out-File -Encoding ASCII -Append "$env:SystemRoot\System32\drivers\etc\hosts"
-Enable-PSRemoting -Force
+pwsh -Command 'Enable-PSRemoting -Force'
 Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer'
 
 # Disable Windows defender / firewall.
@@ -83,8 +83,8 @@ if ($RebootRequired) {
     if ($NoReboot) {
         Write-Host "Reboot Required!"
     } else {
-        Write-Host "Rebooting..."
-        Start-Sleep -Seconds 2
+        Write-Host "Rebooting in 5 seconds..."
+        Start-Sleep -Seconds 5
         Restart-Computer -Force
     }
 }
