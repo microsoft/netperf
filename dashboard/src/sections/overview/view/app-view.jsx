@@ -75,41 +75,45 @@ export default function AppView() {
   let windowsKernelRpsQuic = 1;
 
 
-  let windowsLatencyQuic = [0, 0, 0, 0, 0, 0, 0, 0];
-  let windowsLatencyTcp = [0, 0, 0, 0, 0, 0, 0, 0];
-  let linuxLatencyQuic = [0, 0, 0, 0, 0, 0, 0, 0];
-  let linuxLatencyTcp = [0, 0, 0, 0, 0, 0, 0, 0];
+  let windowsLatencyQuic = [-1, -1, -1, -1, -1, -1, -1, -1];
+  let windowsLatencyTcp = [-1, -1, -1, -1, -1, -1, -1, -1];
+  let linuxLatencyQuic = [-1, -1, -1, -1, -1, -1, -1, -1];
+  let linuxLatencyTcp = [-1, -1, -1, -1, -1, -1, -1, -1];
 
-  let windowsXdpLatencyQuic = [0, 0, 0, 0, 0, 0, 0, 0];
+  let windowsXdpLatencyQuic = [-1, -1, -1, -1, -1, -1, -1, -1];
 
-  let windowsKernelLatencyQuic = [0, 0, 0, 0, 0, 0, 0, 0];
+  let windowsKernelLatencyQuic = [-1, -1, -1, -1, -1, -1, -1, -1];
 
   const windowsType = 'Windows Server 2022';
   const linuxType = 'Linux Ubuntu 20.04 LTS';
 
+  function index(object, key, defaultValue) {
+    return object[key] || defaultValue;
+  }
+
   if (windows.data && linux.data && windowsXdp.data && windowsKernel.data) {
 
     // Throughput
-    windowsDownloadThroughputQuic = Math.max(...windows.data["tput-down-quic"]);
-    windowsDownloadThroughputTcp = Math.max(...windows.data["tput-down-tcp"]);
-    windowsUploadThroughputQuic = Math.max(...windows.data["tput-up-quic"]);
-    windowsUploadThroughputTcp = Math.max(...windows.data["tput-up-tcp"]);
-    windowsLatencyQuic = windows.data["rps-up-512-down-4000-quic"];
-    windowsLatencyTcp = windows.data["rps-up-512-down-4000-tcp"];
-    linuxDownloadThroughputQuic = Math.max(...linux.data["tput-down-quic"]);
-    linuxDownloadThroughputTcp = Math.max(...linux.data["tput-down-tcp"]);
-    linuxUploadThroughputQuic = Math.max(...linux.data["tput-up-quic"]);
-    linuxUploadThroughputTcp = Math.max(...linux.data["tput-up-tcp"]);
-    windowsKernelDownloadThroughputQuic = Math.max(...windowsKernel.data["tput-down-quic"]);
-    windowsKernelUploadThroughputQuic = Math.max(...windowsKernel.data["tput-up-quic"]);
+    windowsDownloadThroughputQuic = Math.max(...index(windows.data, "tput-down-quic", [-1]));
+    windowsDownloadThroughputTcp = Math.max(...index(windows.data, "tput-down-tcp", [-1]));
+    windowsUploadThroughputQuic = Math.max(...index(windows.data, "tput-up-quic", [-1]));
+    windowsUploadThroughputTcp = Math.max(...index(windows.data, "tput-up-tcp", [-1]));
+    linuxDownloadThroughputQuic = Math.max(...index(linux.data, "tput-down-quic", [-1]));
+    linuxDownloadThroughputTcp = Math.max(...index(linux.data, "tput-down-tcp", [-1]));
+    linuxUploadThroughputQuic = Math.max(...index(linux.data, "tput-up-quic", [-1]));
+    linuxUploadThroughputTcp = Math.max(...index(linux.data, "tput-up-tcp", [-1]));
+    windowsKernelDownloadThroughputQuic = Math.max(...index(windowsKernel.data, "tput-down-quic", [-1]));
+    windowsKernelUploadThroughputQuic = Math.max(...index(windowsKernel.data, "tput-up-quic", [-1]));
+    windowsXdpDownloadThroughputQuic = Math.max(...index(windowsXdp.data, "tput-down-quic", [-1]));
+    windowsXdpUploadThroughputQuic = Math.max(...index(windowsXdp.data, "tput-up-quic", [-1]));
 
     // Latency
-    linuxLatencyQuic = linux.data["rps-up-512-down-4000-quic"];
-    linuxLatencyTcp = linux.data["rps-up-512-down-4000-tcp"];
-    windowsXdpDownloadThroughputQuic = Math.max(...windowsXdp.data["tput-down-quic"]);
-    windowsXdpUploadThroughputQuic = Math.max(...windowsXdp.data["tput-up-quic"]);
-    windowsXdpLatencyQuic = windowsXdp.data["rps-up-512-down-4000-quic"];
-    windowsKernelLatencyQuic = windowsKernel.data["rps-up-512-down-4000-quic"];
+    windowsLatencyQuic = index(windows.data, "rps-up-512-down-4000-quic", windowsLatencyQuic);
+    windowsLatencyTcp = index(windows.data, "rps-up-512-down-4000-tcp", windowsLatencyTcp);
+    linuxLatencyQuic = index(linux.data, "rps-up-512-down-4000-quic", linuxLatencyQuic);
+    linuxLatencyTcp = index(linux.data, "rps-up-512-down-4000-tcp", linuxLatencyTcp);
+    windowsXdpLatencyQuic = index(windowsXdp.data, "rps-up-512-down-4000-quic", windowsXdpLatencyQuic)
+    windowsKernelLatencyQuic = index(windowsKernel.data, "rps-up-512-down-4000-quic", windowsKernelLatencyQuic)
 
 
     // Compute Scores
@@ -129,11 +133,11 @@ export default function AppView() {
     linuxPerfScoreLatency = latencyPerformance(linuxLatencyQuic);
 
     // HPS
-    windowsHpsQuic = Math.max(...windows.data["hps-conns-100-quic"]);
-    windowsHpsTcp = Math.max(...windows.data["hps-conns-100-tcp"]);
-    linuxHpsQuic = Math.max(...linux.data["hps-conns-100-quic"]);
-    linuxHpsTcp = Math.max(...linux.data["hps-conns-100-tcp"]);
-    windowsXdpHpsQuic = Math.max(...windowsXdp.data["hps-conns-100-quic"]);
+    windowsHpsQuic = Math.max(...index(windows.data, "hps-conns-100-quic", [-1]));
+    windowsHpsTcp = Math.max(...index(windows.data, "hps-conns-100-tcp", [-1]));
+    linuxHpsQuic = Math.max(...index(linux.data, "hps-conns-100-quic", [-1]));
+    linuxHpsTcp = Math.max(...index(linux.data, "hps-conns-100-tcp", [-1]));
+    windowsXdpHpsQuic = Math.max(...index(windowsXdp.data, "hps-conns-100-quic", [-1]));
 
     // RPS
     windowsRpsQuic = windowsLatencyQuic[windowsLatencyQuic.length - 1]; // Average across all runs or not?
