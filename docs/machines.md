@@ -92,5 +92,5 @@ bash setup-runner-linux.sh -i <peerip> -g <github token *optional> -n <no reboot
 
 ssh-keygen
 
-ssh-copy-id secnetperf@<peerip>
+ssh-copy-id <username of peer>@<peerip>
 ```
