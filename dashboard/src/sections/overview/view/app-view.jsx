@@ -45,33 +45,33 @@ export default function AppView() {
   let windowsPerfScoreLatency = 0;
   let linuxPerfScoreLatency = 0;
 
-  let windowsUploadThroughputQuic = 1;
-  let windowsUploadThroughputTcp = 1;
-  let windowsDownloadThroughputQuic = 1;
-  let windowsDownloadThroughputTcp = 1;
+  let windowsUploadThroughputQuic = -1;
+  let windowsUploadThroughputTcp = -1;
+  let windowsDownloadThroughputQuic = -1;
+  let windowsDownloadThroughputTcp = -1;
 
-  let windowsXdpUploadThroughputQuic = 1;
-  let windowsXdpDownloadThroughputQuic = 1;
+  let windowsXdpUploadThroughputQuic = -1;
+  let windowsXdpDownloadThroughputQuic = -1;
 
-  let windowsKernelUploadThroughputQuic = 1;
-  let windowsKernelDownloadThroughputQuic = 1;
+  let windowsKernelUploadThroughputQuic = -1;
+  let windowsKernelDownloadThroughputQuic = -1;
 
-  let linuxDownloadThroughputQuic = 1;
-  let linuxDownloadThroughputTcp = 1;
-  let linuxUploadThroughputQuic = 1;
-  let linuxUploadThroughputTcp = 1;
+  let linuxDownloadThroughputQuic = -1;
+  let linuxDownloadThroughputTcp = -1;
+  let linuxUploadThroughputQuic = -1;
+  let linuxUploadThroughputTcp = -1;
 
-  let windowsHpsQuic = 1;
-  let windowsHpsTcp = 1;
-  let linuxHpsQuic = 1;
-  let linuxHpsTcp = 1;
-  let windowsXdpHpsQuic = 1;
+  let windowsHpsQuic = -1;
+  let windowsHpsTcp = -1;
+  let linuxHpsQuic = -1;
+  let linuxHpsTcp = -1;
+  let windowsXdpHpsQuic = -1;
 
-  let windowsRpsQuic = 1;
-  let windowsRpsTcp = 1;
-  let linuxRpsQuic = 1;
-  let linuxRpsTcp = 1;
-  let windowsXdpRpsQuic = 1;
+  let windowsRpsQuic = -1;
+  let windowsRpsTcp = -1;
+  let linuxRpsQuic = -1;
+  let linuxRpsTcp = -1;
+  let windowsXdpRpsQuic = -1;
   let windowsKernelRpsQuic = 1;
 
 
@@ -333,7 +333,17 @@ export default function AppView() {
                     windowsKernelUploadThroughputQuic,
                   ],
                 }
-              ],
+              ].filter((item) => { // excludes items with all -1
+                for (const data of item.data) {
+                  if (data !== -1) {
+                    return true
+                  }
+                }
+                return false;
+              }).map((item) => {
+                item.data = item.data.filter((x) => x !== -1); // filters out the -1 from existing entries
+                return item;
+              }),
             }}
           />
         </Grid>
@@ -423,7 +433,17 @@ export default function AppView() {
                     windowsKernelLatencyQuic[4],
                   ],
                 }
-              ],
+              ].filter((item) => { // excludes items with all -1
+                for (const data of item.data) {
+                  if (data !== -1) {
+                    return true
+                  }
+                }
+                return false;
+              }).map((item) => {
+                item.data = item.data.filter((x) => x !== -1); // filters out the -1 from existing entries
+                return item;
+              }),
             }}
           />
         </Grid>
@@ -547,7 +567,17 @@ export default function AppView() {
                     linuxRpsQuic,
                   ],
                 },
-              ],
+              ].filter((item) => { // excludes items with all -1
+                for (const data of item.data) {
+                  if (data !== -1) {
+                    return true
+                  }
+                }
+                return false;
+              }).map((item) => {
+                item.data = item.data.filter((x) => x !== -1); // filters out the -1 from existing entries
+                return item;
+              }),
             }}
           />
         </Grid>
@@ -578,7 +608,17 @@ export default function AppView() {
                     linuxHpsQuic,
                   ],
                 },
-              ],
+              ].filter((item) => { // excludes items with all -1
+                for (const data of item.data) {
+                  if (data !== -1) {
+                    return true
+                  }
+                }
+                return false;
+              }).map((item) => {
+                item.data = item.data.filter((x) => x !== -1); // filters out the -1 from existing entries
+                return item;
+              }),
             }}
           />
         </Grid>
