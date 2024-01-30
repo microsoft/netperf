@@ -34,7 +34,7 @@ TODO
 
 ## Azure VMs
 
-- Standard F4s v2
+- [Standard F4s v2](https://learn.microsoft.com/en-us/azure/virtual-machines/fsv2-series)
 - 4 vCPUs
 - 8 GB RAM
 - Accelerated Networking Enabled
