@@ -69,7 +69,7 @@ $password = '************'
 $token = '************'
 $machine1 = '10.1.0.8'
 $machine2 = '10.1.0.9'
-$url = "https://raw.githubusercontent.com/microsoft/netperf/main/setup-runner.ps1"
+$url = "https://raw.githubusercontent.com/microsoft/netperf/main/setup-runner-windows.ps1"
 
 # Install on Github runner machine
 iex "& { $(irm $url) } $username $password $machine2 $token"
@@ -85,4 +85,8 @@ iex "& { $(irm $url) } $username $password $machine1"
 
 ## Configuration (Linux)
 
-TODO
+```
+curl https://raw.githubusercontent.com/microsoft/netperf/main/setup-runner-linux.ps1 -o setup-runner-linux.sh
+
+bash setup-runner-linux.sh -i <peerip> -g <github token *optional> -n <no reboot *optional>
+```

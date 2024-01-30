@@ -68,7 +68,7 @@ REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v DefaultP
 
 if ($GitHubToken) {
     # Download and install the GitHub runner.
-    Write-Host "Installling GitHub Runner."
+    Write-Host "Installing GitHub Runner."
     mkdir C:\actions-runner | Out-Null
     Set-Location C:\actions-runner
     $RunnerVersion = "2.312.0"
