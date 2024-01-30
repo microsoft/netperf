@@ -2,7 +2,7 @@
 
 ## Dedicated x64 Machines
 
-Based on the [Dell R650](https://i.dell.com/sites/csdocuments/Product_Docs/en/poweredge-r650-spec-sheet.pdf) Rack Server. It has a total of 40 cores and 80 threads, 128 GB of DDR4 RAM, 480 GB of SSD storage, and a 200 Gbps Mellanox CX-6.
+Based on the [Dell R650](https://i.dell.com/sites/csdocuments/Product_Docs/en/poweredge-r650-spec-sheet.pdf) Rack Server:
 
 - 2 x [Intel Xeon Silver 4316](https://ark.intel.com/content/www/us/en/ark/products/215270/intel-xeon-silver-4316-processor-30m-cache-2-30-ghz.html) (2.3 GHz, 20 Cores / 40 Threads)
 - 8 x 16 GB RDIMM, 3200MT/s, Dual Rank
@@ -11,28 +11,22 @@ Based on the [Dell R650](https://i.dell.com/sites/csdocuments/Product_Docs/en/po
 
 All the machines are connected by a 400 GbE [PowerSwitch Z9432F](https://www.delltechnologies.com/asset/en-us/products/networking/technical-support/dell-emc-powerswitch-z9432f-spec-sheet.pdf).
 
-Provisioning steps with WTT (Atlas Studio)
+### Setup
 
-Normally, you would use Atlas Studio (netperf pool) to provision your machines.
+The easiest way to automate machine deployment is via `WorkflowCommandLine.exe`, which you need to install (installed automatically in Program Files if you have WTT Studio).
 
-However, that process is long and cumbersome if we have 60 machines.
-
-Therefore, a way to automate this is with the `WorkflowCommandLine.exe`, which you need to install (installed automatically in Program Files if you have WTT Studio).
-
-```
-
+```PowerShell
 # Run ./WorkflowCommandLine.exe command for machines 01, 02... 09 for a sanity check first.
-
-for ($i = 10; $i -lt 61; $i++) { ./WorkFlowCommandLine.exe /run /datastore:ServerPlaceholder /identityserver:atlasidentity /identitydatabase:wttidentity /id:251 /resourcedatastore:WTT_EDS09 /machinepool:"$\TestServices\WTT_EDS09\Desktop\Private\NetPerf" /machine:RR1-NetPerf-$i /commonparam:DEPLOY_OS_LAB=fe_release_svc_prod1 /commonparam:DEPLOY_OS_EDITION=ServerDatacenter /commonparam:DEPLOY_OS_PLATFORM=amd64
->>  }
+for ($i = 10; $i -lt 61; $i++) { ./WorkFlowCommandLine.exe /run /datastore:ServerPlaceholder /identityserver:atlasidentity /identitydatabase:wttidentity /id:251 /resourcedatastore:WTT_EDS09 /machinepool:"$\TestServices\WTT_EDS09\Desktop\Private\NetPerf" /machine:RR1-NetPerf-$i /commonparam:DEPLOY_OS_LAB=fe_release_svc_prod1 /commonparam:DEPLOY_OS_EDITION=ServerDatacenter /commonparam:DEPLOY_OS_PLATFORM=amd64 }
 ```
-
 
 ## Dedicated arm64 Machines
 
 TODO
 
 ## Azure VMs
+
+In additional to dedicated lab machines, we also leverage Azure VMs to test realistic, production environments:
 
 - [Standard F4s v2](https://learn.microsoft.com/en-us/azure/virtual-machines/fsv2-series)
 - 4 vCPUs
