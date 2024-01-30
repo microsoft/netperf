@@ -88,5 +88,5 @@ iex "& { $(irm $url) } $username $password $machine1"
 ```
 curl https://raw.githubusercontent.com/microsoft/netperf/main/setup-runner-linux.ps1 -o setup-runner-linux.sh
 
-./setup-runner-linux.sh -u <username> -p <password> -i <peerip> -g <github token>
+bash setup-runner-linux.sh -i <peerip> -g <github token *optional> -n <no reboot *optional>
 ```
