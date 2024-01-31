@@ -12,7 +12,7 @@ param (
     [string]$GitHubToken,
 
     [Parameter(Mandatory = $false)]
-    [switch]$NoReboot = $false
+    [switch]$NoReboot = $false,
 
     [Parameter(Mandatory = $false)]
     [string]$NewIpAddress
