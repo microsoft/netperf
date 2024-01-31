@@ -13,6 +13,9 @@ param (
 
     [Parameter(Mandatory = $false)]
     [switch]$NoReboot = $false
+
+    [Parameter(Mandatory = $false)]
+    [string]$NewIpAddress
 )
 
 Set-StrictMode -Version 'Latest'
@@ -76,6 +79,14 @@ if ($GitHubToken) {
     Invoke-WebRequest -Uri "https://github.com/actions/runner/releases/download/v$RunnerVersion/$RunnerName" -OutFile $RunnerName
     Add-Type -AssemblyName System.IO.Compression.FileSystem ; [System.IO.Compression.ZipFile]::ExtractToDirectory("$PWD/$RunnerName", "$PWD")
     ./config.cmd --url https://github.com/microsoft/netperf --token $GitHubToken --runasservice --windowslogonaccount $Username --windowslogonpassword $Password --unattended
+}
+
+if ($NewIpAddress) {
+    # Set the new IP address.
+    Write-Host "Setting new IP address..."
+    $idx = (Get-NetAdapter | where { $_.LinkSpeed -eq '200 Gbps' }).ifIndex
+    New-NetIpAddress -AddressFamily IPv4 -ifindex $idx -IPAddress $NewIpAddress -DefaultGateway "192.168.0.1" -PrefixLength 24
+    ipconfig
 }
 
 # Reboot if necessary.
