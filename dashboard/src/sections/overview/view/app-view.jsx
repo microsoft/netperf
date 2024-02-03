@@ -350,7 +350,7 @@ export default function AppView() {
         {/* Latency */}
         <Grid xs={12} md={6} lg={6}>
           <AppWebsiteVisits
-            title="Latency Comparison (ms), lower the better."
+            title="Latency Comparison (µs), lower the better."
             subheader={`Tested using ${windowsType}, ${linuxType}`}
             chart={{
               // New labels based on percentiles
