@@ -1,0 +1,22 @@
+{
+    "linuxQuic": {
+        "env": 2,
+        "testid": "hps-conns-100-tcp-0",
+        "data": []
+    },
+    "linuxTcp": {
+        "env": 2,
+        "testid": "hps-conns-100-tcp-1",
+        "data": []
+    },
+    "windowsQuic": {
+        "env": 1,
+        "testid": "hps-conns-100-tcp-0",
+        "data": []
+    },
+    "windowsTcp": {
+        "env": 1,
+        "testid": "hps-conns-100-tcp-1",
+        "data": []
+    }
+}
