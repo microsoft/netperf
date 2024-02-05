@@ -80,11 +80,17 @@ iex "& { $(irm $url) } $username $password $machine1"
 ## Configuration (Linux)
 
 ```
-curl https://raw.githubusercontent.com/microsoft/netperf/main/setup-runner-linux.ps1 -o setup-runner-linux.sh
+curl https://raw.githubusercontent.com/microsoft/netperf/main/setup-runner-linux.sh -o setup-runner-linux.sh
 
-bash setup-runner-linux.sh -i <peerip> -g <github token *optional> -n <no reboot *optional>
+bash setup-runner-linux.sh -i <peerip> -g <github token *do this on client only> -n <no reboot *optional>
+
+# Do this on the client only:
 
 ssh-keygen
 
 ssh-copy-id <username of peer>@<peerip>
 ```
+
+### Troubleshooting Linux
+
+- Sometimes, depending on your specific Linux distro and if you are using Azure, Powershell may not install correctly the first time when running this script. In this instance, if `pwsh --version` can not be found, run `sudo apt-get install powershell -y` after waiting a bit.
