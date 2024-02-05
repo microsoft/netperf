@@ -21,7 +21,7 @@ document.addEventListener('mouseup', function() {
 
 export default function ThroughputPage() {
 
-  const URL = "https://raw.githubusercontent.com/microsoft/netperf/deploy/throughput.json";
+  const URL = "https://raw.githubusercontent.com/microsoft/netperf/deploy/detailed_throughput_page.json";
   const { data } = useFetchData(URL);
   let uploadThroughput = <div />
   let downloadThroughput = <div />
@@ -31,7 +31,14 @@ export default function ThroughputPage() {
     for (let i = 0; i < data["linuxTcpUploadThroughput"].length; i++) {
       indices.push(i + 1)
     }
-    data["linuxTcpUploadThroughput"].reverse()
+    data["linuxTcpUploadThroughput"].reverse();
+    data["windowsTcpUploadThroughput"].reverse();
+    data["linuxQuicUploadThroughput"].reverse();
+    data["windowsQuicUploadThroughput"].reverse();
+    data["linuxTcpDownloadThroughput"].reverse();
+    data["windowsTcpDownloadThroughput"].reverse();
+    data["linuxQuicDownloadThroughput"].reverse();
+    data["windowsQuicDownloadThroughput"].reverse();
     uploadThroughput =
       <GraphView title="Upload Throughput"
     subheader='Tested using Windows Server 2022 (Client and Server). Linux Ubuntu 20.04.3 LTS (Client and Server). WIP, NOTE: each datapoint is the max of 3 runs.'

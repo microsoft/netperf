@@ -17,10 +17,10 @@ export default function HpsPage() {
 
       <Container maxWidth="xl">
         <Typography variant="h3" sx={{ mb: 5 }}>
-          Handshakes Per Second
+          Handshakes Per Second - TODO
         </Typography>
         <Grid container spacing={3}>
-          <GraphView title="HPS"
+          {/* <GraphView title="HPS"
 
             subheader='Tested using Windows 11 build 22000.282, Linux Ubuntu 20.04.3 LTS'
             labels={['Commit 1', 'Commit 2', 'Commit 3', 'Commit 4', 'Commit 5', 'Commit 6']}
@@ -51,7 +51,7 @@ export default function HpsPage() {
                 data: [50, 55, 34, 23, 78, 44],
               },
             ]}
-          />
+          /> */}
         </Grid>
       </Container>
     </>
