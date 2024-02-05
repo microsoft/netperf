@@ -37,7 +37,11 @@ They are running on the same VNet.
 
 ### For Windows Testing
 
-Create the machines with the same username ('secnetperf') and password ('************').
+- Use the `netperf` resource group.
+- Create a pair of `F4sv2` VMs in the `East US` location.
+- Name them `f4-windows-XX` where `XX` is replaced with the next (zero-prefixed) machine number.
+- Attach it to the existing vnet, `netperf-secnetperf-win-client-vnet`.
+- Use the username ('secnetperf') and password ('************').
 
 ### For Linux Testing
 
