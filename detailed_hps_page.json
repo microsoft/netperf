@@ -2,21 +2,45 @@
     "linuxQuic": {
         "env": 2,
         "testid": "hps-conns-100-tcp-0",
-        "data": []
+        "data": [
+            [
+                2431.0,
+                "2024-02-06 21:41:40",
+                "c5144aa341512a9f52f53826b012c6eec65b1df3"
+            ]
+        ]
     },
     "linuxTcp": {
         "env": 2,
         "testid": "hps-conns-100-tcp-1",
-        "data": []
+        "data": [
+            [
+                1374.0,
+                "2024-02-06 21:41:40",
+                "c5144aa341512a9f52f53826b012c6eec65b1df3"
+            ]
+        ]
     },
     "windowsQuic": {
         "env": 1,
         "testid": "hps-conns-100-tcp-0",
-        "data": []
+        "data": [
+            [
+                651.0,
+                "2024-02-06 21:41:40",
+                "c5144aa341512a9f52f53826b012c6eec65b1df3"
+            ]
+        ]
     },
     "windowsTcp": {
         "env": 1,
         "testid": "hps-conns-100-tcp-1",
-        "data": []
+        "data": [
+            [
+                1112.0,
+                "2024-02-06 21:41:40",
+                "c5144aa341512a9f52f53826b012c6eec65b1df3"
+            ]
+        ]
     }
 }
