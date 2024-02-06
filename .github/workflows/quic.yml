@@ -124,7 +124,8 @@ jobs:
           { env: "azure", plat: "linux",   os: "ubuntu-20.04", arch: "x64", tls: "openssl",  io: "epoll" },
           { env: "azure", plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "iocp" },
           { env: "azure", plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "xdp" },
-          { env: "azure", plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "wsk" },
+          { env: "azure", plat: "windows", os: "windows-2025", arch: "x64", tls: "schannel", io: "wsk" },
+          { env: "azure", plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "iocp" },
           { env: "lab",   plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "iocp" },
           { env: "lab",   plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "xdp" },
           { env: "lab",   plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "wsk" },
@@ -132,7 +133,7 @@ jobs:
     runs-on:
     - self-hosted
     - ${{ matrix.vec.env }}
-    - ${{ matrix.vec.plat }}
+    - ${{ matrix.vec.os }}
     - ${{ matrix.vec.arch }}
     steps:
     - name: Checkout microsoft/msquic
@@ -143,13 +144,13 @@ jobs:
     - name: Download Artifacts
       uses: actions/download-artifact@6b208ae046db98c579e8a3aa621ab581ff575935
       with:
-        name: Release-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-Perf
+        name: Release-${{ matrix.vec.plat }}-${{ matrix.vec.os == 'windows-2025' && 'windows-2022' || matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-Perf
         path: artifacts
     - name: Download Kernel Artifacts
       uses: actions/download-artifact@6b208ae046db98c579e8a3aa621ab581ff575935
       if: ${{ matrix.vec.io == 'wsk' }}
       with:
-        name: Release-winkernel-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
+        name: Release-winkernel-${{ matrix.vec.os == 'windows-2025' && 'windows-2022' || matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
         path: artifacts
     - name: Run secnetperf
       shell: pwsh
