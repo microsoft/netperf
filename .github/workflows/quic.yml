@@ -133,7 +133,7 @@ jobs:
     runs-on:
     - self-hosted
     - ${{ matrix.vec.env }}
-    - ${{ matrix.vec.os }}
+    - os-${{ matrix.vec.os }}
     - ${{ matrix.vec.arch }}
     steps:
     - name: Checkout microsoft/msquic
