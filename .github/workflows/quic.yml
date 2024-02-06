@@ -141,12 +141,12 @@ jobs:
         repository: microsoft/msquic
         ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
     - name: Download Artifacts
-      uses: actions/download-artifact@6b208ae046db98c579e8a3aa621ab581ff575935
+      uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
       with:
         name: Release-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-Perf
         path: artifacts
     - name: Download Kernel Artifacts
-      uses: actions/download-artifact@6b208ae046db98c579e8a3aa621ab581ff575935
+      uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
       if: ${{ matrix.vec.io == 'wsk' }}
       with:
         name: Release-winkernel-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
@@ -201,7 +201,7 @@ jobs:
       with:
         repository: microsoft/netperf
         ref: sqlite
-    - uses: actions/download-artifact@6b208ae046db98c579e8a3aa621ab581ff575935 # Specify no 'name' to download all uploaded artifacts
+    - uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe # Specify no 'name' to download all uploaded artifacts
     - run: ls
     - run: python sql.py
     - name: Git commit # TODO: Squash history for this branch to keep size small
@@ -221,7 +221,7 @@ jobs:
         repository: microsoft/netperf
         ref: deploy
     - run: 'rm -rf *.json'
-    - uses: actions/download-artifact@6b208ae046db98c579e8a3aa621ab581ff575935 # Specify no 'name' to download all uploaded artifacts. TODO: Refactor this "download-all" models to instead filter for specific artifacts slices.
+    - uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe # Specify no 'name' to download all uploaded artifacts. TODO: Refactor this "download-all" models to instead filter for specific artifacts slices.
     - run: python generate_historical_data.py
     - name: Git commit
       run: 'git config user.name "QUIC Dev[bot]" && git config user.email "quicdev@microsoft.com" && git pull && git add *.json && git commit -m "Update intermediary dashboard files" && git push'
