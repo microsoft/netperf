@@ -158,6 +158,7 @@ jobs:
       run: ./scripts/secnetperf.ps1 `
           -LogProfile ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }} `
           -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} `
+          -environment ${{ matrix.vec.env }} `
           -plat ${{ matrix.vec.plat }} `
           -os ${{ matrix.vec.os }} `
           -arch ${{ matrix.vec.arch }} `
