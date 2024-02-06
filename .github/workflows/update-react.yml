@@ -72,7 +72,7 @@ jobs:
         else
           echo "404.html file does not exist. Skipping removal."
         fi
-    - uses: actions/download-artifact@6b208ae046db98c579e8a3aa621ab581ff575935
+    - uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
       with:
         name: dist
         path: ./dist
