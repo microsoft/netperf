@@ -99,9 +99,9 @@ jobs:
         arch: [x64]
     runs-on:
     - self-hosted
-    - "windows"
+    - os-windows-${{ matrix.os }}
     - ${{ matrix.arch }}
-    - "azure"
+    - azure
     steps:
     - name: Checkout repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
