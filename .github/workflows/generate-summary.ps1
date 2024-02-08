@@ -54,6 +54,24 @@ function Write-HpsRow {
     $Script:markdown += $row
 }
 
+# Adds a row to the RPS/latency table.
+function Write-RpsRow {
+    param ([string]$FileName, [string]$Transport, [array]$Results)
+
+    $header = "`n|"
+    $parts = Convert-FileName $FileName
+    foreach ($part in $parts) { $header += " $part |" }
+    $header += " $Transport |"
+
+    for ($i = 0; $i -lt $Results.Count; $i+=9) {
+        $row = $header
+        for ($j = 0; $j -lt 9; $j++) {
+            $row += " $($Results[$i+$j]) |"
+        }
+        $Script:markdown += $row
+    }
+}
+
 # Write the Upload table.
 $markdown = @"
 # Upload Throughput (Gbps)
@@ -90,6 +108,19 @@ foreach ($file in $files) {
     $json = Get-Content -Path $file.FullName | ConvertFrom-Json
     try { Write-HpsRow $file.Name "quic" $json.'hps-conns-100-quic' } catch { }
     try { Write-HpsRow $file.Name "tcp" $json.'hps-conns-100-tcp' } catch { }
+}
+
+# Write the RPS table.
+$markdown += @"
+`n
+# Request Per Second (HPS) and Latency (µs)
+| Env | OS | Version | Arch | TLS | IO | Transport | Min | P0 | P50 | P90 | P99 | P99.9 | P99.99 | P99.999 | P99.9999 | Max | RPS |
+| --- | -- | ------- | ---- | --- | -- | --------- | --- | -- | --- | --- | --- | ----- | ------ | ------- | -------- | --- | --- |
+"@
+foreach ($file in $files) {
+    $json = Get-Content -Path $file.FullName | ConvertFrom-Json
+    try { Write-RpsRow $file.Name "quic" $json.'rps-up-512-down-4000-quic' } catch { }
+    try { Write-RpsRow $file.Name "tcp" $json.'rps-up-512-down-4000-tcp' } catch { }
 }
 
 # Write the markdown to the console and to the summary file.
