@@ -54,7 +54,7 @@ function Write-HpsRow {
     $Script:markdown += $row
 }
 
-# Write the Upload table
+# Write the Upload table.
 $markdown = @"
 # Upload Throughput (Gbps)
 | Env | OS | Version | Arch | TLS | IO | Transport | Result 1 | Result 2 | Result 3 |
@@ -66,7 +66,7 @@ foreach ($file in $files) {
     try { Write-ThroughputRow $file.Name "tcp" $json.'tput-up-tcp' } catch { }
 }
 
-# Write the Download table
+# Write the Download table.
 $markdown += @"
 `n
 # Download Throughput (Gbps)
@@ -79,7 +79,7 @@ foreach ($file in $files) {
     try { Write-ThroughputRow $file.Name "tcp" $json.'tput-down-tcp' } catch { }
 }
 
-# Write the HPS table
+# Write the HPS table.
 $markdown += @"
 `n
 # Handshakes Per Second (HPS)
