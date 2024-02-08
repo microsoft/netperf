@@ -17,9 +17,10 @@ function Convert-FileName {
     $name = $name -replace '.json', ''
     $name = $name -replace 'windows-windows', 'windows'
     $name = $name -replace 'linux-ubuntu', 'ubuntu'
-    return $Name -split '-'
+    return $name -split '-'
 }
 
+# Adds a row to the throughput table, converting the output from kbps to gbps.
 function Write-ThroughputRow {
     param ([string]$FileName, [string]$Transport, [array]$Results)
 
@@ -36,6 +37,7 @@ function Write-ThroughputRow {
     $Script:markdown += $row
 }
 
+# Adds a row to the HPS table.
 function Write-HpsRow {
     param ([string]$FileName, [string]$Transport, [array]$Results)
 
@@ -90,5 +92,6 @@ foreach ($file in $files) {
     try { Write-HpsRow $file.Name "tcp" $json.'hps-conns-100-tcp' } catch { }
 }
 
+# Write the markdown to the console and to the summary file.
 Write-Host "`n$markdown"
 $markdown | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
