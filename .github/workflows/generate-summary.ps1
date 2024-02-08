@@ -114,8 +114,8 @@ foreach ($file in $files) {
 $markdown += @"
 `n
 # Request Per Second (HPS) and Latency (µs)
-| Env | OS | Version | Arch | TLS | IO | Transport | Min | P0 | P50 | P90 | P99 | P99.9 | P99.99 | P99.999 | P99.9999 | Max | RPS |
-| --- | -- | ------- | ---- | --- | -- | --------- | --- | -- | --- | --- | --- | ----- | ------ | ------- | -------- | --- | --- |
+| Env | OS | Version | Arch | TLS | IO | Transport | Min | P50 | P90 | P99 | P99.9 | P99.99 | P99.999 | P99.9999 | RPS |
+| --- | -- | ------- | ---- | --- | -- | --------- | --- | --- | --- | --- | ----- | ------ | ------- | -------- | --- |
 "@
 foreach ($file in $files) {
     $json = Get-Content -Path $file.FullName | ConvertFrom-Json
