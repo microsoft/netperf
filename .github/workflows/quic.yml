@@ -189,6 +189,22 @@ jobs:
   # Post Processing Jobs
   #
 
+  generate-summary:
+    name: Results
+    needs: [run-secnetperf]
+    runs-on: 'ubuntu-20.04'
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+    - uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
+      with:
+        path: artifacts/logs
+        pattern: json-test-results-*
+        merge-multiple: true
+    - name: Run secnetperf
+      shell: pwsh
+      run: ./.github/workflows/generate-summary.ps1
+
   save-test-results:
     permissions: write-all
     name: Persist Results in DB
