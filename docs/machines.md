@@ -38,10 +38,11 @@ They are running on the same VNet.
 ### For Windows Testing
 
 - Use the `netperf` resource group.
-- Create a pair of `F4sv2` VMs in the `East US` location.
+- Create a pair of `F4sV2` VMs in the `East US` location.
 - Name them `f4-windows-XX` where `XX` is replaced with the next (zero-prefixed) machine number.
 - Attach it to the existing vnet, `netperf-secnetperf-win-client-vnet`.
 - Use the username ('secnetperf') and password ('************').
+- Disable Secure Boot on the VMs.
 
 ### For Linux Testing
 
@@ -63,23 +64,22 @@ The following steps are required to set up each machine in the pool.
 
 ```PowerShell
 $username = 'secnetperf'
-$password = '************'
-$token = '************'
-$machine1 = '10.1.0.8'
-$machine2 = '10.1.0.9'
+$password = '************' # Ask for the password to use
+$token = '************'    # Find at https://github.com/microsoft/netperf/settings/actions/runners/new?arch=x64&os=win
+$machine1 = '10.1.0.8'     # This is the GitHub runner machine's IP address
+$machine2 = '10.1.0.9'     # This is the peer machine's IP address
 $url = "https://raw.githubusercontent.com/microsoft/netperf/main/setup-runner-windows.ps1"
-
-# Install on Github runner machine
-iex "& { $(irm $url) } $username $password $machine2 $token"
-
-# Install on peer machine
-iex "& { $(irm $url) } $username $password $machine1"
 ```
 
-**Note:**
+```PowerShell
+# Run on GitHub runner machine
+iex "& { $(irm $url) } $username $password $machine2 $token"
+```
 
-- Ask for the password to use.
-- Get the token from https://github.com/microsoft/netperf/settings/actions/runners/new?arch=x64&os=win
+```PowerShell
+# Run on peer machine
+iex "& { $(irm $url) } $username $password $machine1"
+```
 
 ## Configuration (Linux)
 
