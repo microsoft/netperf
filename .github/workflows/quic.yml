@@ -201,7 +201,7 @@ jobs:
         path: artifacts/logs
         pattern: json-test-results-*
         merge-multiple: true
-    - name: Run secnetperf
+    - name: Generate Summary
       shell: pwsh
       run: ./.github/workflows/generate-summary.ps1
 

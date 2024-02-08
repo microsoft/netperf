@@ -91,4 +91,4 @@ foreach ($file in $files) {
 }
 
 Write-Host "`n$markdown"
-$env:GITHUB_STEP_SUMMARY = $markdown
+$markdown | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
