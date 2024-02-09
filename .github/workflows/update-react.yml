@@ -5,11 +5,15 @@ on:
   push:
     branches:
       - main
-    paths: [ "dashboard/**", ".github/workflows/update-react.yml" ]
+    paths:
+      - .github/workflows/update-react.yml
+      - dashboard/**"
   pull_request:
     branches:
       - main
-    paths: [ "dashboard/**", ".github/workflows/update-react.yml" ]
+    paths:
+      - .github/workflows/update-react.yml
+      - dashboard/**"
 
 concurrency:
   # Cancel any workflow currently in progress for the same PR.
