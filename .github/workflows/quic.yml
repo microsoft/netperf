@@ -126,6 +126,8 @@ jobs:
           { env: "azure", plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "xdp" },
           { env: "azure", plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "wsk" },
           { env: "azure", plat: "windows", os: "windows-2025", arch: "x64", tls: "schannel", io: "iocp" },
+          { env: "azure", plat: "windows", os: "windows-2025", arch: "x64", tls: "schannel", io: "xdp" },
+          { env: "azure", plat: "windows", os: "windows-2025", arch: "x64", tls: "schannel", io: "wsk" },
           { env: "lab",   plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "iocp" },
           { env: "lab",   plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "xdp" },
           { env: "lab",   plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "wsk" },
