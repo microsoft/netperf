@@ -121,7 +121,7 @@ jobs:
     - name: Download Artifacts
       uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
       with:
-        name: bin_Release_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        name: bin_Release_2022_${{ matrix.vec.arch }} # Build always comes from 2022 for now
         path: artifacts/bin
     - name: Run Tests
       shell: pwsh
