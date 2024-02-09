@@ -4,9 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       ref:
+        description: 'XDP Branch or Commit'
         required: false
-        default: ''
+        default: 'main'
         type: string
+  pull_request:
+    branches:
+    - main
+    paths:
+    - .github/workflows/xdp.yml
   repository_dispatch:
     types: [run-xdp]
       # Args: { guid, sha, ref, pr }
@@ -95,13 +101,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ['2022']
-        arch: [x64]
+        vec: [
+          { env: "azure", os: "2022", arch: "x64" },
+          { env: "azure", os: "2025", arch: "x64" },
+          { env: "lab",   os: "2022", arch: "x64" },
+        ]
     runs-on:
     - self-hosted
-    - os-windows-${{ matrix.os }}
-    - ${{ matrix.arch }}
-    - azure
+    - ${{ matrix.vec.env }}
+    - os-windows-${{ matrix.vec.os }}
+    - ${{ matrix.vec.arch }}
     steps:
     - name: Checkout repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -112,14 +121,14 @@ jobs:
     - name: Download Artifacts
       uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
       with:
-        name: bin_Release_${{ matrix.os }}_${{ matrix.arch }}
+        name: bin_Release_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: artifacts/bin
     - name: Run Tests
       shell: pwsh
-      run: tools/two-machine-perf.ps1 -Config Release -Arch ${{ matrix.arch }}
+      run: tools/two-machine-perf.ps1 -Config Release -Arch ${{ matrix.vec.arch }}
     - name: Upload Logs
       if: ${{ always() }}
       uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
       with:
-        name: logs_Release_${{ matrix.os }}_${{ matrix.arch }}
+        name: logs_Release_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: artifacts/logs
