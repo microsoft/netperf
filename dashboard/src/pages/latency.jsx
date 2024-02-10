@@ -56,7 +56,7 @@ export default function LatencyPage() {
     labels={indices}
     map={(index) => {
       if (isMouseDown) {
-        window.location.href = `https://github.com/microsoft/msquic/commit/${data["linuxTcpUploadThroughput"][index][2]}`
+        window.location.href = `https://github.com/microsoft/msquic/commit/${data["linuxTcp"]["data"][index][2]}`
       }
       return `<div style = "margin: 10px">
 

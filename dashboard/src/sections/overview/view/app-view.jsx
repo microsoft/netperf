@@ -25,18 +25,18 @@ function latencyPerformance(latencies) {
 
 export default function AppView() {
   const windows = useFetchData(
-    'https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-windows-windows-2022-x64-schannel-iocp.json/json-test-results-windows-windows-2022-x64-schannel-iocp.json'
+    'https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-azure-windows-windows-2022-x64-schannel-iocp.json/json-test-results-azure-windows-windows-2022-x64-schannel-iocp.json'
   );
   const linux = useFetchData(
-    'https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-linux-ubuntu-20.04-x64-openssl-epoll.json/json-test-results-linux-ubuntu-20.04-x64-openssl-epoll.json'
+    'https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-azure-linux-ubuntu-20.04-x64-openssl-epoll.json/json-test-results-azure-linux-ubuntu-20.04-x64-openssl-epoll.json'
   );
 
   const windowsXdp = useFetchData(
-    'https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-windows-windows-2022-x64-schannel-xdp.json/json-test-results-windows-windows-2022-x64-schannel-xdp.json'
+    'https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-azure-windows-windows-2022-x64-schannel-xdp.json/json-test-results-azure-windows-windows-2022-x64-schannel-xdp.json'
   );
 
   const windowsKernel = useFetchData(
-    'https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-windows-windows-2022-x64-schannel-wsk.json/json-test-results-windows-windows-2022-x64-schannel-wsk.json'
+    'https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-azure-windows-windows-2022-x64-schannel-wsk.json/json-test-results-azure-windows-windows-2022-x64-schannel-wsk.json'
   );
 
   let windowsPerfScore = 0;
