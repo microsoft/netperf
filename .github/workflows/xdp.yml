@@ -45,8 +45,7 @@ jobs:
         os: ['2022']
         arch: [x64]
       fail-fast: false
-    uses: microsoft/xdp-for-windows/.github/workflows/build.yml@${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
-    with:
+    uses: microsoft/xdp-for-windows/.github/workflows/build.yml@main
       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
       os: ${{ matrix.os }}
       arch: ${{ matrix.arch }}
