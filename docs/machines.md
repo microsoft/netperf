@@ -86,6 +86,8 @@ iex "& { $(irm $url) } $username $password $machine1"
 ```
 curl https://raw.githubusercontent.com/microsoft/netperf/main/setup-runner-linux.sh -o setup-runner-linux.sh
 
+# Make sure to run this script twice to properly install everything (to account for lab vs. Azure environment differences)
+
 bash setup-runner-linux.sh -i <peerip> -g <github token *do this on client only> -n <no reboot *optional>
 
 # Do this on the client only:
@@ -94,7 +96,3 @@ ssh-keygen
 
 ssh-copy-id <username of peer>@<peerip>
 ```
-
-### Troubleshooting Linux
-
-- Sometimes, depending on your specific Linux distro and if you are using Azure, Powershell may not install correctly the first time when running this script. In this instance, if `pwsh --version` can not be found, run `sudo apt-get install powershell -y` after waiting a bit.
