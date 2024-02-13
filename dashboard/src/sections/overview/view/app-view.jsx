@@ -83,7 +83,7 @@ export default function AppView() {
   let windowsXdpLatencyQuic = [-1, -1, -1, -1, -1, -1, -1, -1];
 
   let windowsKernelLatencyQuic = [-1, -1, -1, -1, -1, -1, -1, -1];
-
+  let commitHash = "";
   const windowsType = 'Windows Server 2022';
   const linuxType = 'Linux Ubuntu 20.04 LTS';
 
@@ -92,7 +92,7 @@ export default function AppView() {
   }
 
   if (windows.data && linux.data && windowsXdp.data && windowsKernel.data) {
-
+    commitHash = windows.data.commit;
     // Throughput
     windowsDownloadThroughputQuic = Math.max(...index(windows.data, "tput-down-quic", [-1]));
     windowsDownloadThroughputTcp = Math.max(...index(windows.data, "tput-down-tcp", [-1]));
@@ -152,6 +152,9 @@ export default function AppView() {
     <Container maxWidth="xl">
       <Typography variant="h3" sx={{ mb: 5 }}>
         Network Performance Overview
+      </Typography>
+      <Typography variant="h5" sx={{ mb: 5 }}>
+        Data based on commit: <a href={`https://github.com/microsoft/msquic/commit/${commitHash}`}>{commitHash}</a>
       </Typography>
       <Grid container spacing={3}>
         <Grid xs={12} sm={6} md={3}>
