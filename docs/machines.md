@@ -96,3 +96,10 @@ ssh-keygen
 
 ssh-copy-id <username of peer>@<peerip>
 ```
+
+## Configure IP addresses for lab linux VMs
+
+Depending on your specific linux distro, the process varies a bit.
+
+But the main idea is to use the `ip` util built in to `net-tools` to add an IP to your mellanox NIC.
+The usual command is `sudo ip addr add (address / CIDR block) dev (NIC name)`. The problem is, if you reboot, Linux will revert your IP assignments. So what you do is you can create a startup script that runs on boot leveraging `systemd` or some other service depending on your Linux distro.
