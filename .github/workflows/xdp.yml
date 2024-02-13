@@ -41,10 +41,15 @@ jobs:
     name: Build XDP
     needs: []
     strategy:
+      matrix:
+        os: ['2022']
+        platform: [x64]
       fail-fast: false
-    uses: microsoft/xdp-for-windows/.github/workflows/build.yml@e322503560ebee5518122a87761b9534a8e7bb0c
+    uses: microsoft/xdp-for-windows/.github/workflows/build.yml@${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
     with:
       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+      os: ${{ matrix.os }}
+      arch: ${{ matrix.arch }}
       upload_artifacts: true
 
   test:
