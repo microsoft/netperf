@@ -235,7 +235,9 @@ jobs:
       with:
         repository: microsoft/netperf
         ref: sqlite
-    - uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe # Specify no 'name' to download all uploaded artifacts
+    - uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
+      with:
+        pattern: test-results-*
     - run: ls
     - run: python sql.py
     - name: Git commit # TODO: Squash history for this branch to keep size small
@@ -255,7 +257,9 @@ jobs:
         repository: microsoft/netperf
         ref: deploy
     - run: 'rm -rf *.json'
-    - uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe # Specify no 'name' to download all uploaded artifacts. TODO: Refactor this "download-all" models to instead filter for specific artifacts slices.
+    - uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
+      with:
+        pattern: "json-test-results-*"
     - run: python generate_historical_data.py
     - name: Git commit
       run: 'git config user.name "QUIC Dev[bot]" && git config user.email "quicdev@microsoft.com" && git pull && git add *.json && git commit -m "Update intermediary dashboard files" && git push'
