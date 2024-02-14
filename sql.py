@@ -60,11 +60,6 @@ def pre_process_sql_file(filename, filecontent):
     print('environment id to replace and preprocess: ', environment_id)
     pass 
 
-# Access and print the argument value
-print(f"Received featureint: {args.featureint}")
-
-pre_process_sql_file("test-results-azure-windows-windows-2022-arm-schannel-iocp.sql", "")
-
 # Iterate over all .sql files in the current directory
 for sql_file_path in glob.glob('*.sql'):
     with open(f"{sql_file_path}/{sql_file_path}", 'r') as sql_file:
