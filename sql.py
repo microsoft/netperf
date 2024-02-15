@@ -46,19 +46,21 @@ def pre_process_sql_file(filename, filecontent):
     plat = parts[-5]
     env = parts[-6]
     # cpu = parts[-7] (do we need?)
-    # nic = parts[-8]
+    # nic = parts[-8] (do we need?)
     cursor.execute(f"""SELECT Environment_ID FROM Environment WHERE Architecture = '{arch}' AND OS = '{plat}'""")
     result = cursor.fetchall()
     if len(result) == 0:
         print('inserting new row with new environment')
-        cursor.execute(f"""INSERT INTO Environment (OS, OS_type, OS_version, Architecture, NIC_type, CPU_type) VALUES ('{plat}', '{os}', NULL, '{arch}', NULL, NULL)""")
+        # TODO:
+        cursor.execute(f"""INSERT INTO Environment (OS, OS_type, OS_version, Architecture, 'NIC_type ', CPU_type) VALUES ('{plat}', '{os}', NULL, '{arch}', NULL, NULL)""") # TODO: what's the new schema gonna look like, we need NIC_type at all?
+        # TODO:
         conn.commit()
         environment_id = cursor.lastrowid 
     else:
         environment_id = result[0][0]
-    
-    print('environment id to replace and preprocess: ', environment_id)
-    pass 
+    filecontent = filecontent.replace("__CLIENT_ENV__", environment_id)
+    filecontent = filecontent.replace("__SERVER_ENV__", environment_id)
+    return filecontent
 
 # Iterate over all .sql files in the current directory
 for sql_file_path in glob.glob('*.sql'):
@@ -76,5 +78,7 @@ for sql_file_path in glob.glob('*.sql'):
         # Commit changes
         conn.commit()
 
+cursor.execute("SELECT 'NIC_type ' from Environment")
+print(cursor.fetchall())
 # Close connection
 conn.close()
