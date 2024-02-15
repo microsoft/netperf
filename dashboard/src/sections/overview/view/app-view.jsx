@@ -1,12 +1,26 @@
 /* eslint-disable no-restricted-syntax */
 
+import { useState } from 'react';
+
 import Button from '@mui/material/Button';
 import Container from '@mui/material/Container';
 import Grid from '@mui/material/Unstable_Grid2';
 import Typography from '@mui/material/Typography';
+
+
+import Box from '@mui/material/Box';
+import InputLabel from '@mui/material/InputLabel';
+import MenuItem from '@mui/material/MenuItem';
+import FormControl from '@mui/material/FormControl';
+import Select from '@mui/material/Select';
+
+
 import useFetchData from 'src/hooks/use-fetch-data';
 import AppWebsiteVisits from '../app-website-visits';
 import AppWidgetSummary from '../app-widget-summary';
+
+
+
 
 function throughputPerformance(download, upload, dweight, uweight) {
   return (download * dweight + upload * uweight) / 10000;
@@ -24,19 +38,22 @@ function latencyPerformance(latencies) {
 // ----------------------------------------------------------------------
 
 export default function AppView() {
+
+  const [env, setEnv] = useState('azure');
+
   const windows = useFetchData(
-    'https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-azure-windows-windows-2022-x64-schannel-iocp.json/json-test-results-azure-windows-windows-2022-x64-schannel-iocp.json'
+    `https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-${env}-windows-windows-2022-x64-schannel-iocp.json/json-test-results-${env}-windows-windows-2022-x64-schannel-iocp.json`
   );
   const linux = useFetchData(
-    'https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-azure-linux-ubuntu-20.04-x64-openssl-epoll.json/json-test-results-azure-linux-ubuntu-20.04-x64-openssl-epoll.json'
+    `https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-${env}-linux-ubuntu-20.04-x64-openssl-epoll.json/json-test-results-${env}-linux-ubuntu-20.04-x64-openssl-epoll.json`
   );
 
   const windowsXdp = useFetchData(
-    'https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-azure-windows-windows-2022-x64-schannel-xdp.json/json-test-results-azure-windows-windows-2022-x64-schannel-xdp.json'
+    `https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-${env}-windows-windows-2022-x64-schannel-xdp.json/json-test-results-${env}-windows-windows-2022-x64-schannel-xdp.json`
   );
 
   const windowsKernel = useFetchData(
-    'https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-azure-windows-windows-2022-x64-schannel-wsk.json/json-test-results-azure-windows-windows-2022-x64-schannel-wsk.json'
+    `https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-${env}-windows-windows-2022-x64-schannel-wsk.json/json-test-results-${env}-windows-windows-2022-x64-schannel-wsk.json`
   );
 
   let windowsPerfScore = 0;
@@ -148,6 +165,10 @@ export default function AppView() {
     windowsKernelRpsQuic = windowsKernelLatencyQuic[windowsKernelLatencyQuic.length - 1];
   }
 
+  const handleChange = (event) => {
+    setEnv(event.target.value);
+  };
+
   return (
     <Container maxWidth="xl">
       <Typography variant="h3" sx={{ mb: 5 }}>
@@ -156,6 +177,23 @@ export default function AppView() {
       <Typography variant="h5" sx={{ mb: 5 }}>
         Data based on commit: <a href={`https://github.com/microsoft/msquic/commit/${commitHash}`}>{commitHash}</a>
       </Typography>
+      <Box sx={{ minWidth: 120 }}>
+        <FormControl fullWidth>
+          <InputLabel id="demo-simple-select-label">Context</InputLabel>
+          <Select
+            labelId="demo-simple-select-label"
+            id="demo-simple-select"
+            value={env}
+            label="Context"
+            onChange={handleChange}
+            defaultValue={0}
+          >
+            <MenuItem value='azure'>azure</MenuItem>
+            <MenuItem value='lab'>lab</MenuItem>
+          </Select>
+        </FormControl>
+      </Box>
+      <br />
       <Grid container spacing={3}>
         <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
