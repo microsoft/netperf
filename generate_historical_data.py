@@ -65,7 +65,7 @@ linuxTcpUploadThroughput = cursor.fetchall()
 cursor.execute("""
     SELECT MAX(Result), Build_date_time, Secnetperf_test_runs.Secnetperf_commit FROM Secnetperf_test_runs
         JOIN Secnetperf_builds ON Secnetperf_builds.Secnetperf_commit = Secnetperf_test_runs.Secnetperf_commit
-            WHERE Client_environment_ID = 2 AND Server_environment_ID = 2 AND Secnetperf_test_ID = "tput-down-tcp-0"
+            WHERE Client_environment_ID = 1 AND Server_environment_ID = 1 AND Secnetperf_test_ID = "tput-down-tcp-0"
                 GROUP BY Secnetperf_test_runs.Secnetperf_commit
                     ORDER BY Build_date_time DESC
                         LIMIT 20""")
@@ -75,7 +75,7 @@ windowsQuicDownloadThroughput = cursor.fetchall()
 cursor.execute("""
     SELECT MAX(Result), Build_date_time, Secnetperf_test_runs.Secnetperf_commit FROM Secnetperf_test_runs
         JOIN Secnetperf_builds ON Secnetperf_builds.Secnetperf_commit = Secnetperf_test_runs.Secnetperf_commit
-            WHERE Client_environment_ID = 2 AND Server_environment_ID = 2 AND Secnetperf_test_ID = "tput-up-tcp-0"
+            WHERE Client_environment_ID = 1 AND Server_environment_ID = 1 AND Secnetperf_test_ID = "tput-up-tcp-0"
                 GROUP BY Secnetperf_test_runs.Secnetperf_commit
                     ORDER BY Build_date_time DESC
                         LIMIT 20""")
@@ -85,7 +85,7 @@ windowsQuicUploadThroughput = cursor.fetchall()
 cursor.execute("""
     SELECT MAX(Result), Build_date_time, Secnetperf_test_runs.Secnetperf_commit FROM Secnetperf_test_runs
         JOIN Secnetperf_builds ON Secnetperf_builds.Secnetperf_commit = Secnetperf_test_runs.Secnetperf_commit
-            WHERE Client_environment_ID = 2 AND Server_environment_ID = 2 AND Secnetperf_test_ID = "tput-down-tcp-1"
+            WHERE Client_environment_ID = 1 AND Server_environment_ID = 1 AND Secnetperf_test_ID = "tput-down-tcp-1"
                 GROUP BY Secnetperf_test_runs.Secnetperf_commit
                     ORDER BY Build_date_time DESC
                         LIMIT 20""")
@@ -95,16 +95,12 @@ windowsTcpDownloadThroughput = cursor.fetchall()
 cursor.execute("""
     SELECT MAX(Result), Build_date_time, Secnetperf_test_runs.Secnetperf_commit FROM Secnetperf_test_runs
         JOIN Secnetperf_builds ON Secnetperf_builds.Secnetperf_commit = Secnetperf_test_runs.Secnetperf_commit
-            WHERE Client_environment_ID = 2 AND Server_environment_ID = 2 AND Secnetperf_test_ID = "tput-up-tcp-1"
+            WHERE Client_environment_ID = 1 AND Server_environment_ID = 1 AND Secnetperf_test_ID = "tput-up-tcp-1"
                 GROUP BY Secnetperf_test_runs.Secnetperf_commit
                     ORDER BY Build_date_time DESC
                         LIMIT 20""")
 
 windowsTcpUploadThroughput = cursor.fetchall()
-
-# TODO: Make queries for latency fetches once data gets populated in the automation.
-
-
 
 throughput_json = {
     "linuxQuicDownloadThroughput": linuxQuicDownloadThroughput,
