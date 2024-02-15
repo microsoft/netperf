@@ -23,7 +23,7 @@ import AppWidgetSummary from '../app-widget-summary';
 
 
 function throughputPerformance(download, upload, dweight, uweight) {
-  return (download * dweight + upload * uweight) / 10000;
+  return (download * dweight + upload * uweight) / 100000;
 }
 
 function latencyPerformance(latencies) {
@@ -61,6 +61,12 @@ export default function AppView() {
 
   let windowsPerfScoreLatency = 0;
   let linuxPerfScoreLatency = 0;
+
+  let windowsPerfScoreRps = 0;
+  let linuxPerfScoreRps = 0;
+
+  let windowsPerfScoreHps = 0;
+  let linuxPerfScoreHps = 0;
 
   let windowsUploadThroughputQuic = -1;
   let windowsUploadThroughputTcp = -1;
@@ -163,6 +169,12 @@ export default function AppView() {
     linuxRpsTcp = linuxLatencyTcp[linuxLatencyTcp.length - 1];
     windowsXdpRpsQuic = windowsXdpLatencyQuic[windowsXdpLatencyQuic.length - 1];
     windowsKernelRpsQuic = windowsKernelLatencyQuic[windowsKernelLatencyQuic.length - 1];
+
+    // Compute scores
+    windowsPerfScoreRps = (windowsRpsQuic + windowsRpsTcp) / 1000000;
+    linuxPerfScoreRps = (linuxRpsQuic + linuxRpsTcp) / 1000000;
+    windowsPerfScoreHps = (windowsHpsQuic + windowsHpsTcp) / 100;
+    linuxPerfScoreHps = (linuxHpsQuic + linuxHpsTcp) / 100;
   }
 
   const handleChange = (event) => {
@@ -331,47 +343,75 @@ export default function AppView() {
             title="Throughput Comparison (kbps), higher the better."
             subheader={`Tested using ${windowsType}, ${linuxType}`}
             chart={{
-              labels: ['Windows Download', 'Windows Upload', 'Linux Download', 'Linux Upload'],
+              labels: ['', 'Download', 'Upload', ''],
               series: [
                 {
-                  name: 'TCP',
+                  name: 'TCP + iocp',
                   type: 'column',
                   fill: 'solid',
                   data: [
+                    0,
                     windowsDownloadThroughputTcp,
                     windowsUploadThroughputTcp,
-                    linuxDownloadThroughputTcp,
-                    linuxUploadThroughputTcp,
+                    0,
                   ],
                 },
                 {
-                  name: 'QUIC',
+                  name: 'QUIC + iocp',
                   type: 'column',
                   fill: 'solid',
                   data: [
+                    0,
                     windowsDownloadThroughputQuic,
                     windowsUploadThroughputQuic,
-                    linuxDownloadThroughputQuic,
-                    linuxUploadThroughputQuic,
+                    0,
                   ],
                 },
 
                 {
-                  name: 'QUIC + XDP',
+                  name: 'TCP + epoll',
                   type: 'column',
                   fill: 'solid',
                   data: [
+                    0,
+                    linuxDownloadThroughputTcp,
+                    linuxUploadThroughputTcp,
+                    0,
+                  ],
+                },
+
+                {
+                  name: 'QUIC + epoll',
+                  type: 'column',
+                  fill: 'solid',
+                  data: [
+                    0,
+                    linuxDownloadThroughputQuic,
+                    linuxUploadThroughputQuic,
+                    0,
+                  ],
+                },
+
+                {
+                  name: 'QUIC + winXDP',
+                  type: 'column',
+                  fill: 'solid',
+                  data: [
+                    0,
                     windowsXdpDownloadThroughputQuic,
                     windowsXdpUploadThroughputQuic,
+                    0,
                   ],
                 },
                 {
-                  name: 'QUIC + Kernel Mode (wsk)',
+                  name: 'QUIC + wsk',
                   type: 'column',
                   fill: 'solid',
                   data: [
+                    0,
                     windowsKernelDownloadThroughputQuic,
                     windowsKernelUploadThroughputQuic,
+                    0,
                   ],
                 }
               ].filter((item) => { // excludes items with all -1
@@ -403,19 +443,7 @@ export default function AppView() {
               ],
               series: [
                 {
-                  name: 'Windows QUIC',
-                  type: 'column',
-                  fill: 'solid',
-                  // Data based on Windows QUIC for each percentile
-                  data: [
-                    windowsLatencyQuic[1],
-                    windowsLatencyQuic[2],
-                    windowsLatencyQuic[3],
-                    windowsLatencyQuic[4],
-                  ],
-                },
-                {
-                  name: 'Windows TCP',
+                  name: 'TCP + iocp',
                   type: 'column',
                   fill: 'solid',
                   // Data based on Windows TCP for each percentile
@@ -427,19 +455,19 @@ export default function AppView() {
                   ],
                 },
                 {
-                  name: 'Linux QUIC',
+                  name: 'QUIC + iocp',
                   type: 'column',
                   fill: 'solid',
-                  // Data based on Linux QUIC for each percentile
+                  // Data based on Windows QUIC for each percentile
                   data: [
-                    linuxLatencyQuic[1],
-                    linuxLatencyQuic[2],
-                    linuxLatencyQuic[3],
-                    linuxLatencyQuic[4],
+                    windowsLatencyQuic[1],
+                    windowsLatencyQuic[2],
+                    windowsLatencyQuic[3],
+                    windowsLatencyQuic[4],
                   ],
                 },
                 {
-                  name: 'Linux TCP',
+                  name: 'TCP + epoll',
                   type: 'column',
                   fill: 'solid',
                   // Data based on Linux TCP for each percentile
@@ -451,7 +479,19 @@ export default function AppView() {
                   ],
                 },
                 {
-                  name: 'Windows QUIC + XDP',
+                  name: 'QUIC + epoll',
+                  type: 'column',
+                  fill: 'solid',
+                  // Data based on Linux QUIC for each percentile
+                  data: [
+                    linuxLatencyQuic[1],
+                    linuxLatencyQuic[2],
+                    linuxLatencyQuic[3],
+                    linuxLatencyQuic[4],
+                  ],
+                },
+                {
+                  name: 'QUIC + winXDP',
                   type: 'column',
                   fill: 'solid',
                   // Data based on Linux TCP for each percentile
@@ -463,7 +503,7 @@ export default function AppView() {
                   ],
                 },
                 {
-                  name: 'Windows QUIC + Wsk',
+                  name: 'QUIC + Wsk',
                   type: 'column',
                   fill: 'solid',
                   // Data based on Linux TCP for each percentile
@@ -492,7 +532,7 @@ export default function AppView() {
         <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
             title="Windows RPS Performance Score."
-            total={0}
+            total={windowsPerfScoreRps}
             color="primary"
             icon={
               <div>
@@ -501,7 +541,8 @@ export default function AppView() {
                   onClick={() =>
                     alert(`
                   This score is computed as:
-                  ??? TODO
+                  windowsPerfScoreRps = (windowsRpsQuic + windowsRpsTcp) / 1000000;
+
                 `)
                   }
                 >
@@ -514,7 +555,7 @@ export default function AppView() {
         <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
             title="Linux RPS Performance Score."
-            total={0}
+            total={linuxPerfScoreRps}
             color="primary"
             icon={
               <div>
@@ -523,8 +564,8 @@ export default function AppView() {
                   onClick={() =>
                     alert(`
                 This score is computed as:
+                linuxPerfScoreRps = (linuxRpsQuic + linuxRpsTcp) / 1000000;
 
-                ??? TODO
             `)
                   }
                 >
@@ -538,7 +579,7 @@ export default function AppView() {
         <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
             title="Windows HPS Performance Score."
-            total={0}
+            total={windowsPerfScoreHps}
             color="primary"
             icon={
               <div>
@@ -547,7 +588,7 @@ export default function AppView() {
                   onClick={() =>
                     alert(`
                   This score is computed as:
-                  ??? TODO
+                  windowsPerfScoreHps = (windowsHpsQuic + windowsHpsTcp) / 100;
                 `)
                   }
                 >
@@ -560,7 +601,7 @@ export default function AppView() {
         <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
             title="Linux HPS Performance Score."
-            total={0}
+            total={linuxPerfScoreHps}
             color="primary"
             icon={
               <div>
@@ -570,7 +611,7 @@ export default function AppView() {
                     alert(`
                 This score is computed as:
 
-                ??? TODO
+                linuxPerfScoreHps = (linuxHpsQuic + linuxHpsTcp) / 100;
             `)
                   }
                 >
@@ -586,28 +627,59 @@ export default function AppView() {
             title="RPS Comparison (requests per second), higher the better."
             subheader={`Tested using ${windowsType}, ${linuxType}`}
             chart={{
-              labels: ['TCP', 'QUIC', 'QUIC + XDP', 'QUIC + Wsk'],
+              labels: ['RPS'],
               series: [
                 {
-                  name: 'Windows',
+                  name: 'TCP + iocp',
                   type: 'column',
                   fill: 'solid',
                   data: [
                     windowsRpsTcp,
-                    windowsRpsQuic,
-                    windowsXdpRpsQuic,
-                    windowsKernelRpsQuic,
                   ],
                 },
                 {
-                  name: 'Linux',
+                  name: 'QUIC + iocp',
+                  type: 'column',
+                  fill: 'solid',
+                  data: [
+                    windowsRpsQuic,
+                  ],
+                },
+                {
+                  name: 'TCP + epoll',
                   type: 'column',
                   fill: 'solid',
                   data: [
                     linuxRpsTcp,
+                  ],
+                },
+                {
+                  name: 'QUIC + epoll',
+                  type: 'column',
+                  fill: 'solid',
+                  data: [
                     linuxRpsQuic,
                   ],
                 },
+
+                {
+                  name: 'QUIC + winXDP',
+                  type: 'column',
+                  fill: 'solid',
+                  data: [
+                    windowsXdpRpsQuic,
+                  ],
+                },
+
+                {
+                  name: 'QUIC + wsk',
+                  type: 'column',
+                  fill: 'solid',
+                  data: [
+                    windowsKernelRpsQuic,
+                  ],
+                },
+
               ].filter((item) => { // excludes items with all -1
                 for (const data of item.data) {
                   if (data !== -1) {
@@ -628,27 +700,52 @@ export default function AppView() {
             title="HPS Comparison (handshakes per second), higher the better."
             subheader={`Tested using ${windowsType}, ${linuxType}`}
             chart={{
-              labels: ['TCP', 'QUIC', 'QUIC + XDP'],
+              labels: ['HPS'],
               series: [
                 {
-                  name: 'Windows',
+                  name: 'TCP + iocp',
                   type: 'column',
                   fill: 'solid',
                   data: [
-                    windowsHpsTcp,
-                    windowsHpsQuic,
-                    windowsXdpHpsQuic,
+                    windowsHpsTcp
                   ],
                 },
                 {
-                  name: 'Linux',
+                  name: 'QUIC + iocp',
                   type: 'column',
                   fill: 'solid',
                   data: [
-                    linuxHpsTcp,
-                    linuxHpsQuic,
+                    windowsHpsQuic
                   ],
                 },
+
+                {
+                  name: 'TCP + epoll',
+                  type: 'column',
+                  fill: 'solid',
+                  data: [
+                    linuxHpsTcp
+                  ],
+                },
+
+                {
+                  name: 'QUIC + epoll',
+                  type: 'column',
+                  fill: 'solid',
+                  data: [
+                    linuxHpsQuic
+                  ],
+                },
+
+                {
+                  name: 'QUIC + winxdp',
+                  type: 'column',
+                  fill: 'solid',
+                  data: [
+                    windowsXdpHpsQuic
+                  ],
+                },
+
               ].filter((item) => { // excludes items with all -1
                 for (const data of item.data) {
                   if (data !== -1) {
