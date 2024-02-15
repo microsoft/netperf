@@ -1,1 +1,0 @@
-import{r as e}from"./index-fa_W3B1-.js";function h(r){const[o,a]=e.useState(null),[n,s]=e.useState(!0),[u,c]=e.useState(null);return e.useEffect(()=>{fetch(r).then(t=>{if(!t.ok)throw new Error("Network response was not ok");return t.json()}).then(t=>{a(t),s(!1)}).catch(t=>{c(t),s(!1)})},[r]),{data:o,isLoading:n,error:u}}export{h as u};
