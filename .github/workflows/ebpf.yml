@@ -101,7 +101,7 @@ jobs:
 
     - name: Run BPF performance tests
       run: |
-        if ("${{input.profile}}" -eq "true") {
+        if ("${{inputs.profile}}" -eq "true") {
           $pre_command = 'wpr.exe -start CPU'
           $post_command = 'wpr.exe -stop ""${{github.workspace}}\ETL\%NAME%.etl""'
           mkdir -Force -Path ${{github.workspace}}\ETL
