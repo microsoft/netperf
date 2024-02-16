@@ -69,8 +69,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ['windows-2022', 'windows-2019']
-    runs-on: ${{ matrix.os }}
+        vec: [
+          { env: "azure", os: "2022", arch: "x64" },
+          { env: "azure", os: "2025", arch: "x64" },
+          { env: "lab",   os: "2022", arch: "x64" },
+        ]
+    runs-on:
+    - self-hosted
+    - ${{ matrix.vec.env }}
+    - os-windows-${{ matrix.vec.os }}
+    - ${{ matrix.vec.arch }}
 
     steps:
     - name: Download ebpf-for-windows
