@@ -72,7 +72,7 @@ jobs:
         vec: [
           { env: "azure", os: "2022", arch: "x64" },
           { env: "azure", os: "2025", arch: "x64" },
-          { env: "lab",   os: "2022", arch: "x64" },
+          #{ env: "lab",   os: "2022", arch: "x64" },
         ]
     runs-on:
     - self-hosted
@@ -81,13 +81,22 @@ jobs:
     - ${{ matrix.vec.arch }}
 
     steps:
+    - name: Setup workspace
+      run: |
+        Get-Package | Where-Object -Property "Name" -eq "eBPF for Windows" | Uninstall-Package
+        if (Test-Path ${{ github.workspace }}\bpf_performance) { Remove-Item -Recurse -Force ${{ github.workspace }}\bpf_performance }
+        if (Test-Path ${{ github.workspace }}\ETL) { Remove-Item -Recurse -Force ${{ github.workspace }}\ETL }
+        New-item -ItemType Directory -Path ${{ github.workspace }}\bpf_performance
+        New-item -ItemType Directory -Path ${{ github.workspace }}\ETL
+
     - name: Download ebpf-for-windows
       uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
       with:
         name: "ebpf-for-windows - MSI installer (Build-x64_NativeOnlyRelease)"
-        path: .
+        path: ${{ github.workspace }}\bpf_performance
 
     - name: Install ebpf-for-windows
+      working-directory: ${{ github.workspace }}\bpf_performance
       run: |
         $process = Start-Process -FilePath "msiexec" -ArgumentList "/i ebpf-for-windows.msi /quiet /qn /norestart /log install.log ADDLOCAL=ALL" -Wait -NoNewWindow
         echo "C:\Program Files\ebpf-for-windows" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
@@ -97,26 +106,28 @@ jobs:
       uses: actions/upload-artifact@v2
       with:
         name: install.log
-        path: install.log
+        path: ${{ github.workspace }}\bpf_performance\install.log
 
     - name: Download bpf_performance repository artifacts
+      working-directory: ${{ github.workspace }}\bpf_performance
       run: |
         Invoke-WebRequest https://github.com/microsoft/bpf_performance/releases/download/v0.0.6/build-Release-windows-2022.zip -OutFile bpf_performance.zip
 
     - name: Unzip bpf_performance repository artifacts
+      working-directory: ${{ github.workspace }}\bpf_performance
       run: |
         Expand-Archive -Path bpf_performance.zip -DestinationPath .
 
     - name: Run BPF performance tests
+      working-directory: ${{ github.workspace }}\bpf_performance
       run: |
         if ("${{inputs.profile}}" -eq "true") {
           $pre_command = 'wpr.exe -start CPU'
-          $post_command = 'wpr.exe -stop ""${{github.workspace}}\ETL\%NAME%.etl""'
-          mkdir -Force -Path ${{github.workspace}}\ETL
-          Release\bpf_performance_runner.exe -i tests.yml -e .sys -r --pre "$pre_command" --post "$post_command" -p 4 | Tee-Object -FilePath result.csv
+          $post_command = 'wpr.exe -stop ""${{ github.workspace }}\ETL\%NAME%.etl""'
+          Release\bpf_performance_runner.exe -i tests.yml -e .sys -r --pre "$pre_command" --post "$post_command" | Tee-Object -FilePath result.csv
         }
         else {
-          Release\bpf_performance_runner.exe -i tests.yml -e .sys -r  -p 4 | Tee-Object -FilePath result.csv
+          Release\bpf_performance_runner.exe -i tests.yml -e .sys -r | Tee-Object -FilePath result.csv
         }
         Get-Content result.csv | Where-Object { $_ -notmatch "^Program returned non-zero" } | Set-Content bpf_performance_native.csv
 
@@ -125,19 +136,7 @@ jobs:
       uses: actions/upload-artifact@v2
       with:
         name: bpf_performance_native_${{ matrix.os }}
-        path: bpf_performance_native.csv
-
-    - name: Uninstall ebpf-for-windows
-      if: always()
-      run: |
-        $process = Start-Process -FilePath "msiexec" -ArgumentList "/x ebpf-for-windows.msi /quiet /norestart /log uninstall.log" -Wait -NoNewWindow
-
-    - name: Upload uninstall log
-      if: always()
-      uses: actions/upload-artifact@v2
-      with:
-        name: uninstall.log
-        path: uninstall.log
+        path: ${{ github.workspace }}\bpf_performance\bpf_performance_native.csv
 
     - name: Upload CPU profile
       if: ${{ inputs.profile == true }}
@@ -145,3 +144,9 @@ jobs:
       with:
         name: CPU_Profile
         path: ETL
+
+    - name: Cleanup workspace
+      run: |
+        Get-Package | Where-Object -Property "Name" -eq "eBPF for Windows" | Uninstall-Package
+        if (Test-Path ${{ github.workspace }}\bpf_performance) { Remove-Item -Recurse -Force ${{ github.workspace }}\bpf_performance }
+        if (Test-Path ${{ github.workspace }}\ETL) { Remove-Item -Recurse -Force ${{ github.workspace }}\ETL }
