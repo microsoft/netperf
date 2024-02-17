@@ -56,7 +56,7 @@
     "eslint-plugin-unused-imports": "^3.0.0",
     "prettier": "^3.2.4",
     "vite": "^5.0.12",
-    "vite-plugin-checker": "^0.6.2"
+    "vite-plugin-checker": "^0.6.4"
   },
   "homepage": "https://microsoft.github.io/netperf/dist"
 }
