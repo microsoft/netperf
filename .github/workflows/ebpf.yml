@@ -101,13 +101,6 @@ jobs:
         $process = Start-Process -FilePath "msiexec" -ArgumentList "/i ebpf-for-windows.msi /quiet /qn /norestart /log install.log ADDLOCAL=ALL" -Wait -NoNewWindow
         echo "C:\Program Files\ebpf-for-windows" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-    - name: Upload install log
-      if: always()
-      uses: actions/upload-artifact@v2
-      with:
-        name: install.log
-        path: ${{ github.workspace }}\bpf_performance\install.log
-
     - name: Download bpf_performance repository artifacts
       working-directory: ${{ github.workspace }}\bpf_performance
       run: |
