@@ -16,6 +16,7 @@ export default function AppWebsiteVisits({ title, subheader, chart, map, ...othe
     plotOptions: {
       bar: {
         columnWidth: '16%',
+        hideZeroBarsWhenGrouped: true,
       },
     },
     fill: {

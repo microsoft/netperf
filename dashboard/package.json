@@ -24,9 +24,9 @@
     "@emotion/styled": "^11.11.0",
     "@faker-js/faker": "^8.4.0",
     "@iconify/react": "^4.1.1",
-    "@mui/lab": "^5.0.0-alpha.162",
-    "@mui/material": "^5.15.6",
-    "apexcharts": "^3.45.2",
+    "@mui/lab": "^5.0.0-alpha.165",
+    "@mui/material": "^5.15.10",
+    "apexcharts": "3.44.2",
     "date-fns": "^3.3.1",
     "history": "^5.3.0",
     "lodash": "^4.17.21",
@@ -36,13 +36,13 @@
     "react-apexcharts": "^1.4.1",
     "react-dom": "^18.2.0",
     "react-helmet-async": "^2.0.4",
-    "react-hook-form": "^7.49.3",
+    "react-hook-form": "^7.50.1",
     "react-router-dom": "^6.21.3",
     "simplebar-react": "^3.2.4",
     "sql.js": "^1.10.2"
   },
   "devDependencies": {
-    "@vitejs/plugin-react-swc": "^3.4.0",
+    "@vitejs/plugin-react-swc": "^3.6.0",
     "eslint": "^8.56.0",
     "eslint-config-airbnb": "^19.0.4",
     "eslint-config-prettier": "^9.0.0",
@@ -56,7 +56,7 @@
     "eslint-plugin-unused-imports": "^3.0.0",
     "prettier": "^3.2.4",
     "vite": "^5.0.12",
-    "vite-plugin-checker": "^0.6.2"
+    "vite-plugin-checker": "^0.6.4"
   },
   "homepage": "https://microsoft.github.io/netperf/dist"
 }

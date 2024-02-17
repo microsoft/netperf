@@ -86,6 +86,8 @@ iex "& { $(irm $url) } $username $password $machine1"
 ```
 curl https://raw.githubusercontent.com/microsoft/netperf/main/setup-runner-linux.sh -o setup-runner-linux.sh
 
+# Make sure to run this script twice to properly install everything (to account for lab vs. Azure environment differences)
+
 bash setup-runner-linux.sh -i <peerip> -g <github token *do this on client only> -n <no reboot *optional>
 
 # Do this on the client only:
@@ -95,6 +97,9 @@ ssh-keygen
 ssh-copy-id <username of peer>@<peerip>
 ```
 
-### Troubleshooting Linux
+## Configure IP addresses for lab linux VMs
 
-- Sometimes, depending on your specific Linux distro and if you are using Azure, Powershell may not install correctly the first time when running this script. In this instance, if `pwsh --version` can not be found, run `sudo apt-get install powershell -y` after waiting a bit.
+Depending on your specific linux distro, the process varies a bit.
+
+But the main idea is to use the `ip` util built in to `net-tools` to add an IP to your mellanox NIC.
+The usual command is `sudo ip addr add (address / CIDR block) dev (NIC name)`. The problem is, if you reboot, Linux will revert your IP assignments. So what you do is you can create a startup script that runs on boot leveraging `systemd` or some other service depending on your Linux distro.

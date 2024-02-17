@@ -4,17 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: 'Build Reference'
+        description: 'MsQuic Branch or Commit'
         required: false
-        default: ''
+        default: 'main'
         type: string
       filter:
-        description: 'Test Filter'
+        description: 'Custom Test Filter'
         required: false
         default: ''
         type: string
       logprofile:
-        description: 'Log Profile'
+        description: 'Logging WPR Profile'
         required: false
         default: "NULL"
         type: choice
@@ -33,16 +33,22 @@ on:
           - Full.Light
           - Full.Verbose
       commit:
-        description: 'Commit Results'
+        description: 'Publish Results'
         required: false
         default: false
         type: boolean
+  pull_request:
+    branches:
+    - main
+    paths:
+    - .github/workflows/quic.yml
+    - .github/workflows/generate-summary.ps1
   repository_dispatch:
     types: [run-quic]
       # Args: { guid, sha, ref, pr, logs, filter }
 
 concurrency:
-  group: quic-${{ github.event.client_payload.pr || github.event.client_payload.sha || inputs.ref || 'main' }}
+  group: quic-${{ github.event.client_payload.pr || github.event.client_payload.sha || inputs.ref || github.event.pull_request.number || 'main' }}
   cancel-in-progress: true
 
 permissions: read-all
@@ -115,31 +121,36 @@ jobs:
   #
 
   run-secnetperf: # This would be 1 enumeration, after CTS has setup the environment with the correct OS type and version.
-    name: Run secnetperf
+    name: secnetperf
     needs: [build-unix, build-windows, build-windows-kernel]
     strategy:
       fail-fast: false
       matrix:
         vec: [
+          # Azure Ubuntu 20.04
           { env: "azure", plat: "linux",   os: "ubuntu-20.04", arch: "x64", tls: "openssl",  io: "epoll" },
           { env: "azure", plat: "linux",   os: "ubuntu-20.04", arch: "x64", tls: "openssl3", io: "epoll" },
+          # Azure Windows Server 2022
           { env: "azure", plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "iocp" },
           { env: "azure", plat: "windows", os: "windows-2022", arch: "x64", tls: "openssl",  io: "iocp" },
           { env: "azure", plat: "windows", os: "windows-2022", arch: "x64", tls: "openssl3", io: "iocp" },
           { env: "azure", plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "xdp" },
-          { env: "azure", plat: "windows", os: "windows-2022", arch: "x64", tls: "openssl",  io: "xdp" },
-          { env: "azure", plat: "windows", os: "windows-2022", arch: "x64", tls: "openssl3", io: "xdp" },
+          { env: "azure", plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "rio" },
           { env: "azure", plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "wsk" },
+          # Azure Windows Server 2025 (preview)
           { env: "azure", plat: "windows", os: "windows-2025", arch: "x64", tls: "schannel", io: "iocp" },
-          { env: "azure", plat: "windows", os: "windows-2025", arch: "x64", tls: "openssl",  io: "iocp" },
-          { env: "azure", plat: "windows", os: "windows-2025", arch: "x64", tls: "openssl3", io: "iocp" },
+          { env: "azure", plat: "windows", os: "windows-2025", arch: "x64", tls: "schannel", io: "rio" },
+          { env: "azure", plat: "windows", os: "windows-2025", arch: "x64", tls: "schannel", io: "xdp" },
+          { env: "azure", plat: "windows", os: "windows-2025", arch: "x64", tls: "schannel", io: "wsk" },
+          # Lab Windows Server 2022
           { env: "lab",   plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "iocp" },
           { env: "lab",   plat: "windows", os: "windows-2022", arch: "x64", tls: "openssl",  io: "iocp" },
           { env: "lab",   plat: "windows", os: "windows-2022", arch: "x64", tls: "openssl3", io: "iocp" },
           { env: "lab",   plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "xdp" },
-          { env: "lab",   plat: "windows", os: "windows-2022", arch: "x64", tls: "openssl",  io: "xdp" },
-          { env: "lab",   plat: "windows", os: "windows-2022", arch: "x64", tls: "openssl3", io: "xdp" },
           { env: "lab",   plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "wsk" },
+          # Lab Ubuntu Server 20.04 LTS
+          { env: "lab",   plat: "linux",   os: "ubuntu-20.04", arch: "x64", tls: "openssl",  io: "epoll" },
+          { env: "lab",   plat: "linux",   os: "ubuntu-20.04", arch: "x64", tls: "openssl3", io: "epoll" },
         ]
     runs-on:
     - self-hosted
@@ -165,7 +176,7 @@ jobs:
         path: artifacts
     - name: Run secnetperf
       shell: pwsh
-      timeout-minutes: 15 # TODO: Increase as necessary
+      timeout-minutes: 20
       run: ./scripts/secnetperf.ps1 `
           -LogProfile ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }} `
           -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} `
@@ -182,7 +193,7 @@ jobs:
       with:
         name: test-results-${{ matrix.vec.env }}-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}.sql
         path: test-results-${{ matrix.vec.env }}-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}.sql
-    - name: Upload Test Results JSON # Data to populate the various pages of the dashboard. Callers of the Netperf API should specify if we want to update this or not.
+    - name: Upload Test Results JSON
       if: ${{ always() }}
       uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
       with:
@@ -230,7 +241,9 @@ jobs:
       with:
         repository: microsoft/netperf
         ref: sqlite
-    - uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe # Specify no 'name' to download all uploaded artifacts
+    - uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
+      with:
+        pattern: test-results-*
     - run: ls
     - run: python sql.py
     - name: Git commit # TODO: Squash history for this branch to keep size small
@@ -250,7 +263,9 @@ jobs:
         repository: microsoft/netperf
         ref: deploy
     - run: 'rm -rf *.json'
-    - uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe # Specify no 'name' to download all uploaded artifacts. TODO: Refactor this "download-all" models to instead filter for specific artifacts slices.
+    - uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
+      with:
+        pattern: "json-test-results-*"
     - run: python generate_historical_data.py
     - name: Git commit
       run: 'git config user.name "QUIC Dev[bot]" && git config user.email "quicdev@microsoft.com" && git pull && git add *.json && git commit -m "Update intermediary dashboard files" && git push'

@@ -1,0 +1,20 @@
+name: Set Regression Bounds
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - sqlite
+
+jobs:
+  set-regression-bounds:
+    name: Set Regression Bounds
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout netperf repo
+      uses: actions/checkout@v2
+      with:
+        repository: microsoft/netperf
+        ref: sqlite
+    - name: Calculate regression bounds
+      run: python regression.py
