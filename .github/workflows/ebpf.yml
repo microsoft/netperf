@@ -72,7 +72,7 @@ jobs:
         vec: [
           { env: "azure", os: "2022", arch: "x64" },
           { env: "azure", os: "2025", arch: "x64" },
-          #{ env: "lab",   os: "2022", arch: "x64" },
+          { env: "lab",   os: "2022", arch: "x64" },
         ]
     runs-on:
     - self-hosted
