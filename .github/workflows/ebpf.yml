@@ -117,10 +117,10 @@ jobs:
         if ("${{inputs.profile}}" -eq "true") {
           $pre_command = 'wpr.exe -start CPU'
           $post_command = 'wpr.exe -stop ""${{ github.workspace }}\ETL\%NAME%.etl""'
-          Release\bpf_performance_runner.exe -i tests.yml -e .sys -r --pre "$pre_command" --post "$post_command" | Tee-Object -FilePath result.csv
+          Release\bpf_performance_runner.exe -i tests.yml -e .sys -r -p 4 --pre "$pre_command" --post "$post_command" | Tee-Object -FilePath result.csv
         }
         else {
-          Release\bpf_performance_runner.exe -i tests.yml -e .sys -r | Tee-Object -FilePath result.csv
+          Release\bpf_performance_runner.exe -i tests.yml -e .sys -r  -p 4 | Tee-Object -FilePath result.csv
         }
         Get-Content result.csv | Where-Object { $_ -notmatch "^Program returned non-zero" } | Set-Content bpf_performance_native.csv
 
