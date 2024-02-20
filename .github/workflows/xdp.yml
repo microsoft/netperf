@@ -82,7 +82,7 @@ jobs:
         path: artifacts/bin
     - name: Run Tests
       shell: pwsh
-      run: tools/two-machine-perf.ps1 -Config Release -Arch ${{ matrix.vec.arch }}
+      run: tools/two-machine-perf.ps1 -Config Release -Arch ${{ matrix.vec.arch }} -Verbose
     - name: Upload Logs
       if: ${{ always() }}
       uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
