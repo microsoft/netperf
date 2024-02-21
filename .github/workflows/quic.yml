@@ -200,6 +200,13 @@ jobs:
         name: logs-${{ matrix.vec.env }}-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}
         path: artifacts/logs
         if-no-files-found: ignore
+    - name: Upload Full Latency Curves
+      if: ${{ always() }}
+       uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
+        with:
+          name: full-latency-curve-${{ matrix.vec.env }}-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}
+          path: full-latency-curve.txt
+          if-no-files-found: ignore
 
   #
   # Post Processing Jobs
@@ -221,7 +228,7 @@ jobs:
       shell: pwsh
       run: ./.github/workflows/generate-summary.ps1
 
-  save-test-results:
+  save-test-results: # TODO: Download full-latency-curves-*, condense them all to 1 file, name it in a smart way, and save it to the sqlite branch in a subfolder.
     permissions: write-all
     name: Persist Results in DB
     needs: [run-secnetperf]
