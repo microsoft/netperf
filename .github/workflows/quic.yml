@@ -270,3 +270,21 @@ jobs:
     - run: python generate_historical_data.py
     - name: Git commit
       run: 'git config user.name "QUIC Dev[bot]" && git config user.email "quicdev@microsoft.com" && git pull && git add *.json && git commit -m "Update intermediary dashboard files" && git push'
+
+  regression-detection:
+    permissions: write-all
+    name: Update Regression Metrics
+    needs: [update-intermediary-dashboard-json]
+    strategy:
+      fail-fast: false
+    runs-on: 'ubuntu-20.04'
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      with:
+        repository: microsoft/netperf
+        ref: sqlite
+    - run: ls
+    - run: python regression.py
+    - name: Git commit # TODO: Squash history for this branch to keep size small
+      run: 'git config user.name "QUIC Dev[bot]" && git config user.email "quicdev@microsoft.com" && git add *.json && git commit -m "Update regression metrics" && git push'
