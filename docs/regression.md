@@ -6,5 +6,7 @@ For instance, we don't wanna use F4 VMs to set the baseline lower bound / upper 
 
 Things get tricky when it comes to windows prerelease builds.
 
+By definition, there won't be historical data on that particular environment/os/io scenario. So should we use Windows Server 2022 run data as our baseline? 
+
 That is why the design for regression baseline generation should be highly configurable, and workflows like quic.yml should be able to specify which baseline they would like to use to see if there is a regression or not. 
 
