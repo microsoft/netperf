@@ -83,7 +83,7 @@ jobs:
     steps:
     - name: Setup workspace
       run: |
-        Get-Package | Where-Object -Property "Name" -eq "eBPF for Windows" | Uninstall-Package
+        $process = Start-Process -FilePath "msiexec" -ArgumentList "/x {022C44B5-8969-4B75-8DB0-73F98B1BD7DC} /quiet /qn /norestart /log uninstall.log" -Wait -NoNewWindow
         if (Test-Path ${{ github.workspace }}\bpf_performance) { Remove-Item -Recurse -Force ${{ github.workspace }}\bpf_performance }
         if (Test-Path ${{ github.workspace }}\ETL) { Remove-Item -Recurse -Force ${{ github.workspace }}\ETL }
         New-item -ItemType Directory -Path ${{ github.workspace }}\bpf_performance
@@ -140,6 +140,6 @@ jobs:
 
     - name: Cleanup workspace
       run: |
-        Get-Package | Where-Object -Property "Name" -eq "eBPF for Windows" | Uninstall-Package
+        $process = Start-Process -FilePath "msiexec" -ArgumentList "/x {022C44B5-8969-4B75-8DB0-73F98B1BD7DC} /quiet /qn /norestart /log uninstall.log" -Wait -NoNewWindow
         if (Test-Path ${{ github.workspace }}\bpf_performance) { Remove-Item -Recurse -Force ${{ github.workspace }}\bpf_performance }
         if (Test-Path ${{ github.workspace }}\ETL) { Remove-Item -Recurse -Force ${{ github.workspace }}\ETL }
