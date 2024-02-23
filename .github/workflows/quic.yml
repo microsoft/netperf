@@ -204,8 +204,8 @@ jobs:
       if: ${{ always() }}
       uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
       with:
-        name: full-latency-curve-${{ matrix.vec.env }}-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}
-        path: full-latency-curve.txt
+        name: latency-${{ matrix.vec.env }}-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}
+        path: latency.txt
         if-no-files-found: ignore
 
   #
