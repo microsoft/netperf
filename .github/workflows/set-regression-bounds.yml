@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout netperf repo
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
       with:
         repository: microsoft/netperf
         ref: sqlite
