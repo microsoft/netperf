@@ -5,6 +5,7 @@ import json
 conn = sqlite3.connect('netperf.sqlite')
 cursor = conn.cursor()
 
+LAST_N_RUNS = 100 # Only consider results from the last N runs for a particular environment x io x test combination.
 # Execute SQL queries to fetch historical data
 
 print("Performing regression analysis to compute upper/lower bounds...")
@@ -53,21 +54,57 @@ print("Performing regression analysis to compute upper/lower bounds...")
             { env: "lab",   plat: "linux",   os: "ubuntu-20.04", arch: "x64", tls: "openssl",  io: "epoll" },
         ]
 
+  NOTE: for windows prerelease builds, os: field will likely be branch name or "prerelease".
 """
 
-# Read all rows from Environment table from database.
 
-# FOREACH environment row, depending on the specific environment, query for io = [iocp, xdp, rio, wsk], tls = [schannel, openssl].
 
-# Each query nets you the data you use to compute regression metrics.
+"""
 
-# Use the queried data and sort based on the test done.
+TODO:
 
-# Now you have a bucket of data for each test.
 
-# Now we use that to run a OLS (ordinary least squares) or compute some average / median and set that as the regression baseline.
+def compute_baseline(test_run_results, test):
+    # TODO: use mahalanobis distance or some other OLS metric to compute baseline.
+    # returns: {
+    #   "baseline": float,
+    #   "lowerbound": boolean
+    # }
+    return 1
 
-# Save all those metrics, for each query done, and commit that to the sqlite branch.
+fetch all tests
+
+fetch all environment groups.
+
+Do like a GROUP BY os_version, arch, env and output UNIQUE rows. (remove duplicate rows with the same combination of os_version, arch, env)
+
+for test in all_tests:
+    for io in ["wsk", "xdp", "epoll", "rio", "iocp"]:
+        for os_version, arch, env in environment_groups: # os version is most important. could be rs_onecore branch name, or something like windows-2025... ubuntu 20.04... etc.
+            cursor.execute(
+        TODO:
+
+        Do a JOIN from test_runs table and the environment table. Also do a JOIN from test_runs table and secnetperf builds table (for sorting)
+
+        Directly fetch from test_runs table last N most recent runs for each test, io, environment combination. environment is just a basket of relevant variables like {os, arch, env}.
+
+        Partition the run results based on high level environment metrics like {io, tls, os, arch, env}
+
+        )
+
+        relevant runs = cursor.fetchall()
+
+        test_run_results = compute_baseline(relevant_runs, test)
+
+        # TODO: Save test_run_results AND and make it assessible given io, env, arch, os_version, test query metrics. Save all that to a file.
+
+
+# Save results to a json file.
+with open('regression.json', 'w') as f:
+    json.dump(results, f)
+
+"""
+
 
 # Close connection
 conn.close()
