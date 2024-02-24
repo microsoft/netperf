@@ -157,10 +157,12 @@ jobs:
       with:
         repository: microsoft/msquic
         ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+    - name: Lowercase runner.os
+      run: echo "OS=${{runner.os}}" >> $GITHUB_ENV
     - name: Download Artifacts
       uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
       with:
-        name: Release-${{runner.os}}-${{ matrix.vec.os == 'windows-2025' && 'windows-2022' || matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-Perf
+        name: Release-${{env.OS}}-${{ matrix.vec.os == 'windows-2025' && 'windows-2022' || matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-Perf
         path: artifacts
     - name: Download Kernel Artifacts
       uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
