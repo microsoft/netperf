@@ -126,14 +126,14 @@ jobs:
 
     - name: Upload BPF performance test results
       if: always()
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: bpf_performance_native_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: ${{ github.workspace }}\bpf_performance\bpf_performance_native.csv
 
     - name: Upload CPU profile
       if: ${{ inputs.profile == true }}
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: CPU_Profile_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: ETL
