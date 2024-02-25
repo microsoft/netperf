@@ -128,23 +128,23 @@ jobs:
       matrix:
         vec: [
           # Azure Ubuntu 20.04
-          { env: "azure", plat: "linux",   os: "ubuntu-20.04", arch: "x64", tls: "openssl",  io: "epoll" },
+          { env: "azure", os: "ubuntu-20.04", arch: "x64", tls: "openssl",  io: "epoll" },
           # Azure Windows Server 2022
-          { env: "azure", plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "iocp" },
-          { env: "azure", plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "xdp" },
-          { env: "azure", plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "rio" },
-          { env: "azure", plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "wsk" },
+          { env: "azure", os: "windows-2022", arch: "x64", tls: "schannel", io: "iocp" },
+          { env: "azure", os: "windows-2022", arch: "x64", tls: "schannel", io: "xdp" },
+          { env: "azure", os: "windows-2022", arch: "x64", tls: "schannel", io: "rio" },
+          { env: "azure", os: "windows-2022", arch: "x64", tls: "schannel", io: "wsk" },
           # Azure Windows Server 2025 (preview)
-          { env: "azure", plat: "windows", os: "windows-2025", arch: "x64", tls: "schannel", io: "iocp" },
-          { env: "azure", plat: "windows", os: "windows-2025", arch: "x64", tls: "schannel", io: "rio" },
-          { env: "azure", plat: "windows", os: "windows-2025", arch: "x64", tls: "schannel", io: "xdp" },
-          { env: "azure", plat: "windows", os: "windows-2025", arch: "x64", tls: "schannel", io: "wsk" },
+          { env: "azure", os: "windows-2025", arch: "x64", tls: "schannel", io: "iocp" },
+          { env: "azure", os: "windows-2025", arch: "x64", tls: "schannel", io: "rio" },
+          { env: "azure", os: "windows-2025", arch: "x64", tls: "schannel", io: "xdp" },
+          { env: "azure", os: "windows-2025", arch: "x64", tls: "schannel", io: "wsk" },
           # Lab Windows Server 2022
-          { env: "lab",   plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "iocp" },
-          { env: "lab",   plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "xdp" },
-          { env: "lab",   plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", io: "wsk" },
+          { env: "lab",   os: "windows-2022", arch: "x64", tls: "schannel", io: "iocp" },
+          { env: "lab",   os: "windows-2022", arch: "x64", tls: "schannel", io: "xdp" },
+          { env: "lab",   os: "windows-2022", arch: "x64", tls: "schannel", io: "wsk" },
           # Lab Ubuntu Server 20.04 LTS
-          { env: "lab",   plat: "linux",   os: "ubuntu-20.04", arch: "x64", tls: "openssl",  io: "epoll" },
+          { env: "lab",   os: "ubuntu-20.04", arch: "x64", tls: "openssl",  io: "epoll" },
         ]
     runs-on:
     - self-hosted
@@ -157,10 +157,13 @@ jobs:
       with:
         repository: microsoft/msquic
         ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+    - name: Lowercase runner.os
+      shell: pwsh
+      run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
     - name: Download Artifacts
       uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
       with:
-        name: Release-${{ matrix.vec.plat }}-${{ matrix.vec.os == 'windows-2025' && 'windows-2022' || matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-Perf
+        name: Release-${{env.OS}}-${{ matrix.vec.os == 'windows-2025' && 'windows-2022' || matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-Perf
         path: artifacts
     - name: Download Kernel Artifacts
       uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
@@ -175,7 +178,7 @@ jobs:
           -LogProfile ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }} `
           -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} `
           -environment ${{ matrix.vec.env }} `
-          -plat ${{ matrix.vec.plat }} `
+          -plat ${{env.OS}} `
           -os ${{ matrix.vec.os }} `
           -arch ${{ matrix.vec.arch }} `
           -tls ${{ matrix.vec.tls }} `
@@ -185,26 +188,26 @@ jobs:
       if: ${{ always() }}
       uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
       with:
-        name: test-results-${{ matrix.vec.env }}-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}.sql
-        path: test-results-${{ matrix.vec.env }}-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}.sql
+        name: test-results-${{ matrix.vec.env }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}.sql
+        path: test-results-${{ matrix.vec.env }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}.sql
     - name: Upload Test Results JSON
       if: ${{ always() }}
       uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
       with:
-        name: json-test-results-${{ matrix.vec.env }}-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}.json
-        path: json-test-results-${{ matrix.vec.env }}-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}.json
+        name: json-test-results-${{ matrix.vec.env }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}.json
+        path: json-test-results-${{ matrix.vec.env }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}.json
     - name: Upload Logs
       if: ${{ always() }}
       uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
       with:
-        name: logs-${{ matrix.vec.env }}-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}
+        name: logs-${{ matrix.vec.env }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}
         path: artifacts/logs
         if-no-files-found: ignore
     - name: Upload Full Latency Curves
       if: ${{ always() }}
       uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
       with:
-        name: latency-${{ matrix.vec.env }}-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}
+        name: latency-${{ matrix.vec.env }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}
         path: latency.txt
         if-no-files-found: ignore
 
