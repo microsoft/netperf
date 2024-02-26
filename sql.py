@@ -4,16 +4,16 @@ This script will simply connect to the database and execute each sql script. Bef
 
 Preprocessing of SQL file:
     Because SQL isn't a procedural language, it is difficult to run any control flow logic.
-    This is important for us, since in the generated SQL statements, we need to run some 
-    procedural logic. Specifically, use the file name of the sql file to grab information 
-    about the plat, os, arch, cpu_type, nic_type, env (lab vs. azure) of the server and client. 
-    Query our database to see if those configurations already exist, if yes, grab its INTEGER ID 
+    This is important for us, since in the generated SQL statements, we need to run some
+    procedural logic. Specifically, use the file name of the sql file to grab information
+    about the plat, os, arch, cpu_type, nic_type, env (lab vs. azure) of the server and client.
+    Query our database to see if those configurations already exist, if yes, grab its INTEGER ID
     and replace all placeholders in the generated SQL file with the INTEGER ID. If it does not exist,
-    insert a new row in the Environments table, and grab its LAST_ROW_INSERTED_ID() and cache the result 
+    insert a new row in the Environments table, and grab its LAST_ROW_INSERTED_ID() and cache the result
     (you can't cache anything in a pure SQL context, hence why we need to do the preprocessing)
     Currently, server = client, so we only have 1 set of plat,os,arch... in the file name. But
-    in the future, if we want to have different environments for client/server, we can encode 
-    that in the file name and update the pre-processing logic. 
+    in the future, if we want to have different environments for client/server, we can encode
+    that in the file name and update the pre-processing logic.
 
 You might ask, "all this work to extract Environment ID, why not just scrap environments table and store everything as a friendly string?"
 The main benefit is to save space in the database, and allow for additional extensions (adding new metadata).
@@ -55,7 +55,7 @@ def pre_process_sql_file(filename, filecontent):
         cursor.execute(f"""INSERT INTO Environment (OS, OS_type, OS_version, Architecture, 'NIC_type ', CPU_type) VALUES ('{plat}', '{os}', NULL, '{arch}', NULL, NULL)""") # TODO: what's the new schema gonna look like, we need NIC_type at all?
         # TODO:
         conn.commit()
-        environment_id = cursor.lastrowid 
+        environment_id = cursor.lastrowid
     else:
         environment_id = result[0][0]
     filecontent = filecontent.replace("__CLIENT_ENV__", environment_id)
@@ -78,7 +78,5 @@ for sql_file_path in glob.glob('*.sql'):
         # Commit changes
         conn.commit()
 
-cursor.execute("SELECT 'NIC_type ' from Environment")
-print(cursor.fetchall())
 # Close connection
 conn.close()
