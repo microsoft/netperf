@@ -39,15 +39,27 @@ args = parser.parse_args()
 
 def pre_process_sql_file(filename, filecontent):
     parts = filename.split("-")
+    print(parts)
     assert len(parts) >= 8
     io = parts[-1]
+    io = io.split(".")[0]
     tls = parts[-2]
     arch = parts[-3]
-    os_name = parts[-4]
-    context = parts[-5] # lab / azure
-
+    os_name_2 = parts[-4]
+    os_name_1 = parts[-5]
+    os_name = os_name_1 + "-" + os_name_2
+    print(os_name)
+    context = parts[-6] # lab / azure
     os_version = None
-    file = f"json-test-results-{context}-{os_name}-{arch}-{tls}-{io}.json"
+    file = None
+
+    for json_file in glob.glob('*.json'):
+        print(json_file)
+        if io in json_file and tls in json_file and arch in json_file and os_name in json_file and context in json_file:
+            file = json_file
+            break
+    assert file is not None
+
     with open(f"{file}/{file}", 'r') as json_file:
         json_content = json_file.read()
         json_obj = json.loads(json_content)
@@ -57,15 +69,15 @@ def pre_process_sql_file(filename, filecontent):
     result = cursor.fetchall()
     if len(result) == 0:
         print('inserting new row with new environment')
-        cursor.execute(f"""INSERT INTO Environment (OS_name, OS_type, OS_version, Architecture, Context) VALUES ('{os_name}', '{os_name}', '{os_version}', '{arch}', '{context}')""")
+        cursor.execute(f"""INSERT INTO Environment (OS_name, OS_version, Architecture, Context) VALUES ('{os_name}', '{os_version}', '{arch}', '{context}')""")
         conn.commit()
         environment_id = cursor.lastrowid
     else:
         print('using existing environment')
         environment_id = result[0][0]
     print(f"Environment ID: {environment_id}")
-    filecontent = filecontent.replace("__CLIENT_ENV__", environment_id)
-    filecontent = filecontent.replace("__SERVER_ENV__", environment_id)
+    filecontent = filecontent.replace("__CLIENT_ENV__", str(environment_id))
+    filecontent = filecontent.replace("__SERVER_ENV__", str(environment_id))
     return filecontent
 
 # Iterate over all .sql files in the current directory
