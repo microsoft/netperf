@@ -22,6 +22,7 @@ The main benefit is to save space in the database, and allow for additional exte
 import sqlite3
 import glob
 import argparse
+import json
 
 # Connect to the database
 conn = sqlite3.connect('netperf.sqlite')
@@ -42,22 +43,27 @@ def pre_process_sql_file(filename, filecontent):
     io = parts[-1]
     tls = parts[-2]
     arch = parts[-3]
-    os = parts[-4]
-    plat = parts[-5]
-    env = parts[-6]
-    # cpu = parts[-7] (do we need?)
-    # nic = parts[-8] (do we need?)
-    cursor.execute(f"""SELECT Environment_ID FROM Environment WHERE Architecture = '{arch}' AND OS = '{plat}'""")
+    os_name = parts[-4]
+    context = parts[-5] # lab / azure
+
+    os_version = None
+    file = f"json-test-results-{context}-{os_name}-{arch}-{tls}-{io}.json"
+    with open(f"{file}/{file}", 'r') as json_file:
+        json_content = json_file.read()
+        json_obj = json.loads(json_content)
+        os_version = json_obj["os_version"]
+
+    cursor.execute(f"""SELECT Environment_ID FROM Environment WHERE Architecture = '{arch}' AND OS_name = '{os_name}' AND OS_version = '{os_version}' AND Context = '{context}'""")
     result = cursor.fetchall()
     if len(result) == 0:
         print('inserting new row with new environment')
-        # TODO:
-        cursor.execute(f"""INSERT INTO Environment (OS, OS_type, OS_version, Architecture, 'NIC_type ', CPU_type) VALUES ('{plat}', '{os}', NULL, '{arch}', NULL, NULL)""") # TODO: what's the new schema gonna look like, we need NIC_type at all?
-        # TODO:
+        cursor.execute(f"""INSERT INTO Environment (OS_name, OS_type, OS_version, Architecture, Context) VALUES ('{os_name}', '{os_name}', '{os_version}', '{arch}', '{context}')""")
         conn.commit()
         environment_id = cursor.lastrowid
     else:
+        print('using existing environment')
         environment_id = result[0][0]
+    print(f"Environment ID: {environment_id}")
     filecontent = filecontent.replace("__CLIENT_ENV__", environment_id)
     filecontent = filecontent.replace("__SERVER_ENV__", environment_id)
     return filecontent
