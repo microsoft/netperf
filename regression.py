@@ -105,6 +105,27 @@ with open('regression.json', 'w') as f:
 
 """
 
+# cursor.execute("SELECT Secnetperf_test_ID, Kernel_mode, Run_arguments FROM Secnetperf_tests")
 
+# all_tests = cursor.fetchall()
+
+# cursor.execute("SELECT OS_name, Architecture, Context FROM Environment GROUP BY OS_name, Architecture, Context")
+
+# environment_groups = cursor.fetchall()
+
+# for testid, _, _ in all_tests:
+#     for io in ["wsk", "xdp", "epoll", "rio", "iocp"]:
+#         for tls in ["openssl", "schannel"]:
+#            for os_version, arch, context in environment_groups:
+#                 # NOTE: This SQL query makes the implicit assumption that Server environment ID = Client environment ID.
+#                 # If in the future we decide to test scenarios where we have Linux --> Windows... etc, this query will need to change. As well as a lot of our automation YAML as well.
+#                 cursor.execute(
+#                         f"""
+#                                 SELECT * FROM Secnetperf_test_runs
+#                                         JOIN Environment ON Secnetperf_test_run.Client_Environment_ID = Environment.Environment_ID
+#                                                 WHERE Secnetperf_test_runs.Secnetperf_test_ID = {testid} AND Secnetperf_test_runs.io = '{io}' AND Environment.OS_name = '{os_version}' AND Environment.Architecture = '{arch}' AND Environment.Context = '{context}'
+#                                 ... TODO ...
+#                         """
+#                 )
 # Close connection
 conn.close()
