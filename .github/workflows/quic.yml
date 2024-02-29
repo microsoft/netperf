@@ -161,12 +161,12 @@ jobs:
       shell: pwsh
       run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
     - name: Download Artifacts
-      uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
+      uses: actions/download-artifact@87c55149d96e628cc2ef7e6fc2aab372015aec85
       with:
         name: Release-${{env.OS}}-${{ matrix.vec.os == 'windows-2025' && 'windows-2022' || matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-Perf
         path: artifacts
     - name: Download Kernel Artifacts
-      uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
+      uses: actions/download-artifact@87c55149d96e628cc2ef7e6fc2aab372015aec85
       if: ${{ matrix.vec.io == 'wsk' }}
       with:
         name: Release-winkernel-${{ matrix.vec.os == 'windows-2025' && 'windows-2022' || matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
@@ -222,7 +222,7 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
-    - uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
+    - uses: actions/download-artifact@87c55149d96e628cc2ef7e6fc2aab372015aec85
       with:
         path: artifacts/logs
         pattern: json-test-results-*
@@ -245,10 +245,10 @@ jobs:
       with:
         repository: microsoft/netperf
         ref: sqlite
-    - uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
+    - uses: actions/download-artifact@87c55149d96e628cc2ef7e6fc2aab372015aec85
       with:
         pattern: test-results-*
-    - uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
+    - uses: actions/download-artifact@87c55149d96e628cc2ef7e6fc2aab372015aec85
       with:
         pattern: json-test-results-*
     - run: python sql.py --featureint 2
@@ -270,7 +270,7 @@ jobs:
         repository: microsoft/netperf
         ref: deploy
     - run: 'rm -rf *.json'
-    - uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
+    - uses: actions/download-artifact@87c55149d96e628cc2ef7e6fc2aab372015aec85
       with:
         pattern: "json-test-results-*"
     - run: python generate_historical_data.py
