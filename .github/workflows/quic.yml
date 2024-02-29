@@ -171,6 +171,9 @@ jobs:
       with:
         name: Release-winkernel-${{ matrix.vec.os == 'windows-2025' && 'windows-2022' || matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
         path: artifacts
+    - name: Download Regression.json file
+      run: Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/regression.json" -OutFile "regression.json"
+      shell: pwsh
     - name: Run secnetperf
       shell: pwsh
       timeout-minutes: 20
