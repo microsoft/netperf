@@ -23,6 +23,8 @@ import sqlite3
 import glob
 import argparse
 import json
+import datetime
+import os
 
 # Connect to the database
 conn = sqlite3.connect('netperf.sqlite')
@@ -80,21 +82,131 @@ def pre_process_sql_file(filename, filecontent):
     filecontent = filecontent.replace("__SERVER_ENV__", str(environment_id))
     return filecontent
 
-# Iterate over all .sql files in the current directory
-for sql_file_path in glob.glob('*.sql'):
-    with open(f"{sql_file_path}/{sql_file_path}", 'r') as sql_file:
-        print("Processing file: {}".format(sql_file_path))
+if args.featureint == 2:
+    class Worker:
+        def __init__(self, cursor, production=False) -> None:
+            self.sql_statements_executed = []
+            self.cursor = cursor
+            self.production = production
+        def execute(self, sql):
+            self.sql_statements_executed.append(sql)
+            if self.production:
+                self.cursor.execute(sql)
 
-        sql_script = sql_file.read()
+        def print_executed_statements(self):
+            for sql in self.sql_statements_executed:
+                print(sql)
+                print('-------------------------------')
 
-        if args.featureint == 1:
-            sql_script = pre_process_sql_file(sql_file_path, sql_script)
+    print("Dynamically executing SQL from the JSON...")
+    for json_file_path in glob.glob('*.json'):
+        if not os.path.exists(f"{json_file_path}/{json_file_path}"):
+            continue
+        with open(f"{json_file_path}/{json_file_path}", 'r') as json_file:
+            print("Processing file: {}".format(json_file_path))
 
-        # Execute SQL script
-        cursor.executescript(sql_script)
+            # Grab data
+            json_content = json_file.read()
+            json_obj = json.loads(json_content)
+            commit = json_obj["commit"]
+            os_version = json_obj["os_version"]
+            parts = json_file_path.split("-")
+            assert len(parts) >= 8
+            io = parts[-1]
+            io = io.split(".")[0]
+            tls = parts[-2]
+            arch = parts[-3]
+            os_name_2 = parts[-4]
+            os_name_1 = parts[-5]
+            os_name = os_name_1 + "-" + os_name_2
+            context = parts[-6] # lab / azure
 
-        # Commit changes
-        conn.commit()
+            # Update Environments table
+            cursor.execute(f"""SELECT Environment_ID FROM Environment WHERE Architecture = '{arch}' AND OS_name = '{os_name}' AND OS_version = '{os_version}' AND Context = '{context}'""")
+            result = cursor.fetchall()
+            if len(result) == 0:
+                print('inserting new row with new environment')
+                cursor.execute(f"""INSERT INTO Environment (OS_name, OS_version, Architecture, Context) VALUES ('{os_name}', '{os_version}', '{arch}', '{context}')""")
+                conn.commit()
+                environment_id = cursor.lastrowid
+            else:
+                print('using existing environment')
+                environment_id = result[0][0]
+            # print(f"Environment ID: {environment_id}")
+
+            worker = Worker(cursor=cursor, production=True)
+
+            worker.execute(f"""
+
+INSERT OR IGNORE INTO Secnetperf_builds (Secnetperf_Commit, Build_date_time, TLS_enabled, Advanced_build_config)
+VALUES ("{commit}", "{datetime.datetime.now()}", 1, "TODO");
+
+            """)
+
+            if not os.path.exists("full_latencies"):
+                os.makedirs("full_latencies")
+
+            for testid in json_obj:
+                if testid == "commit" or testid == "os_version" or "-lat" in testid or testid == "run_args":
+                    continue
+
+                # truncate -tcp or -quic from testid
+                Testid = testid.split("-")
+                transport = Testid.pop()
+                Testid = "-".join(Testid)
+                extra_arg = " -tcp:1" if transport == "tcp" else " -tcp:0"
+                run_args = json_obj["run_args"][Testid]
+                worker.execute(f"""
+INSERT OR IGNORE INTO Secnetperf_tests (Secnetperf_test_ID, Kernel_mode, Run_arguments) VALUES ("{testid}", 1, "{run_args + extra_arg}");
+                """)
+
+                if "rps" in testid:
+                    # is a flattened 1D array of the form: [ first run + RPS, second run + RPS, third run + RPS..... ], ie. if each run has 8 values + RPS, then the array has 27 elements (8*3 + 3)
+                    for offset in range(0, len(json_obj[testid]), 9):
+                        # print(offset)
+                        worker.execute(f"""
+INSERT INTO Secnetperf_latency_stats (p0, p50, p90, p99, p999, p9999, p99999, p999999)
+VALUES ({json_obj[testid][offset]}, {json_obj[testid][offset+1]}, {json_obj[testid][offset+2]}, {json_obj[testid][offset+3]}, {json_obj[testid][offset+4]}, {json_obj[testid][offset+5]}, {json_obj[testid][offset+6]}, {json_obj[testid][offset+7]});
+""")
+                        last_row_inserted_id = worker.cursor.lastrowid
+                        worker.execute(f"""
+INSERT INTO Secnetperf_test_runs (Secnetperf_test_ID, Secnetperf_commit, Client_environment_ID, Server_environment_ID, Result, Secnetperf_latency_stats_ID, io, tls, Run_date)
+VALUES ("{testid}", "{commit}", {environment_id}, {environment_id}, {json_obj[testid][offset+8]}, {last_row_inserted_id}, "{io}", "{tls}", "{datetime.datetime.now()}");
+""")
+                        with open(f"full_latencies/full_curve_{last_row_inserted_id}.json", 'w') as f:
+                            json.dump(json_obj[testid + "-lat"][offset // 9], f, indent=4)
+                else:
+                    for item in json_obj[testid]:
+                        worker.execute(f"""
+INSERT INTO Secnetperf_test_runs (Secnetperf_test_ID, Secnetperf_commit, Client_environment_ID, Server_environment_ID, Result, Secnetperf_latency_stats_ID, io, tls, Run_date)
+VALUES ("{testid}", "{commit}", "{environment_id}", "{environment_id}", {item}, NULL, "{io}", "{tls}", "{datetime.datetime.now()}");
+""")
+
+            # Commit changes
+            conn.commit()
+
+            # dump SQL file for debugging
+            # worker.print_executed_statements()
+
+
+
+else:
+    print("Using the statically downloaded SQL script...")
+    # Iterate over all .sql files in the current directory
+    for sql_file_path in glob.glob('*.sql'):
+        with open(f"{sql_file_path}/{sql_file_path}", 'r') as sql_file:
+            print("Processing file: {}".format(sql_file_path))
+
+            sql_script = sql_file.read()
+
+            if args.featureint == 1:
+                sql_script = pre_process_sql_file(sql_file_path, sql_script)
+
+            # Execute SQL script
+            cursor.executescript(sql_script)
+
+            # Commit changes
+            conn.commit()
 
 # Close connection
 conn.close()
