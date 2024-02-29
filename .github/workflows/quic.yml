@@ -252,7 +252,7 @@ jobs:
       with:
         pattern: json-test-results-*
     - run: ls
-    - run: python sql.py --featureint 1
+    - run: python sql.py --featureint 2
     - name: Git commit # TODO: Squash history for this branch to keep size small
       run: 'git config user.name "QUIC Dev[bot]" && git config user.email "quicdev@microsoft.com" && git add netperf.sqlite && git commit -m "Update SQLite" && git push'
 
