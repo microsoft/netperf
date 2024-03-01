@@ -155,7 +155,9 @@ VALUES ("{commit}", "{datetime.datetime.now()}", 1, "TODO");
                 transport = Testid.pop()
                 Testid = "-".join(Testid)
                 extra_arg = " -tcp:1" if transport == "tcp" else " -tcp:0"
+                extra_semantics = "-tcp-1" if transport == "tcp" else "-tcp-0"
                 run_args = json_obj["run_args"][Testid]
+                testid = Testid + extra_semantics
                 worker.execute(f"""
 INSERT OR IGNORE INTO Secnetperf_tests (Secnetperf_test_ID, Kernel_mode, Run_arguments) VALUES ("{testid}", 1, "{run_args + extra_arg}");
                 """)
