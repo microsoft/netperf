@@ -7,6 +7,7 @@ import json
 # URL of the remote SQLite file
 url = 'https://raw.githubusercontent.com/microsoft/netperf/sqlite/netperf.sqlite'
 
+HISTORY_LENGTH = 20
 
 # Check if file already exists
 
@@ -22,143 +23,116 @@ else:
 # Now, open the local copy with sqlite3
 conn = sqlite3.connect('netperf.sqlite')
 cursor = conn.cursor()
-cursor.execute("""
-    SELECT MAX(Result), Build_date_time, Secnetperf_test_runs.Secnetperf_commit FROM Secnetperf_test_runs
-        JOIN Secnetperf_builds ON Secnetperf_builds.Secnetperf_commit = Secnetperf_test_runs.Secnetperf_commit
-            WHERE Client_environment_ID = 2 AND Server_environment_ID = 2 AND Secnetperf_test_ID = "tput-down-tcp-0"
-                GROUP BY Secnetperf_test_runs.Secnetperf_commit
-                    ORDER BY Build_date_time DESC
-                        LIMIT 20""")
 
-linuxQuicDownloadThroughput = cursor.fetchall()
+# throughput_json = {
+#     "linuxQuicDownloadThroughput": linuxQuicDownloadThroughput,
+#     "linuxQuicUploadThroughput": linuxQuicUploadThroughput,
+#     "linuxTcpDownloadThroughput": linuxTcpDownloadThroughput,
+#     "linuxTcpUploadThroughput": linuxTcpUploadThroughput,
+#     "windowsQuicDownloadThroughput": windowsQuicDownloadThroughput,
+#     "windowsQuicUploadThroughput": windowsQuicUploadThroughput,
+#     "windowsTcpDownloadThroughput": windowsTcpDownloadThroughput,
+#     "windowsTcpUploadThroughput": windowsTcpUploadThroughput
+# }
 
-cursor.execute("""
-    SELECT MAX(Result), Build_date_time, Secnetperf_test_runs.Secnetperf_commit FROM Secnetperf_test_runs
-        JOIN Secnetperf_builds ON Secnetperf_builds.Secnetperf_commit = Secnetperf_test_runs.Secnetperf_commit
-            WHERE Client_environment_ID = 2 AND Server_environment_ID = 2 AND Secnetperf_test_ID = "tput-up-tcp-0"
-                GROUP BY Secnetperf_test_runs.Secnetperf_commit
-                    ORDER BY Build_date_time DESC
-                        LIMIT 20""")
-
-linuxQuicUploadThroughput = cursor.fetchall()
-
-cursor.execute("""
-    SELECT MAX(Result), Build_date_time, Secnetperf_test_runs.Secnetperf_commit FROM Secnetperf_test_runs
-        JOIN Secnetperf_builds ON Secnetperf_builds.Secnetperf_commit = Secnetperf_test_runs.Secnetperf_commit
-            WHERE Client_environment_ID = 2 AND Server_environment_ID = 2 AND Secnetperf_test_ID = "tput-down-tcp-1"
-                GROUP BY Secnetperf_test_runs.Secnetperf_commit
-                    ORDER BY Build_date_time DESC
-                        LIMIT 20""")
-
-linuxTcpDownloadThroughput = cursor.fetchall()
-
-cursor.execute("""
-    SELECT MAX(Result), Build_date_time, Secnetperf_test_runs.Secnetperf_commit FROM Secnetperf_test_runs
-        JOIN Secnetperf_builds ON Secnetperf_builds.Secnetperf_commit = Secnetperf_test_runs.Secnetperf_commit
-            WHERE Client_environment_ID = 2 AND Server_environment_ID = 2 AND Secnetperf_test_ID = "tput-up-tcp-1"
-                GROUP BY Secnetperf_test_runs.Secnetperf_commit
-                    ORDER BY Build_date_time DESC
-                        LIMIT 20""")
-
-linuxTcpUploadThroughput = cursor.fetchall()
-
-cursor.execute("""
-    SELECT MAX(Result), Build_date_time, Secnetperf_test_runs.Secnetperf_commit FROM Secnetperf_test_runs
-        JOIN Secnetperf_builds ON Secnetperf_builds.Secnetperf_commit = Secnetperf_test_runs.Secnetperf_commit
-            WHERE Client_environment_ID = 1 AND Server_environment_ID = 1 AND Secnetperf_test_ID = "tput-down-tcp-0"
-                GROUP BY Secnetperf_test_runs.Secnetperf_commit
-                    ORDER BY Build_date_time DESC
-                        LIMIT 20""")
-
-windowsQuicDownloadThroughput = cursor.fetchall()
-
-cursor.execute("""
-    SELECT MAX(Result), Build_date_time, Secnetperf_test_runs.Secnetperf_commit FROM Secnetperf_test_runs
-        JOIN Secnetperf_builds ON Secnetperf_builds.Secnetperf_commit = Secnetperf_test_runs.Secnetperf_commit
-            WHERE Client_environment_ID = 1 AND Server_environment_ID = 1 AND Secnetperf_test_ID = "tput-up-tcp-0"
-                GROUP BY Secnetperf_test_runs.Secnetperf_commit
-                    ORDER BY Build_date_time DESC
-                        LIMIT 20""")
-
-windowsQuicUploadThroughput = cursor.fetchall()
-
-cursor.execute("""
-    SELECT MAX(Result), Build_date_time, Secnetperf_test_runs.Secnetperf_commit FROM Secnetperf_test_runs
-        JOIN Secnetperf_builds ON Secnetperf_builds.Secnetperf_commit = Secnetperf_test_runs.Secnetperf_commit
-            WHERE Client_environment_ID = 1 AND Server_environment_ID = 1 AND Secnetperf_test_ID = "tput-down-tcp-1"
-                GROUP BY Secnetperf_test_runs.Secnetperf_commit
-                    ORDER BY Build_date_time DESC
-                        LIMIT 20""")
-
-windowsTcpDownloadThroughput = cursor.fetchall()
-
-cursor.execute("""
-    SELECT MAX(Result), Build_date_time, Secnetperf_test_runs.Secnetperf_commit FROM Secnetperf_test_runs
-        JOIN Secnetperf_builds ON Secnetperf_builds.Secnetperf_commit = Secnetperf_test_runs.Secnetperf_commit
-            WHERE Client_environment_ID = 1 AND Server_environment_ID = 1 AND Secnetperf_test_ID = "tput-up-tcp-1"
-                GROUP BY Secnetperf_test_runs.Secnetperf_commit
-                    ORDER BY Build_date_time DESC
-                        LIMIT 20""")
-
-windowsTcpUploadThroughput = cursor.fetchall()
-
-throughput_json = {
-    "linuxQuicDownloadThroughput": linuxQuicDownloadThroughput,
-    "linuxQuicUploadThroughput": linuxQuicUploadThroughput,
-    "linuxTcpDownloadThroughput": linuxTcpDownloadThroughput,
-    "linuxTcpUploadThroughput": linuxTcpUploadThroughput,
-    "windowsQuicDownloadThroughput": windowsQuicDownloadThroughput,
-    "windowsQuicUploadThroughput": windowsQuicUploadThroughput,
-    "windowsTcpDownloadThroughput": windowsTcpDownloadThroughput,
-    "windowsTcpUploadThroughput": windowsTcpUploadThroughput
+"""
+throughput_rps_hps_pages_json = {
+    <os>-<arch>-<context>-<io>-<tls> : {
+        <testid>: {
+            run_args: "...",
+            # last N commits, sorted in desc order, choose best out of all runs
+            data: [ ... { result: X, os_version: Y, commit: Z, build_date_time: ... } ... ]
+        }
+    }
+    ...
 }
-latency_rps_json = {
-    "linuxQuic" : { "env" : 2, "testid" : "rps-up-512-down-4000-tcp-0", "data": [] },
-    "linuxTcp": { "env" : 2, "testid" : "rps-up-512-down-4000-tcp-1", "data": [] },
-    "windowsQuic": { "env" : 1, "testid" : "rps-up-512-down-4000-tcp-0", "data": [] },
-    "windowsTcp": { "env" : 1, "testid" : "rps-up-512-down-4000-tcp-1", "data": [] }
-}
+"""
 
-for key in latency_rps_json:
-    cursor.execute(f"""
-        SELECT MAX(Result), Build_date_time, Secnetperf_test_runs.Secnetperf_commit, P0, P50, P90, P99, P999, P9999, P99999, P999999 FROM Secnetperf_test_runs
-            JOIN Secnetperf_builds ON Secnetperf_builds.Secnetperf_commit = Secnetperf_test_runs.Secnetperf_commit
-                JOIN Secnetperf_latency_stats ON Secnetperf_latency_stats.Secnetperf_latency_stats_ID = Secnetperf_test_runs.Secnetperf_latency_stats_ID
-                    WHERE Client_environment_ID = {latency_rps_json[key]["env"]} AND Server_environment_ID = {latency_rps_json[key]["env"]} AND Secnetperf_test_ID = "{latency_rps_json[key]["testid"]}"
-                        GROUP BY Secnetperf_test_runs.Secnetperf_commit
-                            ORDER BY Build_date_time DESC
-                                LIMIT 20""")
+cursor.execute("SELECT OS_name, Architecture, Context FROM Environment GROUP BY OS_name, Architecture, Context")
+environment_groups = cursor.fetchall()
+cursor.execute("SELECT * FROM Secnetperf_tests")
+all_secnetperf_tests = cursor.fetchall()
 
-    latency_rps_json[key]["data"] = cursor.fetchall()
+detailed_throughput_rps_hps_pages_json = {}
+for test_id, _, run_args in all_secnetperf_tests:
+    if not "tput" in test_id:
+        continue 
+    # HANDLES ALL THROUGHPUT RELATED TESTS. 
+    for os_name, arch, context in environment_groups:
+        for io in ["iocp", "epoll", "wsk", "xdp"]:
+            for tls in ["schannel", "openssl"]:
+                # NOTE: this query assumes implicitly that client environment ID = server environment ID. 
+                # NOTE: If they are different, then we need to re-think our data struct. Perhaps append < client os-arch... > + < server os-arch > in the JSON?
+                cursor.execute(f"""
+                    SELECT MAX(Result), Secnetperf_test_runs.Secnetperf_commit, OS_version, Build_date_time FROM Secnetperf_test_runs
+                        JOIN Secnetperf_builds ON Secnetperf_builds.Secnetperf_commit = Secnetperf_test_runs.Secnetperf_commit
+                            JOIN Environment ON Environment.Environment_ID = Secnetperf_test_runs.Client_environment_ID
+                                WHERE OS_name = "{os_name}" AND Architecture = "{arch}" AND Context = "{context}" AND io = "{io}" AND tls = "{tls}" AND Secnetperf_test_ID = "{test_id}"
+                                    GROUP BY Secnetperf_test_runs.Secnetperf_commit
+                                        ORDER BY Build_date_time, Run_date DESC
+                                            LIMIT {HISTORY_LENGTH}
+                """)
+                data = cursor.fetchall()
+                if not data:
+                    continue
+                env_id_str = f"{os_name}-{arch}-{context}-{io}-{tls}"
+                if not env_id_str in detailed_throughput_rps_hps_pages_json:
+                    detailed_throughput_rps_hps_pages_json[env_id_str] = {
+                        f"{test_id}" : {
+                            "run_args" : run_args, 
+                            "data": data
+                        }
+                    }
+                else:
+                    detailed_throughput_rps_hps_pages_json[env_id_str][f"{test_id}"] = {
+                        "run_args" : run_args, 
+                        "data": data
+                    }
 
 
-hps_json = {
-    "linuxQuic" : { "env" : 2, "testid" : "hps-conns-100-tcp-0", "data": [] },
-    "linuxTcp": { "env" : 2, "testid" : "hps-conns-100-tcp-1", "data": [] },
-    "windowsQuic": { "env" : 1, "testid" : "hps-conns-100-tcp-0", "data": [] },
-    "windowsTcp": { "env" : 1, "testid" : "hps-conns-100-tcp-1", "data": [] }
-}
+# latency_rps_json = {
+#     "linuxQuic" : { "env" : 2, "testid" : "rps-up-512-down-4000-tcp-0", "data": [] },
+#     "linuxTcp": { "env" : 2, "testid" : "rps-up-512-down-4000-tcp-1", "data": [] },
+#     "windowsQuic": { "env" : 1, "testid" : "rps-up-512-down-4000-tcp-0", "data": [] },
+#     "windowsTcp": { "env" : 1, "testid" : "rps-up-512-down-4000-tcp-1", "data": [] }
+# }
 
-for key in hps_json:
-    cursor.execute(f"""
-        SELECT MAX(Result), Build_date_time, Secnetperf_test_runs.Secnetperf_commit FROM Secnetperf_test_runs
-            JOIN Secnetperf_builds ON Secnetperf_builds.Secnetperf_commit = Secnetperf_test_runs.Secnetperf_commit
-                WHERE Client_environment_ID = {hps_json[key]["env"]}  AND Server_environment_ID = {hps_json[key]["env"]} AND Secnetperf_test_ID = "{hps_json[key]["testid"]}"
-                    GROUP BY Secnetperf_test_runs.Secnetperf_commit
-                        ORDER BY Build_date_time DESC
-                            LIMIT 20""")
+# for key in latency_rps_json:
+#     cursor.execute(f"""
+#         SELECT MAX(Result), Build_date_time, Secnetperf_test_runs.Secnetperf_commit, P0, P50, P90, P99, P999, P9999, P99999, P999999 FROM Secnetperf_test_runs
+#             JOIN Secnetperf_builds ON Secnetperf_builds.Secnetperf_commit = Secnetperf_test_runs.Secnetperf_commit
+#                 JOIN Secnetperf_latency_stats ON Secnetperf_latency_stats.Secnetperf_latency_stats_ID = Secnetperf_test_runs.Secnetperf_latency_stats_ID
+#                     WHERE Client_environment_ID = {latency_rps_json[key]["env"]} AND Server_environment_ID = {latency_rps_json[key]["env"]} AND Secnetperf_test_ID = "{latency_rps_json[key]["testid"]}"
+#                         GROUP BY Secnetperf_test_runs.Secnetperf_commit
+#                             ORDER BY Build_date_time DESC
+#                                 LIMIT 20""")
 
-    hps_json[key]["data"] = cursor.fetchall()
+#     latency_rps_json[key]["data"] = cursor.fetchall()
+
+
+# hps_json = {
+#     "linuxQuic" : { "env" : 2, "testid" : "hps-conns-100-tcp-0", "data": [] },
+#     "linuxTcp": { "env" : 2, "testid" : "hps-conns-100-tcp-1", "data": [] },
+#     "windowsQuic": { "env" : 1, "testid" : "hps-conns-100-tcp-0", "data": [] },
+#     "windowsTcp": { "env" : 1, "testid" : "hps-conns-100-tcp-1", "data": [] }
+# }
+
+# for key in hps_json:
+#     cursor.execute(f"""
+#         SELECT MAX(Result), Build_date_time, Secnetperf_test_runs.Secnetperf_commit FROM Secnetperf_test_runs
+#             JOIN Secnetperf_builds ON Secnetperf_builds.Secnetperf_commit = Secnetperf_test_runs.Secnetperf_commit
+#                 WHERE Client_environment_ID = {hps_json[key]["env"]}  AND Server_environment_ID = {hps_json[key]["env"]} AND Secnetperf_test_ID = "{hps_json[key]["testid"]}"
+#                     GROUP BY Secnetperf_test_runs.Secnetperf_commit
+#                         ORDER BY Build_date_time DESC
+#                             LIMIT 20""")
+
+#     hps_json[key]["data"] = cursor.fetchall()
 
 # Save to disk
-with open('detailed_throughput_page.json', 'w') as file:
-    json.dump(throughput_json, file, indent=4)
+with open('detailed_throughput_rps_hps_pages.json', 'w') as file:
+    json.dump(detailed_throughput_rps_hps_pages_json, file, indent=4)
 
-with open('detailed_rps_and_latency_page.json', 'w') as file:
-    json.dump(latency_rps_json, file, indent=4)
-
-with open('detailed_hps_page.json', 'w') as file:
-    json.dump(hps_json, file, indent=4)
-
+with open('optimized_throughput_rps_hps_pages.json', 'w') as file:
+    json.dump(detailed_throughput_rps_hps_pages_json, file)
 
 conn.close()
