@@ -53,41 +53,69 @@ environment_groups = cursor.fetchall()
 cursor.execute("SELECT * FROM Secnetperf_tests")
 all_secnetperf_tests = cursor.fetchall()
 
-detailed_throughput_rps_hps_pages_json = {}
+detailed_throughput_page_json = {}
+detailed_rps_page_json = {}
+detailed_hps_page_json = {}
 for test_id, _, run_args in all_secnetperf_tests:
-    if not "tput" in test_id:
-        continue 
-    # HANDLES ALL THROUGHPUT RELATED TESTS. 
+    # HANDLES ALL THROUGHPUT, RPS, HPS RELATED TESTS. 
     for os_name, arch, context in environment_groups:
         for io in ["iocp", "epoll", "wsk", "xdp"]:
             for tls in ["schannel", "openssl"]:
                 # NOTE: this query assumes implicitly that client environment ID = server environment ID. 
                 # NOTE: If they are different, then we need to re-think our data struct. Perhaps append < client os-arch... > + < server os-arch > in the JSON?
                 cursor.execute(f"""
-                    SELECT MAX(Result), Secnetperf_test_runs.Secnetperf_commit, OS_version, Build_date_time FROM Secnetperf_test_runs
+                    SELECT MAX(Result), Secnetperf_test_runs.Secnetperf_commit, OS_version, Build_date_time, Run_date FROM Secnetperf_test_runs
                         JOIN Secnetperf_builds ON Secnetperf_builds.Secnetperf_commit = Secnetperf_test_runs.Secnetperf_commit
                             JOIN Environment ON Environment.Environment_ID = Secnetperf_test_runs.Client_environment_ID
                                 WHERE OS_name = "{os_name}" AND Architecture = "{arch}" AND Context = "{context}" AND io = "{io}" AND tls = "{tls}" AND Secnetperf_test_ID = "{test_id}"
                                     GROUP BY Secnetperf_test_runs.Secnetperf_commit
-                                        ORDER BY Build_date_time, Run_date DESC
+                                        ORDER BY Build_date_time DESC, Run_date DESC
                                             LIMIT {HISTORY_LENGTH}
                 """)
                 data = cursor.fetchall()
                 if not data:
                     continue
                 env_id_str = f"{os_name}-{arch}-{context}-{io}-{tls}"
-                if not env_id_str in detailed_throughput_rps_hps_pages_json:
-                    detailed_throughput_rps_hps_pages_json[env_id_str] = {
-                        f"{test_id}" : {
+
+                if "tput" in test_id:
+                    if not env_id_str in detailed_throughput_page_json:
+                        detailed_throughput_page_json[env_id_str] = {
+                            f"{test_id}" : {
+                                "run_args" : run_args, 
+                                "data": data
+                            }
+                        }
+                    else:
+                        detailed_throughput_page_json[env_id_str][f"{test_id}"] = {
                             "run_args" : run_args, 
                             "data": data
                         }
-                    }
-                else:
-                    detailed_throughput_rps_hps_pages_json[env_id_str][f"{test_id}"] = {
-                        "run_args" : run_args, 
-                        "data": data
-                    }
+                elif "rps" in test_id:
+                    if not env_id_str in detailed_rps_page_json:
+                        detailed_rps_page_json[env_id_str] = {
+                            f"{test_id}" : {
+                                "run_args" : run_args, 
+                                "data": data
+                            }
+                        }
+                    else:
+                        detailed_rps_page_json[env_id_str][f"{test_id}"] = {
+                            "run_args" : run_args, 
+                            "data": data
+                        }
+                elif "hps" in test_id:
+                    if not env_id_str in detailed_hps_page_json:
+                        detailed_hps_page_json[env_id_str] = {
+                            f"{test_id}" : {
+                                "run_args" : run_args, 
+                                "data": data
+                            }
+                        }
+                    else:
+                        detailed_hps_page_json[env_id_str][f"{test_id}"] = {
+                            "run_args" : run_args, 
+                            "data": data
+                        }
 
 
 # latency_rps_json = {
@@ -129,10 +157,16 @@ for test_id, _, run_args in all_secnetperf_tests:
 #     hps_json[key]["data"] = cursor.fetchall()
 
 # Save to disk
-with open('detailed_throughput_rps_hps_pages.json', 'w') as file:
-    json.dump(detailed_throughput_rps_hps_pages_json, file, indent=4)
+with open('detailed_throughput_page.json', 'w') as file:
+    json.dump(detailed_throughput_page_json, file, indent=4)
 
-with open('optimized_throughput_rps_hps_pages.json', 'w') as file:
-    json.dump(detailed_throughput_rps_hps_pages_json, file)
+with open('detailed_rps_page.json', 'w') as file:
+    json.dump(detailed_rps_page_json, file, indent=4)
+
+with open('detailed_hps_page.json', 'w') as file:
+    json.dump(detailed_hps_page_json, file, indent=4)
+
+# with open('optimized_throughput_rps_hps_pages.json', 'w') as file:
+#     json.dump(detailed_throughput_rps_hps_pages_json, file)
 
 conn.close()
