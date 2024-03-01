@@ -3,7 +3,7 @@
 Restrictions and assumptions:
 - Follow test ID semantics: for throughput tests, add "tput-...". For RPS and HPS, add "rps-..." or "hps-..."
 - New tests always maps to either throughput, rps, hps. The only differences are the specific run parameters (N connections, Y bytes...)
-- Do not specify tcp or quic in the test id. All the testsids have automation to append -tcp:0 or tcp:1 to the test id depending on the scenario.
+- Do not specify tcp or quic in the test id. All the testsids have automation to append -tcp-0 or tcp-1 to the test id depending on the scenario.
 
 
 1. (current: MANUAL) Add a new key-value pair in $allTests in the secnetperf.ps1 script
