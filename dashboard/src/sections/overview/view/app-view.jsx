@@ -41,19 +41,23 @@ export default function AppView() {
 
   const [env, setEnv] = useState('azure');
 
+  const [windowsOs, setWindowsOs] = useState('windows-2022-x64')
+
+  const [linuxOs, setLinuxOs] = useState('ubuntu-20.04-x64')
+
   const windows = useFetchData(
-    `https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-${env}-windows-windows-2022-x64-schannel-iocp.json/json-test-results-${env}-windows-windows-2022-x64-schannel-iocp.json`
+    `https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-${env}-${windowsOs}-schannel-iocp.json/json-test-results-${env}-${windowsOs}-schannel-iocp.json`
   );
   const linux = useFetchData(
-    `https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-${env}-linux-ubuntu-20.04-x64-openssl-epoll.json/json-test-results-${env}-linux-ubuntu-20.04-x64-openssl-epoll.json`
+    `https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-${env}-${linuxOs}-openssl-epoll.json/json-test-results-${env}-${linuxOs}-openssl-epoll.json`
   );
 
   const windowsXdp = useFetchData(
-    `https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-${env}-windows-windows-2022-x64-schannel-xdp.json/json-test-results-${env}-windows-windows-2022-x64-schannel-xdp.json`
+    `https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-${env}-${windowsOs}-schannel-xdp.json/json-test-results-${env}-${windowsOs}-schannel-xdp.json`
   );
 
   const windowsKernel = useFetchData(
-    `https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-${env}-windows-windows-2022-x64-schannel-wsk.json/json-test-results-${env}-windows-windows-2022-x64-schannel-wsk.json`
+    `https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-${env}-${windowsOs}-schannel-wsk.json/json-test-results-${env}-${windowsOs}-schannel-wsk.json`
   );
 
   let windowsPerfScore = 0;
@@ -107,8 +111,8 @@ export default function AppView() {
 
   let windowsKernelLatencyQuic = [-1, -1, -1, -1, -1, -1, -1, -1];
   let commitHash = "";
-  const windowsType = 'Windows Server 2022';
-  const linuxType = 'Linux Ubuntu 20.04 LTS';
+  let windowsType = 'Windows Server 2022';
+  let linuxType = 'Linux Ubuntu 20.04 LTS';
 
   function index(object, key, defaultValue) {
     return object[key] || defaultValue;
@@ -116,6 +120,8 @@ export default function AppView() {
 
   if (windows.data && linux.data && windowsXdp.data && windowsKernel.data) {
     commitHash = windows.data.commit;
+    windowsType = `${windowsOs} ${windows.data.os_version}`
+    linuxType = `${linuxOs} ${linux.data.os_version}`
     // Throughput
     windowsDownloadThroughputQuic = Math.max(...index(windows.data, "tput-down-quic", [-1]));
     windowsDownloadThroughputTcp = Math.max(...index(windows.data, "tput-down-tcp", [-1]));
@@ -181,6 +187,14 @@ export default function AppView() {
     setEnv(event.target.value);
   };
 
+  const handleChangeWindowsOs = (event) => {
+    setWindowsOs(event.target.value);
+  }
+
+  const handleChangeLinuxOs = (event) => {
+    setLinuxOs(event.target.value);
+  }
+
   return (
     <Container maxWidth="xl">
       <Typography variant="h3" sx={{ mb: 5 }}>
@@ -189,8 +203,9 @@ export default function AppView() {
       <Typography variant="h5" sx={{ mb: 5 }}>
         Data based on commit: <a href={`https://github.com/microsoft/msquic/commit/${commitHash}`}>{commitHash}</a>
       </Typography>
-      <Box sx={{ minWidth: 120 }}>
-        <FormControl fullWidth>
+      <div style={{display: 'flex'}}>
+      <Box sx={{ }}>
+        <FormControl>
           <InputLabel id="demo-simple-select-label">Context</InputLabel>
           <Select
             labelId="demo-simple-select-label"
@@ -201,11 +216,46 @@ export default function AppView() {
             defaultValue={0}
           >
             <MenuItem value='azure'>azure</MenuItem>
-            <MenuItem value='lab'>lab</MenuItem>
+            { windowsOs !== 'windows-2025-x64' && <MenuItem value='lab'>lab</MenuItem> }
           </Select>
         </FormControl>
       </Box>
+      {/* <br /> */}
+      <Box sx={{ minWidth: 120, marginLeft: '10px' }}>
+        <FormControl>
+          <InputLabel id="demo-simple-select-label">Windows Environment</InputLabel>
+          <Select
+            labelId="demo-simple-select-label"
+            id="demo-simple-select"
+            value={windowsOs}
+            label="Windows Environment"
+            onChange={handleChangeWindowsOs}
+            defaultValue={0}
+          >
+            <MenuItem value='windows-2022-x64'>windows-2022-x64</MenuItem>
+            { env === 'azure' && <MenuItem value='windows-2025-x64'>windows-2025-x64</MenuItem> }
+          </Select>
+        </FormControl>
+      </Box>
+      {/* <br /> */}
+      <Box sx={{ minWidth: 120, marginLeft: '10px' }}>
+        <FormControl>
+          <InputLabel id="demo-simple-select-label">Linux Environment</InputLabel>
+          <Select
+            labelId="demo-simple-select-label"
+            id="demo-simple-select"
+            value={linuxOs}
+            label="Linux Environment"
+            onChange={handleChangeLinuxOs}
+            defaultValue={0}
+          >
+            <MenuItem value='ubuntu-20.04-x64'>ubuntu-20.04-x64</MenuItem>
+          </Select>
+        </FormControl>
+      </Box>
+      </div>
       <br />
+
       <Grid container spacing={3}>
         <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
