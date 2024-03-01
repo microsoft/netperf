@@ -118,55 +118,52 @@ for test_id, _, run_args in all_secnetperf_tests:
                         }
 
 
-# latency_rps_json = {
-#     "linuxQuic" : { "env" : 2, "testid" : "rps-up-512-down-4000-tcp-0", "data": [] },
-#     "linuxTcp": { "env" : 2, "testid" : "rps-up-512-down-4000-tcp-1", "data": [] },
-#     "windowsQuic": { "env" : 1, "testid" : "rps-up-512-down-4000-tcp-0", "data": [] },
-#     "windowsTcp": { "env" : 1, "testid" : "rps-up-512-down-4000-tcp-1", "data": [] }
-# }
-
-# for key in latency_rps_json:
-#     cursor.execute(f"""
-#         SELECT MAX(Result), Build_date_time, Secnetperf_test_runs.Secnetperf_commit, P0, P50, P90, P99, P999, P9999, P99999, P999999 FROM Secnetperf_test_runs
-#             JOIN Secnetperf_builds ON Secnetperf_builds.Secnetperf_commit = Secnetperf_test_runs.Secnetperf_commit
-#                 JOIN Secnetperf_latency_stats ON Secnetperf_latency_stats.Secnetperf_latency_stats_ID = Secnetperf_test_runs.Secnetperf_latency_stats_ID
-#                     WHERE Client_environment_ID = {latency_rps_json[key]["env"]} AND Server_environment_ID = {latency_rps_json[key]["env"]} AND Secnetperf_test_ID = "{latency_rps_json[key]["testid"]}"
-#                         GROUP BY Secnetperf_test_runs.Secnetperf_commit
-#                             ORDER BY Build_date_time DESC
-#                                 LIMIT 20""")
-
-#     latency_rps_json[key]["data"] = cursor.fetchall()
-
-
-# hps_json = {
-#     "linuxQuic" : { "env" : 2, "testid" : "hps-conns-100-tcp-0", "data": [] },
-#     "linuxTcp": { "env" : 2, "testid" : "hps-conns-100-tcp-1", "data": [] },
-#     "windowsQuic": { "env" : 1, "testid" : "hps-conns-100-tcp-0", "data": [] },
-#     "windowsTcp": { "env" : 1, "testid" : "hps-conns-100-tcp-1", "data": [] }
-# }
-
-# for key in hps_json:
-#     cursor.execute(f"""
-#         SELECT MAX(Result), Build_date_time, Secnetperf_test_runs.Secnetperf_commit FROM Secnetperf_test_runs
-#             JOIN Secnetperf_builds ON Secnetperf_builds.Secnetperf_commit = Secnetperf_test_runs.Secnetperf_commit
-#                 WHERE Client_environment_ID = {hps_json[key]["env"]}  AND Server_environment_ID = {hps_json[key]["env"]} AND Secnetperf_test_ID = "{hps_json[key]["testid"]}"
-#                     GROUP BY Secnetperf_test_runs.Secnetperf_commit
-#                         ORDER BY Build_date_time DESC
-#                             LIMIT 20""")
-
-#     hps_json[key]["data"] = cursor.fetchall()
+detailed_latency_page = {}
+for test_id, _, run_args in all_secnetperf_tests:
+    # HANDLES ONLY TESTS RELATED TO LATENCY
+    if "rps" not in test_id: 
+        continue 
+    for os_name, arch, context in environment_groups:
+        for io in ["iocp", "epoll", "wsk", "xdp"]:
+            for tls in ["schannel", "openssl"]:
+                cursor.execute(f"""
+                    SELECT Secnetperf_test_runs.Secnetperf_commit, Secnetperf_test_runs.Secnetperf_latency_stats_ID, OS_version, Build_date_time, Run_date, MIN(P0), P50, P90, P99, P999, P9999, P99999, P999999 FROM Secnetperf_test_runs
+                        JOIN Secnetperf_builds ON Secnetperf_builds.Secnetperf_commit = Secnetperf_test_runs.Secnetperf_commit
+                            JOIN Environment ON Environment.Environment_ID = Secnetperf_test_runs.Client_environment_ID
+                                JOIN Secnetperf_latency_stats ON Secnetperf_latency_stats.Secnetperf_latency_stats_ID = Secnetperf_test_runs.Secnetperf_latency_stats_ID
+                                    WHERE OS_name = "{os_name}" AND Architecture = "{arch}" AND Context = "{context}" AND io = "{io}" AND tls = "{tls}" AND Secnetperf_test_ID = "{test_id}"
+                                        GROUP BY Secnetperf_test_runs.Secnetperf_commit
+                                            ORDER BY Build_date_time DESC, Run_date DESC
+                                                LIMIT {HISTORY_LENGTH}
+                """)
+                data = cursor.fetchall()
+                if not data:
+                    continue
+                env_id_str = f"{os_name}-{arch}-{context}-{io}-{tls}"
+                if not env_id_str in detailed_latency_page:
+                    detailed_latency_page[env_id_str] = {
+                        f"{test_id}" : {
+                            "run_args" : run_args, 
+                            "data": data
+                        }
+                    }
+                else:
+                    detailed_latency_page[env_id_str][f"{test_id}"] = {
+                        "run_args" : run_args, 
+                        "data": data
+                    }
 
 # Save to disk
-with open('detailed_throughput_page.json', 'w') as file:
-    json.dump(detailed_throughput_page_json, file, indent=4)
+with open('historical_throughput_page.json', 'w') as file:
+    json.dump(detailed_throughput_page_json, file)
 
-with open('detailed_rps_page.json', 'w') as file:
-    json.dump(detailed_rps_page_json, file, indent=4)
+with open('historical_rps_page.json', 'w') as file:
+    json.dump(detailed_rps_page_json, file)
 
-with open('detailed_hps_page.json', 'w') as file:
-    json.dump(detailed_hps_page_json, file, indent=4)
+with open('historical_hps_page.json', 'w') as file:
+    json.dump(detailed_hps_page_json, file)
 
-# with open('optimized_throughput_rps_hps_pages.json', 'w') as file:
-#     json.dump(detailed_throughput_rps_hps_pages_json, file)
+with open('historical_latency_page.json', 'w') as file:
+    json.dump(detailed_latency_page, file)
 
 conn.close()
