@@ -334,7 +334,7 @@
             "baseline": 6078865.544501891
         },
         "windows-2025-x64-azure-xdp-schannel": {
-            "baseline": 846392.3055237094
+            "baseline": -846392.3055237094
         },
         "ubuntu-x64-azure-epoll-openssl": {
             "baseline": -3127231.415650621
@@ -358,13 +358,13 @@
             "baseline": -3376157.446227466
         },
         "windows-2022-x64-azure-iocp-schannel": {
-            "baseline": 5558387.467568446
+            "baseline": -5558387.467568446
         },
         "windows-2022-x64-lab-iocp-schannel": {
-            "baseline": 8013979.320982287
+            "baseline": -8013979.320982287
         },
         "windows-2025-x64-azure-iocp-schannel": {
-            "baseline": 807456.6363396377
+            "baseline": -807456.6363396377
         }
     }
 }
