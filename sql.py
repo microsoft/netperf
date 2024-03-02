@@ -138,7 +138,7 @@ if args.featureint == 2:
 
             worker.execute(f"""
 
-INSERT OR IGNORE INTO Secnetperf_builds (Secnetperf_Commit, Build_date_time, TLS_enabled, Advanced_build_config)
+INSERT OR REPLACE INTO Secnetperf_builds (Secnetperf_Commit, Build_date_time, TLS_enabled, Advanced_build_config)
 VALUES ("{commit}", "{datetime.datetime.now()}", 1, "TODO");
 
             """)
@@ -155,16 +155,20 @@ VALUES ("{commit}", "{datetime.datetime.now()}", 1, "TODO");
                 transport = Testid.pop()
                 Testid = "-".join(Testid)
                 extra_arg = " -tcp:1" if transport == "tcp" else " -tcp:0"
-                extra_semantics = "-tcp-1" if transport == "tcp" else "-tcp-0"
                 run_args = json_obj["run_args"][Testid]
-                testid = Testid + extra_semantics
                 worker.execute(f"""
 INSERT OR IGNORE INTO Secnetperf_tests (Secnetperf_test_ID, Kernel_mode, Run_arguments) VALUES ("{testid}", 1, "{run_args + extra_arg}");
                 """)
 
                 if "rps" in testid:
+                    
+                    full_latency_curve_ids_to_save = {}
+                    minimum_p0 = float('inf')
+                    
                     # is a flattened 1D array of the form: [ first run + RPS, second run + RPS, third run + RPS..... ], ie. if each run has 8 values + RPS, then the array has 27 elements (8*3 + 3)
                     for offset in range(0, len(json_obj[testid]), 9):
+                        p0 = float(json_obj[testid][offset])
+                        minimum_p0 = min(minimum_p0, p0)
                         # print(offset)
                         worker.execute(f"""
 INSERT INTO Secnetperf_latency_stats (p0, p50, p90, p99, p999, p9999, p99999, p999999)
@@ -175,8 +179,15 @@ VALUES ({json_obj[testid][offset]}, {json_obj[testid][offset+1]}, {json_obj[test
 INSERT INTO Secnetperf_test_runs (Secnetperf_test_ID, Secnetperf_commit, Client_environment_ID, Server_environment_ID, Result, Secnetperf_latency_stats_ID, io, tls, Run_date)
 VALUES ("{testid}", "{commit}", {environment_id}, {environment_id}, {json_obj[testid][offset+8]}, {last_row_inserted_id}, "{io}", "{tls}", "{datetime.datetime.now()}");
 """)
-                        with open(f"full_latencies/full_curve_{last_row_inserted_id}.json", 'w') as f:
-                            json.dump(json_obj[testid + "-lat"][offset // 9], f, indent=4)
+
+                        full_latency_curve_ids_to_save[last_row_inserted_id] = (p0, json_obj[testid + "-lat"][offset // 9])
+
+                    for stats_id in full_latency_curve_ids_to_save:
+                        p0_val, lat_curve = full_latency_curve_ids_to_save[stats_id]
+                        if p0_val == minimum_p0:
+                            print(f"Saving full latency curve for {testid} with p0 = {p0_val}")
+                            with open(f"full_latencies/full_curve_{stats_id}.json", 'w') as f:
+                                json.dump(lat_curve, f)
                 else:
                     for item in json_obj[testid]:
                         worker.execute(f"""
