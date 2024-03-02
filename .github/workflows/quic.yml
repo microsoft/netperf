@@ -250,9 +250,6 @@ jobs:
         ref: sqlite
     - uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
       with:
-        pattern: test-results-*
-    - uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
-      with:
         pattern: json-test-results-*
     - run: python sql.py --featureint 2
     - run: ls
