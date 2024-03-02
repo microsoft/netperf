@@ -44,16 +44,16 @@ def compute_baseline(test_run_results, test):
     mean = statistics.mean(results)
     if len(results) < 2:
         return {
-                "baseline": mean * 0.8,
+                "baseline": mean * 0.5,
         }
     else:
         std = statistics.stdev(results)
-    lowerbound = mean - 2 * std
+    lowerbound = mean - 3 * std
     baseline["baseline"] = lowerbound
     return baseline
 
 
-N = 2 # Number of most recent runs to consider for each environment group.
+N = 20 # Number of most recent commit results to consider for each environment group.
 
 cursor.execute("SELECT Secnetperf_test_ID, Kernel_mode, Run_arguments FROM Secnetperf_tests")
 
@@ -75,11 +75,13 @@ for testid, _, _ in all_tests:
                 # If in the future we decide to test scenarios where we have Linux --> Windows... etc, this query will need to change. As well as a lot of our automation YAML as well.
                 cursor.execute(
                         f"""
-                                SELECT Result, Secnetperf_latency_stats_ID FROM Secnetperf_test_runs
-                                        JOIN Environment ON Secnetperf_test_runs.Client_Environment_ID = Environment.Environment_ID
-                                                WHERE Secnetperf_test_runs.Secnetperf_test_ID = '{testid}' AND Secnetperf_test_runs.io = '{io}' AND Secnetperf_test_runs.tls = '{tls}' AND Environment.OS_name = '{os_name}' AND Environment.Architecture = '{arch}' AND Environment.Context = '{context}'
-                                                        ORDER BY Secnetperf_test_runs.Run_date DESC
-                                                                LIMIT {N}
+                                SELECT AVG(Result), Secnetperf_latency_stats_ID FROM Secnetperf_test_runs
+                                    JOIN Environment ON Secnetperf_test_runs.Client_Environment_ID = Environment.Environment_ID
+                                        JOIN Secnetperf_builds ON Secnetperf_test_runs.Secnetperf_commit = Secnetperf_builds.Secnetperf_commit
+                                            WHERE Secnetperf_test_runs.Secnetperf_test_ID = '{testid}' AND Secnetperf_test_runs.io = '{io}' AND Secnetperf_test_runs.tls = '{tls}' AND Environment.OS_name = '{os_name}' AND Environment.Architecture = '{arch}' AND Environment.Context = '{context}'
+                                                GROUP BY Secnetperf_test_runs.Secnetperf_commit
+                                                    ORDER BY Build_date_time DESC, Secnetperf_test_runs.Run_date DESC
+                                                        LIMIT {N}
                         """
                 )
                 data = cursor.fetchall()
