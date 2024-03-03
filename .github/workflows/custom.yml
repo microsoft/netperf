@@ -23,7 +23,7 @@ jobs:
       uses: azure/powershell@v1
       with:
         azPSVersion: "latest"
-        inlineScript: Update-Module AzureRM -Force
+        inlineScript: Update-Module Az -Force
     - name: Create Azure VMs
       uses: azure/powershell@v1
       with:
