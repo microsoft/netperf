@@ -15,7 +15,10 @@ param (
     [switch]$NoReboot = $false,
 
     [Parameter(Mandatory = $false)]
-    [string]$NewIpAddress
+    [string]$NewIpAddress,
+
+    [Parameter(Mandatory = $false)]
+    [string]$RunnerLabels = ""
 )
 
 Set-StrictMode -Version 'Latest'
@@ -25,7 +28,7 @@ $RebootRequired = $false
 
 # Install the latest version of PowerShell.
 Write-Host "Installing latest PowerShell."
-iex "& { $(irm https://aka.ms/install-powershell.ps1) } -UseMSI" # TODO - Get silent install working
+iex "& { $(irm https://aka.ms/install-powershell.ps1) } -UseMSI -Quiet"
 
 # Check to see if test signing is enabled.
 $HasTestSigning = $false
@@ -78,7 +81,7 @@ if ($GitHubToken) {
     $RunnerName = "actions-runner-win-x64-$RunnerVersion.zip"
     Invoke-WebRequest -Uri "https://github.com/actions/runner/releases/download/v$RunnerVersion/$RunnerName" -OutFile $RunnerName
     Add-Type -AssemblyName System.IO.Compression.FileSystem ; [System.IO.Compression.ZipFile]::ExtractToDirectory("$PWD/$RunnerName", "$PWD")
-    ./config.cmd --url https://github.com/microsoft/netperf --token $GitHubToken --runasservice --windowslogonaccount $Username --windowslogonpassword $Password --unattended
+    ./config.cmd --url https://github.com/microsoft/netperf --token $GitHubToken --runasservice --windowslogonaccount $Username --windowslogonpassword $Password --unattended --labels $RunnerLabels
 }
 
 if ($NewIpAddress) {

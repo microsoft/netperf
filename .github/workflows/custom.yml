@@ -6,53 +6,39 @@ on:
 permissions: read-all
 
 jobs:
-  enable-logs: # This would be 1 enumeration, after CTS has setup the environment with the correct OS type and version.
-    name: Enable Logs
+  create-runner:
+    name: Create Runner
+    runs-on: windows-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Login to Azure
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        enable-AzPSSession: true
+    - name: Create Azure VMs
+      uses: azure/powershell@v1
+      with:
+        azPSVersion: "latest"
+        inlineScript: ./github/workflows/create-azure-machines.ps1 -Os windows-2022 -VMSize Standard_F8s_v2
+  test-runner:
+    name: Test Runner
     runs-on:
     - self-hosted
-    - "x64"
-    - "secnetperf"
-    - "windows"
+    - os-windows-2022
+    - azure-ex
     steps:
-    - name: Capture Logs
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Test Runner
       shell: pwsh
       run: |
         Write-Host 'Connecting to netperf-peer'
         $Session = New-PSSession -ComputerName "netperf-peer" -ConfigurationName PowerShell.7
-        Write-Host 'Killing any previous secnetperf'
+        ipconfig /all
         Invoke-Command -Session $Session -ScriptBlock {
-            Get-Process | Where-Object { $_.Name -eq "secnetperf" } | Stop-Process
+          ipconfig /all
         }
-        Write-Host 'Starting logs'
-        Invoke-Command -Session $Session -ScriptBlock {
-            C:\_work\quic\scripts\log.ps1 -Start -Profile Full.Verbose -ProfileInScriptDirectory
-        }
-        Write-Host 'Starting secnetperf'
-        $Job = Invoke-Command -Session $Session -ScriptBlock {
-            C:\_work\quic\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe
-        } -AsJob
-        Start-Sleep 1
-        Stop-Job -Job $Job
-        $RemoteResult = Receive-Job -Job $Job
-        Write-Host ($RemoteResult -join "`n")
-        Write-Host 'Killing secnetperf (if running) and stopping logs'
-        Invoke-Command -Session $Session -ScriptBlock {
-            Get-Process | Where-Object { $_.Name -eq "secnetperf" } | Stop-Process
-            C:\_work\quic\scripts\log.ps1 -Stop -OutputPath C:\_work\quic\logs\quic -RawLogOnly
-            dir C:\_work\quic\logs
-        }
-        Write-Host 'Setting up log folder'
-        Remove-Item .\artifacts\logs -Force -Recurse -ErrorAction Continue | Out-Null
-        mkdir .\artifacts\logs | Out-Null
-        Write-Host 'Copying out log files'
-        Copy-Item -FromSession $Session C:\_work\quic\logs\* .\artifacts\logs
-        Write-Host 'Deleting log files from remote'
-        Invoke-Command -Session $Session -ScriptBlock {
-            del C:\_work\quic\logs\*
-        }
-    - name: Upload Logs
-      if: ${{ always() }}
-      uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
-      with:
-        name: logs
-        path: artifacts/logs

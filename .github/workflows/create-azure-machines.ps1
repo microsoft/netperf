@@ -126,7 +126,40 @@ function Add-NetPerfVm {
     }
 }
 
-Add-NetPerfVm "ex-$osType-01" # TODO - Dynamically generate numbers
-Add-NetPerfVm "ex-$osType-02"
+function Get-NetPerfVmPrivateIp {
+    param ($vmName)
 
-# TODO - Use 'Invoke-AzVMRunCommand' to run the setup-runner scripts on the VMs
+    $vm = Get-AzVM -ResourceGroupName $ResourceGroupName -Name $vmName
+    return $vm.NetworkProfile.NetworkInterfaces[0].IpConfigurations[0].PrivateIpAddress
+}
+
+$vmName1 = "ex-$osType-01" # TODO - Dynamically generate numbers
+$vmName2 = "ex-$osType-02"
+
+Add-NetPerfVm $vmName1
+Add-NetPerfVm $vmName2
+
+if ($GitHubToken) {
+    Write-Host "Configuring GitHub for runner"
+
+    $ip1 = Get-NetPerfVmPrivateIp $vmName1
+    $ip2 = Get-NetPerfVmPrivateIp $vmName2
+
+    if ($osType -eq "windows") {
+        $scriptParams = @{
+            "Username" = $username
+            "Password" = $password
+            "PeerIP" = $ip1
+        }
+        Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunPowerShellScript" -ScriptPath ".\setup-runner-windows.ps1" -Parameter $scriptParams | Out-Null
+
+        $scriptParams = @{
+            "Username" = $username
+            "Password" = $password
+            "PeerIP" = $ip2
+            "GitHubToken" = $GitHubToken
+            "RunnerLabels" = "os-$osType,azure-ex"
+        }
+        Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName1 -CommandId "RunPowerShellScript" -ScriptPath ".\setup-runner-windows.ps1" -Parameter $scriptParams | Out-Null
+    }
+}
