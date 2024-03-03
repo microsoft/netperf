@@ -12,9 +12,6 @@ param (
     [string]$GitHubToken,
 
     [Parameter(Mandatory = $false)]
-    [switch]$NoReboot = $false,
-
-    [Parameter(Mandatory = $false)]
     [string]$NewIpAddress,
 
     [Parameter(Mandatory = $false)]
@@ -24,28 +21,13 @@ param (
 Set-StrictMode -Version 'Latest'
 $PSDefaultParameterValues['*:ErrorAction'] = 'Stop'
 
-$RebootRequired = $false
-
 # Install the latest version of PowerShell.
 Write-Host "Installing latest PowerShell."
-iex "& { $(irm https://aka.ms/install-powershell.ps1) } -UseMSI -Quiet"
-
-# Check to see if test signing is enabled.
-$HasTestSigning = $false
-try { $HasTestSigning = ("$(bcdedit)" | Select-String -Pattern "testsigning\s+Yes").Matches.Success } catch { }
-
-# Enable test signing as necessary.
-if (!$HasTestSigning) {
-    # Enable test signing.
-    Write-Host "Enabling Test Signing."
-    bcdedit /set testsigning on | Write-Verbose
-    $RebootRequired = $true
-}
+iex "& { $(irm https://aka.ms/install-powershell.ps1) } -UseMSI -Quiet -EnablePSRemoting"
 
 # Enable PowerShell remoting to peer.
-Write-Host "Enabling Remote PowerShell."
+Write-Host "Enabling Remote PowerShell to peer."
 "$PeerIp netperf-peer" | Out-File -Encoding ASCII -Append "$env:SystemRoot\System32\drivers\etc\hosts"
-pwsh -Command 'Enable-PSRemoting -Force'
 Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer'
 
 # Disable Windows defender / firewall.
@@ -90,15 +72,4 @@ if ($NewIpAddress) {
     $idx = (Get-NetAdapter | where { $_.LinkSpeed -eq '200 Gbps' }).ifIndex
     New-NetIpAddress -AddressFamily IPv4 -ifindex $idx -IPAddress $NewIpAddress -DefaultGateway "192.168.0.1" -PrefixLength 24
     ipconfig
-}
-
-# Reboot if necessary.
-if ($RebootRequired) {
-    if ($NoReboot) {
-        Write-Host "Reboot Required!"
-    } else {
-        Write-Host "Rebooting in 5 seconds..."
-        Start-Sleep -Seconds 5
-        Restart-Computer -Force
-    }
 }

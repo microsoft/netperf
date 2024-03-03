@@ -147,12 +147,12 @@ Add-NetPerfVm $vmName1
 Add-NetPerfVm $vmName2
 
 if ($GitHubToken) {
-    Write-Host "Configuring GitHub for runner"
 
     $ip1 = Get-NetPerfVmPrivateIp $vmName1
     $ip2 = Get-NetPerfVmPrivateIp $vmName2
 
     if ($osType -eq "windows") {
+        Write-Host "Configuring GitHub peer machine"
         $scriptParams = @{
             "Username" = $username
             "Password" = $password
@@ -160,6 +160,7 @@ if ($GitHubToken) {
         }
         Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunPowerShellScript" -ScriptPath ".\setup-runner-windows.ps1" -Parameter $scriptParams | Out-Null
 
+        Write-Host "Configuring GitHub runner machine"
         $scriptParams = @{
             "Username" = $username
             "Password" = $password
