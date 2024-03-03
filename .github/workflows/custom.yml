@@ -24,7 +24,7 @@ jobs:
       with:
         azPSVersion: "latest"
         inlineScript: |
-          ./github/workflows/create-azure-machines.ps1 `
+          ./.github/workflows/create-azure-machines.ps1 `
             -Os windows-2022 `
             -VMSize Standard_F8s_v2 `
             -GitHubToken ${{ secrets.GITHUB_TOKEN }}
