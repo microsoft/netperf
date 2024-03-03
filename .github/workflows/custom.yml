@@ -23,7 +23,11 @@ jobs:
       uses: azure/powershell@v1
       with:
         azPSVersion: "latest"
-        inlineScript: ./github/workflows/create-azure-machines.ps1 -Os windows-2022 -VMSize Standard_F8s_v2 -GitHubToken ${{ secrets.GITHUB_TOKEN }}
+        inlineScript: |
+          ./github/workflows/create-azure-machines.ps1 `
+            -Os windows-2022 `
+            -VMSize Standard_F8s_v2 `
+            -GitHubToken ${{ secrets.GITHUB_TOKEN }}
   test-runner:
     name: Test Runner
     needs: [create-runner]
