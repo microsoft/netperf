@@ -19,7 +19,7 @@ jobs:
         Update-Module Az -Force
         Get-Module 'Az' | where {([string]($_.Version)).StartsWith('9.3.0')} | Remove-Module
         Get-Module -Name Az -ListAvailable
-        Get-Help New-AzVMConfig -Detailed
+        (Get-Help New-AzVMConfig -Detailed).parameters
     - name: Login to Azure
       uses: azure/login@v1
       with:
@@ -28,16 +28,14 @@ jobs:
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         enable-AzPSSession: true
     - name: Create Azure VMs
-      uses: azure/powershell@v1
-      with:
-        azPSVersion: "latest"
-        inlineScript: |
-          Get-Module -Name Az -ListAvailable
-          Get-Help New-AzVMConfig -Detailed
-          ./.github/workflows/create-azure-machines.ps1 `
-            -Os windows-2022 `
-            -VMSize Standard_F8s_v2 `
-            -GitHubToken ${{ secrets.GITHUB_TOKEN }}
+      shell: pwsh
+      run: |
+        Get-Module -Name Az -ListAvailable
+        (Get-Help New-AzVMConfig -Detailed).parameters
+        ./.github/workflows/create-azure-machines.ps1 `
+          -Os windows-2022 `
+          -VMSize Standard_F8s_v2 `
+          -GitHubToken ${{ secrets.GITHUB_TOKEN }}
   test-runner:
     name: Test Runner
     needs: [create-runner]
