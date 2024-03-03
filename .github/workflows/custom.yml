@@ -17,6 +17,8 @@ jobs:
       run: |
         Install-Module -Name Az -Force -AllowClobber -Repository PSGallery
         Update-Module Az -Force
+        Get-Module -Name Az -ListAvailable
+        New-AzVMConfig -?
     - name: Login to Azure
       uses: azure/login@v1
       with:
@@ -29,6 +31,8 @@ jobs:
       with:
         azPSVersion: "latest"
         inlineScript: |
+          Get-Module -Name Az -ListAvailable
+          New-AzVMConfig -?
           ./.github/workflows/create-azure-machines.ps1 `
             -Os windows-2022 `
             -VMSize Standard_F8s_v2 `
