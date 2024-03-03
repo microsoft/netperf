@@ -12,13 +12,14 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v2
-    - name: Update Azure PowerShell
+    - name: Install Latest Az PowerShell Module
       shell: pwsh
       run: |
         Install-Module -Name Az -Force -AllowClobber -Repository PSGallery
         Update-Module Az -Force
+        Get-Module 'Az' | where {([string]($_.Version)).StartsWith('9.3.0')} | Remove-Module
         Get-Module -Name Az -ListAvailable
-        New-AzVMConfig -?
+        Get-Help New-AzVMConfig -Detailed
     - name: Login to Azure
       uses: azure/login@v1
       with:
@@ -32,7 +33,7 @@ jobs:
         azPSVersion: "latest"
         inlineScript: |
           Get-Module -Name Az -ListAvailable
-          New-AzVMConfig -?
+          Get-Help New-AzVMConfig -Detailed
           ./.github/workflows/create-azure-machines.ps1 `
             -Os windows-2022 `
             -VMSize Standard_F8s_v2 `
