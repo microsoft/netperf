@@ -12,6 +12,11 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v2
+    - name: Update Azure PowerShell
+      shell: pwsh
+      run: |
+        Install-Module -Name Az -Force -AllowClobber -Repository PSGallery
+        Update-Module Az -Force
     - name: Login to Azure
       uses: azure/login@v1
       with:
@@ -19,11 +24,6 @@ jobs:
         tenant-id: ${{ secrets.AZURE_TENANT_ID }}
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         enable-AzPSSession: true
-    - name: Update Azure PowerShell
-      uses: azure/powershell@v1
-      with:
-        azPSVersion: "latest"
-        inlineScript: Update-Module Az -Force
     - name: Create Azure VMs
       uses: azure/powershell@v1
       with:
