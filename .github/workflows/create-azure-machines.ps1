@@ -52,10 +52,10 @@ if ($SubscriptionId) {
 
 try {
     Get-AzResourceGroup -Name $ResourceGroupName | Out-Null
-    Write-Host "Found resource group"
+    Write-Host "Found resource group ($ResourceGroupName)"
 } catch {
     New-AzResourceGroup -Name $ResourceGroupName -Location $Location | Out-Null
-    Write-Host "Created resource group"
+    Write-Host "Created resource group ($ResourceGroupName)"
 }
 
 $vnetName = "exvnet"
