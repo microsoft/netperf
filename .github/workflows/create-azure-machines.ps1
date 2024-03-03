@@ -50,12 +50,14 @@ if ($SubscriptionId) {
     Connect-AzAccount -SubscriptionId $subscriptionId
 }
 
+Write-Host "Creating Azure Resources ($ResourceGroupName, $Location, $os, $VMSize)"
+
 try {
     Get-AzResourceGroup -Name $ResourceGroupName | Out-Null
-    Write-Host "Found resource group ($ResourceGroupName)"
+    Write-Host "Found resource group"
 } catch {
     New-AzResourceGroup -Name $ResourceGroupName -Location $Location | Out-Null
-    Write-Host "Created resource group ($ResourceGroupName)"
+    Write-Host "Created resource group"
 }
 
 $vnetName = "exvnet"
@@ -91,7 +93,13 @@ try {
 function Add-NetPerfVm {
     param ($vmName)
 
-    Write-Host "`nCreating $vmName ($Location, $os, $VMSize)"
+    try {
+        Get-AzVM -ResourceGroupName $ResourceGroupName -Name $vmName | Out-Null
+        Write-Host "`nFound $vmName already created. Skipping..."
+        return
+    } catch { }
+
+    Write-Host "`nCreating $vmName"
 
     Write-Host "$vmName`: Creating IP address" # TODO - Remove need for public IP address
     $publicIp = New-AzPublicIpAddress -ResourceGroupName $ResourceGroupName -Name "$vmName-PublicIP" -Location $Location -AllocationMethod "Static" -Force
@@ -128,9 +136,8 @@ function Add-NetPerfVm {
 
 function Get-NetPerfVmPrivateIp {
     param ($vmName)
-
-    $vm = Get-AzVM -ResourceGroupName $ResourceGroupName -Name $vmName
-    return $vm.NetworkProfile.NetworkInterfaces[0].IpConfigurations[0].PrivateIpAddress
+    $nic = Get-AzNetworkInterface -ResourceGroupName $ResourceGroupName -Name "$vmName-Nic"
+    return $nic.IpConfigurations[0].PrivateIpAddress
 }
 
 $vmName1 = "ex-$osType-01" # TODO - Dynamically generate numbers
