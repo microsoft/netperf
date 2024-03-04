@@ -32,7 +32,6 @@ export default function ThroughputPage() {
   const URL = "https://raw.githubusercontent.com/microsoft/netperf/deploy/historical_throughput_page.json";
   const { data } = useFetchData(URL);
   let uploadThroughput = <div />
-  let downloadThroughput = <div />
 
   const [env, setEnv] = useState('azure');
 
@@ -57,7 +56,7 @@ export default function ThroughputPage() {
 
     uploadThroughput =
       <GraphView title={`${testType === 'up' ? 'Upload' : 'Download'} Throughput`}
-    subheader={`Tested using ${windowsOs}, ${linuxOs}, taking the max of 3 runs. Test run args: `}
+    subheader={`Tested using ${windowsOs}, ${linuxOs}, taking the max of 3 runs. `}
     labels={indices}
     map={(index) => {
       if (isMouseDown) {
@@ -70,12 +69,12 @@ export default function ThroughputPage() {
          <p> <b> Specific Linux OS version this test ran on: </b> ${linuxRep[index][2]} </p>
          <p> <b> Commit hash: </b> <a href="google.com"> ${rep[index][1]} </a> </p>
 
-         <p> <b> TCP + iocp: </b> ${tcpiocp[index] && tcpiocp[index][0]},
-         <p> <b> QUIC + iocp: </b> ${quiciocp[index] && quiciocp[index][0]}
-         <p> <b> TCP + epoll: </b> ${tcpepoll[index] && tcpepoll[index][0]}
-         <p> <b> QUIC + epoll: </b> ${quicepoll[index] && quicepoll[index][0]}
-         <p> <b> QUIC + winXDP: </b> ${quicxdp[index] && quicxdp[index][0]}
-         <p> <b> QUIC + wsk: </b> ${quicwsk[index] && quicwsk[index][0]}
+         <p> <b> TCP + iocp: </b> ${tcpiocp[index] && tcpiocp[index][0]}, </p>
+         <p> <b> QUIC + iocp: </b> ${quiciocp[index] && quiciocp[index][0]} </p>
+         <p> <b> TCP + epoll: </b> ${tcpepoll[index] && tcpepoll[index][0]} </p>
+         <p> <b> QUIC + epoll: </b> ${quicepoll[index] && quicepoll[index][0]},
+         <b> QUIC + winXDP: </b> ${quicxdp[index] && quicxdp[index][0]},
+         <b> QUIC + wsk: </b> ${quicwsk[index] && quicwsk[index][0]} </p>
       </div>`
     }}
     series={[
