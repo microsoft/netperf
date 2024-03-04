@@ -123,7 +123,7 @@ function Add-NetPerfVm {
     $vmConfig = Set-AzVMBootDiagnostic -VM $vmConfig -Enable -ResourceGroupName $ResourceGroupName -StorageAccountName $storage.StorageAccountName
 
     Write-Host "$vmName`: Creating VM"
-    New-AzVM -ResourceGroupName $ResourceGroupName -Location $Location -VM $vmConfig | Out-Null
+    New-AzVM -ResourceGroupName $ResourceGroupName -Location $Location -VM $vmConfig --generation 2 | Out-Null
 
     if ($osType -eq "windows") {
         Write-Host "$vmName`: Enabling test signing"
