@@ -204,8 +204,8 @@ export default function ThroughputPage() {
               onChange={handleChangeTestType}
               defaultValue={0}
             >
-              <MenuItem value={'up'}>Upload</MenuItem>
-              <MenuItem value={'down'}>Download</MenuItem>
+              <MenuItem value={'up'}>Upload - 1 connection, 12 seconds per run</MenuItem>
+              <MenuItem value={'down'}>Download - 1 connection, 12 seconds per run</MenuItem>
             </Select>
           </FormControl>
         </Box>
