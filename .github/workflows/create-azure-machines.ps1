@@ -29,17 +29,17 @@ Set-StrictMode -Version "Latest"
 $PSDefaultParameterValues["*:ErrorAction"] = "Stop"
 
 $osType = $Os.Split("-")[0]
-$image = "MicrosoftWindowsServer:WindowsServer:2022-datacenter-azure-edition:latest"
+$image = "MicrosoftWindowsServer:WindowsServer:2022-datacenter-g2:latest"
 if ($Os -eq "windows-2025") {
     Write-Error "Windows 2025 is not supported yet." # TODO - Get this working
 } elseif ($Os -eq "ubuntu-22.04") {
-    $image = "Canonical:0001-com-ubuntu-server-jammy:22_04-lts:22.04.202403010"
+    $image = "Canonical:0001-com-ubuntu-server-jammy:22_04-lts-gen2:22.04.202403010"
 } elseif ($Os -eq "ubuntu-20.04") {
-    $image = "Canonical:0001-com-ubuntu-server-focal:20_04-lts:20.04.202402290"
+    $image = "Canonical:0001-com-ubuntu-server-focal:20_04-lts-gen2:20.04.202402290"
 } elseif ($Os -eq "ubuntu-18.04") {
-    $image = "Canonical:UbuntuServer:18.04-LTS:latest"
+    $image = "Canonical:UbuntuServer:18_04-lts-gen2:18.04.202402250"
 } elseif ($Os -eq "mariner-2") {
-    $image = "MicrosoftCBLMariner:cbl-mariner:cbl-mariner-2:2.20240223.01"
+    $image = "MicrosoftCBLMariner:cbl-mariner:cbl-mariner-2-gen2:2.20240223.01" # This image may not exist
 }
 $username = "secnetperf"
 $password = "SecureNetworkPerf!" | ConvertTo-SecureString -AsPlainText -Force
@@ -123,7 +123,7 @@ function Add-NetPerfVm {
     $vmConfig = Set-AzVMBootDiagnostic -VM $vmConfig -Enable -ResourceGroupName $ResourceGroupName -StorageAccountName $storage.StorageAccountName
 
     Write-Host "$vmName`: Creating VM"
-    New-AzVM -ResourceGroupName $ResourceGroupName -Location $Location -VM $vmConfig --generation 2 | Out-Null
+    New-AzVM -ResourceGroupName $ResourceGroupName -Location $Location -VM $vmConfig | Out-Null
 
     if ($osType -eq "windows") {
         Write-Host "$vmName`: Enabling test signing"

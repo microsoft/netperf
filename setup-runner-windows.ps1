@@ -28,7 +28,7 @@ iex "& { $(irm https://aka.ms/install-powershell.ps1) } -UseMSI -Quiet -EnablePS
 # Enable PowerShell remoting to peer.
 Write-Host "Enabling Remote PowerShell to peer."
 "$PeerIp netperf-peer" | Out-File -Encoding ASCII -Append "$env:SystemRoot\System32\drivers\etc\hosts"
-Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer'
+Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer' -Force
 
 # Disable Windows defender / firewall.
 Write-Host "Disabling Windows Defender / Firewall."
