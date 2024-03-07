@@ -232,9 +232,9 @@ jobs:
         merge-multiple: true
     - name: Generate Summary
       shell: pwsh
-      run: ./.github/workflows/generate-summary.ps1
+      run: ./.github/workflows/generate-summary.ps1 --PublishResults ${{ github.event.client_payload.pr == '' || inputs.commit }}
 
-  save-test-results: 
+  save-test-results:
     permissions: write-all
     name: Persist Results in DB
     needs: [run-secnetperf]
@@ -253,7 +253,7 @@ jobs:
         pattern: json-test-results-*
     - run: python sql.py --featureint 2
     - run: ls
-    - name: Git commit 
+    - name: Git commit
       run: 'git config user.name "QUIC Dev[bot]" && git config user.email "quicdev@microsoft.com" && git add netperf.sqlite && git add full_latencies && git commit -m "Update DB" && git push'
 
   update-intermediary-dashboard-json:

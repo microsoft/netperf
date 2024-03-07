@@ -3,6 +3,11 @@
     Takes the output json files from the test and generates a markdown summary table.
 #>
 
+param (
+    [Parameter(Mandatory = $false)]
+    [boolean]$PublishResults
+)
+
 Set-StrictMode -Version "Latest"
 $PSDefaultParameterValues["*:ErrorAction"] = "Stop"
 
@@ -178,5 +183,9 @@ $markdown | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
 
 if ($hasRegression) {
     Write-Host "This step has regression results. Please check the summary file for details."
-    exit 1
+
+    # Don't fail the entire workflow if we want to publish results (when we merge code or manually trigger a new workflow with "publish results" checked).
+    if (!$PublishResults) {
+        exit 1
+    }
 }
