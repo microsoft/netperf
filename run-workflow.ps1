@@ -127,3 +127,5 @@ Write-Host "Found: https://github.com/microsoft/netperf/actions/runs/$id"
 Write-Host "Waiting for run to complete..."
 Wait-ForRun $id
 Write-Host "Run succeeded!"
+
+return $id
