@@ -15,21 +15,34 @@ import MenuItem from '@mui/material/MenuItem';
 import FormControl from '@mui/material/FormControl';
 import Select from '@mui/material/Select';
 
+import FullLatCurve from './full-lat-curve';
+
 let isMouseDown = false;
 
-document.addEventListener('mousedown', function() {
-    isMouseDown = true;
+document.addEventListener('mousedown', function () {
+  isMouseDown = true;
 });
 
-document.addEventListener('mouseup', function() {
-    isMouseDown = false;
+document.addEventListener('mouseup', function () {
+  isMouseDown = false;
 });
 
 // ----------------------------------------------------------------------
 
 export default function LatencyPage() {
-  const URL = "https://raw.githubusercontent.com/microsoft/netperf/deploy/detailed_rps_and_latency_page.json";
+  const URL = "https://raw.githubusercontent.com/microsoft/netperf/deploy/historical_latency_page.json";
   const { data } = useFetchData(URL);
+
+  const [env, setEnv] = useState('azure');
+
+  const [windowsOs, setWindowsOs] = useState('windows-2022-x64')
+
+  const [linuxOs, setLinuxOs] = useState('ubuntu-20.04-x64')
+
+  const [testType, setTestType] = useState('rps-up-512-down-4000')
+
+  const [commitIndex, setCommitIndex] = useState(0);
+
   const supportedPercentiles = [
     "50th percentile",
     "90th percentile",
@@ -41,64 +54,114 @@ export default function LatencyPage() {
   ]
   const [percentile, setPercentile] = useState(0);
 
-  const handleChange = (event) => {
+  const handleChangePercentile = (event) => {
     setPercentile(event.target.value);
   };
 
-  let graphView = <div />
+  const handleChangeCommit = (event) => {
+    setCommitIndex(event.target.value);
+  }
+
+  let mode1View = <div />
+  let fullLatCurve = <div />
+
+  let rep = []
+  let linuxRep = []
+  let indices = []
+  let tcpiocp = []
+  let quiciocp = []
+  let tcpepoll = []
+  let quicepoll = []
+  let quicxdp = []
+  let quicwsk = []
+
   if (data) {
-    const indices = []
-    for (let i = 0; i < data["linuxTcp"]["data"].length; i++) {
-      indices.push(i + 1)
-    }
-    graphView = <GraphView title="Latency - Measured in Microseconds"
-    subheader='Tested using Windows Server 2022, Linux Ubuntu 20.04.3 LTS'
-    labels={indices}
-    map={(index) => {
-      if (isMouseDown) {
-        window.location.href = `https://github.com/microsoft/msquic/commit/${data["linuxTcp"]["data"][index][2]}`
-      }
-      return `<div style = "margin: 10px">
+    // TODO: Should we find the max of windows / linux run and use that as our baseline?
+    rep = data[`${windowsOs}-${env}-iocp-schannel`][`${testType}-tcp`]['data'].slice().reverse();
+    linuxRep = data[`${linuxOs}-${env}-epoll-openssl`][`${testType}-tcp`]['data'].slice().reverse();
+    indices = Array.from({ length: Math.max(rep.length, linuxRep.length) }, (_, i) => i);
 
-         <p> <b> Build date: </b> ${data["linuxTcp"]["data"][index][1]} </p>
-         <p> <b> Commit hash: </b> <a href="google.com"> ${data["linuxTcp"]["data"][index][2]} </a> </p>
+    tcpiocp = data[`${windowsOs}-${env}-iocp-schannel`][`${testType}-tcp`]['data'].slice().reverse();
+    quiciocp = data[`${windowsOs}-${env}-iocp-schannel`][`${testType}-quic`]['data'].slice().reverse();
+    tcpepoll = data[`${linuxOs}-${env}-epoll-openssl`][`${testType}-tcp`]['data'].slice().reverse();
+    quicepoll = data[`${linuxOs}-${env}-epoll-openssl`][`${testType}-quic`]['data'].slice().reverse();
+    quicxdp = data[`${windowsOs}-${env}-xdp-schannel`][`${testType}-quic`]['data'].slice().reverse();
+    quicwsk = data[`${windowsOs}-${env}-wsk-schannel`][`${testType}-quic`]['data'].slice().reverse();
 
-         <p> <b> Linux TCP: </b> ${data["linuxTcp"]["data"][index][percentile + 3]} </p>
-         <p> <b> Windows TCP: </b> ${data["windowsTcp"]["data"][index][percentile + 3]} </p>
-         <p> <b> Linux QUIC: </b> ${data["linuxQuic"]["data"][index][percentile + 3]} </p>
-         <p> <b> Windows QUIC: </b> ${data["windowsQuic"]["data"][index][percentile + 3]} </p>
+    mode1View =
+      <GraphView title={`Detailed Latency`}
+        subheader={`Tested using ${windowsOs}, ${linuxOs}, taking the min of P0 of 3 runs. `}
+        labels={indices}
+        map={(index) => {
+          if (isMouseDown) {
+            window.location.href = `https://github.com/microsoft/msquic/commit/${rep[index][0]}`
+          }
+          return `<div style = "margin: 10px">
 
+         <p> <b> Build date: </b> ${rep[index][3]} </p>
+         <p> <b> Specific Windows / Linux OS versions this test ran on: </b> ${rep[index][2]},  ${linuxRep[index][2]} </p>
+         <p> <b> Commit hash: </b> <a href="google.com"> ${rep[index][0]} </a> </p>
+
+         <p> <b> TCP + iocp: </b> ${tcpiocp[index] && tcpiocp[index][5 + percentile]}, </p>
+         <p> <b> QUIC + iocp: </b> ${quiciocp[index] && quiciocp[index][5 + percentile]}, </p>
+         <p> <b> TCP + epoll: </b> ${tcpepoll[index] && tcpepoll[index][5 + percentile]}, </p>
+         <p> <b> QUIC + epoll: </b> ${quicepoll[index] && quicepoll[index][5 + percentile]}, <b> QUIC + winXDP: </b> ${quicxdp[index] && quicxdp[index][5 + percentile]}, <b> QUIC + wsk: </b> ${quicwsk[index] && quicwsk[index][5 + percentile]} </p>
       </div>`
-    }}
-    series={[
-      {
-        name: 'Linux + TCP',
-        type: 'line',
-        fill: 'solid',
-        data: data["linuxTcp"]["data"].reverse().map((x) => x[percentile + 3]),
+        }}
+        series={[
+          {
+            name: 'TCP + iocp',
+            type: 'line',
+            fill: 'solid',
+            data: tcpiocp.map((x) => x[5 + percentile]),
+          },
+          {
+            name: 'QUIC + iocp',
+            type: 'line',
+            fill: 'solid',
+            data: quiciocp.map((x) => x[5 + percentile]),
+          },
+          {
+            name: 'TCP + epoll',
+            type: 'line',
+            fill: 'solid',
+            data: tcpepoll.map((x) => x[5 + percentile]),
+          },
+          {
+            name: 'QUIC + epoll',
+            type: 'line',
+            fill: 'solid',
+            data: quicepoll.map((x) => x[5 + percentile]),
+          },
+          {
+            name: 'QUIC + winXDP',
+            type: 'line',
+            fill: 'solid',
+            data: quicxdp.map((x) => x[5 + percentile]),
+          },
+          {
+            name: 'QUIC + wsk',
+            type: 'line',
+            fill: 'solid',
+            data: quicwsk.map((x) => x[5 + percentile]),
+          },
+        ]} />
+  }
+  
+  const handleChange = (event) => {
+    setEnv(event.target.value);
+  };
 
-      },
-      {
-        name: 'Windows + TCP',
-        type: 'line',
-        fill: 'solid',
-        data: data["windowsTcp"]["data"].reverse().map((x) => x[percentile + 3]),
-      },
-      {
-        name: 'Linux + QUIC',
-        type: 'line',
-        fill: 'solid',
-        data: data["linuxQuic"]["data"].reverse().map((x) => x[percentile + 3]),
-      },
-      {
-        name: 'Windows + QUIC',
-        type: 'line',
-        fill: 'solid',
-        data: data["windowsQuic"]["data"].reverse().map((x) => x[percentile + 3]),
-      },
-    ]}
-  />
+  const handleChangeWindowsOs = (event) => {
+    setWindowsOs(event.target.value);
+  }
 
+  const handleChangeLinuxOs = (event) => {
+    setLinuxOs(event.target.value);
+  }
+
+  const handleChangeTestType = (event) => {
+    setTestType(event.target.value);
   }
 
   return (
@@ -107,34 +170,124 @@ export default function LatencyPage() {
         <title> Netperf </title>
       </Helmet>
 
-
       <Container maxWidth="xl">
         <Typography variant="h3" sx={{ mb: 5 }}>
           Detailed Latency
         </Typography>
-        <Grid container spacing={3}>
+        <div style={{ display: 'flex' }}>
+          <Box sx={{}}>
+            <FormControl>
+              <InputLabel id="demo-simple-select-label">Context</InputLabel>
+              <Select
+                labelId="demo-simple-select-label"
+                id="demo-simple-select"
+                value={env}
+                label="Context"
+                onChange={handleChange}
+                defaultValue={0}
+              >
+                <MenuItem value='azure'>azure</MenuItem>
+                {windowsOs !== 'windows-2025-x64' && <MenuItem value='lab'>lab</MenuItem>}
+              </Select>
+            </FormControl>
+          </Box>
+          {/* <br /> */}
+          <Box sx={{ minWidth: 120, marginLeft: '10px' }}>
+            <FormControl>
+              <InputLabel id="demo-simple-select-label">Windows Environment</InputLabel>
+              <Select
+                labelId="demo-simple-select-label"
+                id="demo-simple-select"
+                value={windowsOs}
+                label="Windows Environment"
+                onChange={handleChangeWindowsOs}
+                defaultValue={0}
+              >
+                <MenuItem value='windows-2022-x64'>windows-2022-x64</MenuItem>
+                {env === 'azure' && <MenuItem value='windows-2025-x64'>windows-2025-x64</MenuItem>}
+              </Select>
+            </FormControl>
+          </Box>
+          {/* <br /> */}
+          <Box sx={{ minWidth: 120, marginLeft: '10px' }}>
+            <FormControl>
+              <InputLabel id="demo-simple-select-label">Linux Environment</InputLabel>
+              <Select
+                labelId="demo-simple-select-label"
+                id="demo-simple-select"
+                value={linuxOs}
+                label="Linux Environment"
+                onChange={handleChangeLinuxOs}
+                defaultValue={0}
+              >
+                <MenuItem value='ubuntu-20.04-x64'>ubuntu-20.04-x64</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+          <Box sx={{ minWidth: 120, marginLeft: '10px' }}>
+            <FormControl>
+              <InputLabel id="demo-simple-select-label">Test type</InputLabel>
+              <Select
+                labelId="demo-simple-select-label"
+                id="demo-simple-select"
+                value={testType}
+                label="Upload or download"
+                onChange={handleChangeTestType}
+                defaultValue={0}
+              >
+                <MenuItem value={'rps-up-512-down-4000'}>512 Kb upload, 4000 Kb download</MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+          <Box sx={{ minWidth: 120, marginLeft: '10px' }}>
+            <FormControl fullWidth>
+              <InputLabel id="demo-simple-select-label">Percentile</InputLabel>
+              <Select
+                labelId="demo-simple-select-label"
+                id="demo-simple-select"
+                value={percentile}
+                label="Percentile"
+                onChange={handleChangePercentile}
+                defaultValue={0}
+              >
+                {supportedPercentiles.map((val, idx) => <MenuItem value={idx}>{val}</MenuItem>)}
+              </Select>
+            </FormControl>
+          </Box>
+        </div>
+        <br />
 
-        <Box sx={{ minWidth: 120 }}>
-        <FormControl fullWidth>
-          <InputLabel id="demo-simple-select-label">Percentile</InputLabel>
-          <Select
-            labelId="demo-simple-select-label"
-            id="demo-simple-select"
-            value={percentile}
-            label="Percentile"
-            onChange={handleChange}
-            defaultValue={0}
-          >
-            {supportedPercentiles.map((val, idx) => <MenuItem value={idx}>{val}</MenuItem>)}
-          </Select>
-        </FormControl>
-      </Box>
-      {/* <br />
-      <br />
-      <p style={{margin: "10px"}}>{supportedPercentiles[percentile]}</p> */}
-          {graphView}
+        <Grid container spacing={3}>
+          {mode1View}
+        </Grid>
+        <Box sx={{ minWidth: 120, margin: '10px' }}>
+          <FormControl fullWidth>
+            <InputLabel id="demo-simple-select-label">Full Latency Curve Commit</InputLabel>
+            <Select
+              labelId="demo-simple-select-label"
+              id="demo-simple-select"
+              value={commitIndex}
+              label="Full Latency Curve Commit"
+              onChange={handleChangeCommit}
+              defaultValue={0}
+            >
+              {rep.slice().reverse().map((val, idx) => <MenuItem value={idx}>{rep.length - idx - 1} ----- {val[0]}</MenuItem>)}
+            </Select>
+          </FormControl>
+        </Box>
+        <Grid container spacing={3}>
+          < FullLatCurve
+            tcpiocp={tcpiocp}
+            quiciocp={quiciocp}
+            tcpepoll={tcpepoll}
+            quicepoll={quicepoll}
+            quicxdp={quicxdp}
+            quicwsk={quicwsk}
+            commitIndex={commitIndex}
+          />
         </Grid>
       </Container>
     </>
   );
 }
+

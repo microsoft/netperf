@@ -1,10 +1,18 @@
-# Note: Verified and tested on Azure with Ubuntu 20.04 LTS only.
+#!/bin/bash
+
+HOME='/home/secnetperf' # Note that you should change this to whatever user account you created when you setup your VM.
 
 # Accept parameters from the user.
 while getopts ":i:g:n" opt; do
   case ${opt} in
     i )
       peerip=$OPTARG
+      ;;
+    p )
+      password=$OPTARG
+      ;;
+    u )
+      username=$OPTARG
       ;;
     g )
       githubtoken=$OPTARG
@@ -28,6 +36,16 @@ if [[ -z "$peerip" ]]; then
   exit 1
 fi
 
+if [[ -z "$password" ]]; then
+  echo "Password is a required parameter." 1>&2
+  exit 1
+fi
+
+if [[ -z "$username" ]]; then
+  echo "Username is a required parameter." 1>&2
+  exit 1
+fi
+
 if [[ -z "$noreboot" ]]; then
   noreboot=false
 fi
@@ -41,12 +59,20 @@ sudo apt-get update
 echo "================= Installing open-ssh server. ================="
 sudo apt install openssh-server -y
 
+echo "================= Configuring SSH. ================="
+
 # Adding "Subsystem powershell /usr/bin/pwsh -sshs -NoLogo -NoProfile" to /etc/ssh/sshd_config if its not there
 if grep -q "Subsystem powershell /usr/bin/pwsh -sshs -NoLogo -NoProfile" /etc/ssh/sshd_config; then
   echo "================= Subsystem powershell is already present in /etc/ssh/sshd_config. ================="
 else
   echo "================= Adding 'Subsystem powershell /usr/bin/pwsh -sshs -NoLogo -NoProfile' to /etc/ssh/sshd_config. ================="
   echo "Subsystem powershell /usr/bin/pwsh -sshs -NoLogo -NoProfile" | sudo tee -a /etc/ssh/sshd_config
+  echo ">>> installing sshpass"
+  sudo apt install sshpass -y
+  echo ">>> Adding new SSH key pair to netperf peer"
+  ssh-keygen -t rsa -b 2048 -N "" -f $HOME/.ssh/id_rsa
+  sshpass -p $password ssh-copy-id -o StrictHostKeyChecking=no $username@$peerip
+  sudo systemctl restart ssh
 fi
 
 # Installing powershell 7
@@ -71,18 +97,25 @@ if [[ -z "$githubtoken" ]]; then
   echo "================= Github Token is not provided. Skipping the setup of Github Actions runner. ================="
 else
   echo "================= Installing Github Actions runner. ================="
-  mkdir actions-runner && cd actions-runner
-  # Download the latest runner package
-  curl -o actions-runner-linux-x64-2.313.0.tar.gz -L https://github.com/actions/runner/releases/download/v2.313.0/actions-runner-linux-x64-2.313.0.tar.gz
-  tar xzf ./actions-runner-linux-x64-2.313.0.tar.gz
+  echo "Making actions runner directory"
 
-  # chown the current directory
-  sudo chown -R $(pwd)
-  # Run the config script.
-  ./config.sh --url https://github.com/microsoft/netperf --token $githubtoken
-  # Install the runner as a service
-  sudo ./svc.sh install
-  sudo ./svc.sh start
+  mkdir $HOME/actions-runner
+
+
+  # Download the latest runner package
+  curl -o $HOME/actions-runner/actions-runner-linux-x64-2.313.0.tar.gz -L https://github.com/actions/runner/releases/download/v2.313.0/actions-runner-linux-x64-2.313.0.tar.gz
+
+  echo "Attempting to tar the actions runner"
+  sudo tar xzf $HOME/actions-runner/actions-runner-linux-x64-2.313.0.tar.gz -C $HOME/actions-runner
+
+  # chown the actions runner
+  sudo chown -R root $HOME/actions-runner
+
+  # # Run the config script.
+  bash $HOME/actions-runner/config.sh --url https://github.com/microsoft/netperf --token $githubtoken --labels experimental-ubuntu
+  # # Install the runner as a service
+  bash svc.sh install
+  ./svc.sh start
 fi
 
 if [[ -z "$noreboot" ]]; then
