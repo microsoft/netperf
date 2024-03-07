@@ -79,6 +79,8 @@ function Write-RpsRow {
     }
 }
 
+$hasRegression = $false
+
 # Write the Upload table.
 $markdown = @"
 # Upload Throughput (Gbps)
@@ -89,8 +91,14 @@ foreach ($file in $files) {
     $json = Get-Content -Path $file.FullName | ConvertFrom-Json
     $RegressionQuic = "None :)"
     $RegressionTcp = "None :)"
-    if ($json.PSObject.Properties.Name -contains 'tput-up-quic-regression') { $RegressionQuic = $json.'tput-up-quic-regression' }
-    if ($json.PSObject.Properties.Name -contains 'tput-up-tcp-regression') { $RegressionTcp = $json.'tput-up-tcp-regression' }
+    if ($json.PSObject.Properties.Name -contains 'tput-up-quic-regression') {
+        $RegressionQuic = $json.'tput-up-quic-regression'
+        $hasRegression = $true
+    }
+    if ($json.PSObject.Properties.Name -contains 'tput-up-tcp-regression') {
+        $RegressionTcp = $json.'tput-up-tcp-regression'
+        $hasRegression = $true
+    }
     try { Write-ThroughputRow $file.Name "quic" $json.'tput-up-quic' $RegressionQuic } catch { }
     try { Write-ThroughputRow $file.Name "tcp" $json.'tput-up-tcp' $RegressionTcp } catch { }
 }
@@ -106,8 +114,14 @@ foreach ($file in $files) {
     $json = Get-Content -Path $file.FullName | ConvertFrom-Json
     $RegressionQuic = "None :)"
     $RegressionTcp = "None :)"
-    if ($json.PSObject.Properties.Name -contains 'tput-down-quic-regression') { $RegressionQuic = $json.'tput-down-quic-regression' }
-    if ($json.PSObject.Properties.Name -contains 'tput-down-tcp-regression') { $RegressionTcp = $json.'tput-down-tcp-regression' }
+    if ($json.PSObject.Properties.Name -contains 'tput-down-quic-regression') {
+        $RegressionQuic = $json.'tput-down-quic-regression'
+        $hasRegression = $true
+    }
+    if ($json.PSObject.Properties.Name -contains 'tput-down-tcp-regression') {
+        $RegressionTcp = $json.'tput-down-tcp-regression'
+        $hasRegression = $true
+    }
     try { Write-ThroughputRow $file.Name "quic" $json.'tput-down-quic' $RegressionQuic } catch { }
     try { Write-ThroughputRow $file.Name "tcp" $json.'tput-down-tcp' $RegressionTcp } catch { }
 }
@@ -123,8 +137,14 @@ foreach ($file in $files) {
     $json = Get-Content -Path $file.FullName | ConvertFrom-Json
     $RegressionQuic = "None :)"
     $RegressionTcp = "None :)"
-    if ($json.PSObject.Properties.Name -contains 'hps-conns-100-quic-regression') { $RegressionQuic = $json.'hps-conns-100-quic-regression' }
-    if ($json.PSObject.Properties.Name -contains 'hps-conns-100-tcp-regression') { $RegressionTcp = $json.'hps-conns-100-tcp-regression' }
+    if ($json.PSObject.Properties.Name -contains 'hps-conns-100-quic-regression') {
+        $RegressionQuic = $json.'hps-conns-100-quic-regression'
+        $hasRegression = $true
+    }
+    if ($json.PSObject.Properties.Name -contains 'hps-conns-100-tcp-regression') {
+        $RegressionTcp = $json.'hps-conns-100-tcp-regression'
+        $hasRegression = $true
+    }
     try { Write-HpsRow $file.Name "quic" $json.'hps-conns-100-quic' $RegressionQuic } catch { }
     try { Write-HpsRow $file.Name "tcp" $json.'hps-conns-100-tcp' $RegressionTcp } catch { }
 }
@@ -140,8 +160,14 @@ foreach ($file in $files) {
     $json = Get-Content -Path $file.FullName | ConvertFrom-Json
     $RegressionQuic = "None :)"
     $RegressionTcp = "None :)"
-    if ($json.PSObject.Properties.Name -contains 'rps-up-512-down-4000-quic-regression') { $RegressionQuic = $json.'rps-up-512-down-4000-quic-regression' }
-    if ($json.PSObject.Properties.Name -contains 'rps-up-512-down-4000-tcp-regression') { $RegressionTcp = $json.'rps-up-512-down-4000-tcp-regression' }
+    if ($json.PSObject.Properties.Name -contains 'rps-up-512-down-4000-quic-regression') {
+        $RegressionQuic = $json.'rps-up-512-down-4000-quic-regression'
+        $hasRegression = $true
+    }
+    if ($json.PSObject.Properties.Name -contains 'rps-up-512-down-4000-tcp-regression') {
+        $RegressionTcp = $json.'rps-up-512-down-4000-tcp-regression'
+        $hasRegression = $true
+    }
     try { Write-RpsRow $file.Name "quic" $json.'rps-up-512-down-4000-quic' $RegressionQuic } catch { }
     try { Write-RpsRow $file.Name "tcp" $json.'rps-up-512-down-4000-tcp' $RegressionTcp } catch { }
 }
@@ -149,3 +175,8 @@ foreach ($file in $files) {
 # Write the markdown to the console and to the summary file.
 Write-Host "`n$markdown"
 $markdown | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+
+if ($hasRegression) {
+    Write-Host "This step has regression results. Please check the summary file for details."
+    exit 1
+}
