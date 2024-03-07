@@ -22,7 +22,7 @@ function Convert-FileName {
 
 # Adds a row to the throughput table, converting the output from kbps to gbps.
 function Write-ThroughputRow {
-    param ([string]$FileName, [string]$Transport, [array]$Results)
+    param ([string]$FileName, [string]$Transport, [array]$Results, [string]$Regression)
 
     $row = "`n|"
     $parts = Convert-FileName $FileName
@@ -34,12 +34,14 @@ function Write-ThroughputRow {
         else { $row += " $(($Results[$i] / 1000000).ToString('F2')) |" }
     }
 
+    $row += " $Regression |"
+
     $Script:markdown += $row
 }
 
 # Adds a row to the HPS table.
 function Write-HpsRow {
-    param ([string]$FileName, [string]$Transport, [array]$Results)
+    param ([string]$FileName, [string]$Transport, [array]$Results, [string]$Regression)
 
     $row = "`n|"
     $parts = Convert-FileName $FileName
@@ -51,12 +53,14 @@ function Write-HpsRow {
         else { $row += " $($Results[$i]) |" }
     }
 
+    $row += " $Regression |"
+
     $Script:markdown += $row
 }
 
 # Adds a row to the RPS/latency table.
 function Write-RpsRow {
-    param ([string]$FileName, [string]$Transport, [array]$Results)
+    param ([string]$FileName, [string]$Transport, [array]$Results, [string]$Regression)
 
     $header = "`n|"
     $parts = Convert-FileName $FileName
@@ -68,6 +72,9 @@ function Write-RpsRow {
         for ($j = 0; $j -lt 9; $j++) {
             $row += " $($Results[$i+$j]) |"
         }
+
+        $row += " $Regression |"
+
         $Script:markdown += $row
     }
 }
@@ -75,52 +82,68 @@ function Write-RpsRow {
 # Write the Upload table.
 $markdown = @"
 # Upload Throughput (Gbps)
-| Env | OS | Version | Arch | TLS | IO | Transport | Result 1 | Result 2 | Result 3 |
-| --- | -- | ------- | ---- | --- | -- | --------- | -------- | -------- | -------- |
+| Env | OS | Version | Arch | TLS | IO | Transport | Result 1 | Result 2 | Result 3 | Regression |
+| --- | -- | ------- | ---- | --- | -- | --------- | -------- | -------- | -------- | ---------- |
 "@
 foreach ($file in $files) {
     $json = Get-Content -Path $file.FullName | ConvertFrom-Json
-    try { Write-ThroughputRow $file.Name "quic" $json.'tput-up-quic' } catch { }
-    try { Write-ThroughputRow $file.Name "tcp" $json.'tput-up-tcp' } catch { }
+    $RegressionQuic = "None :)"
+    $RegressionTcp = "None :)"
+    if ($json.PSObject.Properties.Name -contains 'tput-up-quic-regression') { $RegressionQuic = $json.'tput-up-quic-regression' }
+    if ($json.PSObject.Properties.Name -contains 'tput-up-tcp-regression') { $RegressionTcp = $json.'tput-up-tcp-regression' }
+    try { Write-ThroughputRow $file.Name "quic" $json.'tput-up-quic' $RegressionQuic } catch { }
+    try { Write-ThroughputRow $file.Name "tcp" $json.'tput-up-tcp' $RegressionTcp } catch { }
 }
 
 # Write the Download table.
 $markdown += @"
 `n
 # Download Throughput (Gbps)
-| Env | OS | Version | Arch | TLS | IO | Transport | Result 1 | Result 2 | Result 3 |
-| --- | -- | ------- | ---- | --- | -- | --------- | -------- | -------- | -------- |
+| Env | OS | Version | Arch | TLS | IO | Transport | Result 1 | Result 2 | Result 3 | Regression |
+| --- | -- | ------- | ---- | --- | -- | --------- | -------- | -------- | -------- | ---------- |
 "@
 foreach ($file in $files) {
     $json = Get-Content -Path $file.FullName | ConvertFrom-Json
-    try { Write-ThroughputRow $file.Name "quic" $json.'tput-down-quic' } catch { }
-    try { Write-ThroughputRow $file.Name "tcp" $json.'tput-down-tcp' } catch { }
+    $RegressionQuic = "None :)"
+    $RegressionTcp = "None :)"
+    if ($json.PSObject.Properties.Name -contains 'tput-down-quic-regression') { $RegressionQuic = $json.'tput-down-quic-regression' }
+    if ($json.PSObject.Properties.Name -contains 'tput-down-tcp-regression') { $RegressionTcp = $json.'tput-down-tcp-regression' }
+    try { Write-ThroughputRow $file.Name "quic" $json.'tput-down-quic' $RegressionQuic } catch { }
+    try { Write-ThroughputRow $file.Name "tcp" $json.'tput-down-tcp' $RegressionTcp } catch { }
 }
 
 # Write the HPS table.
 $markdown += @"
 `n
 # Handshakes Per Second (HPS)
-| Env | OS | Version | Arch | TLS | IO | Transport | Result 1 | Result 2 | Result 3 |
-| --- | -- | ------- | ---- | --- | -- | --------- | -------- | -------- | -------- |
+| Env | OS | Version | Arch | TLS | IO | Transport | Result 1 | Result 2 | Result 3 | Regression |
+| --- | -- | ------- | ---- | --- | -- | --------- | -------- | -------- | -------- | ---------- |
 "@
 foreach ($file in $files) {
     $json = Get-Content -Path $file.FullName | ConvertFrom-Json
-    try { Write-HpsRow $file.Name "quic" $json.'hps-conns-100-quic' } catch { }
-    try { Write-HpsRow $file.Name "tcp" $json.'hps-conns-100-tcp' } catch { }
+    $RegressionQuic = "None :)"
+    $RegressionTcp = "None :)"
+    if ($json.PSObject.Properties.Name -contains 'hps-conns-100-quic-regression') { $RegressionQuic = $json.'hps-conns-100-quic-regression' }
+    if ($json.PSObject.Properties.Name -contains 'hps-conns-100-tcp-regression') { $RegressionTcp = $json.'hps-conns-100-tcp-regression' }
+    try { Write-HpsRow $file.Name "quic" $json.'hps-conns-100-quic' $RegressionQuic } catch { }
+    try { Write-HpsRow $file.Name "tcp" $json.'hps-conns-100-tcp' $RegressionTcp } catch { }
 }
 
 # Write the RPS table.
 $markdown += @"
 `n
 # Request Per Second (HPS) and Latency (µs)
-| Env | OS | Version | Arch | TLS | IO | Transport | Min | P50 | P90 | P99 | P99.9 | P99.99 | P99.999 | P99.9999 | RPS |
-| --- | -- | ------- | ---- | --- | -- | --------- | --- | --- | --- | --- | ----- | ------ | ------- | -------- | --- |
+| Env | OS | Version | Arch | TLS | IO | Transport | Min | P50 | P90 | P99 | P99.9 | P99.99 | P99.999 | P99.9999 | RPS | Regression |
+| --- | -- | ------- | ---- | --- | -- | --------- | --- | --- | --- | --- | ----- | ------ | ------- | -------- | --- | ---------- |
 "@
 foreach ($file in $files) {
     $json = Get-Content -Path $file.FullName | ConvertFrom-Json
-    try { Write-RpsRow $file.Name "quic" $json.'rps-up-512-down-4000-quic' } catch { }
-    try { Write-RpsRow $file.Name "tcp" $json.'rps-up-512-down-4000-tcp' } catch { }
+    $RegressionQuic = "None :)"
+    $RegressionTcp = "None :)"
+    if ($json.PSObject.Properties.Name -contains 'rps-up-512-down-4000-quic-regression') { $RegressionQuic = $json.'rps-up-512-down-4000-quic-regression' }
+    if ($json.PSObject.Properties.Name -contains 'rps-up-512-down-4000-tcp-regression') { $RegressionTcp = $json.'rps-up-512-down-4000-tcp-regression' }
+    try { Write-RpsRow $file.Name "quic" $json.'rps-up-512-down-4000-quic' $RegressionQuic } catch { }
+    try { Write-RpsRow $file.Name "tcp" $json.'rps-up-512-down-4000-tcp' $RegressionTcp } catch { }
 }
 
 # Write the markdown to the console and to the summary file.
