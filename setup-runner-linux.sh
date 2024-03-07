@@ -1,7 +1,5 @@
 #!/bin/bash
 
-HOME='/home/secnetperf' # Note that you should change this to whatever user account you created when you setup your VM.
-
 # Accept parameters from the user.
 while getopts ":i:g:n" opt; do
   case ${opt} in
@@ -16,6 +14,9 @@ while getopts ":i:g:n" opt; do
       ;;
     g )
       githubtoken=$OPTARG
+      ;;
+    l )
+      runnerlabels=$OPTARG
       ;;
     n )
       noreboot=true
@@ -49,6 +50,13 @@ fi
 if [[ -z "$noreboot" ]]; then
   noreboot=false
 fi
+
+if [[ -z "$runnerlabels" ]]; then
+  runnerlabels="experimental-ubuntu"
+fi
+
+HOME="/home/$username"
+echo ">>> Using home directory to set up runner: $HOME"
 
 # Update apt-get
 echo "================= Updating apt-get. ================="
@@ -110,12 +118,11 @@ else
 
   # chown the actions runner
   sudo chown -R root $HOME/actions-runner
-
   # # Run the config script.
-  bash $HOME/actions-runner/config.sh --url https://github.com/microsoft/netperf --token $githubtoken --labels experimental-ubuntu
+  bash $HOME/actions-runner/config.sh --url https://github.com/microsoft/netperf --token $githubtoken --labels experimental-ubuntu --unattended
   # # Install the runner as a service
-  bash svc.sh install
-  ./svc.sh start
+  bash $HOME/actions-runner/svc.sh install
+  bash $HOME/actions-runner/svc.sh start
 fi
 
 if [[ -z "$noreboot" ]]; then
