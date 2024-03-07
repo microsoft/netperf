@@ -22,7 +22,13 @@ param (
     [string]$SubscriptionId,
 
     [Parameter(Mandatory = $false)]
-    [string]$GitHubToken
+    [string]$GitHubToken,
+
+    [Parameter(Mandatory = $false)]
+    [string]$ConfigureVMName1 = "",
+
+    [Parameter(Mandatory = $false)]
+    [string]$ConfigureVMName2 = ""
 )
 
 Set-StrictMode -Version "Latest"
@@ -48,6 +54,90 @@ $cred = New-Object System.Management.Automation.PSCredential ($username, $passwo
 if ($SubscriptionId) {
     # Connect to Azure, otherwise assume we're already connected.
     Connect-AzAccount -SubscriptionId $subscriptionId
+}
+
+function Get-NetPerfVmPrivateIp {
+    param ([string]$vmName)
+    $nic = Get-AzNetworkInterface -ResourceGroupName $ResourceGroupName -Name "$vmName-Nic"
+    return $nic.IpConfigurations[0].PrivateIpAddress
+}
+
+function ConfigureVMs {
+    param (
+        [string]$vmName1,
+        [string]$vmName2,
+        [string]$GithubToken,
+        [string]$ResourceGroupName,
+        [string]$osType,
+        [boolean]$Verbose
+    )
+    $ip1 = Get-NetPerfVmPrivateIp $vmName1
+    $ip2 = Get-NetPerfVmPrivateIp $vmName2
+
+    if ($osType -eq "windows") {
+        Write-Host "Configuring GitHub peer machine"
+        $scriptParams = @{
+            "Username" = $username
+            "Password" = $password
+            "PeerIP" = $ip1
+        }
+
+        if ($Verbose) {
+            Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunPowerShellScript" -ScriptPath ".\setup-runner-windows.ps1" -Parameter $scriptParams
+        } else {
+            Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunPowerShellScript" -ScriptPath ".\setup-runner-windows.ps1" -Parameter $scriptParams | Out-Null
+        }
+
+        Write-Host "Configuring GitHub runner machine"
+        $scriptParams = @{
+            "Username" = $username
+            "Password" = $password
+            "PeerIP" = $ip2
+            "GitHubToken" = $GitHubToken
+            "RunnerLabels" = "os-$osType,azure-ex"
+        }
+        if ($Verbose) {
+            Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunPowerShellScript" -ScriptPath ".\setup-runner-windows.ps1" -Parameter $scriptParams
+        } else {
+            Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunPowerShellScript" -ScriptPath ".\setup-runner-windows.ps1" -Parameter $scriptParams | Out-Null
+        }
+    } else {
+        Write-Host "Configuring Linux GitHub peer machine"
+        $scriptParams = @{
+            "username" = $username
+            "password" = $password
+            "peerip" = $ip1
+            "noreboot" = $true
+            "runnerlabels" = "os-$osType,azure-ex"
+        }
+        if ($Verbose) {
+            Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunShellScript" -ScriptPath ".\setup-runner-linux.sh" -Parameter $scriptParams
+        } else {
+            Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunShellScript" -ScriptPath ".\setup-runner-linux.sh" -Parameter $scriptParams | Out-Null
+        }
+
+        Write-Host "Configuring Linux GitHub runner machine"
+        $scriptParams = @{
+            "username" = $username
+            "password" = $password
+            "peerip" = $ip2
+            "githubtoken" = $GitHubToken
+            "noreboot" = $true
+            "runnerlabels" = "os-$osType,azure-ex"
+        }
+        if ($Verbose) {
+            Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunShellScript" -ScriptPath ".\setup-runner-linux.sh" -Parameter $scriptParams
+        } else {
+            Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunShellScript" -ScriptPath ".\setup-runner-linux.sh" -Parameter $scriptParams | Out-Null
+        }
+    }
+
+}
+
+if ($ConfigureVMName1 -and $ConfigureVMName2 -and $GitHubToken) {
+    Write-Host "Machines already exist. Configuring them instead."
+    ConfigureVMs $ConfigureVMName1 $ConfigureVMName2 $GitHubToken $ResourceGroupName $osType $true
+    exit 0
 }
 
 Write-Host "Creating Azure Resources ($ResourceGroupName, $Location, $os, $VMSize)"
@@ -91,7 +181,7 @@ try {
 }
 
 function Add-NetPerfVm {
-    param ($vmName)
+    param ([string]$vmName)
 
     try {
         Get-AzVM -ResourceGroupName $ResourceGroupName -Name $vmName | Out-Null
@@ -134,12 +224,6 @@ function Add-NetPerfVm {
     }
 }
 
-function Get-NetPerfVmPrivateIp {
-    param ($vmName)
-    $nic = Get-AzNetworkInterface -ResourceGroupName $ResourceGroupName -Name "$vmName-Nic"
-    return $nic.IpConfigurations[0].PrivateIpAddress
-}
-
 $vmName1 = "ex-$osType-01" # TODO - Dynamically generate numbers
 $vmName2 = "ex-$osType-02"
 
@@ -147,48 +231,5 @@ Add-NetPerfVm $vmName1
 Add-NetPerfVm $vmName2
 
 if ($GitHubToken) {
-
-    $ip1 = Get-NetPerfVmPrivateIp $vmName1
-    $ip2 = Get-NetPerfVmPrivateIp $vmName2
-
-    if ($osType -eq "windows") {
-        Write-Host "Configuring GitHub peer machine"
-        $scriptParams = @{
-            "Username" = $username
-            "Password" = $password
-            "PeerIP" = $ip1
-        }
-        Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunPowerShellScript" -ScriptPath ".\setup-runner-windows.ps1" -Parameter $scriptParams | Out-Null
-
-        Write-Host "Configuring GitHub runner machine"
-        $scriptParams = @{
-            "Username" = $username
-            "Password" = $password
-            "PeerIP" = $ip2
-            "GitHubToken" = $GitHubToken
-            "RunnerLabels" = "os-$osType,azure-ex"
-        }
-        Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName1 -CommandId "RunPowerShellScript" -ScriptPath ".\setup-runner-windows.ps1" -Parameter $scriptParams | Out-Null
-    } else {
-        Write-Host "Configuring Linux GitHub peer machine"
-        $scriptParams = @{
-            "username" = $username
-            "password" = $password
-            "peerip" = $ip1
-            "noreboot" = $true
-            "runnerlabels" = "os-$osType,azure-ex"
-        }
-        Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunShellScript" -ScriptPath ".\setup-runner-linux.sh" -Parameter $scriptParams | Out-Null
-
-        Write-Host "Configuring Linux GitHub runner machine"
-        $scriptParams = @{
-            "username" = $username
-            "password" = $password
-            "peerip" = $ip2
-            "githubtoken" = $GitHubToken
-            "noreboot" = $true
-            "runnerlabels" = "os-$osType,azure-ex"
-        }
-        Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName1 -CommandId "RunShellScript" -ScriptPath ".\setup-runner-linux.sh" -Parameter $scriptParams | Out-Null
-    }
+    ConfigureVMs $vmName1 $vmName2 $GitHubToken $ResourceGroupName $osType $false
 }
