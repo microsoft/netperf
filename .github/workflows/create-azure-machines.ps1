@@ -143,7 +143,13 @@ function Add-NetPerfVm {
     $vmConfig = Set-AzVMBootDiagnostic -VM $vmConfig -Enable -ResourceGroupName $ResourceGroupName -StorageAccountName $storage.StorageAccountName
 
     Write-Host "$vmName`: Creating VM"
-    New-AzVM -ResourceGroupName $ResourceGroupName -Location $Location -VM $vmConfig -OSDiskDeleteOption Delete -NetworkInterfaceDeleteOption Delete | Out-Null
+    $vmConfig = New-AzVM -ResourceGroupName $ResourceGroupName -Location $Location -VM $vmConfig | Out-Null
+
+    Write-Host "$vmName`: Updating VM delete options"
+    $vmConfig.StorageProfile.OsDisk.DeleteOption = 'Delete'
+    $vmConfig.StorageProfile.DataDisks | ForEach-Object { $_.DeleteOption = 'Delete' }
+    $vmConfig.NetworkProfile.NetworkInterfaces | ForEach-Object { $_.DeleteOption = 'Delete' }
+    $vmConfig | Update-AzVM
 
     if ($osType -eq "windows") {
         Write-Host "$vmName`: Enabling test signing"
