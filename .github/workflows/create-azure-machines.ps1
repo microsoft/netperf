@@ -19,6 +19,9 @@ param (
     [string]$Location = "South Central US",
 
     [Parameter(Mandatory = $false)]
+    [string]$EnvTag = "azure-ex",
+
+    [Parameter(Mandatory = $false)]
     [string]$SubscriptionId,
 
     [Parameter(Mandatory = $false)]
@@ -121,7 +124,7 @@ function Add-NetPerfVm {
 
     Write-Host "$vmName`: Creating VM config"
     if ($osType -eq "windows") {
-        $vmConfig = New-AzVMConfig -VMName $vmName -VMSize $VMSize -SecurityType TrustedLaunch -EnableVtpm $false -EnableSecureBoot $false
+        $vmConfig = New-AzVMConfig -VMName $vmName -VMSize $VMSize -SecurityType TrustedLaunch -EnableVtpm $false -EnableSecureBoot $false -OSDiskDeleteOption Delete -NetworkInterfaceDeleteOption Delete
         $vmConfig = Set-AzVMOperatingSystem -VM $vmConfig -Windows -ComputerName $vmName -Credential $cred -ProvisionVMAgent -EnableAutoUpdate
     } else {
         $vmConfig = New-AzVMConfig -VMName $vmName -VMSize $VMSize
@@ -175,7 +178,7 @@ if ($GitHubToken) {
             "Password" = $securePassword
             "PeerIP" = $ip2
             "GitHubToken" = $GitHubToken
-            "RunnerLabels" = "os-$Os,azure-ex"
+            "RunnerLabels" = "os-$Os,$EnvTag"
         }
         Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName1 -CommandId "RunPowerShellScript" -ScriptPath ".\setup-runner-windows.ps1" -Parameter $scriptParams | Out-Null
     } else {
@@ -185,7 +188,6 @@ if ($GitHubToken) {
             "password" = $securePassword
             "peerip" = $ip1
             "noreboot" = $true
-            "runnerlabels" = "os-$Os,azure-ex"
         }
         Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunShellScript" -ScriptPath ".\setup-runner-linux.sh" -Parameter $scriptParams | Out-Null
 
@@ -196,7 +198,7 @@ if ($GitHubToken) {
             "peerip" = $ip2
             "githubtoken" = $GitHubToken
             "noreboot" = $true
-            "runnerlabels" = "os-$Os,azure-ex"
+            "runnerlabels" = "os-$Os,$EnvTag"
         }
         Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName1 -CommandId "RunShellScript" -ScriptPath ".\setup-runner-linux.sh" -Parameter $scriptParams | Out-Null
     }
