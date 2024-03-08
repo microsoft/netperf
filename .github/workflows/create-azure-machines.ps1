@@ -124,7 +124,7 @@ function Add-NetPerfVm {
 
     Write-Host "$vmName`: Creating VM config"
     if ($osType -eq "windows") {
-        $vmConfig = New-AzVMConfig -VMName $vmName -VMSize $VMSize -SecurityType TrustedLaunch -EnableVtpm $false -EnableSecureBoot $false -OSDiskDeleteOption Delete -NetworkInterfaceDeleteOption Delete
+        $vmConfig = New-AzVMConfig -VMName $vmName -VMSize $VMSize -SecurityType TrustedLaunch -EnableVtpm $false -EnableSecureBoot $false
         $vmConfig = Set-AzVMOperatingSystem -VM $vmConfig -Windows -ComputerName $vmName -Credential $cred -ProvisionVMAgent -EnableAutoUpdate
     } else {
         $vmConfig = New-AzVMConfig -VMName $vmName -VMSize $VMSize
@@ -135,7 +135,7 @@ function Add-NetPerfVm {
     $vmConfig = Set-AzVMBootDiagnostic -VM $vmConfig -Enable -ResourceGroupName $ResourceGroupName -StorageAccountName $storage.StorageAccountName
 
     Write-Host "$vmName`: Creating VM"
-    New-AzVM -ResourceGroupName $ResourceGroupName -Location $Location -VM $vmConfig | Out-Null
+    New-AzVM -ResourceGroupName $ResourceGroupName -Location $Location -VM $vmConfig -OSDiskDeleteOption Delete -NetworkInterfaceDeleteOption Delete | Out-Null
 
     if ($osType -eq "windows") {
         Write-Host "$vmName`: Enabling test signing"
