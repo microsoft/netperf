@@ -128,23 +128,24 @@ jobs:
       matrix:
         vec: [
           # Azure Ubuntu 20.04
-          { env: "azure", os: "ubuntu-20.04", arch: "x64", tls: "openssl",  io: "epoll" },
+          #{ env: "azure", os: "ubuntu-20.04", arch: "x64", tls: "openssl",  io: "epoll" },
           # Azure Windows Server 2022
           { env: "azure", os: "windows-2022", arch: "x64", tls: "schannel", io: "iocp" },
-          { env: "azure", os: "windows-2022", arch: "x64", tls: "schannel", io: "xdp" },
-          { env: "azure", os: "windows-2022", arch: "x64", tls: "schannel", io: "rio" },
-          { env: "azure", os: "windows-2022", arch: "x64", tls: "schannel", io: "wsk" },
+          { env: "azure-ex", os: "windows-2022", arch: "x64", tls: "schannel", io: "iocp" },
+          #{ env: "azure", os: "windows-2022", arch: "x64", tls: "schannel", io: "xdp" },
+          #{ env: "azure", os: "windows-2022", arch: "x64", tls: "schannel", io: "rio" },
+          #{ env: "azure", os: "windows-2022", arch: "x64", tls: "schannel", io: "wsk" },
           # Azure Windows Server 2025 (preview)
-          { env: "azure", os: "windows-2025", arch: "x64", tls: "schannel", io: "iocp" },
-          { env: "azure", os: "windows-2025", arch: "x64", tls: "schannel", io: "rio" },
-          { env: "azure", os: "windows-2025", arch: "x64", tls: "schannel", io: "xdp" },
-          { env: "azure", os: "windows-2025", arch: "x64", tls: "schannel", io: "wsk" },
+          #{ env: "azure", os: "windows-2025", arch: "x64", tls: "schannel", io: "iocp" },
+          #{ env: "azure", os: "windows-2025", arch: "x64", tls: "schannel", io: "rio" },
+          #{ env: "azure", os: "windows-2025", arch: "x64", tls: "schannel", io: "xdp" },
+          #{ env: "azure", os: "windows-2025", arch: "x64", tls: "schannel", io: "wsk" },
           # Lab Windows Server 2022
-          { env: "lab",   os: "windows-2022", arch: "x64", tls: "schannel", io: "iocp" },
-          { env: "lab",   os: "windows-2022", arch: "x64", tls: "schannel", io: "xdp" },
-          { env: "lab",   os: "windows-2022", arch: "x64", tls: "schannel", io: "wsk" },
+          #{ env: "lab",   os: "windows-2022", arch: "x64", tls: "schannel", io: "iocp" },
+          #{ env: "lab",   os: "windows-2022", arch: "x64", tls: "schannel", io: "xdp" },
+          #{ env: "lab",   os: "windows-2022", arch: "x64", tls: "schannel", io: "wsk" },
           # Lab Ubuntu Server 20.04 LTS
-          { env: "lab",   os: "ubuntu-20.04", arch: "x64", tls: "openssl",  io: "epoll" },
+          #{ env: "lab",   os: "ubuntu-20.04", arch: "x64", tls: "openssl",  io: "epoll" },
         ]
     runs-on:
     - self-hosted
