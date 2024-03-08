@@ -94,8 +94,8 @@ $markdown = @"
 "@
 foreach ($file in $files) {
     $json = Get-Content -Path $file.FullName | ConvertFrom-Json
-    $RegressionQuic = "None :)"
-    $RegressionTcp = "None :)"
+    $RegressionQuic = "None 😊"
+    $RegressionTcp = "None 😊"
     if ($json.PSObject.Properties.Name -contains 'tput-up-quic-regression') {
         $RegressionQuic = $json.'tput-up-quic-regression'
         $hasRegression = $true
@@ -117,8 +117,8 @@ $markdown += @"
 "@
 foreach ($file in $files) {
     $json = Get-Content -Path $file.FullName | ConvertFrom-Json
-    $RegressionQuic = "None :)"
-    $RegressionTcp = "None :)"
+    $RegressionQuic = "None 😊"
+    $RegressionTcp = "None 😊"
     if ($json.PSObject.Properties.Name -contains 'tput-down-quic-regression') {
         $RegressionQuic = $json.'tput-down-quic-regression'
         $hasRegression = $true
@@ -140,8 +140,8 @@ $markdown += @"
 "@
 foreach ($file in $files) {
     $json = Get-Content -Path $file.FullName | ConvertFrom-Json
-    $RegressionQuic = "None :)"
-    $RegressionTcp = "None :)"
+    $RegressionQuic = "None 😊"
+    $RegressionTcp = "None 😊"
     if ($json.PSObject.Properties.Name -contains 'hps-conns-100-quic-regression') {
         $RegressionQuic = $json.'hps-conns-100-quic-regression'
         $hasRegression = $true
@@ -177,15 +177,15 @@ foreach ($file in $files) {
     }
     # Potential latency regressions
     if ($json.PSObject.Properties.Name -contains 'rps-up-512-down-4000-quic-lat-regression') {
-        $RegressionQuic += $json.'rps-up-512-down-4000-lat-quic-regression'
+        $RegressionQuic += $json.'rps-up-512-down-4000-quic-lat-regression'
         $hasRegression = $true
     }
     if ($json.PSObject.Properties.Name -contains 'rps-up-512-down-4000-tcp-lat-regression') {
         $RegressionTcp += $json.'rps-up-512-down-4000-tcp-lat-regression'
         $hasRegression = $true
     }
-    if ($RegressionQuic -eq "") { $RegressionQuic = "No RPS or Latency regressions" }
-    if ($RegressionTcp -eq "") { $RegressionTcp = "No RPS or Latency regressions" }
+    if ($RegressionQuic -eq "") { $RegressionQuic = "No RPS or Latency regressions 😊" }
+    if ($RegressionTcp -eq "") { $RegressionTcp = "No RPS or Latency regressions 😊" }
     try { Write-RpsRow $file.Name "quic" $json.'rps-up-512-down-4000-quic' $RegressionQuic } catch { }
     try { Write-RpsRow $file.Name "tcp" $json.'rps-up-512-down-4000-tcp' $RegressionTcp } catch { }
 }
