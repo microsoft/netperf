@@ -35,6 +35,7 @@ jobs:
           -VMSuffix1 c1 `
           -VMSuffix2 c2 `
           -EnvTag azure-custom `
+          -NoPublicIP `
           -GitHubToken ${{ secrets.GITHUB_TOKEN }} `
           -Password ${{ secrets.VM_PASSWORD }}
 
