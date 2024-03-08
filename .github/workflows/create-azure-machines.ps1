@@ -25,7 +25,13 @@ param (
     [string]$GitHubToken,
 
     [Parameter(Mandatory = $true)]
-    [string]$Password
+    [string]$Password,
+
+    [Parameter(Mandatory = $true)]
+    [string]$VMSuffix1,
+
+    [Parameter(Mandatory = $true)]
+    [string]$VMSuffix2
 )
 
 Set-StrictMode -Version "Latest"
@@ -143,8 +149,8 @@ function Get-NetPerfVmPrivateIp {
     return $nic.IpConfigurations[0].PrivateIpAddress
 }
 
-$vmName1 = "ex-$osType-01" # TODO - Dynamically generate numbers
-$vmName2 = "ex-$osType-02"
+$vmName1 = "ex-$osType-$VMSuffix1"
+$vmName2 = "ex-$osType-$VMSuffix2"
 
 Add-NetPerfVm $vmName1
 Add-NetPerfVm $vmName2
