@@ -76,10 +76,14 @@ jobs:
       shell: pwsh
       run: |
         Write-Host "Deleting ex-windows-c1"
-        Get-AzResource -ResourceGroupName "netperf-ex" `
-          | where {$_.Name.StartsWith("ex-windows-c1") } `
-          | Remove-AzResource -Force
+        try {
+          Get-AzResource -ResourceGroupName "netperf-ex" `
+            | where {$_.Name.StartsWith("ex-windows-c1") } `
+            | Remove-AzResource -Force
+        } catch {}
         Write-Host "Deleting ex-windows-c2"
-        Get-AzResource -ResourceGroupName "netperf-ex" `
-          | where {$_.Name.StartsWith("ex-windows-c2") } `
-          | Remove-AzResource -Force
+        try {
+          Get-AzResource -ResourceGroupName "netperf-ex" `
+            | where {$_.Name.StartsWith("ex-windows-c2") } `
+            | Remove-AzResource -Force
+        } catch {}
