@@ -1,7 +1,6 @@
 import sqlite3
 import json
 import statistics
-import argparse
 
 # Connect to the database
 conn = sqlite3.connect('netperf.sqlite')
