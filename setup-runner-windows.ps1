@@ -12,38 +12,23 @@ param (
     [string]$GitHubToken,
 
     [Parameter(Mandatory = $false)]
-    [switch]$NoReboot = $false,
+    [string]$NewIpAddress,
 
     [Parameter(Mandatory = $false)]
-    [string]$NewIpAddress
+    [string]$RunnerLabels = ""
 )
 
 Set-StrictMode -Version 'Latest'
 $PSDefaultParameterValues['*:ErrorAction'] = 'Stop'
 
-$RebootRequired = $false
-
 # Install the latest version of PowerShell.
 Write-Host "Installing latest PowerShell."
-iex "& { $(irm https://aka.ms/install-powershell.ps1) } -UseMSI" # TODO - Get silent install working
-
-# Check to see if test signing is enabled.
-$HasTestSigning = $false
-try { $HasTestSigning = ("$(bcdedit)" | Select-String -Pattern "testsigning\s+Yes").Matches.Success } catch { }
-
-# Enable test signing as necessary.
-if (!$HasTestSigning) {
-    # Enable test signing.
-    Write-Host "Enabling Test Signing."
-    bcdedit /set testsigning on | Write-Verbose
-    $RebootRequired = $true
-}
+iex "& { $(irm https://aka.ms/install-powershell.ps1) } -UseMSI -Quiet -EnablePSRemoting"
 
 # Enable PowerShell remoting to peer.
-Write-Host "Enabling Remote PowerShell."
+Write-Host "Enabling Remote PowerShell to peer."
 "$PeerIp netperf-peer" | Out-File -Encoding ASCII -Append "$env:SystemRoot\System32\drivers\etc\hosts"
-pwsh -Command 'Enable-PSRemoting -Force'
-Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer'
+Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer' -Force
 
 # Disable Windows defender / firewall.
 Write-Host "Disabling Windows Defender / Firewall."
@@ -74,11 +59,11 @@ if ($GitHubToken) {
     Write-Host "Installing GitHub Runner."
     mkdir C:\actions-runner | Out-Null
     Set-Location C:\actions-runner
-    $RunnerVersion = "2.312.0"
+    $RunnerVersion = "2.313.0"
     $RunnerName = "actions-runner-win-x64-$RunnerVersion.zip"
     Invoke-WebRequest -Uri "https://github.com/actions/runner/releases/download/v$RunnerVersion/$RunnerName" -OutFile $RunnerName
     Add-Type -AssemblyName System.IO.Compression.FileSystem ; [System.IO.Compression.ZipFile]::ExtractToDirectory("$PWD/$RunnerName", "$PWD")
-    ./config.cmd --url https://github.com/microsoft/netperf --token $GitHubToken --runasservice --windowslogonaccount $Username --windowslogonpassword $Password --unattended
+    ./config.cmd --url https://github.com/microsoft/netperf --token $GitHubToken --runasservice --windowslogonaccount $Username --windowslogonpassword $Password --unattended --labels $RunnerLabels
 }
 
 if ($NewIpAddress) {
@@ -87,15 +72,4 @@ if ($NewIpAddress) {
     $idx = (Get-NetAdapter | where { $_.LinkSpeed -eq '200 Gbps' }).ifIndex
     New-NetIpAddress -AddressFamily IPv4 -ifindex $idx -IPAddress $NewIpAddress -DefaultGateway "192.168.0.1" -PrefixLength 24
     ipconfig
-}
-
-# Reboot if necessary.
-if ($RebootRequired) {
-    if ($NoReboot) {
-        Write-Host "Reboot Required!"
-    } else {
-        Write-Host "Rebooting in 5 seconds..."
-        Start-Sleep -Seconds 5
-        Restart-Computer -Force
-    }
 }
