@@ -51,8 +51,8 @@ if ($Os -eq "windows-2025") {
     $image = "MicrosoftCBLMariner:cbl-mariner:cbl-mariner-2-gen2:2.20240223.01" # This image may not exist
 }
 $username = "secnetperf"
-$password = $Password | ConvertTo-SecureString -AsPlainText -Force
-$cred = New-Object System.Management.Automation.PSCredential ($username, $password)
+$securePassword = $Password | ConvertTo-SecureString -AsPlainText -Force
+$cred = New-Object System.Management.Automation.PSCredential ($username, $securePassword)
 
 if ($SubscriptionId) {
     # Connect to Azure, otherwise assume we're already connected.
@@ -164,7 +164,7 @@ if ($GitHubToken) {
         Write-Host "Configuring GitHub peer machine"
         $scriptParams = @{
             "Username" = $username
-            "Password" = $password
+            "Password" = $securePassword
             "PeerIP" = $ip1
         }
         Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunPowerShellScript" -ScriptPath ".\setup-runner-windows.ps1" -Parameter $scriptParams | Out-Null
@@ -172,7 +172,7 @@ if ($GitHubToken) {
         Write-Host "Configuring GitHub runner machine"
         $scriptParams = @{
             "Username" = $username
-            "Password" = $password
+            "Password" = $securePassword
             "PeerIP" = $ip2
             "GitHubToken" = $GitHubToken
             "RunnerLabels" = "os-$Os,azure-ex"
@@ -182,7 +182,7 @@ if ($GitHubToken) {
         Write-Host "Configuring Linux GitHub peer machine"
         $scriptParams = @{
             "username" = $username
-            "password" = $password
+            "password" = $securePassword
             "peerip" = $ip1
             "noreboot" = $true
             "runnerlabels" = "os-$Os,azure-ex"
@@ -192,7 +192,7 @@ if ($GitHubToken) {
         Write-Host "Configuring Linux GitHub runner machine"
         $scriptParams = @{
             "username" = $username
-            "password" = $password
+            "password" = $securePassword
             "peerip" = $ip2
             "githubtoken" = $GitHubToken
             "noreboot" = $true
