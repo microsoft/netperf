@@ -139,17 +139,11 @@ function Add-NetPerfVm {
         $vmConfig = Set-AzVMOperatingSystem -VM $vmConfig -Linux -ComputerName $vmName -Credential $cred
     }
     $vmConfig = Set-AzVMSourceImage -VM $vmConfig -PublisherName $image.Split(":")[0] -Offer $image.Split(":")[1] -Skus $image.Split(":")[2] -Version $image.Split(":")[3]
-    $vmConfig = Add-AzVMNetworkInterface -VM $vmConfig -Id $nic.Id
+    $vmConfig = Add-AzVMNetworkInterface -VM $vmConfig -Id $nic.Id -DeleteOption Delete
     $vmConfig = Set-AzVMBootDiagnostic -VM $vmConfig -Enable -ResourceGroupName $ResourceGroupName -StorageAccountName $storage.StorageAccountName
 
     Write-Host "$vmName`: Creating VM"
-    $vmConfig = New-AzVM -ResourceGroupName $ResourceGroupName -Location $Location -VM $vmConfig | Out-Null
-
-    Write-Host "$vmName`: Updating VM delete options"
-    $vmConfig.StorageProfile.OsDisk.DeleteOption = 'Delete'
-    $vmConfig.StorageProfile.DataDisks | ForEach-Object { $_.DeleteOption = 'Delete' }
-    $vmConfig.NetworkProfile.NetworkInterfaces | ForEach-Object { $_.DeleteOption = 'Delete' }
-    $vmConfig | Update-AzVM
+    New-AzVM -ResourceGroupName $ResourceGroupName -Location $Location -VM $vmConfig -OSDiskDeleteOption Delete | Out-Null
 
     if ($osType -eq "windows") {
         Write-Host "$vmName`: Enabling test signing"
