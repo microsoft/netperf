@@ -175,7 +175,7 @@ if ($GitHubToken) {
             "Password" = $password
             "PeerIP" = $ip2
             "GitHubToken" = $GitHubToken
-            "RunnerLabels" = "os-$osType,azure-ex"
+            "RunnerLabels" = "os-$Os,azure-ex"
         }
         Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName1 -CommandId "RunPowerShellScript" -ScriptPath ".\setup-runner-windows.ps1" -Parameter $scriptParams | Out-Null
     } else {
@@ -185,7 +185,7 @@ if ($GitHubToken) {
             "password" = $password
             "peerip" = $ip1
             "noreboot" = $true
-            "runnerlabels" = "os-$osType,azure-ex"
+            "runnerlabels" = "os-$Os,azure-ex"
         }
         Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunShellScript" -ScriptPath ".\setup-runner-linux.sh" -Parameter $scriptParams | Out-Null
 
@@ -196,7 +196,7 @@ if ($GitHubToken) {
             "peerip" = $ip2
             "githubtoken" = $GitHubToken
             "noreboot" = $true
-            "runnerlabels" = "os-$osType,azure-ex"
+            "runnerlabels" = "os-$Os,azure-ex"
         }
         Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName1 -CommandId "RunShellScript" -ScriptPath ".\setup-runner-linux.sh" -Parameter $scriptParams | Out-Null
     }
