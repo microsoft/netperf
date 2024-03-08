@@ -32,7 +32,11 @@ jobs:
         ./.github/workflows/create-azure-machines.ps1 `
           -Os windows-2022 `
           -VMSize Experimental_Boost4 `
-          -GitHubToken ${{ secrets.GITHUB_TOKEN }}
+          -VMSuffix1 c1 `
+          -VMSuffix2 c2 `
+          -GitHubToken ${{ secrets.GITHUB_TOKEN }} `
+          -Password ${{ secrets.VM_PASSWORD }}
+
   test-runner:
     name: Test Runner
     needs: [create-runner]
@@ -52,3 +56,30 @@ jobs:
         Invoke-Command -Session $Session -ScriptBlock {
           ipconfig /all
         }
+
+  delete-runner:
+    name: Delete Runner
+    needs: [test-runner]
+    runs-on: windows-latest
+    if: ${{ always() }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Login to Azure
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        enable-AzPSSession: true
+    - name: Delete Azure VMs
+      shell: pwsh
+      run: |
+        Write-Host "Deleting ex-windows-c1"
+        Get-AzResource -ResourceGroupName "netperf-ex" `
+          | where {$_.Name.StartsWith("ex-windows-c1") } `
+          | Remove-AzResource -Force
+        Write-Host "Deleting ex-windows-c2"
+        Get-AzResource -ResourceGroupName "netperf-ex" `
+          | where {$_.Name.StartsWith("ex-windows-c2") } `
+          | Remove-AzResource -Force
