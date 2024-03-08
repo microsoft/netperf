@@ -34,7 +34,10 @@ param (
     [string]$VMSuffix1,
 
     [Parameter(Mandatory = $true)]
-    [string]$VMSuffix2
+    [string]$VMSuffix2,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$NoPublicIP = $false
 )
 
 Set-StrictMode -Version "Latest"
@@ -113,14 +116,19 @@ function Add-NetPerfVm {
 
     Write-Host "`nCreating $vmName"
 
-    Write-Host "$vmName`: Creating IP address" # TODO - Remove need for public IP address
-    $publicIp = New-AzPublicIpAddress -ResourceGroupName $ResourceGroupName -Name "$vmName-PublicIP" -Location $Location -AllocationMethod "Static" -Force
-
     Write-Host "$vmName`: Creating security group"
     $nsg = New-AzNetworkSecurityGroup -ResourceGroupName $ResourceGroupName -Name "$vmName-Nsg" -Location $Location -Force
 
-    Write-Host "$vmName`: Creating network interface card"
-    $nic = New-AzNetworkInterface -ResourceGroupName $ResourceGroupName -Name "$vmName-Nic" -Location $Location -SubnetId $subnet.Id -PublicIpAddressId $publicIp.Id -NetworkSecurityGroupId $nsg.Id -EnableAcceleratedNetworking -Force
+    if (!$NoPublicIP) {
+        Write-Host "$vmName`: Creating IP address"
+        $publicIp = New-AzPublicIpAddress -ResourceGroupName $ResourceGroupName -Name "$vmName-PublicIP" -Location $Location -AllocationMethod "Static" -Force
+
+        Write-Host "$vmName`: Creating network interface card"
+        $nic = New-AzNetworkInterface -ResourceGroupName $ResourceGroupName -Name "$vmName-Nic" -Location $Location -SubnetId $subnet.Id -PublicIpAddressId $publicIp.Id -NetworkSecurityGroupId $nsg.Id -EnableAcceleratedNetworking -Force
+    } else {
+        Write-Host "$vmName`: Creating network interface card (no public IP)"
+        $nic = New-AzNetworkInterface -ResourceGroupName $ResourceGroupName -Name "$vmName-Nic" -Location $Location -SubnetId $subnet.Id -NetworkSecurityGroupId $nsg.Id -EnableAcceleratedNetworking -Force
+    }
 
     Write-Host "$vmName`: Creating VM config"
     if ($osType -eq "windows") {
