@@ -178,7 +178,10 @@ if ($GitHubToken) {
             "Password" = $securePassword
             "PeerIP" = $ip1
         }
-        Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunPowerShellScript" -ScriptPath ".\setup-runner-windows.ps1" -Parameter $scriptParams | Out-Null
+        Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunPowerShellScript" -ScriptPath ".\setup-runner-windows.ps1" -Parameter $scriptParams
+
+        Write-Host "Restarting peer machine"
+        Restart-AzVM -ResourceGroupName $ResourceGroupName -Name $vmName2
 
         Write-Host "Configuring GitHub runner machine"
         $scriptParams = @{
@@ -188,7 +191,10 @@ if ($GitHubToken) {
             "GitHubToken" = $GitHubToken
             "RunnerLabels" = "os-$Os,$EnvTag"
         }
-        Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName1 -CommandId "RunPowerShellScript" -ScriptPath ".\setup-runner-windows.ps1" -Parameter $scriptParams | Out-Null
+        Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName1 -CommandId "RunPowerShellScript" -ScriptPath ".\setup-runner-windows.ps1" -Parameter $scriptParams
+
+        Write-Host "Restarting GitHub runner machine"
+        Restart-AzVM -ResourceGroupName $ResourceGroupName -Name $vmName1
     } else {
         Write-Host "Configuring Linux GitHub peer machine"
         $scriptParams = @{
@@ -197,7 +203,7 @@ if ($GitHubToken) {
             "peerip" = $ip1
             "noreboot" = $true
         }
-        Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunShellScript" -ScriptPath ".\setup-runner-linux.sh" -Parameter $scriptParams | Out-Null
+        Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunShellScript" -ScriptPath ".\setup-runner-linux.sh" -Parameter $scriptParams
 
         Write-Host "Configuring Linux GitHub runner machine"
         $scriptParams = @{
@@ -208,6 +214,6 @@ if ($GitHubToken) {
             "noreboot" = $true
             "runnerlabels" = "os-$Os,$EnvTag"
         }
-        Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName1 -CommandId "RunShellScript" -ScriptPath ".\setup-runner-linux.sh" -Parameter $scriptParams | Out-Null
+        Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName1 -CommandId "RunShellScript" -ScriptPath ".\setup-runner-linux.sh" -Parameter $scriptParams
     }
 }
