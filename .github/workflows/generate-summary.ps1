@@ -5,8 +5,10 @@
 
 param (
     [Parameter(Mandatory = $false)]
-    [boolean]$PublishResults
+    [string]$BlockOnFailure = "False",
 )
+
+$blockOnFailure = $BlockOnFailure -eq "True"
 
 Set-StrictMode -Version "Latest"
 $PSDefaultParameterValues["*:ErrorAction"] = "Stop"
@@ -165,7 +167,7 @@ foreach ($file in $files) {
     $json = Get-Content -Path $file.FullName | ConvertFrom-Json
     $RegressionQuic = ""
     $RegressionTcp = ""
-    
+
     # Potential RPS regressions
     if ($json.PSObject.Properties.Name -contains 'rps-up-512-down-4000-quic-regression') {
         $RegressionQuic += $json.'rps-up-512-down-4000-quic-regression'
@@ -198,7 +200,7 @@ if ($hasRegression) {
     Write-Host "This step has regression results. Please check the summary file for details."
 
     # Don't fail the entire workflow if we want to publish results (when we merge code or manually trigger a new workflow with "publish results" checked).
-    if (!$PublishResults) {
+    if ($blockOnFailure) {
         exit 1
     }
 }
