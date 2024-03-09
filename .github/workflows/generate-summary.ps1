@@ -5,7 +5,7 @@
 
 param (
     [Parameter(Mandatory = $false)]
-    [string]$BlockOnFailure = "False",
+    [string]$BlockOnFailure = "False"
 )
 
 $blockOnFailure = $BlockOnFailure -eq "True"
