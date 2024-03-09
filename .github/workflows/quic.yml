@@ -174,6 +174,9 @@ jobs:
     - name: Download Regression.json file
       run: Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/regression.json" -OutFile "regression.json"
       shell: pwsh
+    - name: Download Regression.json file
+      run: Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/watermark_regression.json" -OutFile "watermark_regression.json"
+      shell: pwsh
     - name: Run secnetperf
       shell: pwsh
       timeout-minutes: 20
