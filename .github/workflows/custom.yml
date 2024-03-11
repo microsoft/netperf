@@ -78,5 +78,5 @@ jobs:
     - name: Delete Azure VMs
       shell: pwsh
       run: |
-        ./.github/workflows/create-azure-machines.ps1 -VMName ex-windows-c1
-        ./.github/workflows/create-azure-machines.ps1 -VMName ex-windows-c2
+        ./.github/workflows/remove-azure-machine.ps1 -VMName ex-windows-c1
+        ./.github/workflows/remove-azure-machine.ps1 -VMName ex-windows-c2
