@@ -32,23 +32,51 @@ jobs:
         ./.github/workflows/create-azure-machines.ps1 `
           -Os windows-2022 `
           -VMSize Experimental_Boost4 `
-          -GitHubToken ${{ secrets.GITHUB_TOKEN }}
+          -VMSuffix1 c1 `
+          -VMSuffix2 c2 `
+          -EnvTag azure-custom `
+          -GitHubToken ${{ secrets.GITHUB_TOKEN }} `
+          -Password ${{ secrets.VM_PASSWORD }}
+
   test-runner:
     name: Test Runner
     needs: [create-runner]
+    timeout-minutes: 5
     runs-on:
     - self-hosted
     - os-windows-2022
-    - azure-ex
+    - azure-custom
     steps:
-    - name: Checkout
-      uses: actions/checkout@v2
     - name: Test Runner
       shell: pwsh
       run: |
         Write-Host 'Connecting to netperf-peer'
         $Session = New-PSSession -ComputerName "netperf-peer" -ConfigurationName PowerShell.7
+        Write-Host "Local IP Config:"
         ipconfig /all
+        Write-Host "Peer IP Config:"
         Invoke-Command -Session $Session -ScriptBlock {
           ipconfig /all
         }
+        Write-Host "Done!"
+
+  delete-runner:
+    name: Delete Runner
+    needs: [test-runner]
+    runs-on: windows-latest
+    if: ${{ always() }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Login to Azure
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        enable-AzPSSession: true
+    - name: Delete Azure VMs
+      shell: pwsh
+      run: |
+        ./.github/workflows/remove-azure-machine.ps1 -VMName ex-windows-c1
+        ./.github/workflows/remove-azure-machine.ps1 -VMName ex-windows-c2

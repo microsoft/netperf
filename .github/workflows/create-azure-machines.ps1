@@ -19,16 +19,25 @@ param (
     [string]$Location = "South Central US",
 
     [Parameter(Mandatory = $false)]
+    [string]$EnvTag = "azure-ex",
+
+    [Parameter(Mandatory = $false)]
     [string]$SubscriptionId,
 
     [Parameter(Mandatory = $false)]
     [string]$GitHubToken,
 
-    [Parameter(Mandatory = $false)]
-    [string]$ConfigureVMName1 = "",
+    [Parameter(Mandatory = $true)]
+    [string]$Password,
+
+    [Parameter(Mandatory = $true)]
+    [string]$VMSuffix1,
+
+    [Parameter(Mandatory = $true)]
+    [string]$VMSuffix2,
 
     [Parameter(Mandatory = $false)]
-    [string]$ConfigureVMName2 = ""
+    [switch]$NoPublicIP = $false
 )
 
 Set-StrictMode -Version "Latest"
@@ -48,96 +57,12 @@ if ($Os -eq "windows-2025") {
     $image = "MicrosoftCBLMariner:cbl-mariner:cbl-mariner-2-gen2:2.20240223.01" # This image may not exist
 }
 $username = "secnetperf"
-$password = "SecureNetworkPerf!" | ConvertTo-SecureString -AsPlainText -Force
-$cred = New-Object System.Management.Automation.PSCredential ($username, $password)
+$securePassword = $Password | ConvertTo-SecureString -AsPlainText -Force
+$cred = New-Object System.Management.Automation.PSCredential ($username, $securePassword)
 
 if ($SubscriptionId) {
     # Connect to Azure, otherwise assume we're already connected.
     Connect-AzAccount -SubscriptionId $subscriptionId
-}
-
-function Get-NetPerfVmPrivateIp {
-    param ([string]$vmName)
-    $nic = Get-AzNetworkInterface -ResourceGroupName $ResourceGroupName -Name "$vmName-Nic"
-    return $nic.IpConfigurations[0].PrivateIpAddress
-}
-
-function ConfigureVMs {
-    param (
-        [string]$vmName1,
-        [string]$vmName2,
-        [string]$GithubToken,
-        [string]$ResourceGroupName,
-        [string]$osType,
-        [boolean]$Verbose
-    )
-    $ip1 = Get-NetPerfVmPrivateIp $vmName1
-    $ip2 = Get-NetPerfVmPrivateIp $vmName2
-
-    if ($osType -eq "windows") {
-        Write-Host "Configuring GitHub peer machine"
-        $scriptParams = @{
-            "Username" = $username
-            "Password" = $password
-            "PeerIP" = $ip1
-        }
-
-        if ($Verbose) {
-            Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunPowerShellScript" -ScriptPath ".\setup-runner-windows.ps1" -Parameter $scriptParams
-        } else {
-            Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunPowerShellScript" -ScriptPath ".\setup-runner-windows.ps1" -Parameter $scriptParams | Out-Null
-        }
-
-        Write-Host "Configuring GitHub runner machine"
-        $scriptParams = @{
-            "Username" = $username
-            "Password" = $password
-            "PeerIP" = $ip2
-            "GitHubToken" = $GitHubToken
-            "RunnerLabels" = "os-$osType,azure-ex"
-        }
-        if ($Verbose) {
-            Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunPowerShellScript" -ScriptPath ".\setup-runner-windows.ps1" -Parameter $scriptParams
-        } else {
-            Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunPowerShellScript" -ScriptPath ".\setup-runner-windows.ps1" -Parameter $scriptParams | Out-Null
-        }
-    } else {
-        Write-Host "Configuring Linux GitHub peer machine"
-        $scriptParams = @{
-            "username" = $username
-            "password" = $password
-            "peerip" = $ip1
-            "noreboot" = $true
-            "runnerlabels" = "os-$osType,azure-ex"
-        }
-        if ($Verbose) {
-            Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunShellScript" -ScriptPath ".\setup-runner-linux.sh" -Parameter $scriptParams
-        } else {
-            Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunShellScript" -ScriptPath ".\setup-runner-linux.sh" -Parameter $scriptParams | Out-Null
-        }
-
-        Write-Host "Configuring Linux GitHub runner machine"
-        $scriptParams = @{
-            "username" = $username
-            "password" = $password
-            "peerip" = $ip2
-            "githubtoken" = $GitHubToken
-            "noreboot" = $true
-            "runnerlabels" = "os-$osType,azure-ex"
-        }
-        if ($Verbose) {
-            Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunShellScript" -ScriptPath ".\setup-runner-linux.sh" -Parameter $scriptParams
-        } else {
-            Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunShellScript" -ScriptPath ".\setup-runner-linux.sh" -Parameter $scriptParams | Out-Null
-        }
-    }
-
-}
-
-if ($ConfigureVMName1 -and $ConfigureVMName2 -and $GitHubToken) {
-    Write-Host "Machines already exist. Configuring them instead."
-    ConfigureVMs $ConfigureVMName1 $ConfigureVMName2 $GitHubToken $ResourceGroupName $osType $true
-    exit 0
 }
 
 Write-Host "Creating Azure Resources ($ResourceGroupName, $Location, $os, $VMSize)"
@@ -181,7 +106,7 @@ try {
 }
 
 function Add-NetPerfVm {
-    param ([string]$vmName)
+    param ($vmName)
 
     try {
         Get-AzVM -ResourceGroupName $ResourceGroupName -Name $vmName | Out-Null
@@ -191,14 +116,19 @@ function Add-NetPerfVm {
 
     Write-Host "`nCreating $vmName"
 
-    Write-Host "$vmName`: Creating IP address" # TODO - Remove need for public IP address
-    $publicIp = New-AzPublicIpAddress -ResourceGroupName $ResourceGroupName -Name "$vmName-PublicIP" -Location $Location -AllocationMethod "Static" -Force
-
     Write-Host "$vmName`: Creating security group"
     $nsg = New-AzNetworkSecurityGroup -ResourceGroupName $ResourceGroupName -Name "$vmName-Nsg" -Location $Location -Force
 
-    Write-Host "$vmName`: Creating network interface card"
-    $nic = New-AzNetworkInterface -ResourceGroupName $ResourceGroupName -Name "$vmName-Nic" -Location $Location -SubnetId $subnet.Id -PublicIpAddressId $publicIp.Id -NetworkSecurityGroupId $nsg.Id -EnableAcceleratedNetworking -Force
+    if (!$NoPublicIP) {
+        Write-Host "$vmName`: Creating IP address"
+        $publicIp = New-AzPublicIpAddress -ResourceGroupName $ResourceGroupName -Name "$vmName-PublicIP" -Location $Location -AllocationMethod "Static" -Force
+
+        Write-Host "$vmName`: Creating network interface card"
+        $nic = New-AzNetworkInterface -ResourceGroupName $ResourceGroupName -Name "$vmName-Nic" -Location $Location -SubnetId $subnet.Id -PublicIpAddressId $publicIp.Id -NetworkSecurityGroupId $nsg.Id -EnableAcceleratedNetworking -Force
+    } else {
+        Write-Host "$vmName`: Creating network interface card (no public IP)"
+        $nic = New-AzNetworkInterface -ResourceGroupName $ResourceGroupName -Name "$vmName-Nic" -Location $Location -SubnetId $subnet.Id -NetworkSecurityGroupId $nsg.Id -EnableAcceleratedNetworking -Force
+    }
 
     Write-Host "$vmName`: Creating VM config"
     if ($osType -eq "windows") {
@@ -209,11 +139,11 @@ function Add-NetPerfVm {
         $vmConfig = Set-AzVMOperatingSystem -VM $vmConfig -Linux -ComputerName $vmName -Credential $cred
     }
     $vmConfig = Set-AzVMSourceImage -VM $vmConfig -PublisherName $image.Split(":")[0] -Offer $image.Split(":")[1] -Skus $image.Split(":")[2] -Version $image.Split(":")[3]
-    $vmConfig = Add-AzVMNetworkInterface -VM $vmConfig -Id $nic.Id
+    $vmConfig = Add-AzVMNetworkInterface -VM $vmConfig -Id $nic.Id -DeleteOption Delete
     $vmConfig = Set-AzVMBootDiagnostic -VM $vmConfig -Enable -ResourceGroupName $ResourceGroupName -StorageAccountName $storage.StorageAccountName
 
     Write-Host "$vmName`: Creating VM"
-    New-AzVM -ResourceGroupName $ResourceGroupName -Location $Location -VM $vmConfig | Out-Null
+    New-AzVM -ResourceGroupName $ResourceGroupName -Location $Location -VM $vmConfig -OSDiskDeleteOption Delete | Out-Null
 
     if ($osType -eq "windows") {
         Write-Host "$vmName`: Enabling test signing"
@@ -224,12 +154,66 @@ function Add-NetPerfVm {
     }
 }
 
-$vmName1 = "ex-$osType-01" # TODO - Dynamically generate numbers
-$vmName2 = "ex-$osType-02"
+function Get-NetPerfVmPrivateIp {
+    param ($vmName)
+    $nic = Get-AzNetworkInterface -ResourceGroupName $ResourceGroupName -Name "$vmName-Nic"
+    return $nic.IpConfigurations[0].PrivateIpAddress
+}
+
+$vmName1 = "ex-$osType-$VMSuffix1"
+$vmName2 = "ex-$osType-$VMSuffix2"
 
 Add-NetPerfVm $vmName1
 Add-NetPerfVm $vmName2
 
 if ($GitHubToken) {
-    ConfigureVMs $vmName1 $vmName2 $GitHubToken $ResourceGroupName $osType $false
+
+    $ip1 = Get-NetPerfVmPrivateIp $vmName1
+    $ip2 = Get-NetPerfVmPrivateIp $vmName2
+
+    if ($osType -eq "windows") {
+        Write-Host "Configuring GitHub peer machine"
+        $scriptParams = @{
+            "Username" = $username
+            "Password" = $securePassword
+            "PeerIP" = $ip1
+        }
+        Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunPowerShellScript" -ScriptPath ".\setup-runner-windows.ps1" -Parameter $scriptParams
+
+        Write-Host "Restarting peer machine"
+        Restart-AzVM -ResourceGroupName $ResourceGroupName -Name $vmName2
+
+        Write-Host "Configuring GitHub runner machine"
+        $scriptParams = @{
+            "Username" = $username
+            "Password" = $securePassword
+            "PeerIP" = $ip2
+            "GitHubToken" = $GitHubToken
+            "RunnerLabels" = "os-$Os,$EnvTag"
+        }
+        Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName1 -CommandId "RunPowerShellScript" -ScriptPath ".\setup-runner-windows.ps1" -Parameter $scriptParams
+
+        Write-Host "Restarting GitHub runner machine"
+        Restart-AzVM -ResourceGroupName $ResourceGroupName -Name $vmName1
+    } else {
+        Write-Host "Configuring Linux GitHub peer machine"
+        $scriptParams = @{
+            "username" = $username
+            "password" = $securePassword
+            "peerip" = $ip1
+            "noreboot" = $true
+        }
+        Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunShellScript" -ScriptPath ".\setup-runner-linux.sh" -Parameter $scriptParams
+
+        Write-Host "Configuring Linux GitHub runner machine"
+        $scriptParams = @{
+            "username" = $username
+            "password" = $securePassword
+            "peerip" = $ip2
+            "githubtoken" = $GitHubToken
+            "noreboot" = $true
+            "runnerlabels" = "os-$Os,$EnvTag"
+        }
+        Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName1 -CommandId "RunShellScript" -ScriptPath ".\setup-runner-linux.sh" -Parameter $scriptParams
+    }
 }
