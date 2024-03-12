@@ -7,9 +7,9 @@
             "Noise": 0.2
         },
         "windows-2022-x64-azure-wsk-schannel": {
-            "baseline": 4757509.333333334,
-            "BestResult": 5946886.666666667,
-            "BestResultCommit": "d3fa5454ba275b7e50bada9d46ea43780dcc26b7",
+            "baseline": 4972117.066666666,
+            "BestResult": 6215146.333333333,
+            "BestResultCommit": "5d070d661c45979946615289e92bb6b822efe9e9",
             "Noise": 0.2
         },
         "windows-2022-x64-lab-wsk-schannel": {
@@ -19,9 +19,9 @@
             "Noise": 0.2
         },
         "windows-2025-x64-azure-wsk-schannel": {
-            "baseline": 1399040.5333333334,
-            "BestResult": 1748800.6666666667,
-            "BestResultCommit": "b92d8cf0464008069ac650898c6832867899d4c5",
+            "baseline": 1452888.0,
+            "BestResult": 1816110.0,
+            "BestResultCommit": "5d070d661c45979946615289e92bb6b822efe9e9",
             "Noise": 0.2
         },
         "windows server-x64-azure-xdp-schannel": {
@@ -79,9 +79,9 @@
             "Noise": 0.2
         },
         "windows-2025-x64-azure-rio-schannel": {
-            "baseline": 111534.66666666669,
-            "BestResult": 139418.33333333334,
-            "BestResultCommit": "0725976753905392566bb49891b5eba0511aa3f6",
+            "baseline": 117716.0,
+            "BestResult": 147145.0,
+            "BestResultCommit": "5d070d661c45979946615289e92bb6b822efe9e9",
             "Noise": 0.2
         },
         "windows server-x64-azure-iocp-schannel": {
@@ -103,9 +103,9 @@
             "Noise": 0.2
         },
         "windows-2025-x64-azure-iocp-schannel": {
-            "baseline": 1356838.5333333334,
-            "BestResult": 1696048.1666666667,
-            "BestResultCommit": "0725976753905392566bb49891b5eba0511aa3f6",
+            "baseline": 1392804.5333333334,
+            "BestResult": 1741005.6666666667,
+            "BestResultCommit": "5d070d661c45979946615289e92bb6b822efe9e9",
             "Noise": 0.2
         }
     },
@@ -124,9 +124,9 @@
         "ubuntu-20.04-x64-azure-epoll-openssl": {
             "baseline": 6168.0,
             "latencyUpperBound": {
-                "P0": 105.77873997403707,
-                "P50": 128.26599611689994,
-                "P99": 259.749863387611
+                "P0": 105.2633325922632,
+                "P50": 128.70513487090108,
+                "P99": 256.18554410685897
             },
             "BestResult": 7710.0,
             "BestResultCommit": "b92d8cf0464008069ac650898c6832867899d4c5",
@@ -135,9 +135,9 @@
         "ubuntu-20.04-x64-lab-epoll-openssl": {
             "baseline": 628.5333333333333,
             "latencyUpperBound": {
-                "P0": 930.6675143819879,
-                "P50": 1276.8433666561814,
-                "P99": 2412.2557250163736
+                "P0": 981.1317192372023,
+                "P50": 1305.103846015086,
+                "P99": 2384.9017441780065
             },
             "BestResult": 785.6666666666666,
             "BestResultCommit": "b92d8cf0464008069ac650898c6832867899d4c5",
@@ -148,7 +148,7 @@
             "latencyUpperBound": {
                 "P0": 151.10392059986043,
                 "P50": 245.40247970009904,
-                "P99": 1001.9495505880703
+                "P99": 1001.9495505880702
             },
             "BestResult": 6455.166666666667,
             "BestResultCommit": "dc2d0b83c0eeb14f94c93fc4a9ae5300f52bf191",
@@ -157,9 +157,9 @@
         "windows-2022-x64-azure-rio-schannel": {
             "baseline": 9129.333333333334,
             "latencyUpperBound": {
-                "P0": 97.30526456179243,
-                "P50": 116.82852509382641,
-                "P99": 205.7317892662297
+                "P0": 96.37408285061962,
+                "P50": 115.54599695474091,
+                "P99": 237.11394574923153
             },
             "BestResult": 11411.666666666666,
             "BestResultCommit": "d3fa5454ba275b7e50bada9d46ea43780dcc26b7",
@@ -168,9 +168,9 @@
         "windows-2025-x64-azure-rio-schannel": {
             "baseline": 2446.9333333333334,
             "latencyUpperBound": {
-                "P0": 211.97787506233468,
-                "P50": 373.3449650429979,
-                "P99": 1386.0875815003108
+                "P0": 208.4830744015992,
+                "P50": 452.35720003048027,
+                "P99": 2607.4005382394053
             },
             "BestResult": 3058.6666666666665,
             "BestResultCommit": "0725976753905392566bb49891b5eba0511aa3f6",
@@ -190,9 +190,9 @@
         "windows-2022-x64-azure-iocp-schannel": {
             "baseline": 7074.133333333333,
             "latencyUpperBound": {
-                "P0": 102.41581623797195,
-                "P50": 116.57977518760315,
-                "P99": 258.3508016135078
+                "P0": 101.83037260290776,
+                "P50": 116.93235284692611,
+                "P99": 262.14563706859826
             },
             "BestResult": 8842.666666666666,
             "BestResultCommit": "b92d8cf0464008069ac650898c6832867899d4c5",
@@ -201,9 +201,9 @@
         "windows-2022-x64-lab-iocp-schannel": {
             "baseline": 836.0,
             "latencyUpperBound": {
-                "P0": 689.9300072436179,
-                "P50": 1055.3873158497279,
-                "P99": 1761.6629746290562
+                "P0": 689.5477718726625,
+                "P50": 1044.9501500547783,
+                "P99": 1743.6964983731873
             },
             "BestResult": 1045.0,
             "BestResultCommit": "b92d8cf0464008069ac650898c6832867899d4c5",
@@ -212,9 +212,9 @@
         "windows-2025-x64-azure-iocp-schannel": {
             "baseline": 2295.4666666666667,
             "latencyUpperBound": {
-                "P0": 221.8749566874099,
-                "P50": 343.5928859558742,
-                "P99": 1239.9115418930014
+                "P0": 219.95754502904958,
+                "P50": 403.3155473065931,
+                "P99": 2257.314900284994
             },
             "BestResult": 2869.3333333333335,
             "BestResultCommit": "0725976753905392566bb49891b5eba0511aa3f6",
@@ -235,9 +235,9 @@
             "Noise": 0.2
         },
         "ubuntu-20.04-x64-lab-epoll-openssl": {
-            "baseline": 7557919.2,
-            "BestResult": 9447399.0,
-            "BestResultCommit": "5b8d2b49b918c003c0ed5dbffe675ba965ea413e",
+            "baseline": 7665472.266666668,
+            "BestResult": 9581840.333333334,
+            "BestResultCommit": "5d070d661c45979946615289e92bb6b822efe9e9",
             "Noise": 0.2
         },
         "windows server-x64-azure-rio-schannel": {
@@ -253,9 +253,9 @@
             "Noise": 0.2
         },
         "windows-2025-x64-azure-rio-schannel": {
-            "baseline": 1861723.7333333334,
-            "BestResult": 2327154.6666666665,
-            "BestResultCommit": "5b8d2b49b918c003c0ed5dbffe675ba965ea413e",
+            "baseline": 1903121.866666667,
+            "BestResult": 2378902.3333333335,
+            "BestResultCommit": "5d070d661c45979946615289e92bb6b822efe9e9",
             "Noise": 0.2
         },
         "windows server-x64-azure-iocp-schannel": {
@@ -265,15 +265,15 @@
             "Noise": 0.2
         },
         "windows-2022-x64-azure-iocp-schannel": {
-            "baseline": 7618693.066666667,
-            "BestResult": 9523366.333333334,
-            "BestResultCommit": "b92d8cf0464008069ac650898c6832867899d4c5",
+            "baseline": 7652242.933333334,
+            "BestResult": 9565303.666666666,
+            "BestResultCommit": "5d070d661c45979946615289e92bb6b822efe9e9",
             "Noise": 0.2
         },
         "windows-2022-x64-lab-iocp-schannel": {
-            "baseline": 12271648.0,
-            "BestResult": 15339560.0,
-            "BestResultCommit": "d3fa5454ba275b7e50bada9d46ea43780dcc26b7",
+            "baseline": 12483488.266666668,
+            "BestResult": 15604360.333333334,
+            "BestResultCommit": "5d070d661c45979946615289e92bb6b822efe9e9",
             "Noise": 0.2
         },
         "windows-2025-x64-azure-iocp-schannel": {
@@ -327,9 +327,9 @@
             "Noise": 0.2
         },
         "windows-2022-x64-azure-iocp-schannel": {
-            "baseline": 1012.4000000000001,
-            "BestResult": 1265.5,
-            "BestResultCommit": "5b8d2b49b918c003c0ed5dbffe675ba965ea413e",
+            "baseline": 1024.8,
+            "BestResult": 1281.0,
+            "BestResultCommit": "5d070d661c45979946615289e92bb6b822efe9e9",
             "Noise": 0.2
         },
         "windows-2022-x64-lab-iocp-schannel": {
@@ -377,9 +377,9 @@
             "Noise": 0.2
         },
         "windows-2025-x64-azure-rio-schannel": {
-            "baseline": 1776900.5333333332,
-            "BestResult": 2221125.6666666665,
-            "BestResultCommit": "b92d8cf0464008069ac650898c6832867899d4c5",
+            "baseline": 1831662.9333333333,
+            "BestResult": 2289578.6666666665,
+            "BestResultCommit": "5d070d661c45979946615289e92bb6b822efe9e9",
             "Noise": 0.2
         },
         "windows server-x64-azure-iocp-schannel": {
@@ -415,9 +415,9 @@
             "Noise": 0.2
         },
         "windows-2022-x64-azure-xdp-schannel": {
-            "baseline": 465.86666666666673,
-            "BestResult": 582.3333333333334,
-            "BestResultCommit": "0725976753905392566bb49891b5eba0511aa3f6",
+            "baseline": 500.0,
+            "BestResult": 625.0,
+            "BestResultCommit": "5d070d661c45979946615289e92bb6b822efe9e9",
             "Noise": 0.2
         },
         "windows-2022-x64-lab-xdp-schannel": {
@@ -427,9 +427,9 @@
             "Noise": 0.2
         },
         "windows-2025-x64-azure-xdp-schannel": {
-            "baseline": 506.40000000000003,
-            "BestResult": 633.0,
-            "BestResultCommit": "5b8d2b49b918c003c0ed5dbffe675ba965ea413e",
+            "baseline": 512.8000000000001,
+            "BestResult": 641.0,
+            "BestResultCommit": "5d070d661c45979946615289e92bb6b822efe9e9",
             "Noise": 0.2
         },
         "ubuntu-x64-azure-epoll-openssl": {
@@ -463,9 +463,9 @@
             "Noise": 0.2
         },
         "windows-2025-x64-azure-rio-schannel": {
-            "baseline": 286.6666666666667,
-            "BestResult": 358.3333333333333,
-            "BestResultCommit": "b92d8cf0464008069ac650898c6832867899d4c5",
+            "baseline": 297.06666666666666,
+            "BestResult": 371.3333333333333,
+            "BestResultCommit": "5d070d661c45979946615289e92bb6b822efe9e9",
             "Noise": 0.2
         },
         "windows server-x64-azure-iocp-schannel": {
@@ -475,9 +475,9 @@
             "Noise": 0.2
         },
         "windows-2022-x64-azure-iocp-schannel": {
-            "baseline": 589.7333333333333,
-            "BestResult": 737.1666666666666,
-            "BestResultCommit": "0725976753905392566bb49891b5eba0511aa3f6",
+            "baseline": 677.8666666666668,
+            "BestResult": 847.3333333333334,
+            "BestResultCommit": "5d070d661c45979946615289e92bb6b822efe9e9",
             "Noise": 0.2
         },
         "windows-2022-x64-lab-iocp-schannel": {
@@ -508,31 +508,31 @@
         "windows-2022-x64-azure-wsk-schannel": {
             "baseline": 7769.6,
             "latencyUpperBound": {
-                "P0": 80.82842712474618,
-                "P50": 101.27701896679991,
-                "P99": 210.81388573714725
+                "P0": 80.7410142954144,
+                "P50": 102.66851788388792,
+                "P99": 215.70505783099787
             },
             "BestResult": 9712.0,
             "BestResultCommit": "b92d8cf0464008069ac650898c6832867899d4c5",
             "Noise": 0.2
         },
         "windows-2022-x64-lab-wsk-schannel": {
-            "baseline": 897.0666666666666,
+            "baseline": 901.6,
             "latencyUpperBound": {
-                "P0": 510.3055448305432,
-                "P50": 888.8939134804143,
-                "P99": 1520.8428228816892
+                "P0": 514.3362350250765,
+                "P50": 887.9782794228256,
+                "P99": 1527.2857334869373
             },
-            "BestResult": 1121.3333333333333,
-            "BestResultCommit": "d3fa5454ba275b7e50bada9d46ea43780dcc26b7",
+            "BestResult": 1127.0,
+            "BestResultCommit": "5d070d661c45979946615289e92bb6b822efe9e9",
             "Noise": 0.2
         },
         "windows-2025-x64-azure-wsk-schannel": {
             "baseline": 2248.8,
             "latencyUpperBound": {
-                "P0": 223.70606020859168,
-                "P50": 353.99197710403917,
-                "P99": 1103.2875240318835
+                "P0": 217.1286294193294,
+                "P50": 404.1527360458505,
+                "P99": 2362.6937253227507
             },
             "BestResult": 2811.0,
             "BestResultCommit": "5b8d2b49b918c003c0ed5dbffe675ba965ea413e",
@@ -552,9 +552,9 @@
         "windows-2022-x64-azure-xdp-schannel": {
             "baseline": 8687.466666666667,
             "latencyUpperBound": {
-                "P0": 71.48847121960205,
-                "P50": 95.53017883546981,
-                "P99": 116.96266087836526
+                "P0": 71.20592885019677,
+                "P50": 95.20441878009257,
+                "P99": 116.52861078302185
             },
             "BestResult": 10859.333333333334,
             "BestResultCommit": "d3fa5454ba275b7e50bada9d46ea43780dcc26b7",
@@ -563,9 +563,9 @@
         "windows-2022-x64-lab-xdp-schannel": {
             "baseline": 11887.2,
             "latencyUpperBound": {
-                "P0": 63.97664484814193,
-                "P50": 81.70447925362092,
-                "P99": 315.5772553057826
+                "P0": 62.19090533122727,
+                "P50": 79.63492053495203,
+                "P99": 311.19008909455584
             },
             "BestResult": 14859.0,
             "BestResultCommit": "b92d8cf0464008069ac650898c6832867899d4c5",
@@ -574,9 +574,9 @@
         "windows-2025-x64-azure-xdp-schannel": {
             "baseline": 2354.133333333333,
             "latencyUpperBound": {
-                "P0": 189.78460969082653,
-                "P50": 340.3282190001239,
-                "P99": 1354.839350057205
+                "P0": 188.52295343375042,
+                "P50": 365.1084970424436,
+                "P99": 2069.7671058133665
             },
             "BestResult": 2942.6666666666665,
             "BestResultCommit": "5b8d2b49b918c003c0ed5dbffe675ba965ea413e",
@@ -596,9 +596,9 @@
         "ubuntu-20.04-x64-azure-epoll-openssl": {
             "baseline": 6388.8,
             "latencyUpperBound": {
-                "P0": 86.7707848834589,
-                "P50": 130.73172142942795,
-                "P99": 265.9579918013665
+                "P0": 86.18656334834051,
+                "P50": 134.9252230030138,
+                "P99": 267.26964104560534
             },
             "BestResult": 7986.0,
             "BestResultCommit": "b92d8cf0464008069ac650898c6832867899d4c5",
@@ -607,9 +607,9 @@
         "ubuntu-20.04-x64-lab-epoll-openssl": {
             "baseline": 633.3333333333334,
             "latencyUpperBound": {
-                "P0": 816.3400913622614,
-                "P50": 1294.4119550061275,
-                "P99": 2401.3455457359405
+                "P0": 961.1831752436066,
+                "P50": 1316.5860055591806,
+                "P99": 2360.1737401081873
             },
             "BestResult": 791.6666666666666,
             "BestResultCommit": "b92d8cf0464008069ac650898c6832867899d4c5",
@@ -629,9 +629,9 @@
         "windows-2022-x64-azure-rio-schannel": {
             "baseline": 6933.866666666668,
             "latencyUpperBound": {
-                "P0": 103.4614480541223,
-                "P50": 131.23314696374652,
-                "P99": 166.99549467260465
+                "P0": 102.29070507130263,
+                "P50": 129.1535973084639,
+                "P99": 168.58634854378104
             },
             "BestResult": 8667.333333333334,
             "BestResultCommit": "5b8d2b49b918c003c0ed5dbffe675ba965ea413e",
@@ -640,9 +640,9 @@
         "windows-2025-x64-azure-rio-schannel": {
             "baseline": 2022.9333333333334,
             "latencyUpperBound": {
-                "P0": 257.90066591259523,
-                "P50": 434.81640200113355,
-                "P99": 1546.4205750430483
+                "P0": 254.9569595359294,
+                "P50": 447.40649908469686,
+                "P99": 2081.203705843755
             },
             "BestResult": 2528.6666666666665,
             "BestResultCommit": "0725976753905392566bb49891b5eba0511aa3f6",
@@ -662,9 +662,9 @@
         "windows-2022-x64-azure-iocp-schannel": {
             "baseline": 6289.333333333334,
             "latencyUpperBound": {
-                "P0": 105.14244772602488,
-                "P50": 130.95723677881938,
-                "P99": 275.9025662779181
+                "P0": 105.18325687912517,
+                "P50": 129.6159090561228,
+                "P99": 278.397587092345
             },
             "BestResult": 7861.666666666667,
             "BestResultCommit": "5b8d2b49b918c003c0ed5dbffe675ba965ea413e",
@@ -673,9 +673,9 @@
         "windows-2022-x64-lab-iocp-schannel": {
             "baseline": 816.2666666666668,
             "latencyUpperBound": {
-                "P0": 875.7083014292991,
-                "P50": 1026.2794151792787,
-                "P99": 1730.8267890673094
+                "P0": 908.753657144224,
+                "P50": 1027.0700395696779,
+                "P99": 1719.3496130605154
             },
             "BestResult": 1020.3333333333334,
             "BestResultCommit": "d3fa5454ba275b7e50bada9d46ea43780dcc26b7",
@@ -684,9 +684,9 @@
         "windows-2025-x64-azure-iocp-schannel": {
             "baseline": 1984.0,
             "latencyUpperBound": {
-                "P0": 258.7462993153345,
-                "P50": 413.85982252935577,
-                "P99": 1404.4777798468094
+                "P0": 253.50737055896116,
+                "P50": 490.03236126978106,
+                "P99": 2402.2302602392747
             },
             "BestResult": 2480.0,
             "BestResultCommit": "0725976753905392566bb49891b5eba0511aa3f6",
@@ -713,9 +713,9 @@
             "Noise": 0.2
         },
         "windows-2025-x64-azure-wsk-schannel": {
-            "baseline": 1364033.0666666667,
-            "BestResult": 1705041.3333333333,
-            "BestResultCommit": "0725976753905392566bb49891b5eba0511aa3f6",
+            "baseline": 1364689.8666666667,
+            "BestResult": 1705862.3333333333,
+            "BestResultCommit": "5d070d661c45979946615289e92bb6b822efe9e9",
             "Noise": 0.2
         },
         "windows server-x64-azure-xdp-schannel": {
@@ -731,15 +731,15 @@
             "Noise": 0.2
         },
         "windows-2022-x64-lab-xdp-schannel": {
-            "baseline": 6046851.2,
-            "BestResult": 7558564.0,
-            "BestResultCommit": "0725976753905392566bb49891b5eba0511aa3f6",
+            "baseline": 6227635.466666667,
+            "BestResult": 7784544.333333333,
+            "BestResultCommit": "5d070d661c45979946615289e92bb6b822efe9e9",
             "Noise": 0.2
         },
         "windows-2025-x64-azure-xdp-schannel": {
-            "baseline": 1227306.9333333333,
-            "BestResult": 1534133.6666666667,
-            "BestResultCommit": "b92d8cf0464008069ac650898c6832867899d4c5",
+            "baseline": 1307560.8,
+            "BestResult": 1634451.0,
+            "BestResultCommit": "5d070d661c45979946615289e92bb6b822efe9e9",
             "Noise": 0.2
         },
         "ubuntu-x64-azure-epoll-openssl": {
@@ -797,9 +797,9 @@
             "Noise": 0.2
         },
         "windows-2025-x64-azure-iocp-schannel": {
-            "baseline": 1318367.4666666668,
-            "BestResult": 1647959.3333333333,
-            "BestResultCommit": "b92d8cf0464008069ac650898c6832867899d4c5",
+            "baseline": 1499289.8666666667,
+            "BestResult": 1874112.3333333333,
+            "BestResultCommit": "5d070d661c45979946615289e92bb6b822efe9e9",
             "Noise": 0.2
         }
     }

@@ -4,55 +4,55 @@
             "baseline": 280439.37596846744
         },
         "windows-2022-x64-azure-wsk-schannel": {
-            "baseline": 5059546.530824355
+            "baseline": 4978943.61628562
         },
         "windows-2022-x64-lab-wsk-schannel": {
-            "baseline": 5915027.862536384
+            "baseline": 5990729.43434554
         },
         "windows-2025-x64-azure-wsk-schannel": {
-            "baseline": 552695.8869829851
+            "baseline": 587032.5560855112
         },
         "windows server-x64-azure-xdp-schannel": {
             "baseline": -4061805.3691339646
         },
         "windows-2022-x64-azure-xdp-schannel": {
-            "baseline": 5162679.424189992
+            "baseline": 4961312.94468488
         },
         "windows-2022-x64-lab-xdp-schannel": {
-            "baseline": 6345615.129418593
+            "baseline": 6512242.118753705
         },
         "windows-2025-x64-azure-xdp-schannel": {
-            "baseline": 632649.5637410752
+            "baseline": 474679.76148262154
         },
         "ubuntu-x64-azure-epoll-openssl": {
             "baseline": -3278740.6704180953
         },
         "ubuntu-20.04-x64-azure-epoll-openssl": {
-            "baseline": 4772365.218119668
+            "baseline": 4851655.301436684
         },
         "ubuntu-20.04-x64-lab-epoll-openssl": {
-            "baseline": 621867.0567666045
+            "baseline": 614445.6880807399
         },
         "windows server-x64-azure-rio-schannel": {
             "baseline": 48103.35102632032
         },
         "windows-2022-x64-azure-rio-schannel": {
-            "baseline": 33330.6361316375
+            "baseline": 34840.51462414271
         },
         "windows-2025-x64-azure-rio-schannel": {
-            "baseline": 94083.60300300649
+            "baseline": 94384.65574301468
         },
         "windows server-x64-azure-iocp-schannel": {
             "baseline": -3397187.7013885602
         },
         "windows-2022-x64-azure-iocp-schannel": {
-            "baseline": 5106691.930148555
+            "baseline": 5252686.069180209
         },
         "windows-2022-x64-lab-iocp-schannel": {
-            "baseline": -2255466.2579046916
+            "baseline": -2659808.726881393
         },
         "windows-2025-x64-azure-iocp-schannel": {
-            "baseline": 570690.4712719724
+            "baseline": 635738.8828637331
         }
     },
     "rps-up-512-down-4000-tcp": {
@@ -65,19 +65,19 @@
             }
         },
         "ubuntu-20.04-x64-azure-epoll-openssl": {
-            "baseline": 7015.289125776426,
+            "baseline": 7028.915308172106,
             "latencyUpperBound": {
-                "P0": 105.77873997403707,
-                "P50": 128.26599611689994,
-                "P99": 259.749863387611
+                "P0": 105.2633325922632,
+                "P50": 128.70513487090108,
+                "P99": 256.18554410685897
             }
         },
         "ubuntu-20.04-x64-lab-epoll-openssl": {
-            "baseline": 772.8392876135778,
+            "baseline": 747.9117004673868,
             "latencyUpperBound": {
-                "P0": 930.6675143819879,
-                "P50": 1276.8433666561814,
-                "P99": 2412.2557250163736
+                "P0": 981.1317192372023,
+                "P50": 1305.103846015086,
+                "P99": 2384.9017441780065
             }
         },
         "windows server-x64-azure-rio-schannel": {
@@ -85,27 +85,27 @@
             "latencyUpperBound": {
                 "P0": 151.10392059986043,
                 "P50": 245.40247970009904,
-                "P99": 1001.9495505880703
+                "P99": 1001.9495505880702
             }
         },
         "windows-2022-x64-azure-rio-schannel": {
-            "baseline": 7712.08099864563,
+            "baseline": 7553.738235829474,
             "latencyUpperBound": {
-                "P0": 97.30526456179243,
-                "P50": 116.82852509382641,
-                "P99": 205.7317892662297
+                "P0": 96.37408285061962,
+                "P50": 115.54599695474091,
+                "P99": 237.11394574923153
             }
         },
         "windows-2025-x64-azure-rio-schannel": {
-            "baseline": 2164.4458054702973,
+            "baseline": 1388.1980224699564,
             "latencyUpperBound": {
-                "P0": 211.97787506233468,
-                "P50": 373.3449650429979,
-                "P99": 1386.0875815003108
+                "P0": 208.4830744015992,
+                "P50": 452.35720003048027,
+                "P99": 2607.4005382394053
             }
         },
         "windows server-x64-azure-iocp-schannel": {
-            "baseline": -218.68687316960222,
+            "baseline": -218.68687316960313,
             "latencyUpperBound": {
                 "P0": 620.1079698715891,
                 "P50": 974.2483011263311,
@@ -113,27 +113,27 @@
             }
         },
         "windows-2022-x64-azure-iocp-schannel": {
-            "baseline": 7794.451504854439,
+            "baseline": 7660.572357171005,
             "latencyUpperBound": {
-                "P0": 102.41581623797195,
-                "P50": 116.57977518760315,
-                "P99": 258.3508016135078
+                "P0": 101.83037260290776,
+                "P50": 116.93235284692611,
+                "P99": 262.14563706859826
             }
         },
         "windows-2022-x64-lab-iocp-schannel": {
-            "baseline": 925.4119687738945,
+            "baseline": 936.8932146145818,
             "latencyUpperBound": {
-                "P0": 689.9300072436179,
-                "P50": 1055.3873158497279,
-                "P99": 1761.6629746290562
+                "P0": 689.5477718726625,
+                "P50": 1044.9501500547783,
+                "P99": 1743.6964983731873
             }
         },
         "windows-2025-x64-azure-iocp-schannel": {
-            "baseline": 2496.719584605912,
+            "baseline": 1848.0769024772094,
             "latencyUpperBound": {
-                "P0": 221.8749566874099,
-                "P50": 343.5928859558742,
-                "P99": 1239.9115418930014
+                "P0": 219.95754502904958,
+                "P50": 403.3155473065931,
+                "P99": 2257.314900284994
             }
         }
     },
@@ -142,31 +142,31 @@
             "baseline": -7012738.308778233
         },
         "ubuntu-20.04-x64-azure-epoll-openssl": {
-            "baseline": 9444650.668124562
+            "baseline": 9450307.776937293
         },
         "ubuntu-20.04-x64-lab-epoll-openssl": {
-            "baseline": 8567567.52838897
+            "baseline": 8558262.754388908
         },
         "windows server-x64-azure-rio-schannel": {
             "baseline": 1421758.3976388061
         },
         "windows-2022-x64-azure-rio-schannel": {
-            "baseline": 4070529.601575142
+            "baseline": 4064329.588511072
         },
         "windows-2025-x64-azure-rio-schannel": {
-            "baseline": 736389.641751348
+            "baseline": 881131.298122972
         },
         "windows server-x64-azure-iocp-schannel": {
             "baseline": -6484207.131615571
         },
         "windows-2022-x64-azure-iocp-schannel": {
-            "baseline": 9484155.808939986
+            "baseline": 9450048.029247032
         },
         "windows-2022-x64-lab-iocp-schannel": {
-            "baseline": 10499873.052750735
+            "baseline": 10562971.524281483
         },
         "windows-2025-x64-azure-iocp-schannel": {
-            "baseline": 621656.257886457
+            "baseline": 832946.0426189224
         }
     },
     "hps-conns-100-tcp": {
@@ -174,31 +174,31 @@
             "baseline": 217.68115016948104
         },
         "ubuntu-20.04-x64-azure-epoll-openssl": {
-            "baseline": 1271.3803115399883
+            "baseline": 1241.8620539755052
         },
         "ubuntu-20.04-x64-lab-epoll-openssl": {
-            "baseline": 445.51591215996166
+            "baseline": 450.71274723797
         },
         "windows server-x64-azure-rio-schannel": {
             "baseline": 856.6152309520886
         },
         "windows-2022-x64-azure-rio-schannel": {
-            "baseline": 517.5947257366036
+            "baseline": 564.8904691722199
         },
         "windows-2025-x64-azure-rio-schannel": {
-            "baseline": 719.0121474185124
+            "baseline": 731.2383427208335
         },
         "windows server-x64-azure-iocp-schannel": {
             "baseline": 641.8927258305994
         },
         "windows-2022-x64-azure-iocp-schannel": {
-            "baseline": -765.1670147023501
+            "baseline": -566.9874588298419
         },
         "windows-2022-x64-lab-iocp-schannel": {
-            "baseline": -1574.1266098480487
+            "baseline": -1258.2823591058946
         },
         "windows-2025-x64-azure-iocp-schannel": {
-            "baseline": 943.7593245539181
+            "baseline": 954.635112378948
         }
     },
     "tput-up-tcp": {
@@ -206,75 +206,75 @@
             "baseline": -7437873.8154752655
         },
         "ubuntu-20.04-x64-azure-epoll-openssl": {
-            "baseline": 9495805.091262965
+            "baseline": 9494572.996174153
         },
         "ubuntu-20.04-x64-lab-epoll-openssl": {
-            "baseline": 9561577.515050428
+            "baseline": 9722146.228570849
         },
         "windows server-x64-azure-rio-schannel": {
             "baseline": 1824252.9286445663
         },
         "windows-2022-x64-azure-rio-schannel": {
-            "baseline": 1897889.513851921
+            "baseline": 2058307.338039232
         },
         "windows-2025-x64-azure-rio-schannel": {
-            "baseline": 257490.05956600886
+            "baseline": 346504.32760740863
         },
         "windows server-x64-azure-iocp-schannel": {
             "baseline": -7110803.34410489
         },
         "windows-2022-x64-azure-iocp-schannel": {
-            "baseline": 9012111.720254507
+            "baseline": 9073473.448968355
         },
         "windows-2022-x64-lab-iocp-schannel": {
-            "baseline": 13419453.123122877
+            "baseline": 12992803.130209908
         },
         "windows-2025-x64-azure-iocp-schannel": {
-            "baseline": 253086.11115031876
+            "baseline": 422902.26351208985
         }
     },
     "hps-conns-100-quic": {
         "windows server-x64-azure-xdp-schannel": {
-            "baseline": -376.75767526250274
+            "baseline": -376.7576752625032
         },
         "windows-2022-x64-azure-xdp-schannel": {
-            "baseline": 368.72223175147735
+            "baseline": 360.6225078097546
         },
         "windows-2022-x64-lab-xdp-schannel": {
-            "baseline": 5190.053057596913
+            "baseline": 5217.244757284577
         },
         "windows-2025-x64-azure-xdp-schannel": {
-            "baseline": 599.6298493026037
+            "baseline": 598.1216179680641
         },
         "ubuntu-x64-azure-epoll-openssl": {
             "baseline": -857.7408093453564
         },
         "ubuntu-20.04-x64-azure-epoll-openssl": {
-            "baseline": 1906.2351093565544
+            "baseline": 1943.3388918373785
         },
         "ubuntu-20.04-x64-lab-epoll-openssl": {
-            "baseline": 7810.016889137224
+            "baseline": 7650.645556538604
         },
         "windows server-x64-azure-rio-schannel": {
             "baseline": 290.5249753129958
         },
         "windows-2022-x64-azure-rio-schannel": {
-            "baseline": 240.56878511237323
+            "baseline": 246.6134665985532
         },
         "windows-2025-x64-azure-rio-schannel": {
-            "baseline": 283.5615210144194
+            "baseline": 278.04772731218577
         },
         "windows server-x64-azure-iocp-schannel": {
             "baseline": 389.2934681373587
         },
         "windows-2022-x64-azure-iocp-schannel": {
-            "baseline": 568.6391452202984
+            "baseline": 501.3358760919165
         },
         "windows-2022-x64-lab-iocp-schannel": {
-            "baseline": 2416.373603851688
+            "baseline": 2381.659183945535
         },
         "windows-2025-x64-azure-iocp-schannel": {
-            "baseline": 742.5658317811722
+            "baseline": 750.9522921482157
         }
     },
     "rps-up-512-down-4000-quic": {
@@ -287,27 +287,27 @@
             }
         },
         "windows-2022-x64-azure-wsk-schannel": {
-            "baseline": 9039.929215998789,
+            "baseline": 8709.448770336694,
             "latencyUpperBound": {
-                "P0": 80.82842712474618,
-                "P50": 101.27701896679991,
-                "P99": 210.81388573714725
+                "P0": 80.7410142954144,
+                "P50": 102.66851788388792,
+                "P99": 215.70505783099787
             }
         },
         "windows-2022-x64-lab-wsk-schannel": {
-            "baseline": 1096.0598498050076,
+            "baseline": 1092.828014786247,
             "latencyUpperBound": {
-                "P0": 510.3055448305432,
-                "P50": 888.8939134804143,
-                "P99": 1520.8428228816892
+                "P0": 514.3362350250765,
+                "P50": 887.9782794228256,
+                "P99": 1527.2857334869373
             }
         },
         "windows-2025-x64-azure-wsk-schannel": {
-            "baseline": 2504.212028085177,
+            "baseline": 1834.0100920247162,
             "latencyUpperBound": {
-                "P0": 223.70606020859168,
-                "P50": 353.99197710403917,
-                "P99": 1103.2875240318835
+                "P0": 217.1286294193294,
+                "P50": 404.1527360458505,
+                "P99": 2362.6937253227507
             }
         },
         "windows server-x64-azure-xdp-schannel": {
@@ -319,27 +319,27 @@
             }
         },
         "windows-2022-x64-azure-xdp-schannel": {
-            "baseline": 10278.802569165853,
+            "baseline": 10265.706017168815,
             "latencyUpperBound": {
-                "P0": 71.48847121960205,
-                "P50": 95.53017883546981,
-                "P99": 116.96266087836526
+                "P0": 71.20592885019677,
+                "P50": 95.20441878009257,
+                "P99": 116.52861078302185
             }
         },
         "windows-2022-x64-lab-xdp-schannel": {
-            "baseline": 11352.775966135612,
+            "baseline": 11672.713965748564,
             "latencyUpperBound": {
-                "P0": 63.97664484814193,
-                "P50": 81.70447925362092,
-                "P99": 315.5772553057826
+                "P0": 62.19090533122727,
+                "P50": 79.63492053495203,
+                "P99": 311.19008909455584
             }
         },
         "windows-2025-x64-azure-xdp-schannel": {
-            "baseline": 2476.29756641907,
+            "baseline": 2038.8167654422477,
             "latencyUpperBound": {
-                "P0": 189.78460969082653,
-                "P50": 340.3282190001239,
-                "P99": 1354.839350057205
+                "P0": 188.52295343375042,
+                "P50": 365.1084970424436,
+                "P99": 2069.7671058133665
             }
         },
         "ubuntu-x64-azure-epoll-openssl": {
@@ -351,19 +351,19 @@
             }
         },
         "ubuntu-20.04-x64-azure-epoll-openssl": {
-            "baseline": 7090.360184367353,
+            "baseline": 7136.15492978636,
             "latencyUpperBound": {
-                "P0": 86.7707848834589,
-                "P50": 130.73172142942795,
-                "P99": 265.9579918013665
+                "P0": 86.18656334834051,
+                "P50": 134.9252230030138,
+                "P99": 267.26964104560534
             }
         },
         "ubuntu-20.04-x64-lab-epoll-openssl": {
-            "baseline": 766.3181880739695,
+            "baseline": 745.8215277848053,
             "latencyUpperBound": {
-                "P0": 816.3400913622614,
-                "P50": 1294.4119550061275,
-                "P99": 2401.3455457359405
+                "P0": 961.1831752436066,
+                "P50": 1316.5860055591806,
+                "P99": 2360.1737401081873
             }
         },
         "windows server-x64-azure-rio-schannel": {
@@ -375,19 +375,19 @@
             }
         },
         "windows-2022-x64-azure-rio-schannel": {
-            "baseline": 7234.109508952613,
+            "baseline": 7390.292307721409,
             "latencyUpperBound": {
-                "P0": 103.4614480541223,
-                "P50": 131.23314696374652,
-                "P99": 166.99549467260465
+                "P0": 102.29070507130263,
+                "P50": 129.1535973084639,
+                "P99": 168.58634854378104
             }
         },
         "windows-2025-x64-azure-rio-schannel": {
-            "baseline": 1938.842019941341,
+            "baseline": 1724.7272909133667,
             "latencyUpperBound": {
-                "P0": 257.90066591259523,
-                "P50": 434.81640200113355,
-                "P99": 1546.4205750430483
+                "P0": 254.9569595359294,
+                "P50": 447.40649908469686,
+                "P99": 2081.203705843755
             }
         },
         "windows server-x64-azure-iocp-schannel": {
@@ -399,27 +399,27 @@
             }
         },
         "windows-2022-x64-azure-iocp-schannel": {
-            "baseline": 7021.4754354213455,
+            "baseline": 7002.468187963215,
             "latencyUpperBound": {
-                "P0": 105.14244772602488,
-                "P50": 130.95723677881938,
-                "P99": 275.9025662779181
+                "P0": 105.18325687912517,
+                "P50": 129.6159090561228,
+                "P99": 278.397587092345
             }
         },
         "windows-2022-x64-lab-iocp-schannel": {
-            "baseline": 936.1449037226807,
+            "baseline": 933.544269223097,
             "latencyUpperBound": {
-                "P0": 875.7083014292991,
-                "P50": 1026.2794151792787,
-                "P99": 1730.8267890673094
+                "P0": 908.753657144224,
+                "P50": 1027.0700395696779,
+                "P99": 1719.3496130605154
             }
         },
         "windows-2025-x64-azure-iocp-schannel": {
-            "baseline": 2086.4894661463272,
+            "baseline": 1528.5539749569364,
             "latencyUpperBound": {
-                "P0": 258.7462993153345,
-                "P50": 413.85982252935577,
-                "P99": 1404.4777798468094
+                "P0": 253.50737055896116,
+                "P50": 490.03236126978106,
+                "P99": 2402.2302602392747
             }
         }
     },
@@ -428,55 +428,55 @@
             "baseline": -270881.0762199629
         },
         "windows-2022-x64-azure-wsk-schannel": {
-            "baseline": 5022730.56725424
+            "baseline": 4739857.280250998
         },
         "windows-2022-x64-lab-wsk-schannel": {
-            "baseline": 6272539.4377550995
+            "baseline": 6225351.433595482
         },
         "windows-2025-x64-azure-wsk-schannel": {
-            "baseline": 851003.6807187895
+            "baseline": 924991.115367259
         },
         "windows server-x64-azure-xdp-schannel": {
             "baseline": -4134290.336879544
         },
         "windows-2022-x64-azure-xdp-schannel": {
-            "baseline": 5353595.755429528
+            "baseline": 4978526.316119349
         },
         "windows-2022-x64-lab-xdp-schannel": {
-            "baseline": 6302114.653566179
+            "baseline": 6349197.433402004
         },
         "windows-2025-x64-azure-xdp-schannel": {
-            "baseline": 805064.7016499556
+            "baseline": 783122.9750805809
         },
         "ubuntu-x64-azure-epoll-openssl": {
             "baseline": -3127231.415650621
         },
         "ubuntu-20.04-x64-azure-epoll-openssl": {
-            "baseline": 4846694.10449069
+            "baseline": 4814757.933228269
         },
         "ubuntu-20.04-x64-lab-epoll-openssl": {
-            "baseline": 1018603.3499108987
+            "baseline": 948239.3427374719
         },
         "windows server-x64-azure-rio-schannel": {
             "baseline": 47317.679858264884
         },
         "windows-2022-x64-azure-rio-schannel": {
-            "baseline": 13062.856823070051
+            "baseline": 14311.341717973537
         },
         "windows-2025-x64-azure-rio-schannel": {
-            "baseline": 101076.69928482427
+            "baseline": 94802.62833657487
         },
         "windows server-x64-azure-iocp-schannel": {
             "baseline": -3376157.446227466
         },
         "windows-2022-x64-azure-iocp-schannel": {
-            "baseline": 5805947.057617034
+            "baseline": 5625238.142882843
         },
         "windows-2022-x64-lab-iocp-schannel": {
-            "baseline": 1752975.4172160244
+            "baseline": 944077.2673404142
         },
         "windows-2025-x64-azure-iocp-schannel": {
-            "baseline": 860762.0033308737
+            "baseline": 792893.1944965424
         }
     }
 }
