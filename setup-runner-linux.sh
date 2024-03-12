@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Accept parameters from the user.
-while getopts ":i:g:n" opt; do
+while getopts ":i:p:u:g:l:n" opt; do
   case ${opt} in
     i )
       peerip=$OPTARG
@@ -19,7 +19,7 @@ while getopts ":i:g:n" opt; do
       runnerlabels=$OPTARG
       ;;
     n )
-      noreboot=true
+      noreboot=false
       ;;
     \? )
       echo "Invalid option: -$OPTARG" 1>&2
@@ -47,12 +47,8 @@ if [[ -z "$username" ]]; then
   exit 1
 fi
 
-if [[ -z "$noreboot" ]]; then
-  noreboot=false
-fi
-
 if [[ -z "$runnerlabels" ]]; then
-  runnerlabels="experimental-ubuntu"
+  runnerlabels="azure-ex"
 fi
 
 HOME="/home/$username"
@@ -71,19 +67,21 @@ echo "================= Configuring SSH. ================="
 
 # Adding "Subsystem powershell /usr/bin/pwsh -sshs -NoLogo -NoProfile" to /etc/ssh/sshd_config if its not there
 if grep -q "Subsystem powershell /usr/bin/pwsh -sshs -NoLogo -NoProfile" /etc/ssh/sshd_config; then
-  echo "================= Subsystem powershell is already present in /etc/ssh/sshd_config. ================="
+  echo "================= Subsystem powershell is already present in /etc/ssh/sshd_config. Skipping configuring SSH. ================="
 else
+# NOTE: Need to further investigate permissions and ideally remove the 777 chmod.
   echo "================= Adding 'Subsystem powershell /usr/bin/pwsh -sshs -NoLogo -NoProfile' to /etc/ssh/sshd_config. ================="
   echo "Subsystem powershell /usr/bin/pwsh -sshs -NoLogo -NoProfile" | sudo tee -a /etc/ssh/sshd_config
   echo ">>> installing sshpass"
   sudo apt install sshpass -y
   echo ">>> Adding new SSH key pair to netperf peer"
-  ssh-keygen -t rsa -b 2048 -N "" -f $HOME/.ssh/id_rsa
-  sshpass -p $password ssh-copy-id -o StrictHostKeyChecking=no $username@$peerip
+  ssh-keygen -t rsa -N "" -f $HOME/.ssh/id_rsa
+  sudo sshpass -p $password ssh-copy-id -i $HOME/.ssh/id_rsa.pub -o StrictHostKeyChecking=no $username@$peerip
+  chmod 777 $HOME/.ssh/id_rsa
   sudo systemctl restart ssh
 fi
 
-# Installing powershell 7
+# Installing powershell 7 (NOTE: Sometimes, will have to run this again because powershell fails to install the first run. Need investigation.)
 echo "================= Installing powershell 7. ================="
 sudo apt-get install -y wget apt-transport-https software-properties-common
 wget -q https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-prod.deb
@@ -111,18 +109,18 @@ else
 
 
   # Download the latest runner package
-  curl -o $HOME/actions-runner/actions-runner-linux-x64-2.313.0.tar.gz -L https://github.com/actions/runner/releases/download/v2.313.0/actions-runner-linux-x64-2.313.0.tar.gz
+  curl -o $HOME/actions-runner/actions-runner-linux-x64-2.312.0.tar.gz -L https://github.com/actions/runner/releases/download/v2.312.0/actions-runner-linux-x64-2.312.0.tar.gz
 
   echo "Attempting to tar the actions runner"
-  sudo tar xzf $HOME/actions-runner/actions-runner-linux-x64-2.313.0.tar.gz -C $HOME/actions-runner
+  sudo tar xzf $HOME/actions-runner/actions-runner-linux-x64-2.312.0.tar.gz -C $HOME/actions-runner
 
   # chown the actions runner
-  sudo chown -R root $HOME/actions-runner
+  sudo chown -R $username $HOME/actions-runner
   # # Run the config script.
-  bash $HOME/actions-runner/config.sh --url https://github.com/microsoft/netperf --token $githubtoken --labels experimental-ubuntu --unattended
+  bash $HOME/actions-runner/config.sh --url https://github.com/microsoft/netperf --token $githubtoken --labels $runnerlabels --unattended
   # # Install the runner as a service
-  bash $HOME/actions-runner/svc.sh install
-  bash $HOME/actions-runner/svc.sh start
+  sudo bash $HOME/actions-runner/svc.sh install
+  sudo bash $HOME/actions-runner/svc.sh start
 fi
 
 if [[ -z "$noreboot" ]]; then
