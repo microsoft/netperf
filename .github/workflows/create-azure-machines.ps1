@@ -37,10 +37,7 @@ param (
     [string]$VMSuffix2,
 
     [Parameter(Mandatory = $false)]
-    [switch]$NoPublicIP = $false,
-
-    [Parameter(Mandatory = $false)]
-    [switch]$VMAlreadyExists = $false
+    [switch]$NoPublicIP = $false
 )
 
 Set-StrictMode -Version "Latest"
@@ -68,11 +65,7 @@ if ($SubscriptionId) {
     Connect-AzAccount -SubscriptionId $subscriptionId
 }
 
-if ($VMAlreadyExists) {
-    Write-Host "VMs already exist. Skipping creation. Starting configuration..."
-} else {
-    Write-Host "Creating Azure Resources ($ResourceGroupName, $Location, $os, $VMSize)"
-}
+Write-Host "Creating Azure Resources ($ResourceGroupName, $Location, $os, $VMSize)"
 
 try {
     Get-AzResourceGroup -Name $ResourceGroupName | Out-Null
@@ -170,10 +163,8 @@ function Get-NetPerfVmPrivateIp {
 $vmName1 = "ex-$osType-$VMSuffix1"
 $vmName2 = "ex-$osType-$VMSuffix2"
 
-if (!$VMAlreadyExists) {
-    Add-NetPerfVm $vmName1
-    Add-NetPerfVm $vmName2
-}
+Add-NetPerfVm $vmName1
+Add-NetPerfVm $vmName2
 
 if ($GitHubToken) {
 
