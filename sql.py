@@ -147,7 +147,7 @@ VALUES ("{commit}", "{datetime.datetime.now()}", 1, "TODO");
                 os.makedirs("full_latencies")
 
             for testid in json_obj:
-                if testid == "commit" or testid == "os_version" or "-lat" in testid or testid == "run_args":
+                if testid == "commit" or testid == "os_version" or "-lat" in testid or testid == "run_args" or "regression" in testid:
                     continue
 
                 # truncate -tcp or -quic from testid
@@ -161,10 +161,10 @@ INSERT OR IGNORE INTO Secnetperf_tests (Secnetperf_test_ID, Kernel_mode, Run_arg
                 """)
 
                 if "rps" in testid:
-                    
+
                     full_latency_curve_ids_to_save = {}
                     minimum_p0 = float('inf')
-                    
+
                     # is a flattened 1D array of the form: [ first run + RPS, second run + RPS, third run + RPS..... ], ie. if each run has 8 values + RPS, then the array has 27 elements (8*3 + 3)
                     for offset in range(0, len(json_obj[testid]), 9):
                         p0 = float(json_obj[testid][offset])
