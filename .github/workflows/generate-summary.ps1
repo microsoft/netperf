@@ -5,10 +5,8 @@
 
 param (
     [Parameter(Mandatory = $false)]
-    [string]$BlockOnFailure = "False"
+    [switch]$BlockOnFailure = $false
 )
-
-$blockOnFailure = $BlockOnFailure -eq "True"
 
 Set-StrictMode -Version "Latest"
 $PSDefaultParameterValues["*:ErrorAction"] = "Stop"
@@ -200,7 +198,7 @@ if ($hasRegression) {
     Write-Host "This step has regression results. Please check the summary file for details."
 
     # Don't fail the entire workflow if we want to publish results (when we merge code or manually trigger a new workflow with "publish results" checked).
-    if ($blockOnFailure) {
+    if ($BlockOnFailure) {
         exit 1
     }
 }
