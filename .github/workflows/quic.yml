@@ -235,7 +235,7 @@ jobs:
         merge-multiple: true
     - name: Generate Summary
       shell: pwsh # We never block the workflow if its a git merge or someone manually triggered a run with publish_results = true.
-      run: ./.github/workflows/generate-summary.ps1 --BlockOnFailure ${{ github.event.client_payload.pr != '' && !inputs.commit }}
+      run: ./.github/workflows/generate-summary.ps1 -BlockOnFailure ${{ github.event.client_payload.pr != '' && !inputs.commit }}
 
   save-test-results:
     permissions: write-all

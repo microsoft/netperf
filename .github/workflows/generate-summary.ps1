@@ -1,12 +1,17 @@
 <#
 .SYNOPSIS
     Takes the output json files from the test and generates a markdown summary table.
+
+.PARAMETER BlockOnFailure
+    If true, the workflow will fail if there are any regression results.
 #>
 
 param (
     [Parameter(Mandatory = $false)]
-    [switch]$BlockOnFailure = $false
+    [string]$BlockOnFailure = "false"
 )
+
+$blockOnFailure = $BlockOnFailure -eq "true"
 
 Set-StrictMode -Version "Latest"
 $PSDefaultParameterValues["*:ErrorAction"] = "Stop"
@@ -198,7 +203,7 @@ if ($hasRegression) {
     Write-Host "This step has regression results. Please check the summary file for details."
 
     # Don't fail the entire workflow if we want to publish results (when we merge code or manually trigger a new workflow with "publish results" checked).
-    if ($BlockOnFailure) {
+    if ($blockOnFailure) {
         exit 1
     }
 }
