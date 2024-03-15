@@ -254,8 +254,8 @@ foreach ($file in $files) {
 $markdown += @"
 `n
 # Request Per Second (HPS) and Latency (µs)
-| Pass/Fail | Env | OS | Version | Arch | TLS | IO | Transport | Min | P50 | P90 | P99 | P99.9 | P99.99 | P99.999 | P99.9999 | RPS | CumulativeRPS |
-| --------- | --- | -- | ------- | ---- | --- | -- | --------- | --- | --- | --- | --- | ----- | ------ | ------- | -------- | --- | ------------- |
+| Pass/Fail | Env | OS | Version | Arch | TLS | IO | Transport | Min | P50 | P90 | P99 | P99.9 | P99.99 | P99.999 | P99.9999 | RPS | CumulativeRPS | Baseline | BestRPS | BestResultCommit |
+| --------- | --- | -- | ------- | ---- | --- | -- | --------- | --- | --- | --- | --- | ----- | ------ | ------- | -------- | --- | ------------- | -------- | ------- | ---------------- |
 "@
 foreach ($file in $files) {
     # TODO: Right now, we are not using a watermark based method for regression detection of latency percentile values because we don't know how to determine a "Best Ever" distribution.
