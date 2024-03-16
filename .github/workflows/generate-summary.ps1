@@ -171,6 +171,7 @@ foreach ($file in $files) {
 
 # Write the Download table.
 $markdown += @"
+`n
 # Download Throughput (Gbps)
 | Pass/Fail | Env | OS | Version | Arch | TLS | IO | Transport | Result 1 | Result 2 | Result 3 | CumulativeResult | Baseline | BestResult | BestResultCommit |
 | --------- | --- | -- | ------- | ---- | --- | -- | --------- | -------- | -------- | -------- | ---------------- | -------- | ---------- | ---------------- |
