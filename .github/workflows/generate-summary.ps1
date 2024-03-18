@@ -297,17 +297,23 @@ foreach ($file in $files) {
         AggregateFunction = "N/A"
         HasRegression = $false
     }
+
     try {
         $RegressionQuic = $json.'rps-up-512-down-4000-quic-regression'
-        $RegressionTcp = $json.'rps-up-512-down-4000-tcp-regression'
         $RegressionQuic.CumulativeResult = CleanResult ($RegressionQuic.CumulativeResult)
         $RegressionQuic.BestResult = CleanResult ($RegressionQuic.BestResult)
         $RegressionQuic.Baseline = CleanResult ($RegressionQuic.Baseline)
+        $hasRegression = $hasRegression -or $RegressionQuic.HasRegression
+    } catch { Write-Host $_ }
+
+    try {
+        $RegressionTcp = $json.'rps-up-512-down-4000-tcp-regression'
         $RegressionTcp.CumulativeResult = CleanResult ($RegressionTcp.CumulativeResult)
         $RegressionTcp.BestResult = CleanResult ($RegressionTcp.BestResult)
         $RegressionTcp.Baseline = CleanResult ($RegressionTcp.Baseline)
-        $hasRegression = $hasRegression -or $RegressionQuic.HasRegression -or $RegressionTcp.HasRegression
+        $hasRegression = $hasRegression -or $RegressionTcp.HasRegression
     } catch { Write-Host $_ }
+
     try { Write-RpsRow $file.Name "quic" $json.'rps-up-512-down-4000-quic' $RegressionQuic } catch { Write-Host $_ }
     try { Write-RpsRow $file.Name "tcp" $json.'rps-up-512-down-4000-tcp' $RegressionTcp } catch { Write-Host $_ }
 }
