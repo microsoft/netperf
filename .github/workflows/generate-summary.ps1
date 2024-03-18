@@ -128,8 +128,8 @@ $hasRegression = $false
 # Write the Upload table.
 $markdown = @"
 # Upload Throughput (Gbps)
-| Pass/Fail | Env | OS | Version | Arch | TLS | IO | Transport | Result 1 | Result 2 | Result 3 | Average | Baseline | BestResult |
-| --------- | --- | -- | ------- | ---- | --- | -- | --------- | -------- | -------- | -------- | ------- | -------- | ---------- |
+| Pass/Fail | Env | OS | Version | Arch | TLS | IO | Transport | Result 1 | Result 2 | Result 3 | Average | Noise | BestEver |
+| --------- | --- | -- | ------- | ---- | --- | -- | --------- | -------- | -------- | -------- | ------- | ----- | -------- |
 "@
 foreach ($file in $files) {
     Write-Host "Upload Tput: Processing $file..."
@@ -155,17 +155,17 @@ foreach ($file in $files) {
 
     try {
         $RegressionQuic = $json.'tput-up-quic-regression'
+        $RegressionQuic.Baseline = CleanResult ($RegressionQuic.Baseline / $RegressionQuic.BestResult) # transform baseline to "noise"
         $RegressionQuic.CumulativeResult = CleanResult ($RegressionQuic.CumulativeResult / 1000000)
         $RegressionQuic.BestResult = CleanResult ($RegressionQuic.BestResult / 1000000)
-        $RegressionQuic.Baseline = CleanResult ($RegressionQuic.Baseline / 1000000)
         $hasRegression = $hasRegression -or $RegressionQuic.HasRegression
     } catch { Write-Host $_ }
 
     try {
         $RegressionTcp = $json.'tput-up-tcp-regression'
+         $RegressionTcp.Baseline = CleanResult ($RegressionTcp.Baseline / $RegressionTcp.BestResult)
         $RegressionTcp.CumulativeResult = CleanResult ($RegressionTcp.CumulativeResult / 1000000)
         $RegressionTcp.BestResult = CleanResult ($RegressionTcp.BestResult / 1000000)
-        $RegressionTcp.Baseline = CleanResult ($RegressionTcp.Baseline / 1000000)
         $hasRegression = $hasRegression -or $RegressionTcp.HasRegression
     } catch { Write-Host $_ }
 
@@ -177,8 +177,8 @@ foreach ($file in $files) {
 $markdown += @"
 `n
 # Download Throughput (Gbps)
-| Pass/Fail | Env | OS | Version | Arch | TLS | IO | Transport | Result 1 | Result 2 | Result 3 | Average | Baseline | BestResult |
-| --------- | --- | -- | ------- | ---- | --- | -- | --------- | -------- | -------- | -------- | ------- | -------- | ---------- |
+| Pass/Fail | Env | OS | Version | Arch | TLS | IO | Transport | Result 1 | Result 2 | Result 3 | Average | Noise | BestEver |
+| --------- | --- | -- | ------- | ---- | --- | -- | --------- | -------- | -------- | -------- | ------- | ----- | -------- |
 "@
 foreach ($file in $files) {
     Write-Host "Download Tput: Processing $file..."
@@ -203,17 +203,17 @@ foreach ($file in $files) {
     }
     try {
         $RegressionQuic = $json.'tput-down-quic-regression'
+        $RegressionQuic.Baseline = CleanResult ($RegressionQuic.Baseline / $RegressionQuic.BestResult)
         $RegressionQuic.CumulativeResult = CleanResult ($RegressionQuic.CumulativeResult / 1000000)
         $RegressionQuic.BestResult = CleanResult ($RegressionQuic.BestResult / 1000000)
-        $RegressionQuic.Baseline = CleanResult ($RegressionQuic.Baseline / 1000000)
         $hasRegression = $hasRegression -or $RegressionQuic.HasRegression
     } catch { Write-Host $_ }
 
     try {
         $RegressionTcp = $json.'tput-down-tcp-regression'
+        $RegressionTcp.Baseline = CleanResult ($RegressionTcp.Baseline / $RegressionTcp.BestResult)
         $RegressionTcp.CumulativeResult = CleanResult ($RegressionTcp.CumulativeResult / 1000000)
         $RegressionTcp.BestResult = CleanResult ($RegressionTcp.BestResult / 1000000)
-        $RegressionTcp.Baseline = CleanResult ($RegressionTcp.Baseline / 1000000)
         $hasRegression = $hasRegression -or $RegressionTcp.HasRegression
     } catch { Write-Host $_ }
 
@@ -225,8 +225,8 @@ foreach ($file in $files) {
 $markdown += @"
 `n
 # Handshakes Per Second (HPS)
-| Pass/Fail | Env | OS | Version | Arch | TLS | IO | Transport | Result 1 | Result 2 | Result 3 | Average | Baseline | BestResult |
-| --------- | --- | -- | ------- | ---- | --- | -- | --------- | -------- | -------- | -------- | ------- | -------- | ---------- |
+| Pass/Fail | Env | OS | Version | Arch | TLS | IO | Transport | Result 1 | Result 2 | Result 3 | Average | Noise | BestEver |
+| --------- | --- | -- | ------- | ---- | --- | -- | --------- | -------- | -------- | -------- | ------- | ----- | -------- |
 "@
 foreach ($file in $files) {
     Write-Host "HPS: Processing $file..."
@@ -251,16 +251,16 @@ foreach ($file in $files) {
     try {
         $RegressionQuic = $json.'hps-conns-100-quic-regression'
         $RegressionQuic.CumulativeResult = CleanResult $RegressionQuic.CumulativeResult
+        $RegressionQuic.Baseline = CleanResult ($RegressionQuic.Baseline / $RegressionQuic.BestResult)
         $RegressionQuic.BestResult = CleanResult $RegressionQuic.BestResult
-        $RegressionQuic.Baseline = CleanResult $RegressionQuic.Baseline
         $hasRegression = $hasRegression -or $RegressionQuic.HasRegression
     } catch { Write-Host $_ }
 
     try {
         $RegressionTcp = $json.'hps-conns-100-tcp-regression'
         $RegressionTcp.CumulativeResult = CleanResult $RegressionTcp.CumulativeResult
+        $RegressionTcp.Baseline = CleanResult ($RegressionTcp.Baseline / $RegressionTcp.BestResult)
         $RegressionTcp.BestResult = CleanResult $RegressionTcp.BestResult
-        $RegressionTcp.Baseline = CleanResult $RegressionTcp.Baseline
         $hasRegression = $hasRegression -or $RegressionTcp.HasRegression
     } catch { Write-Host $_ }
 
@@ -272,8 +272,8 @@ foreach ($file in $files) {
 $markdown += @"
 `n
 # Request Per Second (HPS) and Latency (µs)
-| Pass/Fail | Env | OS | Version | Arch | TLS | IO | Transport | Min | P50 | P90 | P99 | P99.9 | P99.99 | P99.999 | P99.9999 | RPS | Average | Baseline | BestRPS |
-| --------- | --- | -- | ------- | ---- | --- | -- | --------- | --- | --- | --- | --- | ----- | ------ | ------- | -------- | --- | ------- | -------- | ------- |
+| Pass/Fail | Env | OS | Version | Arch | TLS | IO | Transport | Min | P50 | P90 | P99 | P99.9 | P99.99 | P99.999 | P99.9999 | RPS | Average | Noise | BestRPS |
+| --------- | --- | -- | ------- | ---- | --- | -- | --------- | --- | --- | --- | --- | ----- | ------ | ------- | -------- | --- | ------- | ----- | ------- |
 "@
 foreach ($file in $files) {
     # TODO: Right now, we are not using a watermark based method for regression detection of latency percentile values because we don't know how to determine a "Best Ever" distribution.
@@ -301,16 +301,16 @@ foreach ($file in $files) {
     try {
         $RegressionQuic = $json.'rps-up-512-down-4000-quic-regression'
         $RegressionQuic.CumulativeResult = CleanResult ($RegressionQuic.CumulativeResult)
+        $RegressionQuic.Baseline = CleanResult ($RegressionQuic.Baseline / $RegressionQuic.BestResult)
         $RegressionQuic.BestResult = CleanResult ($RegressionQuic.BestResult)
-        $RegressionQuic.Baseline = CleanResult ($RegressionQuic.Baseline)
         $hasRegression = $hasRegression -or $RegressionQuic.HasRegression
     } catch { Write-Host $_ }
 
     try {
         $RegressionTcp = $json.'rps-up-512-down-4000-tcp-regression'
         $RegressionTcp.CumulativeResult = CleanResult ($RegressionTcp.CumulativeResult)
+        $RegressionTcp.Baseline = CleanResult ($RegressionTcp.Baseline / $RegressionTcp.BestResult)
         $RegressionTcp.BestResult = CleanResult ($RegressionTcp.BestResult)
-        $RegressionTcp.Baseline = CleanResult ($RegressionTcp.Baseline)
         $hasRegression = $hasRegression -or $RegressionTcp.HasRegression
     } catch { Write-Host $_ }
 
