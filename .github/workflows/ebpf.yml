@@ -60,6 +60,7 @@ jobs:
       build_artifact: Build-x64
       build_msi: true
       build_nuget: true
+      repository: 'microsoft/ebpf-for-windows'
       configurations: '["NativeOnlyRelease"]'
       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
