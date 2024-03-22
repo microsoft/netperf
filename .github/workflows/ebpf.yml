@@ -64,9 +64,25 @@ jobs:
       configurations: '["NativeOnlyRelease"]'
       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
+  build-windows-quic:
+    name: Build WinUser
+    needs: []
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ['windows-2022']
+        tls: [schannel] # , openssl, openssl3]
+    uses: microsoft/msquic/.github/workflows/build-reuse-win.yml@main
+    with:
+      os: ${{ matrix.os }}
+      tls: ${{ matrix.tls }}
+      build: -Perf
+      ref: 'main'
+
+
   test:
     name: Test Windows eBPF Performance
-    needs: [build]
+    needs: [build, build-windows-quic]
     strategy:
       fail-fast: false
       matrix:
@@ -177,14 +193,10 @@ jobs:
         repository: microsoft/msquic
         ref: 'main'
 
-    - name: Lowercase runner.os
-      shell: pwsh
-      run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
-
     - name: Download Artifacts
       uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
       with:
-        name: Release-${{env.OS}}-${{ matrix.vec.os == '2025' && '2022' || matrix.vec.os }}-${{ matrix.vec.arch }}-schannel-Perf
+        name: Release-windows-windows-2022-x64-schannel-Perf
         path: artifacts
 
     - name: Download Regression.json file
@@ -200,7 +212,7 @@ jobs:
       timeout-minutes: 20
       run: ./scripts/secnetperf.ps1 `
           -LogProfile 'NULL'`
-          -MsQuicCommit 'main'`
+          -MsQuicCommit 'manual'`
           -environment ${{ matrix.vec.env }} `
           -plat ${{env.OS}} `
           -os ${{ matrix.vec.os }} `
