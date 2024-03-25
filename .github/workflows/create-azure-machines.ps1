@@ -175,7 +175,7 @@ if ($GitHubToken) {
         Write-Host "Configuring GitHub peer machine"
         $scriptParams = @{
             "Username" = $username
-            "Password" = $securePassword
+            "Password" = $Password
             "PeerIP" = $ip1
         }
         Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunPowerShellScript" -ScriptPath ".\setup-runner-windows.ps1" -Parameter $scriptParams
@@ -186,7 +186,7 @@ if ($GitHubToken) {
         Write-Host "Configuring GitHub runner machine"
         $scriptParams = @{
             "Username" = $username
-            "Password" = $securePassword
+            "Password" = $Password
             "PeerIP" = $ip2
             "GitHubToken" = $GitHubToken
             "RunnerLabels" = "os-$Os,$EnvTag"
@@ -199,21 +199,27 @@ if ($GitHubToken) {
         Write-Host "Configuring Linux GitHub peer machine"
         $scriptParams = @{
             "username" = $username
-            "password" = $securePassword
+            "password" = $Password
             "peerip" = $ip1
             "noreboot" = $true
         }
         Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName2 -CommandId "RunShellScript" -ScriptPath ".\setup-runner-linux.sh" -Parameter $scriptParams
 
+        Write-Host "Restarting peer machine"
+        Restart-AzVM -ResourceGroupName $ResourceGroupName -Name $vmName2
+
         Write-Host "Configuring Linux GitHub runner machine"
         $scriptParams = @{
             "username" = $username
-            "password" = $securePassword
+            "password" = $Password
             "peerip" = $ip2
             "githubtoken" = $GitHubToken
             "noreboot" = $true
             "runnerlabels" = "os-$Os,$EnvTag"
         }
         Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $vmName1 -CommandId "RunShellScript" -ScriptPath ".\setup-runner-linux.sh" -Parameter $scriptParams
+
+        Write-Host "Restarting GitHub runner machine"
+        Restart-AzVM -ResourceGroupName $ResourceGroupName -Name $vmName1
     }
 }
