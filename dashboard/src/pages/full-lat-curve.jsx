@@ -62,9 +62,9 @@ const FullLatCurve = (props) => {
                 break;
             }
         }
-        console.log(indices);
+
         curve =  <GraphView title={`Full Curve Latency`}
-            subheader={`Tested using ,, taking the min of P0 of 3 runs. `}
+            subheader={`Curve is the minimum 0th percentile of 3 runs. Data truncated to 10,000 us`}
             labels={indices}
             series={
                 dataset.map((data, idx) => {
@@ -72,7 +72,7 @@ const FullLatCurve = (props) => {
                         name: lableNames[idx],
                         type: 'line',
                         fill: 'solid',
-                        data: data.Values,
+                        data: data.Values.map((x) => Math.min(x, 10000)),
                     }
                 })
             } />

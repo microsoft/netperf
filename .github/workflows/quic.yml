@@ -176,6 +176,9 @@ jobs:
     - name: Download Regression.json file
       run: Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/regression.json" -OutFile "regression.json"
       shell: pwsh
+    - name: Download Watermark_Regression.json file
+      run: Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/watermark_regression.json" -OutFile "watermark_regression.json"
+      shell: pwsh
     - name: Run secnetperf
       shell: pwsh
       timeout-minutes: 20
@@ -189,12 +192,6 @@ jobs:
           -tls ${{ matrix.vec.tls }} `
           -io ${{ matrix.vec.io }} `
           -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
-    - name: Upload Test Results SQL
-      if: ${{ always() }}
-      uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
-      with:
-        name: test-results-${{ matrix.vec.env }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}.sql
-        path: test-results-${{ matrix.vec.env }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}.sql
     - name: Upload Test Results JSON
       if: ${{ always() }}
       uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
@@ -233,8 +230,8 @@ jobs:
         pattern: json-test-results-*
         merge-multiple: true
     - name: Generate Summary
-      shell: pwsh
-      run: ./.github/workflows/generate-summary.ps1
+      shell: pwsh # We never block the workflow if its a git merge or someone manually triggered a run with publish_results = true.
+      run: ./.github/workflows/generate-summary.ps1 -BlockOnFailure ${{ github.event.client_payload.pr != '' && !inputs.commit }}
 
   save-test-results:
     permissions: write-all
