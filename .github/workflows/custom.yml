@@ -3,80 +3,56 @@ name: Custom Tasks
 on:
   workflow_dispatch:
 
-permissions: write-all
+permissions: read-all
 
 jobs:
-  create-runner:
-    name: Create Runner
-    runs-on: windows-latest
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v2
-    - name: Install Latest Az PowerShell Module
-      shell: pwsh
-      run: |
-        Install-Module -Name Az -Force -AllowClobber -Repository PSGallery
-        Update-Module Az -Force
-        Get-Module 'Az' | where {([string]($_.Version)).StartsWith('9.3.0')} | Remove-Module
-        Get-Module -Name Az -ListAvailable
-    - name: Login to Azure
-      uses: azure/login@v1
-      with:
-        client-id: ${{ secrets.AZURE_CLIENT_ID }}
-        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        enable-AzPSSession: true
-    - name: Create Azure VMs
-      shell: pwsh
-      run: |
-        ./.github/workflows/create-azure-machines.ps1 `
-          -Os windows-2022 `
-          -VMSize Experimental_Boost4 `
-          -VMSuffix1 c1 `
-          -VMSuffix2 c2 `
-          -EnvTag azure-custom `
-          -GitHubToken ${{ secrets.GITHUB_TOKEN }} `
-          -Password ${{ secrets.VM_PASSWORD }}
-
-  test-runner:
-    name: Test Runner
-    needs: [create-runner]
-    timeout-minutes: 5
+  enable-logs: # This would be 1 enumeration, after CTS has setup the environment with the correct OS type and version.
+    name: Enable Logs
     runs-on:
     - self-hosted
-    - os-windows-2022
-    - azure-custom
+    - "x64"
+    - "secnetperf"
+    - "windows"
     steps:
-    - name: Test Runner
+    - name: Capture Logs
       shell: pwsh
       run: |
         Write-Host 'Connecting to netperf-peer'
         $Session = New-PSSession -ComputerName "netperf-peer" -ConfigurationName PowerShell.7
-        Write-Host "Local IP Config:"
-        ipconfig /all
-        Write-Host "Peer IP Config:"
+        Write-Host 'Killing any previous secnetperf'
         Invoke-Command -Session $Session -ScriptBlock {
-          ipconfig /all
+            Get-Process | Where-Object { $_.Name -eq "secnetperf" } | Stop-Process
         }
-        Write-Host "Done!"
-
-  delete-runner:
-    name: Delete Runner
-    needs: [test-runner]
-    runs-on: windows-latest
-    if: ${{ always() }}
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v2
-    - name: Login to Azure
-      uses: azure/login@v1
+        Write-Host 'Starting logs'
+        Invoke-Command -Session $Session -ScriptBlock {
+            C:\_work\quic\scripts\log.ps1 -Start -Profile Full.Verbose -ProfileInScriptDirectory
+        }
+        Write-Host 'Starting secnetperf'
+        $Job = Invoke-Command -Session $Session -ScriptBlock {
+            C:\_work\quic\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe
+        } -AsJob
+        Start-Sleep 1
+        Stop-Job -Job $Job
+        $RemoteResult = Receive-Job -Job $Job
+        Write-Host ($RemoteResult -join "`n")
+        Write-Host 'Killing secnetperf (if running) and stopping logs'
+        Invoke-Command -Session $Session -ScriptBlock {
+            Get-Process | Where-Object { $_.Name -eq "secnetperf" } | Stop-Process
+            C:\_work\quic\scripts\log.ps1 -Stop -OutputPath C:\_work\quic\logs\quic -RawLogOnly
+            dir C:\_work\quic\logs
+        }
+        Write-Host 'Setting up log folder'
+        Remove-Item .\artifacts\logs -Force -Recurse -ErrorAction Continue | Out-Null
+        mkdir .\artifacts\logs | Out-Null
+        Write-Host 'Copying out log files'
+        Copy-Item -FromSession $Session C:\_work\quic\logs\* .\artifacts\logs
+        Write-Host 'Deleting log files from remote'
+        Invoke-Command -Session $Session -ScriptBlock {
+            del C:\_work\quic\logs\*
+        }
+    - name: Upload Logs
+      if: ${{ always() }}
+      uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
       with:
-        client-id: ${{ secrets.AZURE_CLIENT_ID }}
-        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        enable-AzPSSession: true
-    - name: Delete Azure VMs
-      shell: pwsh
-      run: |
-        ./.github/workflows/remove-azure-machine.ps1 -VMName ex-windows-c1
-        ./.github/workflows/remove-azure-machine.ps1 -VMName ex-windows-c2
+        name: logs
+        path: artifacts/logs
