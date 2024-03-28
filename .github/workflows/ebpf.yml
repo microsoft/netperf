@@ -78,7 +78,8 @@ jobs:
       if: ${{ needs.build.outputs.should_skip == 'true' }}
       run: |
         gh run download $PREVIOUS_RUN_ID --dir ebpf-for-windows --pattern "ebpf-for-windows - MSI installer (none_NativeOnlyRelease)"
-   - name: Upload ebpf-for-windows artifact
+
+    - name: Upload ebpf-for-windows artifact
       if: ${{ needs.build.outputs.should_skip == 'true' }}
       uses: actions/upload-artifact@v2
       with:
