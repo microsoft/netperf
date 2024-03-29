@@ -87,7 +87,9 @@ sudo apt-get install -y wget apt-transport-https software-properties-common
 wget -q https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-prod.deb
 sudo dpkg -i packages-microsoft-prod.deb
 sleep 5
+echo "================= Updating apt-get again. ================="
 sudo apt-get update
+echo "================= Attempting to install powershell ================="
 sudo apt-get install powershell -y
 echo "Powershell 7 installed. Version:"
 pwsh --version
@@ -114,7 +116,7 @@ else
   curl -o $HOME/actions-runner/actions-runner-linux-x64-2.312.0.tar.gz -L https://github.com/actions/runner/releases/download/v2.312.0/actions-runner-linux-x64-2.312.0.tar.gz
 
   echo "Attempting to tar the actions runner"
-  sudo tar xzf $HOME/actions-runner/actions-runner-linux-x64-2.312.0.tar.gz -C $HOME/actions-runner
+  tar xzf $HOME/actions-runner/actions-runner-linux-x64-2.312.0.tar.gz -C $HOME/actions-runner
 
   # chown the actions runner
   sudo chown -R $username $HOME/actions-runner
