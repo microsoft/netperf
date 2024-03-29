@@ -77,7 +77,7 @@ jobs:
     - name: Download previous ebpf-for-windows artifact
       if: ${{ needs.build.outputs.should_skip == 'true' }}
       run: |
-        gh run download $PREVIOUS_RUN_ID --dir ebpf-for-windows --pattern "ebpf-for-windows - MSI installer (none_NativeOnlyRelease)"
+        gh run download $PREVIOUS_RUN_ID --dir ebpf-for-windows --pattern "ebpf-for-windows - MSI installer (none_NativeOnlyRelease)" --repo microsoft/netperf
 
     - name: Upload ebpf-for-windows artifact
       if: ${{ needs.build.outputs.should_skip == 'true' }}
