@@ -64,6 +64,7 @@ jobs:
       repository: 'microsoft/ebpf-for-windows'
       configurations: '["NativeOnlyRelease"]'
       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+      perform_skip_check: false
 
   test:
     name: Test Windows eBPF Performance
