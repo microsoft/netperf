@@ -86,6 +86,8 @@ echo "================= Installing powershell 7. ================="
 sudo apt-get install -y wget apt-transport-https software-properties-common
 wget -q https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-prod.deb
 sudo dpkg -i packages-microsoft-prod.deb
+sleep 5
+sudo apt-get update
 sudo apt-get install powershell -y
 echo "Powershell 7 installed. Version:"
 pwsh --version
@@ -119,8 +121,9 @@ else
   # # Run the config script.
   bash $HOME/actions-runner/config.sh --url https://github.com/microsoft/netperf --token $githubtoken --labels $runnerlabels --unattended
   # # Install the runner as a service
-  sudo bash $HOME/actions-runner/svc.sh install
-  sudo bash $HOME/actions-runner/svc.sh start
+  cd $HOME/actions-runner
+  sudo ./svc.sh install
+  sudo ./svc.sh start
 fi
 
 if [[ -z "$noreboot" ]]; then
