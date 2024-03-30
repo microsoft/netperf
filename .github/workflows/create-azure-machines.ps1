@@ -42,7 +42,7 @@ $osType = $Os.Split("-")[0]
 $jobs = @()
 Write-Host "Creating $VMName1..."
 $jobs += Start-Job -ScriptBlock {
-    & ./create-azure-machine.ps1 `
+    & ./.github/workflows/create-azure-machine.ps1 `
         -VMName $Using:VMName1 `
         -Password $Using:Password `
         -Os $Using:Os `
@@ -53,7 +53,7 @@ $jobs += Start-Job -ScriptBlock {
 }
 Write-Host "Creating $VMName2..."
 $jobs += Start-Job -ScriptBlock {
-    & ./create-azure-machine.ps1 `
+    & ./.github/workflows/create-azure-machine.ps1 `
         -VMName $Using:VMName2 `
         -Password $Using:Password `
         -Os $Using:Os `
