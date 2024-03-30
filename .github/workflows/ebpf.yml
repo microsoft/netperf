@@ -68,12 +68,12 @@ jobs:
 
   build_cts_traffic:
     name: Build cts-traffic test tool
-    uses: Alan-Jowett/ctsTraffic/.github/workflows/reusable-build.yml@main
+    uses: microsoft/ctsTraffic/.github/workflows/reusable-build.yml@master
     with:
       build_artifact: cts-traffic
-      repository: 'Alan-Jowett/ctsTraffic'
+      repository: 'microsoft/ctsTraffic'
       configurations: '["Release"]'
-      ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+      ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'master' }}
 
   test:
     name: Test Windows eBPF Performance
@@ -168,7 +168,7 @@ jobs:
       # The "Average Duration (ns)" column is the metric of interest.
       run: |
         dir .
-        $url = "https://raw.githubusercontent.com/alan-jowett/bpf_performance/update_two_machine/scripts/two-machine-perf.ps1"
+        $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
         iex "& { $(irm $url) }"
         $content = Get-Content ctsTrafficResults.csv
         $content[0] = "Timestamp,Test,Average Duration (ns)"
