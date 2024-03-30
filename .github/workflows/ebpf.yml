@@ -179,7 +179,7 @@ jobs:
       uses: actions/upload-artifact@v2
       with:
         name: cts_traffic_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
-        path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv
+        path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv -Duration 60000
 
     - name: Run BPF performance tests
       working-directory: ${{ github.workspace }}\bpf_performance
