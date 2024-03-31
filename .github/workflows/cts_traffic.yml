@@ -35,7 +35,7 @@ permissions:
   contents: read
 
 jobs:
-  build_cts_traffic:
+  build:
     name: Build cts-traffic test tool
     uses: microsoft/ctsTraffic/.github/workflows/reusable-build.yml@master
     with:
@@ -45,8 +45,8 @@ jobs:
       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'master' }}
 
   test:
-    name: Test Windows eBPF Performance
-    needs: [build, build_cts_traffic]
+    name: Test CTS Traffic
+    needs: [build]
     strategy:
       fail-fast: false
       matrix:
