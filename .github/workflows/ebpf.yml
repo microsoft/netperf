@@ -73,7 +73,7 @@ jobs:
       build_artifact: cts-traffic
       repository: 'microsoft/ctsTraffic'
       configurations: '["Release"]'
-      ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'master' }}
+      ref: 'master'
 
   test:
     name: Test Windows eBPF Performance

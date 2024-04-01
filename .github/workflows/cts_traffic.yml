@@ -9,11 +9,6 @@ on:
   # Permit manual runs of the workflow.
   workflow_dispatch:
     inputs:
-      ref:
-        description: 'CTS Trafic Branch or Commit'
-        required: false
-        default: 'main'
-        type: string
       profile:
         description: 'Capture CPU profile'
         required: false
@@ -42,7 +37,7 @@ jobs:
       build_artifact: cts-traffic
       repository: 'microsoft/ctsTraffic'
       configurations: '["Release"]'
-      ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'master' }}
+      ref: 'master'
 
   test:
     name: Test CTS Traffic
