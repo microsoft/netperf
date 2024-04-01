@@ -48,6 +48,9 @@ function Add-ServiceLogonRight ($Username) {
 Write-Host "Enabling ServiceLogonRight."
 Add-ServiceLogonRight -Username $Username
 
+# Ensure password doesn't expire
+Set-LocalUser -Name $Username -PasswordNeverExpires $true
+
 # Configure automatic logon.
 Write-Host "Enabling automatic logon."
 REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v AutoAdminLogon /t REG_SZ /d 1 /f
