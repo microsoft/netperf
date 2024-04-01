@@ -17,21 +17,7 @@ on:
         description: 'Logging WPR Profile'
         required: false
         default: "NULL"
-        type: choice
-        options:
-          - "NULL"
-          - Stacks.Light
-          - Stacks.Verbose
-          - Basic.Light
-          - Basic.Verbose
-          - Performance.Light
-          - Performance.Verbose
-          - RPS.Light
-          - RPS.Verbose
-          - Datapath.Light
-          - Datapath.Verbose
-          - Full.Light
-          - Full.Verbose
+        type: string
       commit:
         description: 'Publish Results'
         required: false
