@@ -78,7 +78,8 @@ jobs:
     - name: Start Windows Performance Recorder
       if: ${{ github.event.inputs.profile }}
       run: |
-        wpr -start CPU -filemode 
+        wpr -cancel
+        wpr -start CPU -filemode
 
     - name: Run CTS cts-traffic
       working-directory: ${{ github.workspace }}\cts-traffic
