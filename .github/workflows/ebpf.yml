@@ -66,9 +66,18 @@ jobs:
       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
       perform_skip_check: false
 
+  build_cts_traffic:
+    name: Build cts-traffic test tool
+    uses: microsoft/ctsTraffic/.github/workflows/reusable-build.yml@master
+    with:
+      build_artifact: cts-traffic
+      repository: 'microsoft/ctsTraffic'
+      configurations: '["Release"]'
+      ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'master' }}
+
   test:
     name: Test Windows eBPF Performance
-    needs: [build]
+    needs: [build, build_cts_traffic]
     strategy:
       fail-fast: false
       matrix:
@@ -90,9 +99,11 @@ jobs:
         $process = Start-Process -FilePath "msiexec" -ArgumentList "/x {9363C0E3-4DE9-4067-9F5E-6A1A06034B59} /quiet /qn /norestart /log uninstall.log" -Wait -NoNewWindow
         if (Test-Path ${{ github.workspace }}\bpf_performance) { Remove-Item -Recurse -Force ${{ github.workspace }}\bpf_performance }
         if (Test-Path ${{ github.workspace }}\xdp) { Remove-Item -Recurse -Force ${{ github.workspace }}\xdp }
+        if (Test-Path ${{ github.workspace }}\xdp) { Remove-Item -Recurse -Force ${{ github.workspace }}\cts-traffic }
         if (Test-Path ${{ github.workspace }}\ETL) { Remove-Item -Recurse -Force ${{ github.workspace }}\ETL }
         New-item -ItemType Directory -Path ${{ github.workspace }}\bpf_performance
         New-item -ItemType Directory -Path ${{ github.workspace }}\xdp
+        New-item -ItemType Directory -Path ${{ github.workspace }}\cts-traffic
         New-item -ItemType Directory -Path ${{ github.workspace }}\ETL
 
     - name: Download ebpf-for-windows
@@ -144,6 +155,32 @@ jobs:
       run: |
         Expand-Archive -Path bpf_performance.zip -DestinationPath .
 
+    - name: Download cts-traffic
+      uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
+      with:
+        name: "cts-traffic Release"
+        path: ${{ github.workspace }}\cts-traffic
+
+    - name: Run CTS cts-traffic
+      working-directory: ${{ github.workspace }}\cts-traffic
+      # Note: The script is not in the repository, but is downloaded from the web.
+      # The resulting CSV file's header is updated to match the format produced by the BPF performance tests.
+      # The "Average Duration (ns)" column is the metric of interest.
+      run: |
+        dir .
+        $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
+        iex "& { $(irm $url) }"
+        $content = Get-Content ctsTrafficResults.csv
+        $content[0] = "Timestamp,Test,Average Duration (ns)"
+        $content | Set-Content ctsTrafficResults.csv
+
+    - name: Upload CTS cts-traffic results
+      if: always()
+      uses: actions/upload-artifact@v2
+      with:
+        name: cts_traffic_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv 
+
     - name: Run BPF performance tests
       working-directory: ${{ github.workspace }}\bpf_performance
       run: |
@@ -171,69 +208,6 @@ jobs:
         name: CPU_Profile_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: ETL
 
-    # Run secnet perf tests - This should be refactored into a separate workflow instead of cutting and pasting.
-    # https://github.com/microsoft/netperf/issues/118
-    # - name: Checkout microsoft/msquic
-    #   uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
-    #   with:
-    #     repository: microsoft/msquic
-    #     ref: 'main'
-
-    # - name: Lowercase runner.os
-    #   shell: pwsh
-    #   run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
-
-    # - name: Download Artifacts
-    #   uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
-    #   with:
-    #     name: Release-${{env.OS}}-${{ matrix.vec.os == '2025' && '2022' || matrix.vec.os }}-${{ matrix.vec.arch }}-schannel-Perf
-    #     path: artifacts
-
-    # - name: Download Regression.json file
-    #   run: Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/regression.json" -OutFile "regression.json"
-    #   shell: pwsh
-
-    # - name: Download Watermark_Regression.json file
-    #   run: Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/watermark_regression.json" -OutFile "watermark_regression.json"
-    #   shell: pwsh
-
-    # - name: Run secnetperf
-    #   shell: pwsh
-    #   timeout-minutes: 20
-    #   run: ./scripts/secnetperf.ps1 `
-    #       -LogProfile 'NULL'`
-    #       -MsQuicCommit 'main'`
-    #       -environment ${{ matrix.vec.env }} `
-    #       -plat ${{env.OS}} `
-    #       -os ${{ matrix.vec.os }} `
-    #       -arch ${{ matrix.vec.arch }} `
-    #       -tls schannel `
-    #       -io iocp `
-    #       -filter ''
-
-    # - name: Upload Test Results JSON
-    #   if: ${{ always() }}
-    #   uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
-    #   with:
-    #     name: json-test-results-${{ matrix.vec.env }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-schannel-iocp.json
-    #     path: json-test-results-${{ matrix.vec.env }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-schannel-iocp.json
-  
-    # - name: Upload Logs
-    #   if: ${{ always() }}
-    #   uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
-    #   with:
-    #     name: logs-${{ matrix.vec.env }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-schannel-iocp
-    #     path: artifacts/logs
-    #     if-no-files-found: ignore
-
-    # - name: Upload Full Latency Curves
-    #   if: ${{ always() }}
-    #   uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
-    #   with:
-    #     name: latency-${{ matrix.vec.env }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-schannel-iocp
-    #     path: latency.txt
-    #     if-no-files-found: ignore
-
     - name: Cleanup workspace
       if: always()
       run: |
@@ -241,4 +215,5 @@ jobs:
         $process = Start-Process -FilePath "msiexec" -ArgumentList "/x {9363C0E3-4DE9-4067-9F5E-6A1A06034B59} /quiet /qn /norestart /log uninstall.log" -Wait -NoNewWindow
         if (Test-Path ${{ github.workspace }}\bpf_performance) { Remove-Item -Recurse -Force ${{ github.workspace }}\bpf_performance }
         if (Test-Path ${{ github.workspace }}\xdp) { Remove-Item -Recurse -Force ${{ github.workspace }}\xdp }
+        if (Test-Path ${{ github.workspace }}\cts-traffic) { Remove-Item -Recurse -Force ${{ github.workspace }}\cts-traffic }
         if (Test-Path ${{ github.workspace }}\ETL) { Remove-Item -Recurse -Force ${{ github.workspace }}\ETL }
