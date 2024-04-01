@@ -8,8 +8,7 @@ permissions: read-all
 jobs:
   trigger-remote:
     name: Trigger remote
-    steps:
-    - name: Try running secnetperf remotely
-      uses: microsoft/netperf/.github/workflows/quic.yml@jackhe/make-secnetperf-callable
-      with:
-        ref: main
+    needs: []
+    uses: microsoft/netperf/.github/workflows/quic.yml@jackhe/make-secnetperf-callable
+    with:
+      ref: main
