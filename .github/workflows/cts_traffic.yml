@@ -93,7 +93,7 @@ jobs:
     - name: Stop Windows Performance Recorder
       if: ${{ github.event.inputs.profile }}
       run: |
-        wpr -stop -file ${{ github.workspace }}\ETL\ctsTrafficResults.etl
+        wpr -stop ${{ github.workspace }}\ETL\ctsTrafficResults.etl
 
     - name: Upload CTS cts-traffic results
       if: always()
