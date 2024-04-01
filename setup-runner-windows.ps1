@@ -46,7 +46,9 @@ function Add-ServiceLogonRight ($Username) {
     Remove-Item $tmp* -ErrorAction SilentlyContinue
 }
 Write-Host "Enabling ServiceLogonRight."
-Add-ServiceLogonRight -Username $Username
+
+# Ensure password doesn't expire
+Set-LocalUser -Name $Username -PasswordNeverExpires $true
 
 # Configure automatic logon.
 Write-Host "Enabling automatic logon."
