@@ -8,23 +8,19 @@ param (
     [string]$VMName,
 
     [Parameter(Mandatory = $false)]
-    [string]$ResourceGroupName = "netperf-ex",
-
-    [Parameter(Mandatory = $false)]
-    [string]$SubscriptionId
+    [string]$ResourceGroupName = "netperf-ex"
 )
 
 Set-StrictMode -Version "Latest"
 $PSDefaultParameterValues["*:ErrorAction"] = "Stop"
 
-if ($SubscriptionId) {
-    # Connect to Azure, otherwise assume we're already connected.
-    Connect-AzAccount -SubscriptionId $subscriptionId
-}
-
 Write-Host "$vmName`: Removing VM"
-$vm = Get-AzVM -ResourceGroupName $ResourceGroupName -Name $vmName
-$null = $vm | Remove-AzVM -Force
+try {
+    $vm = Get-AzVM -ResourceGroupName $ResourceGroupName -Name $vmName
+    $null = $vm | Remove-AzVM -Force
+} catch {
+    Write-Host "$vmName`: No VM found"
+}
 
 Write-Host "$vmName`: Removing Public IP"
 try {
