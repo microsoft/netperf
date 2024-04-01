@@ -1,6 +1,42 @@
 name: QUIC
 
 on:
+  workflow_call:
+    inputs:
+      ref:
+        description: 'MsQuic Branch or Commit'
+        required: false
+        default: 'main'
+        type: string
+      filter:
+        description: 'Custom Test Filter'
+        required: false
+        default: ''
+        type: string
+      logprofile:
+        description: 'Logging WPR Profile'
+        required: false
+        default: "NULL"
+        type: choice
+        options:
+          - "NULL"
+          - Stacks.Light
+          - Stacks.Verbose
+          - Basic.Light
+          - Basic.Verbose
+          - Performance.Light
+          - Performance.Verbose
+          - RPS.Light
+          - RPS.Verbose
+          - Datapath.Light
+          - Datapath.Verbose
+          - Full.Light
+          - Full.Verbose
+      commit:
+        description: 'Publish Results'
+        required: false
+        default: false
+        type: boolean
   workflow_dispatch:
     inputs:
       ref:
