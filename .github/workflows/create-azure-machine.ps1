@@ -32,14 +32,15 @@ Set-StrictMode -Version "Latest"
 $PSDefaultParameterValues["*:ErrorAction"] = "Stop"
 
 $osType = $Os.Split("-")[0]
+$imageByParts = $true
 if ($Os -eq "windows-2025") {
-
     $subscriptionId = "DDITIMAGEFACTORY-PUBLIC"
-    $versionId = "latest"
     $resourceGroupName = "DEVDIVIMAGEGALLERY"
     $galleryName = "DevDivImageGallery"
     $imageName = "ge_release-edition_server_serverdatacentercore_en-us_vl"
+    $versionId = "latest"
     $image = "/subscriptions/$subscriptionId/resourceGroups/$resourceGroupName/providers/Microsoft.Compute/galleries/$galleryName/images/$imageName/versions/$versionId"
+    $imageByParts = $false
 } elseif ($Os -eq "windows-2022") {
     $image = "MicrosoftWindowsServer:WindowsServer:2022-datacenter-g2:latest"
 } elseif ($Os -eq "windows-2019") {
@@ -65,7 +66,7 @@ try {
     return
 } catch { }
 
-Write-Host "[$(Get-Date)] Creating Azure Resources ($os, $VMSize, $ResourceGroupName, $Location)"
+Write-Host "[$(Get-Date)] Creating $VMName ($os, $VMSize, $ResourceGroupName, $Location)"
 
 try {
     Get-AzResourceGroup -Name $ResourceGroupName | Out-Null
@@ -96,7 +97,7 @@ try {
     Write-Host "[$(Get-Date)] Created subnet config"
 }
 
-$storageName = "exbootstorage"
+$storageName = "exbootstorage2"
 try {
     $storage = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $storageName
     Write-Host "[$(Get-Date)] Found storage account"
@@ -113,8 +114,6 @@ try {
 #    $proximity = New-AzProximityPlacementGroup -ResourceGroupName $ResourceGroupName -Name $proximity -Location $Location -ProximityPlacementGroupType Standard -Zone "1" -IntentVMSizeList $VMSize
 #    Write-Host "Created proximity placement group"
 #}
-
-#Write-Host "`nCreating $VMName"
 
 Write-Host "[$(Get-Date)] $VMName`: Creating security group"
 $nsg = New-AzNetworkSecurityGroup -ResourceGroupName $ResourceGroupName -Name "$VMName-Nsg" -Location $Location -Force
@@ -138,11 +137,10 @@ if ($osType -eq "windows") {
     $vmConfig = New-AzVMConfig -VMName $VMName -VMSize $VMSize
     $vmConfig = Set-AzVMOperatingSystem -VM $vmConfig -Linux -ComputerName $VMName -Credential $cred
 }
-
-if ($OS -eq "windows-2025") {
-    $vmConfig = Set-AzVMSourceImage -VM $vmConfig -Id $image
-} else {
+if ($imageByParts) {
     $vmConfig = Set-AzVMSourceImage -VM $vmConfig -PublisherName $image.Split(":")[0] -Offer $image.Split(":")[1] -Skus $image.Split(":")[2] -Version $image.Split(":")[3]
+} else {
+    $vmConfig = Set-AzVMSourceImage -VM $vmConfig -Id $image
 }
 $vmConfig = Add-AzVMNetworkInterface -VM $vmConfig -Id $nic.Id -DeleteOption Delete
 $vmConfig = Set-AzVMBootDiagnostic -VM $vmConfig -Enable -ResourceGroupName $ResourceGroupName -StorageAccountName $storage.StorageAccountName
@@ -157,3 +155,5 @@ if ($osType -eq "windows") {
     Write-Host "[$(Get-Date)] $VMName`: Restarting VM"
     Restart-AzVM -ResourceGroupName $ResourceGroupName -Name $VMName
 }
+
+Write-Host "[$(Get-Date)] $VMName`: Complete"
