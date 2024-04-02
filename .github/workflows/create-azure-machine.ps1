@@ -33,7 +33,13 @@ $PSDefaultParameterValues["*:ErrorAction"] = "Stop"
 
 $osType = $Os.Split("-")[0]
 if ($Os -eq "windows-2025") {
-    Write-Error "Windows 2025 is not supported yet." # TODO - Get this working
+
+    $subscriptionId = "DDITIMAGEFACTORY-PUBLIC"
+    $versionId = "latest"
+    $resourceGroupName = "DEVDIVIMAGEGALLERY"
+    $galleryName = "DevDivImageGallery"
+    $imageName = "ge_release-edition_server_serverdatacentercore_en-us_vl"
+    $image = "/subscriptions/$subscriptionId/resourceGroups/$resourceGroupName/providers/Microsoft.Compute/galleries/$galleryName/images/$imageName/versions/$versionId"
 } elseif ($Os -eq "windows-2022") {
     $image = "MicrosoftWindowsServer:WindowsServer:2022-datacenter-g2:latest"
 } elseif ($Os -eq "windows-2019") {
@@ -132,7 +138,12 @@ if ($osType -eq "windows") {
     $vmConfig = New-AzVMConfig -VMName $VMName -VMSize $VMSize
     $vmConfig = Set-AzVMOperatingSystem -VM $vmConfig -Linux -ComputerName $VMName -Credential $cred
 }
-$vmConfig = Set-AzVMSourceImage -VM $vmConfig -PublisherName $image.Split(":")[0] -Offer $image.Split(":")[1] -Skus $image.Split(":")[2] -Version $image.Split(":")[3]
+
+if ($OS -eq "windows-2025") {
+    $vmConfig = Set-AzVMSourceImage -VM $vmConfig -Id $image
+} else {
+    $vmConfig = Set-AzVMSourceImage -VM $vmConfig -PublisherName $image.Split(":")[0] -Offer $image.Split(":")[1] -Skus $image.Split(":")[2] -Version $image.Split(":")[3]
+}
 $vmConfig = Add-AzVMNetworkInterface -VM $vmConfig -Id $nic.Id -DeleteOption Delete
 $vmConfig = Set-AzVMBootDiagnostic -VM $vmConfig -Enable -ResourceGroupName $ResourceGroupName -StorageAccountName $storage.StorageAccountName
 
