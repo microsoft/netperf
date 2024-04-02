@@ -1,6 +1,12 @@
 <#
 .SYNOPSIS
     Creates a pair of Azure VMs to use for testing.
+
+    Example usage:
+
+        $password = '...'
+        $token = '...'
+        .\.github\workflows\create-azure-machines.ps1 -VMName1 ex-windows-03 -VMName2 ex-windows-04 -Password $password -GitHubToken $token
 #>
 
 param (
@@ -40,7 +46,7 @@ $PSDefaultParameterValues["*:ErrorAction"] = "Stop"
 $osType = $Os.Split("-")[0]
 
 $jobs = @()
-Write-Host "Creating $VMName1..."
+Write-Host "[$(Get-Date)] Creating $VMName1..."
 $jobs += Start-Job -ScriptBlock {
     & ./.github/workflows/create-azure-machine.ps1 `
         -VMName $Using:VMName1 `
@@ -48,10 +54,9 @@ $jobs += Start-Job -ScriptBlock {
         -Os $Using:Os `
         -VMSize $Using:VMSize `
         -ResourceGroupName $Using:ResourceGroupName `
-        -Location $Using:Location `
-        -NoPublicIP
+        -Location $Using:Location
 }
-Write-Host "Creating $VMName2..."
+Write-Host "[$(Get-Date)] Creating $VMName2..."
 $jobs += Start-Job -ScriptBlock {
     & ./.github/workflows/create-azure-machine.ps1 `
         -VMName $Using:VMName2 `
@@ -59,11 +64,10 @@ $jobs += Start-Job -ScriptBlock {
         -Os $Using:Os `
         -VMSize $Using:VMSize `
         -ResourceGroupName $Using:ResourceGroupName `
-        -Location $Using:Location `
-        -NoPublicIP
+        -Location $Using:Location
 }
 $jobs | Wait-Job    # Wait for all jobs to complete
-Write-Host "`nJobs complete!`n"
+Write-Host "`n[$(Get-Date)] Jobs complete!`n"
 $jobs | Receive-Job # Get job results
 $jobs | Remove-Job  # Clean up the jobs
 
@@ -81,7 +85,7 @@ if ($GitHubToken) {
     $jobs = @()
 
     if ($osType -eq "windows") {
-        Write-Host "Configuring GitHub peer machine"
+        Write-Host "[$(Get-Date)] Configuring GitHub peer machine"
         $jobs += Start-Job -ScriptBlock {
             $scriptParams = @{
                 "Username" = "netperf"
@@ -96,11 +100,11 @@ if ($GitHubToken) {
                 -Parameter $scriptParams `
                 -Verbose
 
-            Write-Host "Restarting peer machine"
+            Write-Host "[$(Get-Date)] Restarting peer machine"
             Restart-AzVM -ResourceGroupName $Using:ResourceGroupName -Name $Using:vmName2
         }
 
-        Write-Host "Configuring GitHub runner machine"
+        Write-Host "[$(Get-Date)] Configuring GitHub runner machine"
         $jobs += Start-Job -ScriptBlock {
             $scriptParams = @{
                 "Username" = "netperf"
@@ -117,11 +121,11 @@ if ($GitHubToken) {
                 -Parameter $scriptParams `
                 -Verbose
 
-            Write-Host "Restarting GitHub runner machine"
+            Write-Host "[$(Get-Date)] Restarting GitHub runner machine"
             Restart-AzVM -ResourceGroupName $Using:ResourceGroupName -Name $Using:VMName1
         }
     } else {
-        Write-Host "Configuring Linux GitHub peer machine"
+        Write-Host "[$(Get-Date)] Configuring Linux GitHub peer machine"
         $jobs += Start-Job -ScriptBlock {
             $scriptParams = @{
                 "username" = "netperf"
@@ -136,11 +140,11 @@ if ($GitHubToken) {
                 -ScriptPath ".\setup-runner-linux.sh" `
                 -Parameter $scriptParams
 
-            Write-Host "Restarting peer machine"
+            Write-Host "[$(Get-Date)] Restarting peer machine"
             Restart-AzVM -ResourceGroupName $Using:ResourceGroupName -Name $Using:VMName2
         }
 
-        Write-Host "Configuring Linux GitHub runner machine"
+        Write-Host "[$(Get-Date)] Configuring Linux GitHub runner machine"
         $jobs += Start-Job -ScriptBlock {
             $scriptParams = @{
                 "username" = "netperf"
@@ -157,13 +161,13 @@ if ($GitHubToken) {
                 -ScriptPath ".\setup-runner-linux.sh" `
                 -Parameter $scriptParams
 
-            Write-Host "Restarting GitHub runner machine"
+            Write-Host "[$(Get-Date)] Restarting GitHub runner machine"
             Restart-AzVM -ResourceGroupName $Using:ResourceGroupName -Name $Using:VMName1
         }
     }
 
     $jobs | Wait-Job    # Wait for all jobs to complete
-    Write-Host "`nJobs complete!`n"
+    Write-Host "`n[$(Get-Date)] Jobs complete!`n"
     $jobs | Receive-Job # Get job results
     $jobs | Remove-Job  # Clean up the jobs
 }

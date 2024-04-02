@@ -59,44 +59,44 @@ try {
     return
 } catch { }
 
-Write-Host "Creating Azure Resources ($os, $VMSize, $ResourceGroupName, $Location)"
+Write-Host "[$(Get-Date)] Creating Azure Resources ($os, $VMSize, $ResourceGroupName, $Location)"
 
 try {
     Get-AzResourceGroup -Name $ResourceGroupName | Out-Null
-    Write-Host "Found resource group"
+    Write-Host "[$(Get-Date)] Found resource group"
 } catch {
     New-AzResourceGroup -Name $ResourceGroupName -Location $Location | Out-Null
-    Write-Host "Created resource group"
+    Write-Host "[$(Get-Date)] Created resource group"
 }
 
 $vnetName = "exvnet"
 try {
     $vnet = Get-AzVirtualNetwork -ResourceGroupName $ResourceGroupName -Name $vnetName
-    Write-Host "Found vnet"
+    Write-Host "[$(Get-Date)] Found vnet"
 } catch {
     $vnet = New-AzVirtualNetwork -ResourceGroupName $ResourceGroupName -Name $vnetName -Location $Location -AddressPrefix "10.0.0.0/16"
-    Write-Host "Created vnet"
+    Write-Host "[$(Get-Date)] Created vnet"
 }
 
 $subnetName = "exsubnet"
 try {
     $subnet = Get-AzVirtualNetworkSubnetConfig -VirtualNetwork $vnet -Name $subnetName
-    Write-Host "Found subnet config"
+    Write-Host "[$(Get-Date)] Found subnet config"
 } catch {
     $subnet = Add-AzVirtualNetworkSubnetConfig -Name $subnetName -VirtualNetwork $vnet -AddressPrefix "10.0.1.0/24"
     $vnet | Set-AzVirtualNetwork | Out-Null
     $vnet = Get-AzVirtualNetwork -ResourceGroupName $ResourceGroupName -Name $vnetName
     $subnet = Get-AzVirtualNetworkSubnetConfig -VirtualNetwork $vnet -Name $subnetName
-    Write-Host "Created subnet config"
+    Write-Host "[$(Get-Date)] Created subnet config"
 }
 
 $storageName = "exbootstorage"
 try {
     $storage = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $storageName
-    Write-Host "Found storage account"
+    Write-Host "[$(Get-Date)] Found storage account"
 } catch {
     $storage = New-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $storageName -Location $Location -SkuName "Standard_LRS"
-    Write-Host "Created storage account"
+    Write-Host "[$(Get-Date)] Created storage account"
 }
 
 #$proximity = "exproximity"
@@ -110,21 +110,21 @@ try {
 
 #Write-Host "`nCreating $VMName"
 
-Write-Host "$VMName`: Creating security group"
+Write-Host "[$(Get-Date)] $VMName`: Creating security group"
 $nsg = New-AzNetworkSecurityGroup -ResourceGroupName $ResourceGroupName -Name "$VMName-Nsg" -Location $Location -Force
 
 if (!$NoPublicIP) {
-    Write-Host "$VMName`: Creating IP address"
+    Write-Host "[$(Get-Date)] $VMName`: Creating IP address"
     $publicIp = New-AzPublicIpAddress -ResourceGroupName $ResourceGroupName -Name "$VMName-PublicIP" -Location $Location -AllocationMethod "Static" -Force
 
-    Write-Host "$VMName`: Creating network interface card"
+    Write-Host "[$(Get-Date)] $VMName`: Creating network interface card"
     $nic = New-AzNetworkInterface -ResourceGroupName $ResourceGroupName -Name "$VMName-Nic" -Location $Location -SubnetId $subnet.Id -PublicIpAddressId $publicIp.Id -NetworkSecurityGroupId $nsg.Id -EnableAcceleratedNetworking -Force
 } else {
-    Write-Host "$VMName`: Creating network interface card (no public IP)"
+    Write-Host "[$(Get-Date)] $VMName`: Creating network interface card (no public IP)"
     $nic = New-AzNetworkInterface -ResourceGroupName $ResourceGroupName -Name "$VMName-Nic" -Location $Location -SubnetId $subnet.Id -NetworkSecurityGroupId $nsg.Id -EnableAcceleratedNetworking -Force
 }
 
-Write-Host "$VMName`: Creating VM config"
+Write-Host "[$(Get-Date)] $VMName`: Creating VM config"
 if ($osType -eq "windows") {
     $vmConfig = New-AzVMConfig -VMName $VMName -VMSize $VMSize -SecurityType TrustedLaunch -EnableVtpm $false -EnableSecureBoot $false
     $vmConfig = Set-AzVMOperatingSystem -VM $vmConfig -Windows -ComputerName $VMName -Credential $cred -ProvisionVMAgent -EnableAutoUpdate
@@ -136,13 +136,13 @@ $vmConfig = Set-AzVMSourceImage -VM $vmConfig -PublisherName $image.Split(":")[0
 $vmConfig = Add-AzVMNetworkInterface -VM $vmConfig -Id $nic.Id -DeleteOption Delete
 $vmConfig = Set-AzVMBootDiagnostic -VM $vmConfig -Enable -ResourceGroupName $ResourceGroupName -StorageAccountName $storage.StorageAccountName
 
-Write-Host "$VMName`: Creating VM"
+Write-Host "[$(Get-Date)] $VMName`: Creating VM"
 New-AzVM -ResourceGroupName $ResourceGroupName -Location $Location -VM $vmConfig -OSDiskDeleteOption Delete | Out-Null
 
 if ($osType -eq "windows") {
-    Write-Host "$VMName`: Enabling test signing"
+    Write-Host "[$(Get-Date)] $VMName`: Enabling test signing"
     Invoke-AzVMRunCommand -ResourceGroupName $ResourceGroupName -VMName $VMName -CommandId "RunPowerShellScript" -ScriptString "bcdedit /set testsigning on" | Out-Null
 
-    Write-Host "$VMName`: Restarting VM"
+    Write-Host "[$(Get-Date)] $VMName`: Restarting VM"
     Restart-AzVM -ResourceGroupName $ResourceGroupName -Name $VMName
 }
