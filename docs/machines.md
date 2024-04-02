@@ -13,6 +13,16 @@ All the machines are connected by a 400 GbE [PowerSwitch Z9432F](https://www.del
 
 ### Setup
 
+#### BIOS Configuration
+
+The following changes must be made to each lab machine from the default configuration:
+
+- Processor Settings -> Kernel DMA Protection -> Enabled
+- Integrated Devices -> SR-IOV Global Enable -> Enabled
+- System Profile Settings -> System Profile -> Performance
+
+#### OS Deployment
+
 The easiest way to automate machine deployment is via `WorkflowCommandLine.exe`, which you need to install (installed automatically in Program Files if you have WTT Studio).
 
 ```PowerShell
