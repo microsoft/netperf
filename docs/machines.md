@@ -30,6 +30,8 @@ The easiest way to automate machine deployment is via `WorkflowCommandLine.exe`,
 for ($i = 10; $i -lt 61; $i++) { ./WorkFlowCommandLine.exe /run /datastore:ServerPlaceholder /identityserver:atlasidentity /identitydatabase:wttidentity /id:251 /resourcedatastore:WTT_EDS09 /machinepool:"$\TestServices\WTT_EDS09\Desktop\Private\NetPerf" /machine:RR1-NetPerf-$i /commonparam:DEPLOY_OS_LAB=fe_release_svc_prod1 /commonparam:DEPLOY_OS_EDITION=ServerDatacenter /commonparam:DEPLOY_OS_PLATFORM=amd64 }
 ```
 
+Once the OS is installed, run [`setup-host.ps1`](/setup-host.ps1) on each machine to apply the host configuration.
+
 ## Dedicated arm64 Machines
 
 TODO
