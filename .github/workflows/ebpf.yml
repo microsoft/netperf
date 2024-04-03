@@ -95,10 +95,8 @@ jobs:
     steps:
     - name: Setup workspace
       run: |
-        $process = Start-Process -FilePath "msiexec" -ArgumentList "/x {022C44B5-8969-4B75-8DB0-73F98B1BD7DC} /quiet /qn /norestart /log uninstall.log" -Wait -NoNewWindow -PassThru
-        if ($process.ExitCode -ne 0) { Write-Output "Failed to uninstall ebpf-for-windows"; exit $process.ExitCode }
-        $process = Start-Process -FilePath "msiexec" -ArgumentList "/x {9363C0E3-4DE9-4067-9F5E-6A1A06034B59} /quiet /qn /norestart /log uninstall.log" -Wait -NoNewWindow -PassThru
-        if ($process.ExitCode -ne 0) { Write-Output "Failed to uninstall xdp-for-windows"; exit $process.ExitCode }
+        $process = Start-Process -FilePath "msiexec" -ArgumentList "/x {022C44B5-8969-4B75-8DB0-73F98B1BD7DC} /quiet /qn /norestart /log uninstall.log" -Wait -NoNewWindow
+        $process = Start-Process -FilePath "msiexec" -ArgumentList "/x {9363C0E3-4DE9-4067-9F5E-6A1A06034B59} /quiet /qn /norestart /log uninstall.log" -Wait -NoNewWindow
         if (Test-Path ${{ github.workspace }}\bpf_performance) { Remove-Item -Recurse -Force ${{ github.workspace }}\bpf_performance }
         if (Test-Path ${{ github.workspace }}\xdp) { Remove-Item -Recurse -Force ${{ github.workspace }}\xdp }
         if (Test-Path ${{ github.workspace }}\xdp) { Remove-Item -Recurse -Force ${{ github.workspace }}\cts-traffic }
@@ -215,11 +213,8 @@ jobs:
     - name: Cleanup workspace
       if: always()
       run: |
-        $process = Start-Process -FilePath "msiexec" -ArgumentList "/x {022C44B5-8969-4B75-8DB0-73F98B1BD7DC} /quiet /qn /norestart /log uninstall.log" -Wait -NoNewWindow -PassThru
-        if ($process.ExitCode -ne 0) { Write-Output "Failed to uninstall ebpf-for-windows"; exit $process.ExitCode }
-        $process = Start-Process -FilePath "msiexec" -ArgumentList "/x {9363C0E3-4DE9-4067-9F5E-6A1A06034B59} /quiet /qn /norestart /log uninstall.log" -Wait -NoNewWindow -PassThru
-        if ($process.ExitCode -ne 0) { Write-Output "Failed to uninstall xdp-for-windows"; exit $process.ExitCode }
-        if ($process1.ExitCode -ne 0 -or $process2.ExitCode -ne 0) { exit 1 }
+        $process = Start-Process -FilePath "msiexec" -ArgumentList "/x {022C44B5-8969-4B75-8DB0-73F98B1BD7DC} /quiet /qn /norestart /log uninstall.log" -Wait -NoNewWindow
+        $process = Start-Process -FilePath "msiexec" -ArgumentList "/x {9363C0E3-4DE9-4067-9F5E-6A1A06034B59} /quiet /qn /norestart /log uninstall.log" -Wait -NoNewWindow
         if (Test-Path ${{ github.workspace }}\bpf_performance) { Remove-Item -Recurse -Force ${{ github.workspace }}\bpf_performance }
         if (Test-Path ${{ github.workspace }}\xdp) { Remove-Item -Recurse -Force ${{ github.workspace }}\xdp }
         if (Test-Path ${{ github.workspace }}\cts-traffic) { Remove-Item -Recurse -Force ${{ github.workspace }}\cts-traffic }
