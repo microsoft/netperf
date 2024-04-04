@@ -27,7 +27,7 @@ jobs:
         "https://api.github.com/repos/microsoft/netperf/actions/runners/registration-token" | jq -r .token)
         echo "::set-output name=REGISTRATION_TOKEN::$TOKEN"
       shell: bash
-  # Use the output `steps.generate-token.outputs.REGISTRATION_TOKEN` in subsequent step
+  # Use the output `steps.get-registration-token.outputs.REGISTRATION_TOKEN` in subsequent step
   create-runner:
     name: Create Runner
     needs: [get-registration-token]
@@ -58,7 +58,7 @@ jobs:
           -Password ${{ secrets.VM_PASSWORD }} `
           -Os windows-${{ inputs.os }} `
           -EnvTag azure-custom `
-          -GitHubToken ${{ steps.generate-token.outputs.REGISTRATION_TOKEN }}
+          -GitHubToken ${{ steps.get-registration-token.outputs.REGISTRATION_TOKEN }}
 
   test-runner:
     name: Test Runner
