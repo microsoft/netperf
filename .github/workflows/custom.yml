@@ -39,7 +39,7 @@ jobs:
     - name: Generate registration token
       id: generate-token
       run: |
-        TOKEN=$(curl -X POST -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" "https://api.github.com/repos/microsoft/netperf/actions/runners/registration-token" | jq -r .token) && echo "::set-output name=REGISTRATION_TOKEN::$TOKEN"
+        TOKEN=$(curl -X POST -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" "https://api.github.com/repos/microsoft/netperf/actions/runners/registration-token" | jq -r .token) && echo "::add-mask::$TOKEN" && echo "::set-output name=REGISTRATION_TOKEN::$TOKEN"
       shell: bash
     - name: Create Azure VMs
       shell: pwsh
