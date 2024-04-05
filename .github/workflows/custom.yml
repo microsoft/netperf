@@ -18,7 +18,6 @@ permissions: write-all
 jobs:
   create-runner:
     name: Create Runner
-    needs: [get-registration-token]
     runs-on: windows-latest
     steps:
     - name: Checkout
