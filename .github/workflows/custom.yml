@@ -16,86 +16,80 @@ on:
 permissions: write-all
 
 jobs:
-  create-runner:
-    name: Create Runner
-    runs-on: windows-latest
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v2
-    - name: Install Latest Az PowerShell Module
-      shell: pwsh
-      run: |
-        Install-Module -Name Az -Force -AllowClobber -Repository PSGallery
-        Update-Module Az -Force
-        Get-Module 'Az' | where {([string]($_.Version)).StartsWith('9.3.0')} | Remove-Module
-        Get-Module -Name Az -ListAvailable
-    - name: Login to Azure
-      uses: azure/login@v1
-      with:
-        client-id: ${{ secrets.AZURE_CLIENT_ID }}
-        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        enable-AzPSSession: true
-    - name: Generate registration token
-      id: generate-token
-      run: |
-        TOKEN=$(curl -X POST -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" "https://api.github.com/repos/microsoft/netperf/actions/runners/registration-token" | jq -r .token) && echo "::add-mask::$TOKEN" && echo "::set-output name=REGISTRATION_TOKEN::$TOKEN"
-      shell: bash
-    - name: Create Azure VMs
-      shell: pwsh
-      run: |
-        ./.github/workflows/create-azure-machines.ps1 `
-          -VMName1 ex-windows-c1 `
-          -VMName2 ex-windows-c2 `
-          -Password ${{ secrets.VM_PASSWORD }} `
-          -Os windows-${{ inputs.os }} `
-          -EnvTag azure-custom `
-          -GitHubToken ${{ steps.generate-token.outputs.REGISTRATION_TOKEN }}
+  # create-runner:
+  #   name: Create Runner
+  #   runs-on: windows-latest
+  #   steps:
+  #   - name: Checkout
+  #     uses: actions/checkout@v2
+  #   - name: Install Latest Az PowerShell Module
+  #     shell: pwsh
+  #     run: |
+  #       Install-Module -Name Az -Force -AllowClobber -Repository PSGallery
+  #       Update-Module Az -Force
+  #       Get-Module 'Az' | where {([string]($_.Version)).StartsWith('9.3.0')} | Remove-Module
+  #       Get-Module -Name Az -ListAvailable
+  #   - name: Login to Azure
+  #     uses: azure/login@v1
+  #     with:
+  #       client-id: ${{ secrets.AZURE_CLIENT_ID }}
+  #       tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+  #       subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  #       enable-AzPSSession: true
+  #   - name: Generate registration token
+  #     id: generate-token
+  #     run: |
+  #       TOKEN=$(curl -X POST -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" "https://api.github.com/repos/microsoft/netperf/actions/runners/registration-token" | jq -r .token) && echo "::add-mask::$TOKEN" && echo "::set-output name=REGISTRATION_TOKEN::$TOKEN"
+  #     shell: bash
+  #   - name: Create Azure VMs
+  #     shell: pwsh
+  #     run: |
+  #       ./.github/workflows/create-azure-machines.ps1 `
+  #         -VMName1 ex-windows-c1 `
+  #         -VMName2 ex-windows-c2 `
+  #         -Password ${{ secrets.VM_PASSWORD }} `
+  #         -Os windows-${{ inputs.os }} `
+  #         -EnvTag azure-custom `
+  #         -GitHubToken ${{ steps.generate-token.outputs.REGISTRATION_TOKEN }}
 
-  test-runner:
-    name: Test Runner
-    needs: [create-runner]
-    timeout-minutes: 5
-    runs-on:
-    - self-hosted
-    - os-windows-${{ inputs.os }}
-    - azure-custom
-    steps:
-    - name: Test Runner
-      shell: pwsh
-      run: |
-        Write-Host 'Connecting to netperf-peer'
-        $Session = New-PSSession -ComputerName "netperf-peer" -ConfigurationName PowerShell.7
-        Write-Host "Local IP Config:"
-        ipconfig /all
-        Write-Host "Peer IP Config:"
-        Invoke-Command -Session $Session -ScriptBlock {
-          ipconfig /all
-        }
-        Write-Host "Done!"
+  # test-runner:
+  #   name: Test Runner
+  #   needs: [create-runner]
+  #   timeout-minutes: 5
+  #   runs-on:
+  #   - self-hosted
+  #   - os-windows-${{ inputs.os }}
+  #   - azure-custom
+  #   steps:
+  #   - name: Test Runner
+  #     shell: pwsh
+  #     run: |
+  #       Write-Host 'Connecting to netperf-peer'
+  #       $Session = New-PSSession -ComputerName "netperf-peer" -ConfigurationName PowerShell.7
+  #       Write-Host "Local IP Config:"
+  #       ipconfig /all
+  #       Write-Host "Peer IP Config:"
+  #       Invoke-Command -Session $Session -ScriptBlock {
+  #         ipconfig /all
+  #       }
+  #       Write-Host "Done!"
 
-  delete-runner:
-    name: Delete Runner
-    needs: [test-runner]
+
+  delete-github-runner:
+    name: Delete GitHub Runner
     runs-on: windows-latest
     if: ${{ always() }}
     steps:
-    - name: Checkout
-      uses: actions/checkout@v2
-    - name: Login to Azure
-      uses: azure/login@v1
-      with:
-        client-id: ${{ secrets.AZURE_CLIENT_ID }}
-        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-        enable-AzPSSession: true
-    - name: Delete Azure VMs
-      shell: pwsh
+    - name: Get Relevant Runner IDs to Delete
+      shell: bash
+      env:
+        TAG: "azure-custom"
       run: |
-        #$jobs = @()
-        #$jobs += Start-Job -ScriptBlock { ./.github/workflows/remove-azure-machine.ps1 -VMName ex-windows-c1 }
-        #$jobs += Start-Job -ScriptBlock { ./.github/workflows/remove-azure-machine.ps1 -VMName ex-windows-c2 }
-        #$jobs | Wait-Job
-        #$jobs | Receive-Job
-        ./.github/workflows/remove-azure-machine.ps1 -VMName ex-windows-c1
-        ./.github/workflows/remove-azure-machine.ps1 -VMName ex-windows-c2
+        RUNNERS_JSON=$(curl -s \
+          -H "Accept: application/vnd.github+json" \
+          -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          "https://api.github.com/repos/microsoft/netperf/actions/runners")
+
+        RUNNER_ID=$(echo $RUNNERS_JSON | jq ".runners[] | select(.labels[].name == \"$TAG\") | .id")
+
+        echo "Runner ID(s) with tag $TAG: $RUNNER_ID"
