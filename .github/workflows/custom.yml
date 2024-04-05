@@ -76,6 +76,7 @@ jobs:
 
 
   delete-github-runner:
+    permissions: write-all
     name: Delete GitHub Runner
     runs-on: windows-latest
     if: ${{ always() }}
