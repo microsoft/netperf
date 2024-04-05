@@ -16,18 +16,6 @@ on:
 permissions: write-all
 
 jobs:
-  get-registration-token:
-    name: Gets a Github Registration token to register a new self hosted runner
-    runs-on: ubuntu-latest
-    steps:
-    - name: Generate registration token
-      id: generate-token
-      run: |
-        TOKEN=$(curl -X POST -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
-        "https://api.github.com/repos/microsoft/netperf/actions/runners/registration-token" | jq -r .token)
-        echo "::set-output name=REGISTRATION_TOKEN::$TOKEN"
-      shell: bash
-  # Use the output `steps.get-registration-token.outputs.REGISTRATION_TOKEN` in subsequent step
   create-runner:
     name: Create Runner
     needs: [get-registration-token]
@@ -49,6 +37,11 @@ jobs:
         tenant-id: ${{ secrets.AZURE_TENANT_ID }}
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         enable-AzPSSession: true
+    - name: Generate registration token
+      id: generate-token
+      run: |
+        TOKEN=$(curl -X POST -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" "https://api.github.com/repos/microsoft/netperf/actions/runners/registration-token" | jq -r .token) && echo "::set-output name=REGISTRATION_TOKEN::$TOKEN"
+      shell: bash
     - name: Create Azure VMs
       shell: pwsh
       run: |
@@ -58,7 +51,7 @@ jobs:
           -Password ${{ secrets.VM_PASSWORD }} `
           -Os windows-${{ inputs.os }} `
           -EnvTag azure-custom `
-          -GitHubToken ${{ steps.get-registration-token.outputs.REGISTRATION_TOKEN }}
+          -GitHubToken ${{ steps.generate-token.outputs.REGISTRATION_TOKEN }}
 
   test-runner:
     name: Test Runner
