@@ -1,10 +1,6 @@
 name: Cleanup Azure VMs
 
 on:
-  push:
-    branches:
-      - main
-      - create-azure-machines
   workflow_dispatch:
     inputs:
       tag:
