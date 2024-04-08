@@ -1,0 +1,52 @@
+name: Setup temporary Azure VMs for testing
+
+on:
+  workflow_call:
+    inputs:
+      os:
+        description: "The operating system to provision on the temp VMs"
+        required: true
+        type: string
+      tag:
+        description: "The tag to identify the temporary VMs we created"
+        required: true
+        type: string
+
+permissions: write-all
+
+jobs:
+  create-runner:
+    name: Create Runner
+    runs-on: windows-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Install Latest Az PowerShell Module
+      shell: pwsh
+      run: |
+        Install-Module -Name Az -Force -AllowClobber -Repository PSGallery
+        Update-Module Az -Force
+        Get-Module 'Az' | where {([string]($_.Version)).StartsWith('9.3.0')} | Remove-Module
+        Get-Module -Name Az -ListAvailable
+    - name: Login to Azure
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        enable-AzPSSession: true
+    - name: Generate registration token
+      id: generate-token
+      run: |
+        TOKEN=$(curl -X POST -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" "https://api.github.com/repos/microsoft/netperf/actions/runners/registration-token" | jq -r .token) && echo "::add-mask::$TOKEN" && echo "::set-output name=REGISTRATION_TOKEN::$TOKEN"
+      shell: bash
+    - name: Create Azure VMs
+      shell: pwsh
+      run: |
+        ./.github/workflows/create-azure-machines.ps1 `
+          -VMName1 ex-windows-c1 `
+          -VMName2 ex-windows-c2 `
+          -Password ${{ secrets.VM_PASSWORD }} `
+          -Os ${{ inputs.os }} `
+          -EnvTag azure-custom `
+          -GitHubToken ${{ steps.generate-token.outputs.REGISTRATION_TOKEN }}

@@ -1,6 +1,12 @@
 name: Cleanup Azure VMs
 
 on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to identify the VMs to be cleaned up'
+        required: true
+        type: string
   workflow_call:
     inputs:
       tag:
