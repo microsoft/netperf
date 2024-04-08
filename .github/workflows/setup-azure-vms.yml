@@ -1,6 +1,10 @@
 name: Setup temporary Azure VMs for testing
 
 on:
+  push:
+      branches:
+        - main
+        - create-azure-vms
   workflow_call:
     inputs:
       os:
