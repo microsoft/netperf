@@ -136,7 +136,7 @@ jobs:
 
   run-secnetperf: # This would be 1 enumeration, after CTS has setup the environment with the correct OS type and version.
     name: secnetperf
-    needs: [build-unix, build-windows, build-windows-kernel]
+    needs: [build-unix, build-windows, build-windows-kernel, create-azure-vms]
     strategy:
       fail-fast: false
       matrix:
@@ -228,6 +228,16 @@ jobs:
   #
   # Post Processing Jobs
   #
+
+  #
+  # Cleanup temporary VMs
+  #
+  cleanup-azure-vms:
+    name: Cleanup temporary Azure VMs
+    needs: [run-secnetperf]
+    uses: microsoft/netperf/.github/workflows/cleanup-azure-vms.yml@create-azure-machines
+    with:
+      tag: 'azure-temp'
 
   generate-summary:
     name: Results
