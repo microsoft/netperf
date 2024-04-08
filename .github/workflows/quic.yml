@@ -51,7 +51,7 @@ concurrency:
   group: quic-${{ github.event.client_payload.pr || github.event.client_payload.sha || inputs.ref || github.event.pull_request.number || 'main' }}
   cancel-in-progress: true
 
-permissions: read-all
+permissions: write-all
 
 jobs:
   # For automated identification of the workflow.
