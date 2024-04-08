@@ -74,7 +74,7 @@ jobs:
   #       }
   #       Write-Host "Done!"
 
-
+  # Finds all self hosted runners with a specific TAG and deletes them. 
   delete-github-runner:
     permissions: write-all
     name: Delete GitHub Runner
