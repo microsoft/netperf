@@ -116,6 +116,20 @@ jobs:
       build: -Perf
       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
+
+
+  #
+  # Create temporary VMs
+  #
+  create-azure-vms:
+    name: Create temporary Azure VMs
+    uses: microsoft/netperf/.github/workflows/create-azure-vms.yml@create-azure-machines
+    with:
+      os: 'windows-2022'
+      tag: 'azure-temp'
+      vmname1: 'temp-windows-2022-01'
+      vmname2: 'temp-windows-2022-02'
+
   #
   # Test Jobs
   #
@@ -130,10 +144,10 @@ jobs:
           # Azure Ubuntu 20.04
           { env: "azure-ex", os: "ubuntu-20.04", arch: "x64", tls: "openssl",  io: "epoll" },
           # Azure Windows Server 2022
-          { env: "azure-ex", os: "windows-2022", arch: "x64", tls: "schannel", io: "iocp" },
-          { env: "azure-ex", os: "windows-2022", arch: "x64", tls: "schannel", io: "xdp" },
-          { env: "azure-ex", os: "windows-2022", arch: "x64", tls: "schannel", io: "rio" },
-          { env: "azure-ex", os: "windows-2022", arch: "x64", tls: "schannel", io: "wsk" },
+          { env: "azure-temp", os: "windows-2022", arch: "x64", tls: "schannel", io: "iocp" },
+          { env: "azure-temp", os: "windows-2022", arch: "x64", tls: "schannel", io: "xdp" },
+          { env: "azure-temp", os: "windows-2022", arch: "x64", tls: "schannel", io: "rio" },
+          { env: "azure-temp", os: "windows-2022", arch: "x64", tls: "schannel", io: "wsk" },
           # Azure Windows Server 2025 (preview)
           { env: "azure", os: "windows-2025", arch: "x64", tls: "schannel", io: "iocp" },
           { env: "azure", os: "windows-2025", arch: "x64", tls: "schannel", io: "rio" },

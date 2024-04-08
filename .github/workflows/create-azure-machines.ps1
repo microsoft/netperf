@@ -111,7 +111,7 @@ if ($GitHubToken) {
                 "Password" = $Using:Password
                 "PeerIP" = $Using:ip2
                 "GitHubToken" = $Using:GitHubToken
-                "RunnerLabels" = "os-$Using:Os,$Using:EnvTag"
+                "RunnerLabels" = "os-$Using:Os,$Using:EnvTag,x64"
             }
             Invoke-AzVMRunCommand `
                 -ResourceGroupName $Using:ResourceGroupName `

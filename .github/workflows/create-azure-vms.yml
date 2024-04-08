@@ -2,9 +2,27 @@ name: Setup temporary Azure VMs for testing
 
 on:
   push:
-      branches:
-        - main
-        - create-azure-vms
+    branches:
+      - main
+      - create-azure-machines
+  workflow_dispatch:
+    inputs:
+      os:
+        description: "The operating system to provision on the temp VMs"
+        required: true
+        type: string
+      tag:
+        description: 'Tag to identify the temporary VMs'
+        required: true
+        type: string
+      vmname1:
+        description: 'Name of the first VM to create'
+        required: true
+        type: string
+      vmname2:
+        description: 'Name of the second VM to create'
+        required: true
+        type: string
   workflow_call:
     inputs:
       os:
@@ -13,6 +31,14 @@ on:
         type: string
       tag:
         description: "The tag to identify the temporary VMs we created"
+        required: true
+        type: string
+      vmname1:
+        description: "The name of the first VM to create"
+        required: true
+        type: string
+      vmname2:
+        description: "The name of the second VM to create"
         required: true
         type: string
 
@@ -48,9 +74,9 @@ jobs:
       shell: pwsh
       run: |
         ./.github/workflows/create-azure-machines.ps1 `
-          -VMName1 ex-windows-c1 `
-          -VMName2 ex-windows-c2 `
+          -VMName1 ${{ inputs.vmname1 }} `
+          -VMName2 ${{ inputs.vmname2 }} `
           -Password ${{ secrets.VM_PASSWORD }} `
           -Os ${{ inputs.os }} `
-          -EnvTag azure-custom `
+          -EnvTag ${{ inputs.tag }}`
           -GitHubToken ${{ steps.generate-token.outputs.REGISTRATION_TOKEN }}
