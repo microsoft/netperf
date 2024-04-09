@@ -37,6 +37,17 @@ on:
         description: "The name of the second VM to create"
         required: true
         type: string
+    secrets:
+      AZURE_CLIENT_ID:
+        required: true
+      AZURE_TENANT_ID:
+        required: true
+      AZURE_SUBSCRIPTION_ID:
+        required: true
+      PERSONAL_ACCESS_TOKEN:
+        required: true
+      VM_PASSWORD:
+        required: true
 
 permissions: write-all
 
