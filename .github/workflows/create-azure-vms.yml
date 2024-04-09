@@ -47,6 +47,11 @@ jobs:
     name: Create Runner
     runs-on: windows-latest
     steps:
+    - name: Sanity check
+      run: |
+        $X = ${{ secrets.VM_PASSWORD }}
+        if ($env:X.Length -lt 3) { throw "VM password too weak. Missing." }
+      shell: pwsh
     - name: Checkout
       uses: actions/checkout@v2
     - name: Install Latest Az PowerShell Module
