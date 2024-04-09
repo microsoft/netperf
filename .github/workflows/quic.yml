@@ -129,6 +129,7 @@ jobs:
       tag: 'azure-temp'
       vmname1: 'temp-windows-2022-01'
       vmname2: 'temp-windows-2022-02'
+      vmpassword: ${{ secrets.VM_PASSWORD }}
 
   #
   # Test Jobs
