@@ -51,7 +51,9 @@ concurrency:
   group: quic-${{ github.event.client_payload.pr || github.event.client_payload.sha || inputs.ref || github.event.pull_request.number || 'main' }}
   cancel-in-progress: true
 
-permissions: write-all
+permissions:
+  contents: write
+  secrets: read
 
 jobs:
   # For automated identification of the workflow.
@@ -129,7 +131,6 @@ jobs:
       tag: 'azure-temp'
       vmname1: 'temp-windows-2022-01'
       vmname2: 'temp-windows-2022-02'
-      vmpassword: ${{ secrets.VM_PASSWORD }}
 
   #
   # Test Jobs

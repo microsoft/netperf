@@ -1,6 +1,24 @@
 name: Setup temporary Azure VMs for testing
 
 on:
+  workflow_dispatch:
+    inputs:
+      os:
+        description: "The operating system to provision on the temp VMs"
+        required: true
+        type: string
+      tag:
+        description: 'Tag to identify the temporary VMs'
+        required: true
+        type: string
+      vmname1:
+        description: 'Name of the first VM to create'
+        required: true
+        type: string
+      vmname2:
+        description: 'Name of the second VM to create'
+        required: true
+        type: string
   workflow_call:
     inputs:
       os:
@@ -19,13 +37,10 @@ on:
         description: "The name of the second VM to create"
         required: true
         type: string
-      vmpassword:
-        description: "The password for the VMs"
-        required: true
-        type: string
 
-
-permissions: write-all
+permissions:
+  contents: write
+  secrets: read
 
 jobs:
   create-runner:
@@ -41,6 +56,13 @@ jobs:
         Update-Module Az -Force
         Get-Module 'Az' | where {([string]($_.Version)).StartsWith('9.3.0')} | Remove-Module
         Get-Module -Name Az -ListAvailable
+    - name: Login to Azure
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        enable-AzPSSession: true
     - name: Generate registration token
       id: generate-token
       run: |
@@ -52,7 +74,7 @@ jobs:
         ./.github/workflows/create-azure-machines.ps1 `
           -VMName1 ${{ inputs.vmname1 }} `
           -VMName2 ${{ inputs.vmname2 }} `
-          -Password ${{ inputs.vmpassword }} `
+          -Password ${{ secrets.VM_PASSWORD }} `
           -Os ${{ inputs.os }} `
           -EnvTag ${{ inputs.tag }}`
           -GitHubToken ${{ steps.generate-token.outputs.REGISTRATION_TOKEN }}
