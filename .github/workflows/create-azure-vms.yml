@@ -65,6 +65,13 @@ jobs:
         Update-Module Az -Force
         Get-Module 'Az' | where {([string]($_.Version)).StartsWith('9.3.0')} | Remove-Module
         Get-Module -Name Az -ListAvailable
+    - name: Login to Azure
+      uses: azure/login@v1
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        enable-AzPSSession: true
     - name: Generate registration token
       id: generate-token
       run: |
