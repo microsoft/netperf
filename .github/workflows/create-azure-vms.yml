@@ -56,7 +56,6 @@ jobs:
     name: Create Runner
     runs-on: windows-latest
     steps:
-      shell: pwsh
     - name: Checkout
       uses: actions/checkout@v2
     - name: Install Latest Az PowerShell Module
