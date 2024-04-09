@@ -38,9 +38,7 @@ on:
         required: true
         type: string
 
-permissions:
-  contents: write
-  secrets: read
+permissions: write-all
 
 jobs:
   create-runner:
