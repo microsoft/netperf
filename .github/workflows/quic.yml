@@ -126,8 +126,8 @@ jobs:
     with:
       os: 'windows-2022'
       tag: 'azure-temp'
-      vmname1: 'temp-windows-2022-01'
-      vmname2: 'temp-windows-2022-02'
+      vmname1: 'windows-tmp-1'
+      vmname2: 'windows-tmp-2'
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
@@ -243,6 +243,13 @@ jobs:
     uses: microsoft/netperf/.github/workflows/cleanup-azure-vms.yml@create-azure-machines
     with:
       tag: 'azure-temp'
+      vmname1: 'windows-tmp-1'
+      vmname2: 'windows-tmp-2'
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
 
   generate-summary:
     name: Results
