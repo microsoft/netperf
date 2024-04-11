@@ -85,5 +85,5 @@ jobs:
           -VMName2 ${{ inputs.vmname2 }} `
           -Password ${{ secrets.VM_PASSWORD }} `
           -Os ${{ inputs.os }} `
-          -EnvTag ${{ inputs.tag }}`
-          -GitHubToken "${{ steps.generate-token.outputs.REGISTRATION_TOKEN }}"
+          -EnvTag ${{ inputs.tag }} `
+          -GitHubToken ${{ steps.generate-token.outputs.REGISTRATION_TOKEN }} `
