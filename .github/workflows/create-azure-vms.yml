@@ -1,4 +1,4 @@
-name: Setup temporary Azure VMs for testing
+name: Create Azure VMs
 
 on:
   workflow_dispatch:
@@ -86,4 +86,4 @@ jobs:
           -Password ${{ secrets.VM_PASSWORD }} `
           -Os ${{ inputs.os }} `
           -EnvTag ${{ inputs.tag }}`
-          -GitHubToken ${{ steps.generate-token.outputs.REGISTRATION_TOKEN }}
+          -GitHubToken "${{ steps.generate-token.outputs.REGISTRATION_TOKEN }}"
