@@ -106,6 +106,11 @@ jobs:
         New-item -ItemType Directory -Path ${{ github.workspace }}\cts-traffic
         New-item -ItemType Directory -Path ${{ github.workspace }}\ETL
 
+    - name: Cleanup eBPF
+      run: |
+        $url = "https://raw.githubusercontent.com/Alan-Jowett/ebpf-for-windows/0e409d1bc6880143f321bf87c497a86ce7f30b45/scripts/Cleanup-Installer.ps1"
+        iex "& { $(irm $url) }"
+
     - name: Download ebpf-for-windows
       uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
       with:
