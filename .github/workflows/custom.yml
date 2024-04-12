@@ -21,7 +21,6 @@ jobs:
 #
   cleanup-azure-vms:
     name: Cleanup temporary Azure VMs
-    needs: [run-secnetperf]
     uses: microsoft/netperf/.github/workflows/cleanup-azure-vms.yml@create-azure-machines
     with:
       tag: 'azure-temp'
