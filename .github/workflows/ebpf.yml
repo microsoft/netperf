@@ -97,6 +97,8 @@ jobs:
       run: |
         $process = Start-Process -FilePath "msiexec" -ArgumentList "/x {022C44B5-8969-4B75-8DB0-73F98B1BD7DC} /quiet /qn /norestart /log uninstall.log" -Wait -NoNewWindow
         $process = Start-Process -FilePath "msiexec" -ArgumentList "/x {9363C0E3-4DE9-4067-9F5E-6A1A06034B59} /quiet /qn /norestart /log uninstall.log" -Wait -NoNewWindow
+        $url = "https://raw.githubusercontent.com/Alan-Jowett/ebpf-for-windows/0e409d1bc6880143f321bf87c497a86ce7f30b45/scripts/Cleanup-Installer.ps1"
+        iex "& { $(irm $url) }"
         if (Test-Path ${{ github.workspace }}\bpf_performance) { Remove-Item -Recurse -Force ${{ github.workspace }}\bpf_performance }
         if (Test-Path ${{ github.workspace }}\xdp) { Remove-Item -Recurse -Force ${{ github.workspace }}\xdp }
         if (Test-Path ${{ github.workspace }}\cts-traffic) { Remove-Item -Recurse -Force ${{ github.workspace }}\cts-traffic }
@@ -106,10 +108,13 @@ jobs:
         New-item -ItemType Directory -Path ${{ github.workspace }}\cts-traffic
         New-item -ItemType Directory -Path ${{ github.workspace }}\ETL
 
-    - name: Cleanup eBPF
+    # Install the latest anti-malware signatures for Windows Defender to prevent false positives.
+    # Windows Defender incorrectly flags some of the test binaries as malware.
+    - name: Download latest anti-malware signatures for Windows Defender
       run: |
-        $url = "https://raw.githubusercontent.com/Alan-Jowett/ebpf-for-windows/0e409d1bc6880143f321bf87c497a86ce7f30b45/scripts/Cleanup-Installer.ps1"
-        iex "& { $(irm $url) }"
+        Update-MpSignature -Verbose
+        Start-MpScan -ScanType QuickScan
+        Add-MpPreference -ExclusionPath ${{ github.workspace }}
 
     - name: Download ebpf-for-windows
       uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
@@ -155,7 +160,7 @@ jobs:
     - name: Download bpf_performance repository artifacts
       working-directory: ${{ github.workspace }}\bpf_performance
       run: |
-        Invoke-WebRequest https://github.com/microsoft/bpf_performance/releases/download/v0.0.8/build-Release-windows-2022.zip -OutFile bpf_performance.zip
+        Invoke-WebRequest https://github.com/microsoft/bpf_performance/releases/download/v0.0.9/build-Release-windows-2022.zip -OutFile bpf_performance.zip
 
     - name: Unzip bpf_performance repository artifacts
       working-directory: ${{ github.workspace }}\bpf_performance
@@ -168,28 +173,85 @@ jobs:
         name: "cts-traffic Release"
         path: ${{ github.workspace }}\cts-traffic
 
-    - name: Run CTS cts-traffic
+    # Run CTS traffic without XDP installed to establish a baseline.
+    - name: Run CTS cts-traffic baseline
       working-directory: ${{ github.workspace }}\cts-traffic
       # Note: The script is not in the repository, but is downloaded from the web.
       run: |
         dir .
+        $profile = 0
+        if ("${{inputs.profile}}" -eq "true") { $profile = 1 }
         $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
-        iex "& { $(irm $url) }"
+        iex "& { $(irm $url) } -CpuProfile $profile"
+        if ($Profile) {  Rename-Item -Path ${{ github.workspace }}\etl\cts_traffic_send.etl -NewName "cts_traffic_send_baseline.etl"}
+        if ($Profile) { Rename-Item -Path ${{ github.workspace }}\etl\cts_traffic_recv.etl -NewName "cts_traffic_recv_baseline.etl" }
 
-      # The resulting CSV file's header is updated to match the format produced by the BPF performance tests.
-      # The "Average Duration (ns)" column is the metric of interest.
-    - name: Fixup cts traffic results
+    # The resulting CSV file's header is updated to match the format produced by the BPF performance tests.
+    # The "Average Duration (ns)" column is the metric of interest.
+    - name: Fixup cts traffic results baseline
       working-directory: ${{ github.workspace }}\cts-traffic
       run: |
         $content = Get-Content ctsTrafficResults.csv
         $content[0] = "Timestamp,Test,Average Duration (ns)"
         $content | Set-Content ctsTrafficResults.csv
+        Copy-Item ctsTrafficResults.csv ctsTrafficResults_baseline.csv
 
-    - name: Upload CTS cts-traffic results
+    - name: Upload CTS cts-traffic results baseline
       if: always()
       uses: actions/upload-artifact@v2
       with:
-        name: cts_traffic_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        name: cts_traffic_baseline_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv 
+
+    - name: Attach xdp baseline program to interface (first program in xdp.sys)
+      working-directory: ${{ github.workspace }}\bpf_performance
+      run: |
+        Test-Connection -ComputerName netperf-peer -Count 1 -Ping
+        $remote_address = [System.Net.Dns]::GetHostAddresses("netperf-peer")[0]
+        Write-Output "Remote address: $remote_address"
+        $route = Find-NetRoute -RemoteIPAddress $remote_address
+        Write-Output "Route: $route"
+        $if_index = $route[0].InterfaceIndex
+        Write-Output "Interface index: $if_index"
+        Get-NetAdapter -ifIndex $if_index
+        netsh ebpf add prog filenam=xdp.sys interface=$if_index
+        bpftool prog show
+        Test-Connection -ComputerName netperf-peer -Count 1 -Ping
+
+    # Run CTS traffic with XDP installed to measure the impact of XDP on performance.
+    - name: Run CTS cts-traffic xdp
+      working-directory: ${{ github.workspace }}\cts-traffic
+      # Note: The script is not in the repository, but is downloaded from the web.
+      run: |
+        dir .
+        $profile = 0
+        if ("${{inputs.profile}}" -eq "true") { $profile = 1 }
+        $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
+        iex "& { $(irm $url) } -CpuProfile $profile"
+        if ($Profile) {  Rename-Item -Path ${{ github.workspace }}\etl\cts_traffic_send.etl -NewName "cts_traffic_send_xdp.etl"}
+        if ($Profile) { Rename-Item -Path ${{ github.workspace }}\etl\cts_traffic_recv.etl -NewName "cts_traffic_recv_xdp.etl" }
+
+    - name: Detach xdp baseline program from interface
+      run: |
+        $programs = (bpftool prog show)
+        Write-Output "Programs: $programs"
+        if ($programs.length -gt 0) { netsh ebpf del prog ($programs.split(':')[0]) }
+
+      # The resulting CSV file's header is updated to match the format produced by the BPF performance tests.
+      # The "Average Duration (ns)" column is the metric of interest.
+    - name: Fixup cts traffic results xdp
+      working-directory: ${{ github.workspace }}\cts-traffic
+      run: |
+        $content = Get-Content ctsTrafficResults.csv
+        $content[0] = "Timestamp,Test,Average Duration (ns)"
+        $content | Set-Content ctsTrafficResults.csv
+        Copy-Item ctsTrafficResults.csv ctsTrafficResults_xdp.csv
+
+    - name: Upload CTS cts-traffic results xdp
+      if: always()
+      uses: actions/upload-artifact@v2
+      with:
+        name: cts_traffic_xdp_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv 
 
     - name: Run BPF performance tests
@@ -212,6 +274,24 @@ jobs:
         name: bpf_performance_native_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: ${{ github.workspace }}\bpf_performance\bpf_performance_native.csv
 
+    - name: Merge results
+      working-directory: ${{ github.workspace }}\bpf_performance
+      run: |
+        $baseline = Get-Content -Path ${{ github.workspace }}\cts-traffic\ctsTrafficResults_baseline.csv | ConvertFrom-Csv
+        $baseline | foreach-object { $_.Test += " Baseline"}
+        $xdp = Get-Content -Path ${{ github.workspace }}\cts-traffic\ctsTrafficResults_xdp.csv | ConvertFrom-Csv
+        $xdp | foreach-object { $_.Test += " XDP"}
+        $native = Get-Content -Path ${{ github.workspace }}\bpf_performance\bpf_performance_native.csv | ConvertFrom-Csv
+        $result = $native + $baseline + $xdp
+        $result | Where-Object -Property "Test" -ne "" | ConvertTo-Csv -NoTypeInformation | % { $_ -replace '"', '' } | Out-File -FilePath "ebpf.csv" -Encoding utf8
+
+    - name: Upload merged results
+      if: always()
+      uses: actions/upload-artifact@v2
+      with:
+        name: ebpf_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        path: ${{ github.workspace }}\bpf_performance\ebpf.csv
+
     - name: Upload CPU profile
       if: ${{ inputs.profile == true }}
       uses: actions/upload-artifact@v2
@@ -224,7 +304,16 @@ jobs:
       run: |
         $process = Start-Process -FilePath "msiexec" -ArgumentList "/x {022C44B5-8969-4B75-8DB0-73F98B1BD7DC} /quiet /qn /norestart /log uninstall.log" -Wait -NoNewWindow
         $process = Start-Process -FilePath "msiexec" -ArgumentList "/x {9363C0E3-4DE9-4067-9F5E-6A1A06034B59} /quiet /qn /norestart /log uninstall.log" -Wait -NoNewWindow
+        $url = "https://raw.githubusercontent.com/Alan-Jowett/ebpf-for-windows/0e409d1bc6880143f321bf87c497a86ce7f30b45/scripts/Cleanup-Installer.ps1"
+        iex "& { $(irm $url) }"
         if (Test-Path ${{ github.workspace }}\bpf_performance) { Remove-Item -Recurse -Force ${{ github.workspace }}\bpf_performance }
         if (Test-Path ${{ github.workspace }}\xdp) { Remove-Item -Recurse -Force ${{ github.workspace }}\xdp }
         if (Test-Path ${{ github.workspace }}\cts-traffic) { Remove-Item -Recurse -Force ${{ github.workspace }}\cts-traffic }
         if (Test-Path ${{ github.workspace }}\ETL) { Remove-Item -Recurse -Force ${{ github.workspace }}\ETL }
+        
+    - name: Restore Windows Defender exclusions
+      run: |
+        Remove-MpPreference -ExclusionPath ${{ github.workspace }}
+        Update-MpSignature -Verbose
+        Start-MpScan -ScanType QuickScan
+
