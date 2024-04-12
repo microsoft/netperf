@@ -155,7 +155,7 @@ jobs:
     - name: Download bpf_performance repository artifacts
       working-directory: ${{ github.workspace }}\bpf_performance
       run: |
-        Invoke-WebRequest https://github.com/microsoft/bpf_performance/releases/download/v0.0.7/build-Release-windows-2022.zip -OutFile bpf_performance.zip
+        Invoke-WebRequest https://github.com/microsoft/bpf_performance/releases/download/v0.0.8/build-Release-windows-2022.zip -OutFile bpf_performance.zip
 
     - name: Unzip bpf_performance repository artifacts
       working-directory: ${{ github.workspace }}\bpf_performance
