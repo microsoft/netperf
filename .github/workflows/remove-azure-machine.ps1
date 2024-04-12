@@ -19,7 +19,7 @@ try {
     $vm = Get-AzVM -ResourceGroupName $ResourceGroupName -Name $vmName
     $null = $vm | Remove-AzVM -Force
 } catch {
-    Write-Host "[$(Get-Date)] $vmName`: No VM found"
+    Write-Host "[$(Get-Date)] $vmName`: Failure to remove VM, reason: $_"
 }
 
 Write-Host "[$(Get-Date)] $vmName`: Removing Public IP"
