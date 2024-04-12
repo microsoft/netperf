@@ -128,10 +128,10 @@ jobs:
       working-directory: ${{ github.workspace }}\xdp
       run: |
         $ProgressPreference = 'SilentlyContinue'
-        $packageUrl = "https://github.com/microsoft/xdp-for-windows/releases/download/v1.1.0%2Bc10f37fa/xdp-for-windows.1.1.0.msi"
+        $packageUrl = "https://github.com/microsoft/xdp-for-windows/releases/download/v1.1.0%2B3b7480bf/xdp-for-windows.1.1.0.msi"
         Invoke-WebRequest -Uri $packageUrl -OutFile xdp-for-windows.1.1.0.msi
         dir *.msi
-        $packageUrl = "https://github.com/microsoft/xdp-for-windows/releases/download/v1.1.0+c10f37fa/xdp-devkit-x64-1.1.0.zip"
+        $packageUrl = "https://github.com/microsoft/xdp-for-windows/releases/download/v1.1.0%2B3b7480bf/xdp-devkit-x64-1.1.0.zip"
         Invoke-WebRequest -Uri $packageUrl -OutFile xdp-devkit-x64-1.1.0.zip
         dir *.zip
         Expand-Archive -Path "xdp-devkit-x64-1.1.0.zip" -DestinationPath .
@@ -155,7 +155,7 @@ jobs:
     - name: Download bpf_performance repository artifacts
       working-directory: ${{ github.workspace }}\bpf_performance
       run: |
-        Invoke-WebRequest https://github.com/microsoft/bpf_performance/releases/download/v0.0.6/build-Release-windows-2022.zip -OutFile bpf_performance.zip
+        Invoke-WebRequest https://github.com/microsoft/bpf_performance/releases/download/v0.0.8/build-Release-windows-2022.zip -OutFile bpf_performance.zip
 
     - name: Unzip bpf_performance repository artifacts
       working-directory: ${{ github.workspace }}\bpf_performance
