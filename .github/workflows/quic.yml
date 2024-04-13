@@ -119,10 +119,14 @@ jobs:
 
   #
   # Create temporary VMs
+  # NOTE: tag == env
+  # TODO: Make this into a matrix, read matrix from output of preprocess job.
   #
   create-azure-vms:
     name: Create temporary Azure VMs
     uses: microsoft/netperf/.github/workflows/create-azure-vms.yml@create-azure-machines
+    strategy:
+      fail-fast: false
     with:
       os: 'windows-2022'
       tag: 'azure-temp'
@@ -136,12 +140,14 @@ jobs:
       VM_PASSWORD: ${{ secrets.VM_PASSWORD }}
 
   #
-  # Test Jobs
+  # Test Jobs.
+  # NOTE: tag == env
+  # TODO: Update the matrix here to take the output of the preprocess job.
   #
 
   run-secnetperf: # This would be 1 enumeration, after CTS has setup the environment with the correct OS type and version.
     name: secnetperf
-    needs: [build-unix, build-windows, build-windows-kernel, create-azure-vms]
+    needs: [build-unix, build-windows, build-windows-kernel]
     strategy:
       fail-fast: false
       matrix:
