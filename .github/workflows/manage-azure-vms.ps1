@@ -20,6 +20,8 @@
             Repeat loop until this run gets unblocked.
 #>
 
+Set-StrictMode -Version "Latest"
+$PSDefaultParameterValues["*:ErrorAction"] = "Stop"
 
 $ResourceGroupName = "netperf-ex"
 $MatrixJson = Get-Content -Path .\.github\workflows\matrix.json | ConvertFrom-Json
