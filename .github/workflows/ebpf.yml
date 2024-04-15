@@ -97,7 +97,7 @@ jobs:
       run: |
         $process = Start-Process -FilePath "msiexec" -ArgumentList "/x {022C44B5-8969-4B75-8DB0-73F98B1BD7DC} /quiet /qn /norestart /log uninstall.log" -Wait -NoNewWindow
         $process = Start-Process -FilePath "msiexec" -ArgumentList "/x {9363C0E3-4DE9-4067-9F5E-6A1A06034B59} /quiet /qn /norestart /log uninstall.log" -Wait -NoNewWindow
-        $url = "https://raw.githubusercontent.com/Alan-Jowett/ebpf-for-windows/0e409d1bc6880143f321bf87c497a86ce7f30b45/scripts/Cleanup-Installer.ps1"
+        $url = "https://raw.githubusercontent.com/microsoft/ebpf-for-windows/main/scripts/Cleanup-Installer.ps1"
         iex "& { $(irm $url) }"
         if (Test-Path ${{ github.workspace }}\bpf_performance) { Remove-Item -Recurse -Force ${{ github.workspace }}\bpf_performance }
         if (Test-Path ${{ github.workspace }}\xdp) { Remove-Item -Recurse -Force ${{ github.workspace }}\xdp }
@@ -304,7 +304,7 @@ jobs:
       run: |
         $process = Start-Process -FilePath "msiexec" -ArgumentList "/x {022C44B5-8969-4B75-8DB0-73F98B1BD7DC} /quiet /qn /norestart /log uninstall.log" -Wait -NoNewWindow
         $process = Start-Process -FilePath "msiexec" -ArgumentList "/x {9363C0E3-4DE9-4067-9F5E-6A1A06034B59} /quiet /qn /norestart /log uninstall.log" -Wait -NoNewWindow
-        $url = "https://raw.githubusercontent.com/Alan-Jowett/ebpf-for-windows/0e409d1bc6880143f321bf87c497a86ce7f30b45/scripts/Cleanup-Installer.ps1"
+        $url = "https://raw.githubusercontent.com/microsoft/ebpf-for-windows/main/scripts/Cleanup-Installer.ps1"
         iex "& { $(irm $url) }"
         if (Test-Path ${{ github.workspace }}\bpf_performance) { Remove-Item -Recurse -Force ${{ github.workspace }}\bpf_performance }
         if (Test-Path ${{ github.workspace }}\xdp) { Remove-Item -Recurse -Force ${{ github.workspace }}\xdp }
