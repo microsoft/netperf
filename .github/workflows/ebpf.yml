@@ -312,6 +312,7 @@ jobs:
         if (Test-Path ${{ github.workspace }}\ETL) { Remove-Item -Recurse -Force ${{ github.workspace }}\ETL }
         
     - name: Restore Windows Defender exclusions
+      if: always()
       run: |
         Remove-MpPreference -ExclusionPath ${{ github.workspace }}
         Update-MpSignature -Verbose
