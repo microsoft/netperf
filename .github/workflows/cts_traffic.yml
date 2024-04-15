@@ -64,6 +64,14 @@ jobs:
         New-item -ItemType Directory -Path ${{ github.workspace }}\cts-traffic
         New-item -ItemType Directory -Path ${{ github.workspace }}\ETL
 
+    # Install the latest anti-malware signatures for Windows Defender to prevent false positives.
+    # Windows Defender incorrectly flags some of the test binaries as malware.
+    - name: Download latest anti-malware signatures for Windows Defender
+      run: |
+        Update-MpSignature -Verbose
+        Start-MpScan -ScanType QuickScan
+        Add-MpPreference -ExclusionPath ${{ github.workspace }}
+
     - name: Download cts-traffic
       uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
       with:
@@ -98,3 +106,10 @@ jobs:
       run: |
         if (Test-Path ${{ github.workspace }}\cts-traffic) { Remove-Item -Recurse -Force ${{ github.workspace }}\cts-traffic }
         if (Test-Path ${{ github.workspace }}\ETL) { Remove-Item -Recurse -Force ${{ github.workspace }}\ETL }
+
+    - name: Restore Windows Defender exclusions
+      if: always()
+      run: |
+        Remove-MpPreference -ExclusionPath ${{ github.workspace }}
+        Update-MpSignature -Verbose
+        Start-MpScan -ScanType QuickScan
