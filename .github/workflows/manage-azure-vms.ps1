@@ -47,8 +47,9 @@ try {
         #     Write-Host "VM: $($vm.Name) is alive. Ignoring."
         # }
         Write-Host "Deleting VM: $($vm.Name)..."
+        $name = $vm.Name
         $jobs += Start-Job -ScriptBlock {
-            & ./.github/workflows/remove-azure-machine.ps1 -VMName $vm.Name
+            & ./.github/workflows/remove-azure-machine.ps1 -VMName $Using:name
         }
     } else {
         Write-Host "Ignoring VM: $($vm.Name) as it's not a temporary VM."
