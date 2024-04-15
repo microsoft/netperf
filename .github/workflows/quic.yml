@@ -115,23 +115,56 @@ jobs:
       build: -Perf
       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
-
+  #
+  # Manage Azure VMs, TODO: blocks if resources are not available. Waits for it to become available.
+  #
+  manage-azure-vms:
+    name: Manage Azure VMs
+    runs-on: windows-latest
+    outputs:
+      full-matrix: ${{ steps.generate.outputs.matrix }}
+      azure-matrix: ${{ steps.generate-azure-matrix.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install Latest Az PowerShell Module
+        shell: pwsh
+        run: |
+          Install-Module -Name Az -Force -AllowClobber -Repository PSGallery
+          Update-Module Az -Force
+          Get-Module 'Az' | where {([string]($_.Version)).StartsWith('9.3.0')} | Remove-Module
+          Get-Module -Name Az -ListAvailable
+      - name: Login to Azure
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Run manage-azure-vms.ps1
+        run: ./.github/workflows/manage-azure-vms.ps1
+        shell: pwsh
+      - id: generate-full-matrix
+        run: echo "::set-output name=matrix::$(jq -c '.' ./.github/workflows/processed-matrix.json)"
+      - id: generate-azure-matrix
+        run: echo "::set-output name=matrix::$(jq -c '.' ./.github/workflows/azure-matrix.json)"
 
   #
   # Create temporary VMs
   # NOTE: tag == env
-  # TODO: Make this into a matrix, read matrix from output of preprocess job.
   #
   create-azure-vms:
     name: Create temporary Azure VMs
     uses: microsoft/netperf/.github/workflows/create-azure-vms.yml@create-azure-machines
     strategy:
       fail-fast: false
+      matrix:
+        include: ${{fromJson(needs.manage-azure-vms.outputs.azure-matrix)}}
     with:
-      os: 'windows-2022'
-      tag: 'azure-temp'
-      vmname1: 'windows-tmp-1'
-      vmname2: 'windows-tmp-2'
+      os: ${{ matrix.os }}
+      tag: ${{ matrix.env }}
+      vmname1: ${{ matrix.env }}-1
+      vmname2: ${{ matrix.env }}-2
+      workflowId: ${{ github.run_id }}
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
@@ -142,40 +175,19 @@ jobs:
   #
   # Test Jobs.
   # NOTE: tag == env
-  # TODO: Update the matrix here to take the output of the preprocess job.
   #
-
   run-secnetperf: # This would be 1 enumeration, after CTS has setup the environment with the correct OS type and version.
     name: secnetperf
     needs: [build-unix, build-windows, build-windows-kernel]
     strategy:
       fail-fast: false
       matrix:
-        vec: [
-          # Azure Ubuntu 20.04
-          { env: "azure-ex", os: "ubuntu-20.04", arch: "x64", tls: "openssl",  io: "epoll" },
-          # Azure Windows Server 2022
-          { env: "azure-temp", os: "windows-2022", arch: "x64", tls: "schannel", io: "iocp" },
-          { env: "azure-temp", os: "windows-2022", arch: "x64", tls: "schannel", io: "xdp" },
-          { env: "azure-temp", os: "windows-2022", arch: "x64", tls: "schannel", io: "rio" },
-          { env: "azure-temp", os: "windows-2022", arch: "x64", tls: "schannel", io: "wsk" },
-          # Azure Windows Server 2025 (preview)
-          { env: "azure", os: "windows-2025", arch: "x64", tls: "schannel", io: "iocp" },
-          { env: "azure", os: "windows-2025", arch: "x64", tls: "schannel", io: "rio" },
-          { env: "azure", os: "windows-2025", arch: "x64", tls: "schannel", io: "xdp" },
-          { env: "azure", os: "windows-2025", arch: "x64", tls: "schannel", io: "wsk" },
-          # Lab Windows Server 2022
-          { env: "lab",   os: "windows-2022", arch: "x64", tls: "schannel", io: "iocp" },
-          { env: "lab",   os: "windows-2022", arch: "x64", tls: "schannel", io: "xdp" },
-          { env: "lab",   os: "windows-2022", arch: "x64", tls: "schannel", io: "wsk" },
-          # Lab Ubuntu Server 20.04 LTS
-          { env: "lab",   os: "ubuntu-20.04", arch: "x64", tls: "openssl",  io: "epoll" },
-        ]
+        include: ${{fromJson(needs.manage-azure-vms.outputs.matrix)}}
     runs-on:
     - self-hosted
-    - ${{ matrix.vec.env }}
-    - os-${{ matrix.vec.os }}
-    - ${{ matrix.vec.arch }}
+    - ${{ matrix.env }}
+    - os-${{ matrix.os }}
+    - ${{ matrix.arch }}
     steps:
     - name: Checkout microsoft/msquic
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -188,13 +200,13 @@ jobs:
     - name: Download Artifacts
       uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
       with:
-        name: Release-${{env.OS}}-${{ matrix.vec.os == 'windows-2025' && 'windows-2022' || matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-Perf
+        name: Release-${{env.OS}}-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-Perf
         path: artifacts
     - name: Download Kernel Artifacts
       uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
-      if: ${{ matrix.vec.io == 'wsk' }}
+      if: ${{ matrix.io == 'wsk' }}
       with:
-        name: Release-winkernel-${{ matrix.vec.os == 'windows-2025' && 'windows-2022' || matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
+        name: Release-winkernel-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}
         path: artifacts
     - name: Download Regression.json file
       run: Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/regression.json" -OutFile "regression.json"
@@ -208,49 +220,49 @@ jobs:
       run: ./scripts/secnetperf.ps1 `
           -LogProfile ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }} `
           -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} `
-          -environment ${{ matrix.vec.env }} `
+          -environment ${{ matrix.env }} `
           -plat ${{env.OS}} `
-          -os ${{ matrix.vec.os }} `
-          -arch ${{ matrix.vec.arch }} `
-          -tls ${{ matrix.vec.tls }} `
-          -io ${{ matrix.vec.io }} `
+          -os ${{ matrix.os }} `
+          -arch ${{ matrix.arch }} `
+          -tls ${{ matrix.tls }} `
+          -io ${{ matrix.io }} `
           -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
     - name: Upload Test Results JSON
       if: ${{ always() }}
       uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
       with:
-        name: json-test-results-${{ matrix.vec.env }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}.json
-        path: json-test-results-${{ matrix.vec.env }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}.json
+        name: json-test-results-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}.json
+        path: json-test-results-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}.json
     - name: Upload Logs
       if: ${{ always() }}
       uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
       with:
-        name: logs-${{ matrix.vec.env }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}
+        name: logs-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
         path: artifacts/logs
         if-no-files-found: ignore
     - name: Upload Full Latency Curves
       if: ${{ always() }}
       uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
       with:
-        name: latency-${{ matrix.vec.env }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}-${{ matrix.vec.io }}
+        name: latency-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
         path: latency.txt
         if-no-files-found: ignore
 
   #
   # Post Processing Jobs
   #
-
-  #
-  # Cleanup temporary VMs
-  #
   cleanup-azure-vms:
     name: Cleanup temporary Azure VMs
     needs: [run-secnetperf]
     uses: microsoft/netperf/.github/workflows/cleanup-azure-vms.yml@create-azure-machines
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{fromJson(needs.manage-azure-vms.outputs.azure-matrix)}}
     with:
-      tag: 'azure-temp'
-      vmname1: 'windows-tmp-1'
-      vmname2: 'windows-tmp-2'
+      tag: ${{ matrix.env }}
+      vmname1: ${{ matrix.env }}-1
+      vmname2: ${{ matrix.env }}-2
     secrets:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}

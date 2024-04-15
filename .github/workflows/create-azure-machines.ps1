@@ -37,7 +37,10 @@ param (
     [string]$EnvTag = "azure-ex",
 
     [Parameter(Mandatory = $false)]
-    [string]$GitHubToken
+    [string]$GitHubToken,
+
+    [Parameter(Mandatory = $true)]
+    [string]$WorkflowId,
 )
 
 Set-StrictMode -Version "Latest"
@@ -55,6 +58,7 @@ $jobs += Start-Job -ScriptBlock {
         -VMSize $Using:VMSize `
         -ResourceGroupName $Using:ResourceGroupName `
         -Location $Using:Location
+        -WorkflowId $Using:WorkflowId
 }
 Write-Host "[$(Get-Date)] Creating $VMName2..."
 $jobs += Start-Job -ScriptBlock {
@@ -65,6 +69,7 @@ $jobs += Start-Job -ScriptBlock {
         -VMSize $Using:VMSize `
         -ResourceGroupName $Using:ResourceGroupName `
         -Location $Using:Location
+        -WorkflowId $Using:WorkflowId
 }
 $jobs | Wait-Job    # Wait for all jobs to complete
 Write-Host "`n[$(Get-Date)] Jobs complete!`n"

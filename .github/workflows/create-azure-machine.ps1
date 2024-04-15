@@ -25,7 +25,10 @@ param (
     [string]$Location = "South Central US",
 
     [Parameter(Mandatory = $false)]
-    [switch]$NoPublicIP = $false
+    [switch]$NoPublicIP = $false,
+
+    [Parameter(Mandatory = $true)]
+    [string]$WorkflowId,
 )
 
 Set-StrictMode -Version "Latest"
@@ -147,6 +150,13 @@ $vmConfig = Set-AzVMBootDiagnostic -VM $vmConfig -Enable -ResourceGroupName $Res
 
 Write-Host "[$(Get-Date)] $VMName`: Creating VM"
 New-AzVM -ResourceGroupName $ResourceGroupName -Location $Location -VM $vmConfig -OSDiskDeleteOption Delete | Out-Null
+
+# Tag the VM after creation
+Write-Host "[$(Get-Date)] $VMName`: Tagging VM with Creation Date, and associated workflow ID"
+$vmResourceId = (Get-AzVM -ResourceGroupName $ResourceGroupName -Name $VMName).Id
+$vmCreationTime = Get-Date
+Update-AzTag -ResourceId $vmResourceId -Tag @{ "CreationDate" = $vmCreationTime; "Environment" = "Test" } -Operation Merge
+
 
 if ($osType -eq "windows") {
     Write-Host "[$(Get-Date)] $VMName`: Enabling test signing"
