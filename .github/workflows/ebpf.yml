@@ -230,10 +230,9 @@ jobs:
         iex "& { $(irm $url) } -CpuProfile $profile"
 
     - name: Copy ETL files to ETL folder
-      if: (${{inputs.profile}} == 'true')
       run: |
-        Copy-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl -Destination ${{ github.workspace }}\ETL
-        Copy-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl -Destination ${{ github.workspace }}\ETL
+        if (Test-Path -Path ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl) { Move-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl -Destination ${{ github.workspace }}\ETL }
+        if (Test-Path -Path ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl) { Move-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl -Destination ${{ github.workspace }}\ETL }
 
     - name: Detach xdp baseline program from interface
       run: |
