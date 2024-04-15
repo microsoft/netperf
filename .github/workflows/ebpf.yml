@@ -228,8 +228,12 @@ jobs:
         if ("${{inputs.profile}}" -eq "true") { $profile = 1 }
         $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
         iex "& { $(irm $url) } -CpuProfile $profile"
-        if ($Profile) { Move-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl -NewName "${{ github.workspace }}\etl\cts_traffic_send_xdp.etl"}
-        if ($Profile) { Rename-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl -NewName "${{ github.workspace }}\etl\cts_traffic_recv_xdp.etl" }
+
+    - name: Copy ETL files to ETL folder
+      if: (${{inputs.profile}} == 'true')
+      run: |
+        Copy-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl -Destination ${{ github.workspace }}\ETL
+        Copy-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl -Destination ${{ github.workspace }}\ETL
 
     - name: Detach xdp baseline program from interface
       run: |
