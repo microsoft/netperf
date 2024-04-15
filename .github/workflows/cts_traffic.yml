@@ -70,26 +70,14 @@ jobs:
         name: "cts-traffic Release"
         path: ${{ github.workspace }}\cts-traffic
 
-    - name: Start Windows Performance Recorder
-      if: ${{ github.event.inputs.profile }}
-      run: |
-        wpr -cancel
-        wpr -start CPU -filemode
-
     - name: Run CTS cts-traffic
       working-directory: ${{ github.workspace }}\cts-traffic
-      # Note: The script is not in the repository, but is downloaded from the web.
-      # The resulting CSV file's header is updated to match the format produced by the BPF performance tests.
-      # The "Average Duration (ns)" column is the metric of interest.
       run: |
-        dir .
+        $profile = 0
+        if ("${{inputs.profile}}" -eq "true") { $profile = 1 }
         $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
-        iex "& { $(irm $url) }"
-
-    - name: Stop Windows Performance Recorder
-      if: ${{ github.event.inputs.profile }}
-      run: |
-        wpr -stop ${{ github.workspace }}\ETL\ctsTrafficResults.etl
+        iex "& { $(irm $url) } -CpuProfile $profile"
+        if ("${{inputs.profile}}" -eq "true") { Move-Item -Path ${{ github.workspace }}\cts-traffic\*.etl -Destination ${{ github.workspace }}\ETL }
 
     - name: Upload CTS cts-traffic results
       if: always()
@@ -103,7 +91,7 @@ jobs:
       uses: actions/upload-artifact@v2
       with:
         name: cts_traffic_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}_ETL
-        path: ${{ github.workspace }}\ETL\ctsTrafficResults.etl
+        path: ${{ github.workspace }}\ETL\*.etl
 
     - name: Cleanup workspace
       if: always()
