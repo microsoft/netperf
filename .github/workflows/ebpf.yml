@@ -183,8 +183,8 @@ jobs:
         if ("${{inputs.profile}}" -eq "true") { $profile = 1 }
         $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
         iex "& { $(irm $url) } -CpuProfile $profile"
-        if ($Profile) {  Rename-Item -Path ${{ github.workspace }}\etl\cts_traffic_send.etl -NewName "cts_traffic_send_baseline.etl"}
-        if ($Profile) { Rename-Item -Path ${{ github.workspace }}\etl\cts_traffic_recv.etl -NewName "cts_traffic_recv_baseline.etl" }
+        if ($Profile) { Move-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl -NewName "${{ github.workspace }}\etl\cts_traffic_send_baseline.etl"}
+        if ($Profile) { Rename-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl -NewName "${{ github.workspace }}\etl\cts_traffic_recv_baseline.etl" }
 
     # The resulting CSV file's header is updated to match the format produced by the BPF performance tests.
     # The "Average Duration (ns)" column is the metric of interest.
@@ -228,8 +228,8 @@ jobs:
         if ("${{inputs.profile}}" -eq "true") { $profile = 1 }
         $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
         iex "& { $(irm $url) } -CpuProfile $profile"
-        if ($Profile) {  Rename-Item -Path ${{ github.workspace }}\etl\cts_traffic_send.etl -NewName "cts_traffic_send_xdp.etl"}
-        if ($Profile) { Rename-Item -Path ${{ github.workspace }}\etl\cts_traffic_recv.etl -NewName "cts_traffic_recv_xdp.etl" }
+        if ($Profile) { Move-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl -NewName "${{ github.workspace }}\etl\cts_traffic_send_xdp.etl"}
+        if ($Profile) { Rename-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl -NewName "${{ github.workspace }}\etl\cts_traffic_recv_xdp.etl" }
 
     - name: Detach xdp baseline program from interface
       run: |
