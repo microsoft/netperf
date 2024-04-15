@@ -85,6 +85,10 @@ jobs:
         if ("${{inputs.profile}}" -eq "true") { $profile = 1 }
         $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
         iex "& { $(irm $url) } -CpuProfile $profile"
+
+    - name: Move ETL files to ETLfolder 
+      working-directory: ${{ github.workspace }}\cts-traffic
+      run: |
         dir .
         if (Test-Path ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl) { Move-Item ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl ${{ github.workspace }}\ETL }
         if (Test-Path ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl) { Move-Item ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl ${{ github.workspace }}\ETL }
