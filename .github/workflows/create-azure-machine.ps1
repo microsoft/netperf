@@ -28,7 +28,7 @@ param (
     [switch]$NoPublicIP = $false,
 
     [Parameter(Mandatory = $true)]
-    [string]$WorkflowId,
+    [string]$WorkflowId
 )
 
 Set-StrictMode -Version "Latest"
