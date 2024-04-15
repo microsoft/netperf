@@ -57,7 +57,7 @@ $jobs += Start-Job -ScriptBlock {
         -Os $Using:Os `
         -VMSize $Using:VMSize `
         -ResourceGroupName $Using:ResourceGroupName `
-        -Location $Using:Location
+        -Location $Using:Location `
         -WorkflowId $Using:WorkflowId
 }
 Write-Host "[$(Get-Date)] Creating $VMName2..."
@@ -68,7 +68,7 @@ $jobs += Start-Job -ScriptBlock {
         -Os $Using:Os `
         -VMSize $Using:VMSize `
         -ResourceGroupName $Using:ResourceGroupName `
-        -Location $Using:Location
+        -Location $Using:Location `
         -WorkflowId $Using:WorkflowId
 }
 $jobs | Wait-Job    # Wait for all jobs to complete
