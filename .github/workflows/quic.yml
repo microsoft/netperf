@@ -146,14 +146,17 @@ jobs:
         shell: pwsh
       - id: generate-full-matrix
         run: echo "::set-output name=matrix::$(jq -c '.' ./.github/workflows/processed-matrix.json)"
+        shell: bash
       - id: generate-azure-matrix
         run: echo "::set-output name=matrix::$(jq -c '.' ./.github/workflows/azure-matrix.json)"
+        shell: bash
 
   #
   # Create temporary VMs
   # NOTE: tag == env
   #
   create-azure-vms:
+    needs: [manage-azure-vms]
     name: Create temporary Azure VMs
     uses: microsoft/netperf/.github/workflows/create-azure-vms.yml@create-azure-machines
     strategy:
@@ -179,7 +182,7 @@ jobs:
   #
   run-secnetperf: # This would be 1 enumeration, after CTS has setup the environment with the correct OS type and version.
     name: secnetperf
-    needs: [build-unix, build-windows, build-windows-kernel]
+    needs: [build-unix, build-windows, build-windows-kernel, create-azure-vms]
     strategy:
       fail-fast: false
       matrix:
