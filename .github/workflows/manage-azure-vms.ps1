@@ -33,22 +33,25 @@ $jobs = @()
 try {
     $vms | Foreach-Object {
     $vm = $_
-    Write-Host "VM: $($vm.Name)"
     $vmCreationTime = $vm.Tags["CreationTime"]
     $vmWorkflowId = $vm.Tags["WorkflowId"]
-    if ($vmCreationTime) {
-        $vmCreationTime = [DateTime]::Parse($vmCreationTime)
-        $timeSinceCreation = (Get-Date) - $vmCreationTime
-        if ($timeSinceCreation.TotalMinutes -gt 30) {
-            Write-Host "VM: $($vm.Name) is dead. Deleting..."
-            $jobs += Start-Job -ScriptBlock {
-                & ./.github/workflows/remove-azure-machine.ps1 -VMName $vm.Name
-            }
-        } else {
-            Write-Host "VM: $($vm.Name) is alive. Ignoring."
+    if ($vmCreationTime -or !($vm.Name.Contains("ex-"))) {
+        # $vmCreationTime = [DateTime]::Parse($vmCreationTime)
+        # $timeSinceCreation = (Get-Date) - $vmCreationTime
+        # if ($timeSinceCreation.TotalMinutes -gt 30) {
+        #     Write-Host "VM: $($vm.Name) is dead. Deleting..."
+        #     $jobs += Start-Job -ScriptBlock {
+        #         & ./.github/workflows/remove-azure-machine.ps1 -VMName $vm.Name
+        #     }
+        # } else {
+        #     Write-Host "VM: $($vm.Name) is alive. Ignoring."
+        # }
+        Write-Host "Deleting VM: $($vm.Name)..."
+        $jobs += Start-Job -ScriptBlock {
+            & ./.github/workflows/remove-azure-machine.ps1 -VMName $vm.Name
         }
     } else {
-        Write-Host "VM: $($vm.Name) has no creation time tag. Ignoring."
+        Write-Host "Ignoring VM: $($vm.Name) as it's not a temporary VM."
     }
         # TODO: leverage Github API and do something with $vmWorkflowId.
     }

@@ -75,6 +75,7 @@ try {
     Get-AzResourceGroup -Name $ResourceGroupName | Out-Null
     Write-Host "[$(Get-Date)] Found resource group"
 } catch {
+    Write-Host "[$(Get-Date)] Error getting resource group: $_. Will try and create a new one..."
     New-AzResourceGroup -Name $ResourceGroupName -Location $Location | Out-Null
     Write-Host "[$(Get-Date)] Created resource group"
 }
@@ -84,6 +85,7 @@ try {
     $vnet = Get-AzVirtualNetwork -ResourceGroupName $ResourceGroupName -Name $vnetName
     Write-Host "[$(Get-Date)] Found vnet"
 } catch {
+    Write-Host "[$(Get-Date)] Error getting vnet: $_. Will try and create a new one..."
     $vnet = New-AzVirtualNetwork -ResourceGroupName $ResourceGroupName -Name $vnetName -Location $Location -AddressPrefix "10.0.0.0/16"
     Write-Host "[$(Get-Date)] Created vnet"
 }
@@ -93,6 +95,7 @@ try {
     $subnet = Get-AzVirtualNetworkSubnetConfig -VirtualNetwork $vnet -Name $subnetName
     Write-Host "[$(Get-Date)] Found subnet config"
 } catch {
+    Write-Host "[$(Get-Date)] Error getting subnet config: $_. Will try and create a new one..."
     $subnet = Add-AzVirtualNetworkSubnetConfig -Name $subnetName -VirtualNetwork $vnet -AddressPrefix "10.0.1.0/24"
     $vnet | Set-AzVirtualNetwork | Out-Null
     $vnet = Get-AzVirtualNetwork -ResourceGroupName $ResourceGroupName -Name $vnetName
@@ -105,6 +108,7 @@ try {
     $storage = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $storageName
     Write-Host "[$(Get-Date)] Found storage account"
 } catch {
+    Write-Host "[$(Get-Date)] Error getting storage account: $_. Will try and create a new one..."
     $storage = New-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $storageName -Location $Location -SkuName "Standard_LRS"
     Write-Host "[$(Get-Date)] Created storage account"
 }
