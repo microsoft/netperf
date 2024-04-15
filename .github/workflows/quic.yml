@@ -186,7 +186,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{fromJson(needs.manage-azure-vms.outputs.matrix)}}
+        include: ${{fromJson(needs.manage-azure-vms.outputs.full-matrix)}}
     runs-on:
     - self-hosted
     - ${{ matrix.env }}
