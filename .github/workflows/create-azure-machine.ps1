@@ -155,7 +155,7 @@ New-AzVM -ResourceGroupName $ResourceGroupName -Location $Location -VM $vmConfig
 Write-Host "[$(Get-Date)] $VMName`: Tagging VM with Creation Date, and associated workflow ID"
 $vmResourceId = (Get-AzVM -ResourceGroupName $ResourceGroupName -Name $VMName).Id
 $vmCreationTime = Get-Date
-Update-AzTag -ResourceId $vmResourceId -Tag @{ "CreationDate" = $vmCreationTime; "Environment" = "Test" } -Operation Merge
+Update-AzTag -ResourceId $vmResourceId -Tag @{ "CreationDate" = $vmCreationTime; "WorkFlowId" = $WorkFlowId } -Operation Merge
 
 
 if ($osType -eq "windows") {
