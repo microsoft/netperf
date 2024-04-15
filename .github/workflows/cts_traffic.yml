@@ -85,7 +85,9 @@ jobs:
         if ("${{inputs.profile}}" -eq "true") { $profile = 1 }
         $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
         iex "& { $(irm $url) } -CpuProfile $profile"
-        if ("${{inputs.profile}}" -eq "true") { Move-Item -Path ${{ github.workspace }}\cts-traffic\*.etl -Destination ${{ github.workspace }}\ETL }
+        dir .
+        if (Test-Path ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl) { Move-Item ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl ${{ github.workspace }}\ETL }
+        if (Test-Path ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl) { Move-Item ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl ${{ github.workspace }}\ETL }
 
     - name: Upload CTS cts-traffic results
       if: always()
