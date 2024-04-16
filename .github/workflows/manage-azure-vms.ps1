@@ -20,6 +20,44 @@
             Repeat loop until this run gets unblocked.
 #>
 
+param (
+    [Parameter(Mandatory = $true)]
+    [string]$GithubPatToken
+)
+
+function Remove-GitHubRunner {
+    param (
+        $Tag,
+        $runners,
+        $headers
+    )
+    # GitHub API URL to list runners
+    $apiUrl = "https://api.github.com/repos/microsoft/netperf/actions/runners"
+
+    try {
+        # Fetch the list of runners from GitHub
+        $runners = Invoke-RestMethod -Uri $apiUrl -Method Get -Headers $headers
+
+        # Filter for the runner with the specified tag
+        $runner = $runners.runners | Where-Object { $_.labels.name -contains $Tag }
+
+        if ($runner) {
+            # If runner is found, prepare to remove it
+            $deleteUrl = "$apiUrl/$($runner.id)"
+
+            # Send DELETE request to remove the runner
+            Invoke-RestMethod -Uri $deleteUrl -Method Delete -Headers $headers
+            Write-Output "Runner with ID $($runner.id) and tag '$Tag' has been removed."
+        }
+        else {
+            Write-Output "No runner found with tag '$Tag'."
+        }
+    }
+    catch {
+        Write-Error "Failed to query or remove the runner: $_"
+    }
+}
+
 Set-StrictMode -Version "Latest"
 $PSDefaultParameterValues["*:ErrorAction"] = "Stop"
 
@@ -31,6 +69,19 @@ $jobs = @()
 
 # 1. In case previous jobs failed to cleanup their VMs, we opportunistically delete them here.
 try {
+
+    $headers = @{
+        Authorization = "token $GithubPatToken"
+        Accept = "application/vnd.github+json"
+    }
+
+    # GitHub API URL to list runners
+    $apiUrl = "https://api.github.com/repos/microsoft/netperf/actions/runners"
+
+    # Fetch the list of runners from GitHub
+    $Runners = Invoke-RestMethod -Uri $apiUrl -Method Get -Headers $headers
+    $tagsRemoved =[System.Collections.Generic.List[string]]::new()
+
     $vms | Foreach-Object {
     $vm = $_
     $vmCreationTime = $vm.Tags["CreationTime"]
@@ -46,8 +97,14 @@ try {
         # } else {
         #     Write-Host "VM: $($vm.Name) is alive. Ignoring."
         # }
-        Write-Host "Deleting VM: $($vm.Name)..."
         $name = $vm.Name
+        if ($name.EndsWith("1")) {
+            Write-Host "Removing Github Self Hosted Runner with Tag: $($vm.Name)..."
+            $tagToRemove = $name.Substring(0, $name.Length - 2)
+            $tagsRemoved.Add($tagToRemove)
+            Remove-GitHubRunner -Tag $tagToRemove -runners $Runners -headers $headers
+        }
+        Write-Host "Deleting VM: $($vm.Name)..."
         $jobs += Start-Job -ScriptBlock {
             & ./.github/workflows/remove-azure-machine.ps1 -VMName $Using:name
         }
@@ -56,6 +113,7 @@ try {
     }
         # TODO: leverage Github API and do something with $vmWorkflowId.
     }
+
     if ($jobs.Count -gt 0) {
         Write-Host "`n[$(Get-Date)] Deleting residual dead VMs...`n"
         Wait-Job -Job $jobs
@@ -63,6 +121,18 @@ try {
         $jobs | Receive-Job # Get job results
         $jobs | Remove-Job  # Clean up the jobs
     }
+
+    # Cleaning up any residual temporary self hosted runners
+    $Runners.runners | Foreach-Object {
+        $runner = $_
+        $runnerName = $runner.name
+        if ($runnerName.EndsWith("-1") -and !($tagsRemoved.Contains($runnerName))) {
+            Write-Host "Removing Github Self Hosted Runner with Tag: $runnerName..."
+            $tagToRemove = $runnerName.Substring(0, $runnerName.Length - 2)
+            Remove-GitHubRunner -Tag $tagToRemove -runners $Runners -headers $headers
+        }
+    }
+
 } catch {
     Write-Host "Likely some other job is already cleaning up the VMs. Full error: $_"
 }
