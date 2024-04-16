@@ -1,21 +1,16 @@
 <#
 .SYNOPSIS
-    Creates a pair of Azure VMs to use for testing.
+
+    Reads an "azure-matrix.json" file and creates a pair of Azure VMs to use for testing foreach row in the matrix.
 
     Example usage:
 
         $password = '...'
         $token = '...'
-        .\.github\workflows\create-azure-machines.ps1 -VMName1 ex-windows-03 -VMName2 ex-windows-04 -Password $password -GitHubToken $token
+        .\.github\workflows\create-azure-machines.ps1 -Password $password -GitHubToken $token
 #>
 
 param (
-    [Parameter(Mandatory = $true)]
-    [string]$VMName1,
-
-    [Parameter(Mandatory = $true)]
-    [string]$VMName2,
-
     [Parameter(Mandatory = $true)]
     [string]$Password,
 

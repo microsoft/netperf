@@ -206,11 +206,11 @@ jobs:
   #
   run-secnetperf: # This would be 1 enumeration, after CTS has setup the environment with the correct OS type and version.
     name: secnetperf
-    needs: [build-unix, build-windows, build-windows-kernel, create-azure-vms, manage-azure-vms]
+    needs: [build-unix, build-windows, build-windows-kernel, create-azure-vms]
     strategy:
       fail-fast: false
       matrix:
-        include: ${{fromJson(needs.manage-azure-vms.outputs.full-matrix)}}
+        include: ${{fromJson(needs.create-azure-vms.outputs.full-matrix)}}
     runs-on:
     - self-hosted
     - ${{ matrix.env }}
