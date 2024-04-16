@@ -22,7 +22,13 @@
 
 param (
     [Parameter(Mandatory = $true)]
-    [string]$GithubPatToken
+    [string]$GithubPatToken,
+
+    [Parameter(Mandatory = $false)]
+    [string]$MatrixFileName = "quic_matrix.json",
+
+    [Parameter(Mandatory = $false)]
+    [string]$ResourceGroupName = "netperf-ex"
 )
 
 function Remove-GitHubRunner {
@@ -61,8 +67,7 @@ function Remove-GitHubRunner {
 Set-StrictMode -Version "Latest"
 $PSDefaultParameterValues["*:ErrorAction"] = "Stop"
 
-$ResourceGroupName = "netperf-ex"
-$MatrixJson = Get-Content -Path .\.github\workflows\matrix.json | ConvertFrom-Json
+$MatrixJson = Get-Content -Path .\.github\workflows\$MatrixFileName | ConvertFrom-Json
 $NumVms = $MatrixJson.Count * 2 # We need two VMs per matrix entry for pair machine tests.
 $vms = Get-AzVM -ResourceGroupName $ResourceGroupName
 $jobs = @()
