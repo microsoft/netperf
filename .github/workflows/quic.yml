@@ -65,7 +65,7 @@ on:
     paths:
     - .github/workflows/quic.yml
     - .github/workflows/generate-summary.ps1
-    - .github/workflows/quic.json
+    - .github/workflows/quic_matrix.json
     - .github/workflows/manage-azure-vms.ps1
   repository_dispatch:
     types: [run-quic]
