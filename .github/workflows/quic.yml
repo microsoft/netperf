@@ -182,7 +182,7 @@ jobs:
   create-azure-vms:
     needs: [manage-azure-vms]
     name: Create temporary Azure VMs
-    uses: microsoft/netperf/.github/workflows/create-azure-vms.yml@create-azure-machines
+    uses: microsoft/netperf/.github/workflows/create-azure-vms.yml@main
     strategy:
       fail-fast: false
       matrix:
@@ -282,7 +282,7 @@ jobs:
   cleanup-azure-vms:
     name: Cleanup temporary Azure VMs
     needs: [run-secnetperf, manage-azure-vms]
-    uses: microsoft/netperf/.github/workflows/cleanup-azure-vms.yml@create-azure-machines
+    uses: microsoft/netperf/.github/workflows/cleanup-azure-vms.yml@main
     strategy:
       fail-fast: false
       matrix:
