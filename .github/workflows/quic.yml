@@ -151,6 +151,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+      - name: Install Latest Az PowerShell Module
+        shell: pwsh
+        run: |
+          Install-Module -Name Az -Force -AllowClobber -Repository PSGallery
+          Update-Module Az -Force
+          Get-Module 'Az' | where {([string]($_.Version)).StartsWith('9.3.0')} | Remove-Module
+          Get-Module -Name Az -ListAvailable
       - name: Login to Azure
         uses: azure/login@v1
         with:
