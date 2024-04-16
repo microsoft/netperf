@@ -1,5 +1,6 @@
 name: Create Azure VMs
 
+
 on:
   workflow_dispatch:
     inputs:
@@ -24,6 +25,7 @@ on:
         required: false
         default: 'manual'
         type: string
+
   workflow_call:
     inputs:
       os:

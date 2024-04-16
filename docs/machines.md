@@ -13,12 +13,24 @@ All the machines are connected by a 400 GbE [PowerSwitch Z9432F](https://www.del
 
 ### Setup
 
+#### BIOS Configuration
+
+The following changes must be made to each lab machine from the default configuration:
+
+- Processor Settings -> Kernel DMA Protection -> Enabled
+- Integrated Devices -> SR-IOV Global Enable -> Enabled
+- System Profile Settings -> System Profile -> Performance
+
+#### OS Deployment
+
 The easiest way to automate machine deployment is via `WorkflowCommandLine.exe`, which you need to install (installed automatically in Program Files if you have WTT Studio).
 
 ```PowerShell
 # Run ./WorkflowCommandLine.exe command for machines 01, 02... 09 for a sanity check first.
 for ($i = 10; $i -lt 61; $i++) { ./WorkFlowCommandLine.exe /run /datastore:ServerPlaceholder /identityserver:atlasidentity /identitydatabase:wttidentity /id:251 /resourcedatastore:WTT_EDS09 /machinepool:"$\TestServices\WTT_EDS09\Desktop\Private\NetPerf" /machine:RR1-NetPerf-$i /commonparam:DEPLOY_OS_LAB=fe_release_svc_prod1 /commonparam:DEPLOY_OS_EDITION=ServerDatacenter /commonparam:DEPLOY_OS_PLATFORM=amd64 }
 ```
+
+Once the OS is installed, run [`setup-host.ps1`](/setup-host.ps1) on each machine to apply the host configuration.
 
 ## Dedicated arm64 Machines
 

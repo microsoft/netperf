@@ -1,0 +1,121 @@
+# Copyright (c) Microsoft Corporation
+# SPDX-License-Identifier: MIT
+
+# This workflow will download the cts traffic generator and run it against a target.
+
+name: cts_traffic
+
+on:
+  # Permit manual runs of the workflow.
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Capture CPU profile'
+        required: false
+        default: false
+        type: boolean
+
+  pull_request:
+    branches:
+    - main
+    paths:
+    - .github/workflows/cts_traffic.yml
+  
+
+concurrency:
+  group: ctstraffic-${{ github.event.client_payload.pr || github.event.client_payload.sha || inputs.ref || github.event.pull_request.number || 'main' }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build cts-traffic test tool
+    uses: microsoft/ctsTraffic/.github/workflows/reusable-build.yml@master
+    with:
+      build_artifact: cts-traffic
+      repository: 'microsoft/ctsTraffic'
+      configurations: '["Release"]'
+      ref: 'master'
+
+  test:
+    name: Test CTS Traffic
+    needs: [build]
+    strategy:
+      fail-fast: false
+      matrix:
+        vec: [
+          { env: "azure", os: "2022", arch: "x64" },
+          { env: "azure", os: "2025", arch: "x64" },
+          { env: "lab",   os: "2022", arch: "x64" },
+        ]
+    runs-on:
+    - self-hosted
+    - ${{ matrix.vec.env }}
+    - os-windows-${{ matrix.vec.os }}
+    - ${{ matrix.vec.arch }}
+
+    steps:
+    - name: Setup workspace
+      run: |
+        if (Test-Path ${{ github.workspace }}\xdp) { Remove-Item -Recurse -Force ${{ github.workspace }}\cts-traffic }
+        if (Test-Path ${{ github.workspace }}\ETL) { Remove-Item -Recurse -Force ${{ github.workspace }}\ETL }
+        New-item -ItemType Directory -Path ${{ github.workspace }}\cts-traffic
+        New-item -ItemType Directory -Path ${{ github.workspace }}\ETL
+
+    # Install the latest anti-malware signatures for Windows Defender to prevent false positives.
+    # Windows Defender incorrectly flags some of the test binaries as malware.
+    - name: Download latest anti-malware signatures for Windows Defender
+      run: |
+        Update-MpSignature -Verbose
+        Start-MpScan -ScanType QuickScan
+        Add-MpPreference -ExclusionPath ${{ github.workspace }}
+
+    - name: Download cts-traffic
+      uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
+      with:
+        name: "cts-traffic Release"
+        path: ${{ github.workspace }}\cts-traffic
+
+    - name: Run CTS cts-traffic
+      working-directory: ${{ github.workspace }}\cts-traffic
+      run: |
+        $profile = 0
+        if ("${{inputs.profile}}" -eq "true") { $profile = 1 }
+        $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
+        iex "& { $(irm $url) } -CpuProfile $profile"
+
+    - name: Move ETL files to ETLfolder 
+      working-directory: ${{ github.workspace }}\cts-traffic
+      run: |
+        dir .
+        if (Test-Path ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl) { Move-Item ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl ${{ github.workspace }}\ETL }
+        if (Test-Path ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl) { Move-Item ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl ${{ github.workspace }}\ETL }
+
+    - name: Upload CTS cts-traffic results
+      if: always()
+      uses: actions/upload-artifact@v2
+      with:
+        name: cts_traffic_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv 
+
+    - name: Upload ETL
+      if: ${{ github.event.inputs.profile }}
+      uses: actions/upload-artifact@v2
+      with:
+        name: cts_traffic_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}_ETL
+        path: ${{ github.workspace }}\ETL\*.etl
+
+    - name: Cleanup workspace
+      if: always()
+      run: |
+        if (Test-Path ${{ github.workspace }}\cts-traffic) { Remove-Item -Recurse -Force ${{ github.workspace }}\cts-traffic }
+        if (Test-Path ${{ github.workspace }}\ETL) { Remove-Item -Recurse -Force ${{ github.workspace }}\ETL }
+
+    - name: Restore Windows Defender exclusions
+      if: always()
+      run: |
+        Remove-MpPreference -ExclusionPath ${{ github.workspace }}
+        Update-MpSignature -Verbose
+        Start-MpScan -ScanType QuickScan
