@@ -1,4 +1,5 @@
-name: Setup temporary Azure VMs for testing
+name: Create Azure VMs
+
 
 on:
   workflow_dispatch:
@@ -19,6 +20,12 @@ on:
         description: 'Name of the second VM to create'
         required: true
         type: string
+      workflowId:
+        description: 'The ID of the caller workflow'
+        required: false
+        default: 'manual'
+        type: string
+
   workflow_call:
     inputs:
       os:
@@ -37,6 +44,21 @@ on:
         description: "The name of the second VM to create"
         required: true
         type: string
+      workflowId:
+        description: "The ID of the caller workflow"
+        required: true
+        type: string
+    secrets:
+      AZURE_CLIENT_ID:
+        required: true
+      AZURE_TENANT_ID:
+        required: true
+      AZURE_SUBSCRIPTION_ID:
+        required: true
+      PERSONAL_ACCESS_TOKEN:
+        required: true
+      VM_PASSWORD:
+        required: true
 
 permissions: write-all
 
@@ -64,7 +86,7 @@ jobs:
     - name: Generate registration token
       id: generate-token
       run: |
-        TOKEN=$(curl -X POST -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" "https://api.github.com/repos/microsoft/netperf/actions/runners/registration-token" | jq -r .token) && echo "::add-mask::$TOKEN" && echo "::set-output name=REGISTRATION_TOKEN::$TOKEN"
+        TOKEN=$(curl -X POST -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" "https://api.github.com/repos/microsoft/netperf/actions/runners/registration-token" | jq -r .token) && echo "::add-mask::$TOKEN" && echo "REGISTRATION_TOKEN=$TOKEN" >> $GITHUB_OUTPUT
       shell: bash
     - name: Create Azure VMs
       shell: pwsh
@@ -74,6 +96,6 @@ jobs:
           -VMName2 ${{ inputs.vmname2 }} `
           -Password ${{ secrets.VM_PASSWORD }} `
           -Os ${{ inputs.os }} `
-          -EnvTag ${{ inputs.tag }}`
-          -GitHubToken ${{ steps.generate-token.outputs.REGISTRATION_TOKEN }}
-          
+          -EnvTag ${{ inputs.tag }} `
+          -GitHubToken ${{ steps.generate-token.outputs.REGISTRATION_TOKEN }} `
+          -WorkflowId ${{ inputs.workflowId }}
