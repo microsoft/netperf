@@ -81,31 +81,8 @@ jobs:
     - name: Run CTS cts-traffic
       working-directory: ${{ github.workspace }}\cts-traffic
       run: |
-        $profile = 0
-        if ("${{inputs.profile}}" -eq "true") { $profile = 1 }
-        $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
-        iex "& { $(irm $url) } -CpuProfile $profile"
-
-    - name: Move ETL files to ETLfolder 
-      working-directory: ${{ github.workspace }}\cts-traffic
-      run: |
-        dir .
-        if (Test-Path ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl) { Move-Item ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl ${{ github.workspace }}\ETL }
-        if (Test-Path ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl) { Move-Item ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl ${{ github.workspace }}\ETL }
-
-    - name: Upload CTS cts-traffic results
-      if: always()
-      uses: actions/upload-artifact@v2
-      with:
-        name: cts_traffic_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
-        path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv 
-
-    - name: Upload ETL
-      if: ${{ github.event.inputs.profile }}
-      uses: actions/upload-artifact@v2
-      with:
-        name: cts_traffic_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}_ETL
-        path: ${{ github.workspace }}\ETL\*.etl
+        $url = "https://raw.githubusercontent.com/Alan-Jowett/bpf_performance/udp/scripts/two-machine-udp-stream.ps1"
+        iex "& { $(irm $url) }"
 
     - name: Cleanup workspace
       if: always()
