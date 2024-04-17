@@ -4,14 +4,6 @@ name: Create Azure VMs
 on:
   workflow_dispatch:
     inputs:
-      os:
-        description: "The operating system to provision on the temp VMs"
-        required: true
-        type: string
-      tag:
-        description: 'Tag to identify the temporary VMs'
-        required: true
-        type: string
       matrix_filename:
         description: 'Matrix of jobs and their respective environments'
         required: false
@@ -25,14 +17,6 @@ on:
 
   workflow_call:
     inputs:
-      os:
-        description: "The operating system to provision on the temp VMs"
-        required: true
-        type: string
-      tag:
-        description: "The tag to identify the temporary VMs we created"
-        required: true
-        type: string
       matrix_filename:
         description: "Matrix of jobs and their respective environments"
         required: false
@@ -81,18 +65,12 @@ jobs:
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         enable-AzPSSession: true
     - name: Run manage-azure-vms.ps1
-        run: ./.github/workflows/manage-azure-vms.ps1 -GithubPatToken ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+        run: ./.github/workflows/manage-azure-vms.ps1 -GithubPatToken ${{ secrets.PERSONAL_ACCESS_TOKEN }} -MatrixFileName ${{ inputs.matrix_filename }}
         shell: pwsh
     - name: Generate registration token
       id: generate-token
       run: |
         TOKEN=$(curl -X POST -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" "https://api.github.com/repos/microsoft/netperf/actions/runners/registration-token" | jq -r .token) && echo "::add-mask::$TOKEN" && echo "REGISTRATION_TOKEN=$TOKEN" >> $GITHUB_OUTPUT
-      shell: bash
-    - id: generate-full-matrix
-      run: echo "matrix=$(jq -c '.' ./.github/workflows/processed-matrix.json)" >> $GITHUB_OUTPUT
-      shell: bash
-    - id: generate-azure-matrix
-      run: echo "matrix=$(jq -c '.' ./.github/workflows/azure-matrix.json)" >> $GITHUB_OUTPUT
       shell: bash
     - name: Create Azure VMs
       shell: pwsh
@@ -103,3 +81,9 @@ jobs:
           -EnvTag ${{ inputs.tag }} `
           -GitHubToken ${{ steps.generate-token.outputs.REGISTRATION_TOKEN }} `
           -WorkflowId ${{ inputs.workflowId }}
+    - id: generate-full-matrix
+      run: echo "matrix=$(jq -c '.' ./.github/workflows/processed-matrix.json)" >> $GITHUB_OUTPUT
+      shell: bash
+    - id: generate-azure-matrix
+      run: echo "matrix=$(jq -c '.' ./.github/workflows/azure-matrix.json)" >> $GITHUB_OUTPUT
+      shell: bash
