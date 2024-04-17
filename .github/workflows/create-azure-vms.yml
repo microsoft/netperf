@@ -27,8 +27,12 @@ on:
         required: true
         type: string
     outputs:
-      full-matrix: ${{ steps.generate-full-matrix.outputs.matrix }}
-      azure-matrix: ${{ steps.generate-azure-matrix.outputs.matrix }}
+      full-matrix:
+        description: "The full list of jobs to be run in secnetperf"
+        value: ${{ jobs.manage-and-create-runners.outputs.full-matrix }}
+      azure-matrix:
+        description: "The list of jobs to be run on Azure VMs"
+        value: ${{ jobs.manage-and-create-runners.outputs.azure-matrix }}
     secrets:
       AZURE_CLIENT_ID:
         required: true
@@ -46,6 +50,9 @@ permissions: write-all
 jobs:
   manage-and-create-runners:
     name: Manage Runners and Create Azure VMs
+    outputs:
+      full-matrix: ${{ steps.generate-full-matrix.outputs.matrix }}
+      azure-matrix: ${{ steps.generate-azure-matrix.outputs.matrix }}
     runs-on: windows-latest
     steps:
     - name: Checkout
