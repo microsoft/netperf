@@ -95,7 +95,6 @@ for ($i = 0; $i -lt $jobs.Count; $i += 2) {
 }
 
 Write-Host "`n[$(Get-Date)] Jobs complete!`n"
-$jobs | Receive-Job # Get job results
 $jobs | Remove-Job -Force  # Clean up all the jobs
 if ($RequiredPlatforms.Count -ne $PlatformsCovered.Count) {
     $MissingPlatforms = $RequiredPlatforms - $PlatformsCovered
