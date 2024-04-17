@@ -41,7 +41,7 @@ $jobs = @()
 $RequiredPlatforms = New-Object 'System.Collections.Generic.HashSet[string]'
 
 foreach ($entry in $AzureMatrixJson) {
-    $IdTag = $entry.env
+    $IdTag = $entry.runner_id
     $Os = $entry.os
     $VMName1 = "$IdTag-1"
     $VMName2 = "$IdTag-2"
@@ -90,7 +90,7 @@ for ($i = 0; $i -lt $jobs.Count; $i += 2) {
         $VMsSuccessfullyCreated += ($i / 2)
         $PlatformsCovered.Add($AzureMatrixJson[$i / 2].os) | Out-Null
     } else {
-        Write-Host "[$(Get-Date)] VM creation failed for $($AzureMatrixJson[$i / 2].env)"
+        Write-Host "[$(Get-Date)] VM creation failed for $($AzureMatrixJson[$i / 2].runner_id)"
     }
 }
 
@@ -114,9 +114,9 @@ if ($GitHubToken) {
         # Only configure the pairs of VMs successfully provisioned.
         $entry = $AzureMatrixJson[$index]
         $Os = $entry.os
-        $EnvTag = $entry.env
-        $VMName1 = "$($entry.env)-1"
-        $VMName2 = "$($entry.env)-2"
+        $RunnerId = $entry.runner_id
+        $VMName1 = "$($entry.runner_id)-1"
+        $VMName2 = "$($entry.runner_id)-2"
         $osType = $Os.Split("-")[0]
         $ip1 = Get-NetPerfVmPrivateIp $VMName1
         $ip2 = Get-NetPerfVmPrivateIp $VMName2
@@ -148,7 +148,7 @@ if ($GitHubToken) {
                     "Password" = $Using:Password
                     "PeerIP" = $Using:ip2
                     "GitHubToken" = $Using:GitHubToken
-                    "RunnerLabels" = "os-$Using:Os,$Using:EnvTag,x64"
+                    "RunnerLabels" = "os-$Using:Os,$Using:RunnerId,x64"
                 }
                 Invoke-AzVMRunCommand `
                     -ResourceGroupName $Using:ResourceGroupName `
@@ -189,7 +189,7 @@ if ($GitHubToken) {
                     "peerip" = $Using:ip2
                     "githubtoken" = $Using:GitHubToken
                     "noreboot" = $true
-                    "runnerlabels" = "os-$Using:Os,$Using:EnvTag"
+                    "runnerlabels" = "os-$Using:Os,$Using:RunnerId"
                 }
                 Invoke-AzVMRunCommand `
                     -ResourceGroupName $Using:ResourceGroupName `
@@ -212,21 +212,21 @@ if ($GitHubToken) {
 
 # Now we should reassign the tags for jobs missing a successfully provisioned VM.
 
-# Stores the 'env' tags for the VMs that were successfully provisioned.
+# Stores the 'runner_id' tags for the VMs that were successfully provisioned.
 $SuccessfulPairs = @{}
 foreach ($index in $VMsSuccessfullyCreated) {
     $entry = $AzureMatrixJson[$index]
-    $SuccessfulPairs[$entry.env] = $entry.os
+    $SuccessfulPairs[$entry.runner_id] = $entry.os
 }
 
 $RoundRobinCandidates = @($SuccessfulPairs.Keys)
 $RoundRobinIndex = 0
 foreach ($entry in $AzureMatrixJson) {
-    if ($SuccessfulPairs.ContainsKey($entry.env)) {
+    if ($SuccessfulPairs.ContainsKey($entry.runner_id)) {
         # This pair was successfully provisioned.
         continue
     }
-    $MissingTag = $entry.env
+    $MissingTag = $entry.runner_id
     $RequiredOs = $entry.os
     # In a round-robin style, reassign this job's tag to one of the successpair's tag that matches the required OS.
     while ($true) {
@@ -234,10 +234,10 @@ foreach ($entry in $AzureMatrixJson) {
         $ReplacementOs = $SuccessfulPairs[$ReplacementTag]
         if ($ReplacementOs -eq $RequiredOs) {
             Write-Host "[$(Get-Date)] Reassigning $MissingTag to $ReplacementTag"
-            $entry.env = $ReplacementTag
+            $entry.runner_id = $ReplacementTag
             foreach ($row in $FullMatrixJson) {
-                if ($row.env -eq $MissingTag) {
-                    $row.env = $ReplacementTag
+                if ($row.runner_id -eq $MissingTag) {
+                    $row.runner_id = $ReplacementTag
                 }
             }
             $RoundRobinIndex = ($RoundRobinIndex + 1) % $RoundRobinCandidates.Count

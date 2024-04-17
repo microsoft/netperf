@@ -150,7 +150,7 @@ foreach ($entry in $MatrixJson) {
         $randomTag = [System.Guid]::NewGuid().ToString()
         # limit randomTag to 13 characters
         $randomTag = $randomTag.Substring(0, [Math]::Min(13, $randomTag.Length))
-        $entry.env = $randomTag
+        $entry | Add-Member -MemberType NoteProperty -Name "runner_id" -Value $randomTag
         $AzureJson += $entry
     }
 }
