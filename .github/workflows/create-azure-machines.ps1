@@ -115,6 +115,7 @@ if ($GitHubToken) {
         # Only configure the pairs of VMs successfully provisioned.
         $entry = $AzureMatrixJson[$index]
         $Os = $entry.os
+        $EnvTag = $entry.env
         $VMName1 = "$($entry.env)-1"
         $VMName2 = "$($entry.env)-2"
         $osType = $Os.Split("-")[0]
