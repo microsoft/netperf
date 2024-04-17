@@ -45,7 +45,7 @@ foreach ($entry in $AzureMatrixJson) {
     $Os = $entry.os
     $VMName1 = "$IdTag-1"
     $VMName2 = "$IdTag-2"
-    Write-Host "[$(Get-Date)] Creating $VMName1..."
+    Write-Host "[$(Get-Date)] Creating $VMName1 for platform $Os..."
     $jobs += Start-Job -ScriptBlock {
         & ./.github/workflows/create-azure-machine.ps1 `
             -VMName $Using:VMName1 `
@@ -56,7 +56,7 @@ foreach ($entry in $AzureMatrixJson) {
             -Location $Using:Location `
             -WorkflowId $Using:WorkflowId
     }
-    Write-Host "[$(Get-Date)] Creating $VMName2..."
+    Write-Host "[$(Get-Date)] Creating $VMName2 for platform $Os..."
     $jobs += Start-Job -ScriptBlock {
         & ./.github/workflows/create-azure-machine.ps1 `
             -VMName $Using:VMName2 `
@@ -68,7 +68,7 @@ foreach ($entry in $AzureMatrixJson) {
             -WorkflowId $Using:WorkflowId
     }
 
-    $RequiredPlatforms.Add($Os)
+    $RequiredPlatforms.Add($Os) | Out-Null
 }
 
 $TimeoutMinutes = 12
