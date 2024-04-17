@@ -30,18 +30,8 @@ permissions:
   contents: read
 
 jobs:
-  # build:
-  #   name: Build cts-traffic test tool
-  #   uses: microsoft/ctsTraffic/.github/workflows/reusable-build.yml@master
-  #   with:
-  #     build_artifact: cts-traffic
-  #     repository: 'microsoft/ctsTraffic'
-  #     configurations: '["Release"]'
-  #     ref: 'master'
-
   test:
     name: Test CTS Traffic
-#    needs: [build]
     strategy:
       fail-fast: false
       matrix:
@@ -72,11 +62,6 @@ jobs:
         Start-MpScan -ScanType QuickScan
         Add-MpPreference -ExclusionPath ${{ github.workspace }}
 
-    # - name: Download cts-traffic
-    #   uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
-    #   with:
-    #     name: "cts-traffic Release"
-    #     path: ${{ github.workspace }}\cts-traffic
     - name: Download prebuilt ctstraffic
       run: |
         $url = "https://github.com/microsoft/ctsTraffic/raw/master/Releases/2.0.3.3/x64/ctsTraffic.exe"
