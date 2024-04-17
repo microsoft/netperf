@@ -26,6 +26,9 @@ on:
         description: "The ID of the caller workflow"
         required: true
         type: string
+    outputs:
+      full-matrix: ${{ steps.generate-full-matrix.outputs.matrix }}
+      azure-matrix: ${{ steps.generate-azure-matrix.outputs.matrix }}
     secrets:
       AZURE_CLIENT_ID:
         required: true
@@ -43,9 +46,6 @@ permissions: write-all
 jobs:
   manage-and-create-runners:
     name: Manage Runners and Create Azure VMs
-    outputs:
-      full-matrix: ${{ steps.generate-full-matrix.outputs.matrix }}
-      azure-matrix: ${{ steps.generate-azure-matrix.outputs.matrix }}
     runs-on: windows-latest
     steps:
     - name: Checkout

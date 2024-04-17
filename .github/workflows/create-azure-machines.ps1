@@ -88,7 +88,7 @@ for ($i = 0; $i -lt $jobs.Count; $i += 2) {
 
     if ($VM1_Job_Status -eq "Completed" -and $VM2_Job_Status -eq "Completed") {
         $VMsSuccessfullyCreated += ($i / 2)
-        $PlatformsCovered.Add($AzureMatrixJson[$i / 2].os)
+        $PlatformsCovered.Add($AzureMatrixJson[$i / 2].os) | Out-Null
     } else {
         Write-Host "[$(Get-Date)] VM creation failed for $($AzureMatrixJson[$i / 2].env)"
     }
