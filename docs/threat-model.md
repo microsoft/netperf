@@ -36,8 +36,10 @@ Pull Requests are a primary attack vector for netperf. Pull Requests can trigger
 
 This threat is largely mitigated by the following:
 
-1. **Approval Required**: Pull Requests from outside contributors are not automatically run. They must be approved by a netperf maintainer before they will be run.
+1. **Approval Required**: Pull Requests from outside contributors are not automatically run. They must be approved by a netperf maintainer before they will be run. All Pull Requests from outside contributors are thouroughly reviewed before approval.
 2. **Secrets**: Secrets are stored in GitHub Secrets and are not exposed in the Pull Request. This means that an attacker would need to compromise the GitHub repository to access the secrets.
+
+Additionally, the Federated credentials that are used to access the Azure Subscription are limited in scope and only allowed to be executed from the main branch of the netperf repository. So, even if a Pull Request were to be run, and somehow get access to the secrets, it would not have access to the Azure Subscription.
 
 ### Remote Action Triggering
 
