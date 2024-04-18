@@ -57,13 +57,6 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v2
-    - name: Install Latest Az PowerShell Module
-      shell: pwsh
-      run: |
-        Install-Module -Name Az -Force -AllowClobber -Repository PSGallery
-        Update-Module Az -Force
-        Get-Module 'Az' | where {([string]($_.Version)).StartsWith('9.3.0')} | Remove-Module
-        Get-Module -Name Az -ListAvailable
     - name: Login to Azure
       uses: azure/login@v1
       with:
@@ -72,15 +65,16 @@ jobs:
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         enable-AzPSSession: true
     - name: Run manage-azure-vms.ps1
-      run: ./.github/workflows/manage-azure-vms.ps1 -GithubPatToken ${{ secrets.PERSONAL_ACCESS_TOKEN }} -MatrixFileName ${{ inputs.matrix_filename }}
-      shell: pwsh
+      uses: azure/powershell@v2
+      with:
+        inlineScript: ./.github/workflows/manage-azure-vms.ps1 -GithubPatToken ${{ secrets.PERSONAL_ACCESS_TOKEN }} -MatrixFileName ${{ inputs.matrix_filename }}
+        azPSVersion: '11.5.0'
     - name: Create Azure VMs
-      shell: pwsh
-      run: |
-        ./.github/workflows/create-azure-machines.ps1 `
-          -Password ${{ secrets.VM_PASSWORD }} `
-          -GithubPatToken ${{ secrets.PERSONAL_ACCESS_TOKEN }} `
-          -WorkflowId ${{ inputs.workflowId }}
+      uses: azure/powershell@v2
+      with:
+        inlineScript: |
+          ./.github/workflows/create-azure-machines.ps1 -Password ${{ secrets.VM_PASSWORD }} -GithubPatToken ${{ secrets.PERSONAL_ACCESS_TOKEN }} -WorkflowId ${{ inputs.workflowId }}
+        azPSVersion: '11.5.0'
     - id: generate-full-matrix
       run: echo "matrix=$(jq -c '.' ./.github/workflows/processed-matrix.json)" >> $GITHUB_OUTPUT
       shell: bash
