@@ -20,7 +20,7 @@ Some netperf tests are run on Azure Virtual Machines ([details](machines#azure-v
 
 #### Lab
 
-Some netperf tests are run on machines in a physical lab ([details](machines#lab-x64-machines)). The lab is a set of machines that are used for testing. The machines are controlled by the netperf framework and are used to run the tests.
+Some netperf tests are run on machines in a physical lab ([details](machines#lab-x64-machines)). The lab machines do not have access to any corpnet resources. They have internet acecss and are on a shared, private network with each other (used for the network testing). The machines are controlled by the netperf framework and are used to run the tests.
 
 #### Dependencies
 
