@@ -136,7 +136,7 @@ try {
     $Runners.runners | Foreach-Object {
         $runner = $_
         $runnerName = $runner.name
-        if (!($runnerName.Contains("ex-")) -and !($tagsRemoved.Contains($runnerName)) -and !($aliveVm.Contains($runnerName))) {
+        if (!($runnerName.Contains("ex-")) -and !($tagsRemoved.Contains($runnerName)) -and !($aliveVm.Contains($runnerName)) -and $runnerName.EndsWith("-1")) {
             Write-Host "Cleaning up Residual Github Self Hosted Runner with Tag: $runnerName..."
             $tagToRemove = $runnerName.Substring(0, $runnerName.Length - 2)
             Remove-GitHubRunner -Tag $tagToRemove -runners $Runners -headers $headers
