@@ -25,7 +25,7 @@ param (
     [string]$Location = "South Central US",
 
     [Parameter(Mandatory = $false)]
-    [string]$GitHubToken,
+    [string]$GithubPatToken,
 
     [Parameter(Mandatory = $true)]
     [string]$WorkflowId
@@ -108,7 +108,19 @@ function Get-NetPerfVmPrivateIp {
     return $nic.IpConfigurations[0].PrivateIpAddress
 }
 
-if ($GitHubToken) {
+if ($GithubPatToken) {
+
+    # Define the header with the authorization token
+    $headers = @{
+        "Authorization" = "token $GithubPatToken"
+    }
+
+    # Make the POST request and store the response
+    $response = Invoke-RestMethod -Uri "https://api.github.com/repos/microsoft/netperf/actions/runners/registration-token" -Method Post -Headers $headers
+
+    # Output the token
+    $GitHubRegistrationToken = $response.token
+
     $jobs = @()
     foreach ($index in $VMsSuccessfullyCreated) {
         # Only configure the pairs of VMs successfully provisioned.
@@ -147,7 +159,7 @@ if ($GitHubToken) {
                     "Username" = "netperf"
                     "Password" = $Using:Password
                     "PeerIP" = $Using:ip2
-                    "GitHubToken" = $Using:GitHubToken
+                    "GitHubToken" = $Using:GitHubRegistrationToken
                     "RunnerLabels" = "os-$Using:Os,$Using:RunnerId,x64"
                 }
                 Invoke-AzVMRunCommand `
@@ -187,7 +199,7 @@ if ($GitHubToken) {
                     "username" = "netperf"
                     "password" = $Using:Password
                     "peerip" = $Using:ip2
-                    "githubtoken" = $Using:GitHubToken
+                    "githubtoken" = $Using:GitHubRegistrationToken
                     "noreboot" = $true
                     "runnerlabels" = "os-$Using:Os,$Using:RunnerId"
                 }
@@ -210,11 +222,38 @@ if ($GitHubToken) {
     $jobs | Remove-Job  # Clean up the jobs
 }
 
-# Now we should reassign the tags for jobs missing a successfully provisioned VM.
-
-# Stores the 'runner_id' tags for the VMs that were successfully provisioned.
-$SuccessfulPairs = @{}
+# In case of any setup failure, we filter down our list of successfully created VMs to just the ones able to be successfully onboarded to GitHub.
+$SuccessfulVmsOnboardedToGitHub = @()
+$PlatformsSuccessfullyOnboardedToGitHub = New-Object 'System.Collections.Generic.HashSet[string]'
+$headers = @{
+    Authorization = "token $GithubPatToken"
+    Accept = "application/vnd.github+json"
+}
+# GitHub API URL to list runners
+$RunnersUrl = "https://api.github.com/repos/microsoft/netperf/actions/runners"
+# Fetch the list of runners from GitHub
+$Runners = Invoke-RestMethod -Uri $RunnersUrl -Method Get -Headers $headers
 foreach ($index in $VMsSuccessfullyCreated) {
+    $entry = $AzureMatrixJson[$index]
+    $RunnerId = $entry.runner_id
+    foreach ($runner in $Runners.runners) {
+        if ($runner.name.Contains($RunnerId)) {
+            $SuccessfulVmsOnboardedToGitHub += $index
+            $PlatformsSuccessfullyOnboardedToGitHub.Add($entry.os) | Out-Null
+            Write-Host "[$(Get-Date)] Successfully onboarded $RunnerId to GitHub!"
+            break
+        }
+    }
+}
+if ($PlatformsSuccessfullyOnboardedToGitHub.Count -ne $RequiredPlatforms.Count) {
+    $MissingPlatforms = $RequiredPlatforms - $PlatformsSuccessfullyOnboardedToGitHub
+    Write-Error "Failed to onboard successfully created VMs to GitHub for the following platforms: $MissingPlatforms"
+    exit 1
+}
+
+# Now we should reassign the tags for jobs missing a successfully provisioned VM onboarded to Github.
+$SuccessfulPairs = @{} # Stores the 'runner_id' tags for the VMs that were successfully provisioned.
+foreach ($index in $SuccessfulVmsOnboardedToGitHub) {
     $entry = $AzureMatrixJson[$index]
     $SuccessfulPairs[$entry.runner_id] = $entry.os
 }

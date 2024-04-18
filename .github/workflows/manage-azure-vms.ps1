@@ -90,6 +90,7 @@ try {
     $WorkflowRuns = Invoke-RestMethod -Uri $WorkflowRunsUrl -Method Get -Headers $headers
 
     $tagsRemoved =[System.Collections.Generic.List[string]]::new()
+    $aliveVm =[System.Collections.Generic.List[string]]::new()
 
     $vms | Foreach-Object {
         $vm = $_
@@ -103,6 +104,7 @@ try {
 
             if ($WorkflowThatReferenceThisVm) {
                 Write-Host "Ignoring VM: $($vm.Name) as it's in use by a running workflow. Workflow ID: $vmWorkflowId, Vm Creation Time: $vmCreationTime"
+                $aliveVm.Add($vm.Name)
                 continue
             }
 
@@ -134,8 +136,8 @@ try {
     $Runners.runners | Foreach-Object {
         $runner = $_
         $runnerName = $runner.name
-        if ($runnerName.EndsWith("-1") -and !($tagsRemoved.Contains($runnerName))) {
-            Write-Host "Removing Github Self Hosted Runner with Tag: $runnerName..."
+        if (!($runnerName.Contains("ex-")) -and !($tagsRemoved.Contains($runnerName)) -and !($aliveVm.Contains($runnerName))) {
+            Write-Host "Cleaning up Residual Github Self Hosted Runner with Tag: $runnerName..."
             $tagToRemove = $runnerName.Substring(0, $runnerName.Length - 2)
             Remove-GitHubRunner -Tag $tagToRemove -runners $Runners -headers $headers
         }
