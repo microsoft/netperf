@@ -52,6 +52,7 @@ jobs:
       run: |
         sudo apt update
         sudo apt-get install -y \
+          build-essentials \
           gcc-multilib \
           lcov \
           pkg-config \
