@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: 'EBPF Branch or Commit'
+        description: 'BPF performance Branch or Commit'
         required: false
         default: 'main'
         type: string
@@ -19,7 +19,7 @@ on:
     branches:
     - main
     paths:
-    - .github/workflows/ebpf.yml
+    - .github/workflows/ebpf_linux.yml
 
   repository_dispatch:
     types: [run-ebpf-linux]
@@ -36,13 +36,15 @@ jobs:
     runs-on: 
     - self-hosted
     - os-ubuntu-20.04
-    - x64
+    - X64
+    - azure
+    - Linux
 
     steps:
     - name: Checkout
       uses: actions/checkout@v2
       with:
-        ref: ${{ github.event.client_payload.pr || github.event.client_payload.sha || inputs.ref || github.event.pull_request.head.sha || 'main' }}
+        ref: ${{ inputs.ref || 'main' }}
         submodules: 'recursive'
         repository: 'microsoft/bpf_performance'
 
