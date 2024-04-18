@@ -10,8 +10,7 @@
 
     Logic:
 
-    1. Opportunistically deletes dead Azure VMs. We consider a VM dead if it's creation time is more than 30 minutes ago, as we have a 20 minute time-out per job.
-       A VM is also dead if it has a "workflow ID" tag, but there is currently no running workflow with that ID.
+    1. Opportunistically deletes dead Azure VMs. We consider a VM dead if it has a "workflow ID" tag, but there is currently no 'in_progress' workflow with that ID.
 
     2. Determines how many Azure VMs we will create based on ./matrix.json, and modifies ./matrix.json to reflect the tags of the VMs we will create.
 
@@ -81,42 +80,48 @@ try {
     }
 
     # GitHub API URL to list runners
-    $apiUrl = "https://api.github.com/repos/microsoft/netperf/actions/runners"
+    $RunnersUrl = "https://api.github.com/repos/microsoft/netperf/actions/runners"
+    # GitHub API to list workflow runs
+    $WorkflowRunsUrl = "https://api.github.com/repos/microsoft/netperf/actions/runs"
 
     # Fetch the list of runners from GitHub
-    $Runners = Invoke-RestMethod -Uri $apiUrl -Method Get -Headers $headers
+    $Runners = Invoke-RestMethod -Uri $RunnersUrl -Method Get -Headers $headers
+    # Fetch the list of workflow runs from GitHub
+    $WorkflowRuns = Invoke-RestMethod -Uri $WorkflowRunsUrl -Method Get -Headers $headers
+
     $tagsRemoved =[System.Collections.Generic.List[string]]::new()
+    $aliveVm =[System.Collections.Generic.List[string]]::new()
 
     $vms | Foreach-Object {
-    $vm = $_
-    $vmCreationTime = $vm.Tags["CreationTime"]
-    $vmWorkflowId = $vm.Tags["WorkflowId"]
-    if ($vmCreationTime -or !($vm.Name.Contains("ex-"))) {
-        # $vmCreationTime = [DateTime]::Parse($vmCreationTime)
-        # $timeSinceCreation = (Get-Date) - $vmCreationTime
-        # if ($timeSinceCreation.TotalMinutes -gt 30) {
-        #     Write-Host "VM: $($vm.Name) is dead. Deleting..."
-        #     $jobs += Start-Job -ScriptBlock {
-        #         & ./.github/workflows/remove-azure-machine.ps1 -VMName $vm.Name
-        #     }
-        # } else {
-        #     Write-Host "VM: $($vm.Name) is alive. Ignoring."
-        # }
-        $name = $vm.Name
-        if ($name.EndsWith("1")) {
-            Write-Host "Removing Github Self Hosted Runner with Tag: $($vm.Name)..."
-            $tagToRemove = $name.Substring(0, $name.Length - 2)
-            $tagsRemoved.Add($tagToRemove)
-            Remove-GitHubRunner -Tag $tagToRemove -runners $Runners -headers $headers
+        $vm = $_
+        $vmCreationTime = $vm.Tags["CreationTime"]
+        $vmWorkflowId = $vm.Tags["WorkflowId"]
+        if (!($vm.Name.Contains("ex-"))) {
+
+            $WorkflowThatReferenceThisVm = $WorkflowRuns.workflow_runs | Where-Object {
+                $_.workflow_id -eq $vmWorkflowId -and $_.status -eq 'in_progress'
+            }
+
+            if ($WorkflowThatReferenceThisVm) {
+                Write-Host "Ignoring VM: $($vm.Name) as it's in use by a running workflow. Workflow ID: $vmWorkflowId, Vm Creation Time: $vmCreationTime"
+                $aliveVm.Add($vm.Name)
+                continue
+            }
+
+            $name = $vm.Name
+            if ($name.EndsWith("1")) {
+                Write-Host "Removing Github Self Hosted Runner with Tag: $($vm.Name)..."
+                $tagToRemove = $name.Substring(0, $name.Length - 2)
+                $tagsRemoved.Add($tagToRemove)
+                Remove-GitHubRunner -Tag $tagToRemove -runners $Runners -headers $headers
+            }
+            Write-Host "Deleting VM: $($vm.Name)..."
+            $jobs += Start-Job -ScriptBlock {
+                & ./.github/workflows/remove-azure-machine.ps1 -VMName $Using:name
+            }
+        } else {
+            Write-Host "Ignoring VM: $($vm.Name) as it's not a temporary VM."
         }
-        Write-Host "Deleting VM: $($vm.Name)..."
-        $jobs += Start-Job -ScriptBlock {
-            & ./.github/workflows/remove-azure-machine.ps1 -VMName $Using:name
-        }
-    } else {
-        Write-Host "Ignoring VM: $($vm.Name) as it's not a temporary VM."
-    }
-        # TODO: leverage Github API and do something with $vmWorkflowId.
     }
 
     if ($jobs.Count -gt 0) {
@@ -131,15 +136,15 @@ try {
     $Runners.runners | Foreach-Object {
         $runner = $_
         $runnerName = $runner.name
-        if ($runnerName.EndsWith("-1") -and !($tagsRemoved.Contains($runnerName))) {
-            Write-Host "Removing Github Self Hosted Runner with Tag: $runnerName..."
+        if (!($runnerName.Contains("ex-")) -and !($tagsRemoved.Contains($runnerName)) -and !($aliveVm.Contains($runnerName)) -and $runnerName.EndsWith("-1")) {
+            Write-Host "Cleaning up Residual Github Self Hosted Runner with Tag: $runnerName..."
             $tagToRemove = $runnerName.Substring(0, $runnerName.Length - 2)
             Remove-GitHubRunner -Tag $tagToRemove -runners $Runners -headers $headers
         }
     }
 
 } catch {
-    Write-Host "Likely some other job is already cleaning up the VMs. Full error: $_"
+    Write-Host "Error managing VMs. Full error: $_"
 }
 
 $AzureJson = @()
@@ -149,8 +154,9 @@ foreach ($entry in $MatrixJson) {
     if ($entry.env -match "azure" -and $entry.os -match "windows-2022") { # TODO: Add support for windows-2025 and Linux.
         $randomTag = [System.Guid]::NewGuid().ToString()
         # limit randomTag to 13 characters
-        $randomTag = $randomTag.Substring(0, [Math]::Min(13, $randomTag.Length))
-        $entry.env = $randomTag
+        $randomTag = $randomTag.Substring(0, [Math]::Min(12, $randomTag.Length))
+        $randomTag = "a" += $randomTag
+        $entry | Add-Member -MemberType NoteProperty -Name "runner_id" -Value $randomTag
         $AzureJson += $entry
     }
 }
@@ -159,4 +165,4 @@ foreach ($entry in $MatrixJson) {
 $MatrixJson | ConvertTo-Json | Set-Content -Path .\.github\workflows\processed-matrix.json
 $AzureJson | ConvertTo-Json | Set-Content -Path .\.github\workflows\azure-matrix.json
 
-# 3. TODO
+# 3. TODO; load management with Abstract Pool Queue Logic here.
