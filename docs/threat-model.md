@@ -8,7 +8,13 @@ netperf is a framework and set of tools for measuring network (and related compo
 
 #### netperf Repository
 
-The netperf repository contains the scripts and yaml for the netperf framework and tools. It also contains various secrets to access an Azure Subscription.
+The netperf repository contains the scripts and yaml for the netperf framework and tools. It also contains the following secrets, stored in GitHub Respository secrets:
+
+- `AZURE_CLIENT_ID` - Used for accessing the Azure Subscription
+- `AZURE_SUBSCRIPTION_ID` - Used for accessing the Azure Subscription
+- `AZURE_TENANT_ID` - Used for accessing the Azure Subscription
+- `PERSONAL_ACCESS_TOKEN` - Used to access the GitHub CLI
+- `VM_PASSWORD` - A well-known password to provision the test machines with
 
 #### GitHub Actions
 
