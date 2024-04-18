@@ -1,0 +1,102 @@
+# Copyright (c) Microsoft Corporation
+# SPDX-License-Identifier: MIT
+
+# This workflow will run the bpf_performance test suite on the provided Ubuntu version
+
+name: ebpf_linux
+
+on:
+  # Permit manual runs of the workflow.
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'EBPF Branch or Commit'
+        required: false
+        default: 'main'
+        type: string
+
+  pull_request:
+    branches:
+    - main
+    paths:
+    - .github/workflows/ebpf.yml
+
+  repository_dispatch:
+    types: [run-ebpf-linux]
+
+concurrency:
+  group: ebpf-linux-${{ github.event.client_payload.pr || github.event.client_payload.sha || inputs.ref || github.event.pull_request.number || 'main' }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: 
+    - self-hosted
+    - os-ubuntu-20.04
+    - x64
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        ref: ${{ github.event.client_payload.pr || github.event.client_payload.sha || inputs.ref || github.event.pull_request.head.sha || 'main' }}
+        submodules: 'recursive'
+        repository: 'microsoft/bpf_performance'
+
+    - name: Setup
+      run: |
+        sudo apt update
+        sudo apt-get install -y \
+          gcc-multilib \
+          lcov \
+          pkg-config \
+          libelf-dev
+    
+    - name: Clone and build libbpf
+      run: |
+        git clone https://github.com/libbpf/libbpf.git
+        cd libbpf
+        git checkout v0.7.0
+        cd src
+        make
+        sudo LIBDIR=/lib/x86_64-linux-gnu make install
+        sudo ldconfig
+
+    - name: Get Linux Kernel version
+      run: |
+        echo "COMMIT_SHA=$(uname -r)" >> $env:GITHUB_ENV
+
+    - name: Configure CMake
+      run: |
+        cmake \
+          -B ${{github.workspace}}/build \
+          -DCMAKE_BUILD_TYPE=Release
+    
+    - name: Build
+      run: |
+        cmake --build ${{github.workspace}}/build --config Release -- -j $(nproc)
+
+    - name: Create results directory
+      run: |
+        mkdir -p ${{github.workspace}}/results
+
+    - name: Create commit_sha.txt - Ubuntu-22.04
+      run: |
+        echo ${{env.COMMIT_SHA}} >> ${{github.workspace}}/results/commit_sha.txt
+
+    - name: Run tests
+      working-directory: ${{github.workspace}}/build/bin
+      run: |
+        sudo ./bpf_performance_runner -i tests.yml -r | tee ${{github.workspace}}/results/jit-ubuntu-40.04-Release.csv
+        exit ${PIPESTATUS[0]}
+
+    - name: Upload results
+      uses: actions/upload-artifact@82c141cc518b40d92cc801eee768e7aafc9c2fa2 # v2.3.1
+      with:
+        name: results-${{env.BUILD_TYPE}}-${{inputs.platform}}-${{inputs.option}}
+        path: |
+          ${{github.workspace}}/results/*.csv
+          ${{github.workspace}}/results/commit_sha.txt
