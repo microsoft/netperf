@@ -97,7 +97,7 @@ jobs:
       uses: actions/download-artifact@v2
       with:
         name: bpf_performance
-        path: ${{github.workspace}}
+        path: ${{github.workspace}}/bpf_performance
   
     - name: Create results directory
       run: |
@@ -108,7 +108,9 @@ jobs:
         echo ${{env.COMMIT_SHA}} >> ${{github.workspace}}/results/commit_sha.txt
 
     - name: Run tests
+      working-directory: ${{github.workspace}}/bpf_performance
       run: |
+        ldd ./bpf_performance_runner
         sudo ./bpf_performance_runner -i tests.yml -r | tee ${{github.workspace}}/results/jit-ubuntu-40.04-Release.csv
         exit ${PIPESTATUS[0]}
 
