@@ -84,6 +84,7 @@ jobs:
         path: ${{github.workspace}}/build/bin
 
   test:
+    needs: [build]
     runs-on: 
     - self-hosted
     - os-ubuntu-20.04
