@@ -4,6 +4,8 @@ This repository maintains a GitHub Action for each different test scenario, [qui
 
 ![](arch.png)
 
+## Usage
+
 When a project needs performance testing to be run, it uses the [run-workflow.ps1](../run-workflow.ps1) script to trigger the appropriate test and wait for it to complete.  The script leverages the [GitHub REST API](https://docs.github.com/en/rest) to trigger the workflow, wait for it to complete and then use the result to pass or fail the original caller.  For example:
 
 ```yaml

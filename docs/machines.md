@@ -1,6 +1,10 @@
 # Hardware
 
-## Dedicated x64 Machines
+We run our tests on a variety of hardware to ensure that our performance measurements are accurate and repeatable. We use a combination of dedicated machines in a lab environment and virtual machines in Azure. The following sections detail the hardware we use for testing.
+
+## Lab x64 Machines
+
+We have a set of dedicated machines in a lab environment for testing. Each machine hosts a single virtual machine that is used to run the tests.
 
 Based on the [Dell R650](https://i.dell.com/sites/csdocuments/Product_Docs/en/poweredge-r650-spec-sheet.pdf) Rack Server:
 
@@ -32,86 +36,19 @@ for ($i = 10; $i -lt 61; $i++) { ./WorkFlowCommandLine.exe /run /datastore:Serve
 
 Once the OS is installed, run [`setup-host.ps1`](/setup-host.ps1) on each machine to apply the host configuration.
 
-## Dedicated arm64 Machines
+## Lab ARM64 Machines
 
-TODO
+_We are in the process of procuring dedicated arm64 machines for testing._
 
-## Azure VMs
+## Azure Virtual Machines
 
-In additional to dedicated lab machines, we also leverage Azure VMs to test realistic, production environments:
+We also leverage Azure VMs to test realistic, production environments:
 
-- [Standard F4s v2](https://learn.microsoft.com/en-us/azure/virtual-machines/fsv2-series)
+- Experimental Boost4 series (not publicly available)
 - 4 vCPUs
 - 8 GB RAM
+- [Microsoft Azure Network Adapter](https://learn.microsoft.com/en-us/azure/virtual-network/accelerated-networking-mana-overview)
 - Accelerated Networking Enabled
+- 25 Gbps Max Network Bandwidth
 
-They are running on the same VNet.
-
-### For Windows Testing
-
-- Use the `netperf` resource group.
-- Create a pair of `F4sV2` VMs in the `East US` location.
-- Name them `f4-windows-XX` where `XX` is replaced with the next (zero-prefixed) machine number.
-- Attach it to the existing vnet, `netperf-secnetperf-win-client-vnet`.
-- Use the username ('secnetperf') and password ('************').
-- Disable Secure Boot on the VMs.
-
-### For Linux Testing
-
-TLDR;
-
-1. On Azure, create your 2 VMs on Ubuntu 20.04.
-
-2. Change powershell remoting to use SSH instead of WinRM.
-
-3. Link client as a Github self-hosted runner.
-
-# Set up
-
-The following instructions are required to set up each machine in the pool.
-
-## Configuration (Windows)
-
-The following steps are required to set up each machine in the pool.
-
-```PowerShell
-$username = 'secnetperf'
-$password = '************' # Ask for the password to use
-$token = '************'    # Find at https://github.com/microsoft/netperf/settings/actions/runners/new?arch=x64&os=win
-$machine1 = '10.1.0.8'     # This is the GitHub runner machine's IP address
-$machine2 = '10.1.0.9'     # This is the peer machine's IP address
-$url = "https://raw.githubusercontent.com/microsoft/netperf/main/setup-runner-windows.ps1"
-```
-
-```PowerShell
-# Run on GitHub runner machine
-iex "& { $(irm $url) } $username $password $machine2 $token"
-```
-
-```PowerShell
-# Run on peer machine
-iex "& { $(irm $url) } $username $password $machine1"
-```
-
-## Configuration (Linux)
-
-```
-curl https://raw.githubusercontent.com/microsoft/netperf/main/setup-runner-linux.sh -o setup-runner-linux.sh
-
-# Make sure to run this script twice to properly install everything (to account for lab vs. Azure environment differences)
-
-bash setup-runner-linux.sh -i <peerip> -g <github token *do this on client only> -n <no reboot *optional>
-
-# Do this on the client only:
-
-ssh-keygen
-
-ssh-copy-id <username of peer>@<peerip>
-```
-
-## Configure IP addresses for lab linux VMs
-
-Depending on your specific linux distro, the process varies a bit.
-
-But the main idea is to use the `ip` util built in to `net-tools` to add an IP to your mellanox NIC.
-The usual command is `sudo ip addr add (address / CIDR block) dev (NIC name)`. The problem is, if you reboot, Linux will revert your IP assignments. So what you do is you can create a startup script that runs on boot leveraging `systemd` or some other service depending on your Linux distro.
+The VMs are connected by a shared virtual network.
