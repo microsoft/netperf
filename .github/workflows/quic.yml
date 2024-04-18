@@ -141,7 +141,7 @@ jobs:
 
 
   #
-  # Manage and Create temporary VMs
+  # Manage and create temporary VMs
   # NOTE: tag == env
   #
   create-azure-vms:
