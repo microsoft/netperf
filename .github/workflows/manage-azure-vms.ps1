@@ -154,7 +154,8 @@ foreach ($entry in $MatrixJson) {
     if ($entry.env -match "azure" -and $entry.os -match "windows-2022") { # TODO: Add support for windows-2025 and Linux.
         $randomTag = [System.Guid]::NewGuid().ToString()
         # limit randomTag to 13 characters
-        $randomTag = $randomTag.Substring(0, [Math]::Min(13, $randomTag.Length))
+        $randomTag = $randomTag.Substring(0, [Math]::Min(12, $randomTag.Length))
+        $randomTag = "a" += $randomTag
         $entry | Add-Member -MemberType NoteProperty -Name "runner_id" -Value $randomTag
         $AzureJson += $entry
     }
