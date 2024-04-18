@@ -146,7 +146,7 @@ jobs:
   #
   create-azure-vms:
     name: Manage and Create Temporary VMs
-    uses: microsoft/netperf/.github/workflows/create-azure-vms.yml@jackhe/robust-vms
+    uses: microsoft/netperf/.github/workflows/create-azure-vms.yml@main
     with:
       matrix_filename: 'quic_matrix.json'
       workflowId: ${{ github.run_id }}
@@ -236,7 +236,6 @@ jobs:
   #
   # Post Processing Jobs
   #
-
   generate-summary:
     name: Results
     needs: [run-secnetperf]
