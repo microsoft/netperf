@@ -170,7 +170,7 @@ jobs:
         include: ${{fromJson(needs.create-azure-vms.outputs.full-matrix)}}
     runs-on:
     - self-hosted
-    - ${{ matrix.env }}
+    - ${{ matrix.runner_id || matrix.env }} # try assigning to auto-generated runner id. If it fails, assign to env.
     - os-${{ matrix.os }}
     - ${{ matrix.arch }}
     steps:

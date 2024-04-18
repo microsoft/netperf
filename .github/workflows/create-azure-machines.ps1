@@ -236,6 +236,11 @@ foreach ($entry in $AzureMatrixJson) {
             Write-Host "[$(Get-Date)] Reassigning $MissingTag to $ReplacementTag"
             $entry.runner_id = $ReplacementTag
             foreach ($row in $FullMatrixJson) {
+                $propertyToCheck = "runner_id"
+                $propertyExists = $row | Get-Member -MemberType NoteProperty -Name $propertyToCheck
+                if ($propertyExists -eq $null) {
+                    continue
+                }
                 if ($row.runner_id -eq $MissingTag) {
                     $row.runner_id = $ReplacementTag
                 }
