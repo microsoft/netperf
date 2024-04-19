@@ -90,9 +90,8 @@ jobs:
     runs-on: 
     - self-hosted
     - os-ubuntu-20.04
-    - X64
+    - x64
     - azure
-    - Linux
 
     steps:
     - name: Download artifacts
@@ -100,7 +99,11 @@ jobs:
       with:
         name: bpf_performance
         path: ${{github.workspace}}/bpf_performance
-  
+
+      - name: Setup
+      run: |
+        sudo apt update
+        sudo apt-get install -y gcc-multilib
     - name: Create results directory
       run: |
         mkdir -p ${{github.workspace}}/results
