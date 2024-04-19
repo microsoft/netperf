@@ -100,10 +100,11 @@ jobs:
         name: bpf_performance
         path: ${{github.workspace}}/bpf_performance
 
-      - name: Setup
+    - name: Setup
       run: |
         sudo apt update
         sudo apt-get install -y gcc-multilib
+
     - name: Create results directory
       run: |
         mkdir -p ${{github.workspace}}/results
