@@ -26,7 +26,7 @@ jobs:
       matrix: ${{ steps.filter.outputs.matrix }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - id: filter
         run: echo "::set-output name=matrix::$(jq -c '.' ./.github/workflows/matrix.json)"
 

@@ -77,7 +77,7 @@ jobs:
     if: ${{ always() }}
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
     - name: Install Latest Az PowerShell Module
       shell: pwsh
       run: |
