@@ -117,7 +117,7 @@ jobs:
         Add-MpPreference -ExclusionPath ${{ github.workspace }}
 
     - name: Download ebpf-for-windows
-      uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
+      uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
       with:
         name: "ebpf-for-windows - MSI installer (none_NativeOnlyRelease)"
         path: ${{ github.workspace }}\bpf_performance
@@ -168,7 +168,7 @@ jobs:
         Expand-Archive -Path bpf_performance.zip -DestinationPath .
 
     - name: Download cts-traffic
-      uses: actions/download-artifact@eaceaf801fd36c7dee90939fad912460b18a1ffe
+      uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
       with:
         name: "cts-traffic Release"
         path: ${{ github.workspace }}\cts-traffic
