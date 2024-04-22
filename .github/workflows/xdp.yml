@@ -76,7 +76,7 @@ jobs:
         ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
         sparse-checkout: tools
     - name: Download Artifacts
-      uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+      uses: actions/download-artifact@9c19ed7fe5d278cd354c7dfd5d3b88589c7e2395
       with:
         name: bin_Release_${{ matrix.vec.arch }} # Build always comes from 2022 for now
         path: artifacts/bin
