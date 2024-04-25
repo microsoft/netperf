@@ -31,6 +31,9 @@ on:
     types: [run-ebpf]
       # Args: { guid, sha, ref, pr }
 
+env:
+  XDP_VERSION: 'v1.1.0%2B3b7480bf'
+
 concurrency:
   group: ebpf-${{ github.event.client_payload.pr || github.event.client_payload.sha || inputs.ref || github.event.pull_request.number || 'main' }}
   cancel-in-progress: true
@@ -133,10 +136,10 @@ jobs:
       working-directory: ${{ github.workspace }}\xdp
       run: |
         $ProgressPreference = 'SilentlyContinue'
-        $packageUrl = "https://github.com/microsoft/xdp-for-windows/releases/download/v1.1.0%2B3b7480bf/xdp-for-windows.1.1.0.msi"
+        $packageUrl = "https://github.com/microsoft/xdp-for-windows/releases/download/${{env.XDP_VERSION}}/xdp-for-windows.1.1.0.msi"
         Invoke-WebRequest -Uri $packageUrl -OutFile xdp-for-windows.1.1.0.msi
         dir *.msi
-        $packageUrl = "https://github.com/microsoft/xdp-for-windows/releases/download/v1.1.0%2B3b7480bf/xdp-devkit-x64-1.1.0.zip"
+        $packageUrl = "https://github.com/microsoft/xdp-for-windows/releases/download/${{env.XDP_VERSION}}/xdp-devkit-x64-1.1.0.zip"
         Invoke-WebRequest -Uri $packageUrl -OutFile xdp-devkit-x64-1.1.0.zip
         dir *.zip
         Expand-Archive -Path "xdp-devkit-x64-1.1.0.zip" -DestinationPath .
