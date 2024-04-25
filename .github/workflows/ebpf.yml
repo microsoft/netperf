@@ -38,9 +38,9 @@ concurrency:
   group: ebpf-${{ github.event.client_payload.pr || github.event.client_payload.sha || inputs.ref || github.event.pull_request.number || 'main' }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-  security-events: write # Required by codeql task
+# Need to determine why this is required.
+permissions: write-all
+ 
 
 jobs:
   # For automated identification of the workflow.
@@ -78,9 +78,27 @@ jobs:
       configurations: '["Release"]'
       ref: 'master'
 
+  #
+  # Manage and create temporary VMs
+  # NOTE: tag == env
+  #
+  create-azure-vms:
+    name: Manage and Create Temporary VMs
+    uses: microsoft/netperf/.github/workflows/create-azure-vms.yml@main
+    with:
+      matrix_filename: 'ebpf_matrix.json'
+      workflowId: ${{ github.run_id }}
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+      VM_PASSWORD: ${{ secrets.VM_PASSWORD }}
+
+
   test:
     name: Test Windows eBPF Performance
-    needs: [build, build_cts_traffic]
+    needs: [build, build_cts_traffic, create-azure-vms]
     strategy:
       fail-fast: false
       matrix:
@@ -91,9 +109,9 @@ jobs:
         ]
     runs-on:
     - self-hosted
-    - ${{ matrix.vec.env }}
-    - os-windows-${{ matrix.vec.os }}
-    - ${{ matrix.vec.arch }}
+    - ${{ matrix.runner_id || matrix.env }} # Use auto-generated 'runner id' if present, otherwise assign to 'env'.
+    - os-${{ matrix.os }}
+    - ${{ matrix.arch }}
 
     steps:
     - name: Setup workspace

@@ -19,7 +19,7 @@ on:
     branches:
     - main
     paths:
-    - .github/workflows/ebpf.yml
+    - .github/workflows/ebpf_linux.yml
 
   repository_dispatch:
     types: [run-ebpf-linux]
