@@ -174,6 +174,8 @@ jobs:
 
     - name: Download bpf_performance repository artifacts
       working-directory: ${{ github.workspace }}\bpf_performance
+      env:
+        GH_TOKEN: ${{ github.token }}
       run: |
         $releases = (gh release -R microsoft/bpf_performance list --json name,createdAt | ConvertFrom-Json)
         $release = ($releases | Sort-Object -Property createdAt -Descending)[0]
