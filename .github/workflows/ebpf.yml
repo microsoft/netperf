@@ -119,6 +119,15 @@ jobs:
         Start-MpScan -ScanType QuickScan
         Add-MpPreference -ExclusionPath ${{ github.workspace }}
 
+    - name: Download GH CLI if not installed
+      run: |
+        if (-not (Test-Path -Path "C:\Program Files\GitHub CLI\gh.exe")) {
+        $url = "https://github.com/cli/cli/releases/download/v2.48.0/gh_2.48.0_windows_amd64.msi"
+        Invoke-WebRequest -Uri $url -OutFile "gh.msi"
+        Start-Process -FilePath "msiexec" -ArgumentList "/i gh.msi /quiet /qn /norestart /log install.log" -Wait -NoNewWindow
+        }
+        echo "C:\Program Files\GitHub CLI" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
     - name: Download ebpf-for-windows
       uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
       with:
@@ -135,6 +144,7 @@ jobs:
     - name: Download xdp-for-windows
       working-directory: ${{ github.workspace }}\xdp
       run: |
+        
         $ProgressPreference = 'SilentlyContinue'
         $releases = (gh release -R microsoft/xdp-for-windows list --json name,isPrerelease,createdAt | ConvertFrom-Json)
         $release = ($releases | Where-Object -Property isPrerelease -eq true | Sort-Object -Property createdAt -Descending)[0]
