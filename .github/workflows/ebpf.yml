@@ -31,6 +31,9 @@ on:
     types: [run-ebpf]
       # Args: { guid, sha, ref, pr }
 
+env:
+  XDP_VERSION: '1.1.0'
+
 concurrency:
   group: ebpf-${{ github.event.client_payload.pr || github.event.client_payload.sha || inputs.ref || github.event.pull_request.number || 'main' }}
   cancel-in-progress: true
@@ -116,6 +119,17 @@ jobs:
         Start-MpScan -ScanType QuickScan
         Add-MpPreference -ExclusionPath ${{ github.workspace }}
 
+    - name: Download GH CLI if not installed
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        if (-not (Test-Path -Path "C:\Program Files\GitHub CLI\gh.exe")) {
+        $url = "https://github.com/cli/cli/releases/download/v2.48.0/gh_2.48.0_windows_amd64.msi"
+        Invoke-WebRequest -Uri $url -OutFile "gh.msi"
+        Start-Process -FilePath "msiexec" -ArgumentList "/i gh.msi /quiet /qn /norestart /log install.log" -Wait -NoNewWindow
+        }
+        echo "C:\Program Files\GitHub CLI" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
     - name: Download ebpf-for-windows
       uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
       with:
@@ -130,16 +144,17 @@ jobs:
         echo "C:\Program Files\ebpf-for-windows" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
     - name: Download xdp-for-windows
+      env:
+        GH_TOKEN: ${{ github.token }}
       working-directory: ${{ github.workspace }}\xdp
       run: |
         $ProgressPreference = 'SilentlyContinue'
-        $packageUrl = "https://github.com/microsoft/xdp-for-windows/releases/download/v1.1.0%2B3b7480bf/xdp-for-windows.1.1.0.msi"
-        Invoke-WebRequest -Uri $packageUrl -OutFile xdp-for-windows.1.1.0.msi
+        $releases = (gh release -R microsoft/xdp-for-windows list --json name,isPrerelease,createdAt | ConvertFrom-Json)
+        $release = ($releases | Where-Object -Property isPrerelease -eq true | Sort-Object -Property createdAt -Descending)[0]
+        gh release download -R microsoft/xdp-for-windows $release.name
         dir *.msi
-        $packageUrl = "https://github.com/microsoft/xdp-for-windows/releases/download/v1.1.0%2B3b7480bf/xdp-devkit-x64-1.1.0.zip"
-        Invoke-WebRequest -Uri $packageUrl -OutFile xdp-devkit-x64-1.1.0.zip
         dir *.zip
-        Expand-Archive -Path "xdp-devkit-x64-1.1.0.zip" -DestinationPath .
+        Expand-Archive -Path "xdp-devkit-x64-${{env.XDP_VERSION}}.zip" -DestinationPath .
 
     - name: Install xdp-for-windows
       working-directory: ${{ github.workspace }}\xdp
@@ -149,7 +164,7 @@ jobs:
           Write-Output "Installing XDP for Windows"
           CertUtil.exe -addstore Root bin\CoreNetSignRoot.cer
           CertUtil.exe -addstore TrustedPublisher bin\CoreNetSignRoot.cer
-          $process = Start-Process msiexec.exe -Wait -ArgumentList "/i xdp-for-windows.1.1.0.msi INSTALLFOLDER=$installPath /qn" -PassThru
+          $process = Start-Process msiexec.exe -Wait -ArgumentList "/i xdp-for-windows.${{env.XDP_VERSION}}.msi INSTALLFOLDER=$installPath /qn" -PassThru
           if ($process.ExitCode -ne 0) { exit $process.ExitCode }
           Write-Output "XDP for Windows installed"
           sc.exe query xdp
@@ -159,13 +174,17 @@ jobs:
 
     - name: Download bpf_performance repository artifacts
       working-directory: ${{ github.workspace }}\bpf_performance
+      env:
+        GH_TOKEN: ${{ github.token }}
       run: |
-        Invoke-WebRequest https://github.com/microsoft/bpf_performance/releases/download/v0.0.9/build-Release-windows-2022.zip -OutFile bpf_performance.zip
+        $releases = (gh release -R microsoft/bpf_performance list --json name,createdAt | ConvertFrom-Json)
+        $release = ($releases | Sort-Object -Property createdAt -Descending)[0]
+        gh release download -R microsoft/bpf_performance $release.name
 
     - name: Unzip bpf_performance repository artifacts
       working-directory: ${{ github.workspace }}\bpf_performance
       run: |
-        Expand-Archive -Path bpf_performance.zip -DestinationPath .
+        Expand-Archive -Path build-Release-windows-2022.zip -DestinationPath .
 
     - name: Download cts-traffic
       uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
