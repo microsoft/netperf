@@ -32,7 +32,7 @@ on:
       # Args: { guid, sha, ref, pr }
 
 env:
-  XDP_VERSION: 'v1.1.0%2B3b7480bf'
+  XDP_VERSION: '1.1.0'
 
 concurrency:
   group: ebpf-${{ github.event.client_payload.pr || github.event.client_payload.sha || inputs.ref || github.event.pull_request.number || 'main' }}
@@ -136,13 +136,12 @@ jobs:
       working-directory: ${{ github.workspace }}\xdp
       run: |
         $ProgressPreference = 'SilentlyContinue'
-        $packageUrl = "https://github.com/microsoft/xdp-for-windows/releases/download/${{env.XDP_VERSION}}/xdp-for-windows.1.1.0.msi"
-        Invoke-WebRequest -Uri $packageUrl -OutFile xdp-for-windows.1.1.0.msi
+        $releases = (gh release -R microsoft/xdp-for-windows list --json name,isPrerelease,createdAt | ConvertFrom-Json)
+        $release = ($releases | Where-Object -Property isPrerelease -eq true | Sort-Object -Property createdAt -Descending)[0]
+        gh release download -R microsoft/xdp-for-windows $release.name
         dir *.msi
-        $packageUrl = "https://github.com/microsoft/xdp-for-windows/releases/download/${{env.XDP_VERSION}}/xdp-devkit-x64-1.1.0.zip"
-        Invoke-WebRequest -Uri $packageUrl -OutFile xdp-devkit-x64-1.1.0.zip
         dir *.zip
-        Expand-Archive -Path "xdp-devkit-x64-1.1.0.zip" -DestinationPath .
+        Expand-Archive -Path "xdp-devkit-x64-${{env.XDP_VERSION}}.zip" -DestinationPath .
 
     - name: Install xdp-for-windows
       working-directory: ${{ github.workspace }}\xdp
@@ -152,7 +151,7 @@ jobs:
           Write-Output "Installing XDP for Windows"
           CertUtil.exe -addstore Root bin\CoreNetSignRoot.cer
           CertUtil.exe -addstore TrustedPublisher bin\CoreNetSignRoot.cer
-          $process = Start-Process msiexec.exe -Wait -ArgumentList "/i xdp-for-windows.1.1.0.msi INSTALLFOLDER=$installPath /qn" -PassThru
+          $process = Start-Process msiexec.exe -Wait -ArgumentList "/i xdp-for-windows.${{env.XDP_VERSION}}.msi INSTALLFOLDER=$installPath /qn" -PassThru
           if ($process.ExitCode -ne 0) { exit $process.ExitCode }
           Write-Output "XDP for Windows installed"
           sc.exe query xdp
