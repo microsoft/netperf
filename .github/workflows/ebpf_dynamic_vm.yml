@@ -101,11 +101,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        vec: [
-          { env: "azure", os: "2022", arch: "x64" },
-          #{ env: "azure", os: "2025", arch: "x64" }, # F4 based VMS are being deprecated by netperf team.
-          { env: "lab",   os: "2022", arch: "x64" },
-        ]
+        include: ${{fromJson(needs.create-azure-vms.outputs.full-matrix)}}
     runs-on:
     - self-hosted
     - ${{ matrix.runner_id || matrix.env }} # Use auto-generated 'runner id' if present, otherwise assign to 'env'.
@@ -236,7 +232,7 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v2
       with:
-        name: cts_traffic_baseline_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        name: cts_traffic_baseline_${{ matrix.env }}_${{ matrix.os }}_${{ matrix.arch }}
         path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv 
 
     - name: Attach xdp baseline program to interface (first program in xdp.sys)
@@ -290,7 +286,7 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v2
       with:
-        name: cts_traffic_xdp_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        name: cts_traffic_xdp_${{ matrix.env }}_${{ matrix.os }}_${{ matrix.arch }}
         path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv 
 
     - name: Run BPF performance tests
@@ -310,7 +306,7 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v2
       with:
-        name: bpf_performance_native_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        name: bpf_performance_native_${{ matrix.env }}_${{ matrix.os }}_${{ matrix.arch }}
         path: ${{ github.workspace }}\bpf_performance\bpf_performance_native.csv
 
     - name: Merge results
@@ -328,14 +324,14 @@ jobs:
       if: always()
       uses: actions/upload-artifact@v2
       with:
-        name: ebpf_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        name: ebpf_${{ matrix.env }}_${{ matrix.os }}_${{ matrix.arch }}
         path: ${{ github.workspace }}\bpf_performance\ebpf.csv
 
     - name: Upload CPU profile
       if: ${{ inputs.profile == true }}
       uses: actions/upload-artifact@v2
       with:
-        name: CPU_Profile_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        name: CPU_Profile_${{ matrix.env }}_${{ matrix.os }}_${{ matrix.arch }}
         path: ETL
 
     - name: Cleanup workspace
