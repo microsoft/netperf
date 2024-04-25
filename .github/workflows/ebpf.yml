@@ -120,6 +120,8 @@ jobs:
         Add-MpPreference -ExclusionPath ${{ github.workspace }}
 
     - name: Download GH CLI if not installed
+      env:
+        GH_TOKEN: ${{ github.token }}
       run: |
         if (-not (Test-Path -Path "C:\Program Files\GitHub CLI\gh.exe")) {
         $url = "https://github.com/cli/cli/releases/download/v2.48.0/gh_2.48.0_windows_amd64.msi"
@@ -142,9 +144,10 @@ jobs:
         echo "C:\Program Files\ebpf-for-windows" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
     - name: Download xdp-for-windows
+      env:
+        GH_TOKEN: ${{ github.token }}
       working-directory: ${{ github.workspace }}\xdp
       run: |
-        
         $ProgressPreference = 'SilentlyContinue'
         $releases = (gh release -R microsoft/xdp-for-windows list --json name,isPrerelease,createdAt | ConvertFrom-Json)
         $release = ($releases | Where-Object -Property isPrerelease -eq true | Sort-Object -Property createdAt -Descending)[0]
