@@ -162,12 +162,14 @@ jobs:
     - name: Download bpf_performance repository artifacts
       working-directory: ${{ github.workspace }}\bpf_performance
       run: |
-        Invoke-WebRequest https://github.com/microsoft/bpf_performance/releases/download/v0.0.9/build-Release-windows-2022.zip -OutFile bpf_performance.zip
+        $releases = (gh release -R microsoft/bpf_performance list --json name,createdAt | ConvertFrom-Json)
+        $release = ($releases | Sort-Object -Property createdAt -Descending)[0]
+        gh release download -R microsoft/bpf_performance $release.name
 
     - name: Unzip bpf_performance repository artifacts
       working-directory: ${{ github.workspace }}\bpf_performance
       run: |
-        Expand-Archive -Path bpf_performance.zip -DestinationPath .
+        Expand-Archive -Path build-Release-windows-2022.zip -DestinationPath .
 
     - name: Download cts-traffic
       uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
