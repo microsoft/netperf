@@ -4,7 +4,7 @@
 # This workflow will download the latest ebpf-for-windows MSI installer and run
 # the BPF performance tests. The results will be uploaded as an artifact.
 
-name: ebpf-for-windows
+name: ebpf-for-windows-dynamic
 
 on:
   # Permit manual runs of the workflow.
@@ -28,14 +28,14 @@ on:
     - .github/workflows/ebpf_dynamic.yml
 
   repository_dispatch:
-    types: [run-ebpf]
+    types: [run-ebpf-dynamic]
       # Args: { guid, sha, ref, pr }
 
 env:
   XDP_VERSION: '1.1.0'
 
 concurrency:
-  group: ebpf-${{ github.event.client_payload.pr || github.event.client_payload.sha || inputs.ref || github.event.pull_request.number || 'main' }}
+  group: ebpf-dynamic-${{ github.event.client_payload.pr || github.event.client_payload.sha || inputs.ref || github.event.pull_request.number || 'main' }}
   cancel-in-progress: true
 
 # Need to determine why this is required.
