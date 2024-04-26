@@ -19,7 +19,7 @@ import AppWebsiteVisits from '../app-website-visits';
 
 // ----------------------------------------------------------------------
 function GraphView(props) {
-  const { title, subheader, series, labels, map } = props;
+  const { title, subheader, series, labels, map, options } = props;
   return (
 
         <Grid xs={12} md={6} lg={12}>
@@ -29,6 +29,7 @@ function GraphView(props) {
             chart={{
               labels,
               series,
+              options
             }}
             map={map}
           />
@@ -42,6 +43,7 @@ GraphView.propTypes = {
   series: PropTypes.array.isRequired,
   labels: PropTypes.array.isRequired,
   map: PropTypes.func,
+  options: PropTypes.object
 }
 
 export default GraphView;

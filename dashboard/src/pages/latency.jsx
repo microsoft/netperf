@@ -80,6 +80,7 @@ export default function LatencyPage() {
     rep = data[`${windowsOs}-${env}-iocp-schannel`][`${testType}-tcp`]['data'].slice().reverse();
     linuxRep = data[`${linuxOs}-${env}-epoll-openssl`][`${testType}-tcp`]['data'].slice().reverse();
     indices = Array.from({ length: Math.max(rep.length, linuxRep.length) }, (_, i) => i);
+    indices.reverse();
 
     tcpiocp = data[`${windowsOs}-${env}-iocp-schannel`][`${testType}-tcp`]['data'].slice().reverse();
     quiciocp = data[`${windowsOs}-${env}-iocp-schannel`][`${testType}-quic`]['data'].slice().reverse();
@@ -145,9 +146,20 @@ export default function LatencyPage() {
             fill: 'solid',
             data: quicwsk.map((x) => x[5 + percentile]),
           },
-        ]} />
+        ]}
+
+        options = {{
+          xaxis: {
+            tickplacement: 'on',
+          },
+          markers: {
+            size: 5,
+          }
+        }}
+
+        />
   }
-  
+
   const handleChange = (event) => {
     setEnv(event.target.value);
   };
@@ -271,7 +283,7 @@ export default function LatencyPage() {
               onChange={handleChangeCommit}
               defaultValue={0}
             >
-              {rep.slice().reverse().map((val, idx) => <MenuItem value={idx}>{rep.length - idx - 1} ----- {val[0]}</MenuItem>)}
+              {rep.slice().reverse().map((val, idx) => <MenuItem value={idx}>Commit {idx}: {val[0]}</MenuItem>)}
             </Select>
           </FormControl>
         </Box>

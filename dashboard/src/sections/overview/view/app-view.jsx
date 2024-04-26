@@ -197,12 +197,11 @@ export default function AppView() {
 
   return (
     <Container maxWidth="xl">
+      <div style={{display: 'flex'}}>
       <Typography variant="h3" sx={{ mb: 5 }}>
         Network Performance Overview
       </Typography>
-      <Typography variant="h5" sx={{ mb: 5 }}>
-        Data based on commit: <a href={`https://github.com/microsoft/msquic/commit/${commitHash}`}>{commitHash}</a>
-      </Typography>
+      </div>
       <div style={{display: 'flex'}}>
       <Box sx={{ }}>
         <FormControl>
@@ -253,6 +252,10 @@ export default function AppView() {
           </Select>
         </FormControl>
       </Box>
+      {/* <Typography variant="h5" sx={{ mb: 5 }}>
+        Data based on commit: <a href={`https://github.com/microsoft/msquic/commit/${commitHash}`}>{commitHash}</a>
+      </Typography> */}
+      <p style={{marginLeft: '10px'}}>Data based on <a href={`https://github.com/microsoft/msquic/commit/${commitHash}`}>commit</a></p>
       </div>
       <br />
 
