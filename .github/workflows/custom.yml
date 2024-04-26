@@ -48,7 +48,7 @@ jobs:
             Write-Output "Checking for ip address..."
             try {
               $Response = Invoke-WebRequest -Uri $uri
-              if ($Response.StatusCode -neq 200) {
+              if (!($Response.StatusCode -eq 200)) {
                 throw "Failed to get ip address. Status code: $($Response.StatusCode)"
               }
               $ipAddress = $Response.Content
