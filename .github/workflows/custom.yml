@@ -49,19 +49,35 @@ jobs:
 
       - name: (Client) Poll for an ip address uploaded by the server
         if: ${{ matrix.role == 'client' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Ensure this is set in your repository's secrets
         run: |
           $repo = "${{ github.repository }}"
           $runId = "${{ github.run_id }}"
           $found = $false
           do {
             Write-Output "Checking for artifact..."
-            $artifacts = gh artifact list --repo $repo --workflow-run-id $runId | Out-String
-            Write-Output $artifacts
-            if ($artifacts -like "*ipaddress*") {
-              Write-Output "Artifact 'ipaddress' found!"
-              $found = $true
-            } else {
-              Write-Output "Artifact 'ipaddress' not found. Waiting for 30 seconds..."
+            $headers = @{
+              "Authorization" = "Bearer $env:GITHUB_TOKEN"
+              "Accept" = "application/vnd.github.v3+json"
+            }
+            $uri = "https://api.github.com/repos/$repo/actions/runs/$runId/artifacts"
+            try {
+              $response = Invoke-WebRequest -Uri $uri -Method Get -Headers $headers -UseBasicParsing
+              $artifacts = ($response.Content | ConvertFrom-Json).artifacts
+              $artifactNames = $artifacts | ForEach-Object { $_.name }
+              Write-Output $artifactNames
+
+              if ($artifactNames -contains "ipaddress") {
+                Write-Output "Artifact 'ipaddress' found!"
+                $found = $true
+              } else {
+                Write-Output "Artifact 'ipaddress' not found. Waiting for 30 seconds..."
+                Start-Sleep -Seconds 30
+              }
+            }
+            catch {
+              Write-Output "Error accessing GitHub API: $_"
               Start-Sleep -Seconds 30
             }
           } while (-not $found)
