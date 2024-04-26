@@ -30,20 +30,24 @@ jobs:
         run: Get-NetIpAddress -AddressFamily IPv4
         shell: pwsh
 
-      - name: Preparing to upload ip address as an .txt artifact
+      - name: Install Github CLI
+        run: winget install --id GitHub.cli
+        shell: pwsh
+
+      - name: (Server) Preparing to upload ip address as an .txt artifact
         if: ${{ matrix.role == 'server' }}
         run: |
           (Get-NetIpAddress -AddressFamily IPv4).IpAddress | Out-File -FilePath ipaddress.txt
         shell: pwsh
 
-      - name: Upload ip address as an artifact
+      - name: (Server) Upload ip address as an artifact
         if: ${{ matrix.role == 'server' }}
         uses: actions/upload-artifact@v2
         with:
           name: ipaddress
           path: ipaddress.txt
 
-      - name: Poll for an ip address uploaded by the server
+      - name: (Client) Poll for an ip address uploaded by the server
         if: ${{ matrix.role == 'client' }}
         run: |
           $repo = "${{ github.repository }}"
@@ -63,31 +67,31 @@ jobs:
           } while (-not $found)
         shell: pwsh
 
-      - name: Download ip address artifact
+      - name: (Client) Download ip address artifact
         if: ${{ matrix.role == 'client' }}
         uses: actions/download-artifact@v2
         with:
           name: ipaddress
 
-      - name: Print server ip address
+      - name: (Client) Print server ip address
         if: ${{ matrix.role == 'client' }}
         run: Get-Content ipaddress.txt
         shell: pwsh
 
-      - name: Prepare to upload ACK as an artifact
+      - name: (Client) Prepare to upload ACK as an artifact
         if: ${{ matrix.role == 'client' }}
         run: |
           "ACK" | Out-File -FilePath ack.txt
         shell: pwsh
 
-      - name: Upload ACK as an artifact
+      - name: (Client) Upload ACK as an artifact
         if: ${{ matrix.role == 'client' }}
         uses: actions/upload-artifact@v2
         with:
           name: ack
           path: ack.txt
 
-      - name: Server polls for an ACK so it can clean up
+      - name: (Server) Server polls for an ACK so it can clean up
         if: ${{ matrix.role == 'server' }}
         run: |
           $repo = "${{ github.repository }}"
