@@ -25,20 +25,23 @@ jobs:
       - name: Print Role
         run: Write-Host "Role; ${{ matrix.role }}"
         shell: pwsh
+
       - name: Print networking information
         run: Get-NetIpAddress -AddressFamily IPv4
         shell: pwsh
+
       - name: Preparing to upload ip address as an .txt artifact
         if: ${{ matrix.role == 'server' }}
         run: |
           (Get-NetIpAddress -AddressFamily IPv4).IpAddress | Out-File -FilePath ipaddress.txt
+
       - name: Upload ip address as an artifact
         if: ${{ matrix.role == 'server' }}
         uses: actions/upload-artifact@v2
         with:
           name: ipaddress
           path: ipaddress.txt
-        shell: pwsh
+
       - name: Poll for an ip address uploaded by the server
         if: ${{ matrix.role == 'client' }}
         run: |
@@ -58,20 +61,24 @@ jobs:
             }
           } while (-not $found)
         shell: pwsh
+
       - name: Download ip address artifact
         if: ${{ matrix.role == 'client' }}
         uses: actions/download-artifact@v2
         with:
           name: ipaddress
         shell: pwsh
+
       - name: Print server ip address
         if: ${{ matrix.role == 'client' }}
         run: Get-Content ipaddress.txt
         shell: pwsh
+
       - name: Prepare to upload ACK as an artifact
         if: ${{ matrix.role == 'client' }}
         run: |
           "ACK" | Out-File -FilePath ack.txt
+
       - name: Upload ACK as an artifact
         if: ${{ matrix.role == 'client' }}
         uses: actions/upload-artifact@v2
@@ -79,6 +86,7 @@ jobs:
           name: ack
           path: ack.txt
         shell: pwsh
+        
       - name: Server polls for an ACK so it can clean up
         if: ${{ matrix.role == 'server' }}
         run: |
