@@ -20,7 +20,13 @@ jobs:
 # Cleanup temporary VMs
 #
   testjob:
+    matrix:
+      role: ["client", "server"]
     runs-on: [self-hosted, 1ES.Pool=netperf-aztestpool]
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
+      - name: Print Role
+        run: Write-Host "Role; ${{ matrix.role }}"
+        shell: pwsh
+      - name: Print networking information
+        run: Get-NetIpAddress -AddressFamily IPv4
+        shell: pwsh
