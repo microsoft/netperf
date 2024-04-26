@@ -16,9 +16,6 @@ on:
 permissions: write-all
 
 jobs:
-#
-# Cleanup temporary VMs
-#
   testjob:
     strategy:
       matrix:
@@ -31,3 +28,50 @@ jobs:
       - name: Print networking information
         run: Get-NetIpAddress -AddressFamily IPv4
         shell: pwsh
+      - name: Upload ip address as an .txt artifact
+        if: ${{ matrix.role == 'server' }}
+        run: |
+          Get-NetIpAddress -AddressFamily IPv4 | Out-File -FilePath $env:GITHUB_WORKSPACE\ipaddress.txt
+          Write-Host "##vso[task.uploadfile]$env:GITHUB_WORKSPACE\ipaddress.txt"
+        shell: pwsh
+      - name: Poll for an ip address uploaded by the server
+        if: ${{ matrix.role == 'client' }}
+        run: |
+          $ipaddress = ""
+          $attempts = 0
+          while ($ipaddress -eq "" -and $attempts -lt 10) {
+            $ipaddress = Get-Content $env:GITHUB_WORKSPACE\ipaddress.txt
+            if ($ipaddress -eq "") {
+              Write-Host "Waiting for the server to upload the ip address..."
+              Start-Sleep -Seconds 10
+              $attempts++
+            }
+          }
+          if ($ipaddress -eq "") {
+            Write-Error "Server did not upload the ip address"
+            exit 1
+          }
+          Write-Host "Server ip address: $ipaddress"
+          # Client uploads an ACK so the server can proceed to clean up
+          Write-Host "Run your test code and stuff here..."
+          Write-Host "ACK" | Out-File -FilePath $env:GITHUB_WORKSPACE\ack.txt
+          Write-Host "Uploaded ACK to server. Client cleaning up."
+        shell: pwsh
+      - name: Server polls for an ACK so it can cleanup
+        if: ${{ matrix.role == 'server' }}
+        run: |
+          $ack = ""
+          $attempts = 0
+          while ($ack -ne "ACK" -and $attempts -lt 10) {
+            $ack = Get-Content $env:GITHUB_WORKSPACE\ack.txt
+            if ($ack -ne "ACK") {
+              Write-Host "Waiting for the client to upload the ACK..."
+              Start-Sleep -Seconds 10
+              $attempts++
+            }
+          }
+          if ($ack -ne "ACK") {
+            Write-Error "Client did not upload the ACK"
+            exit 1
+          }
+          Write-Host "Client uploaded the ACK. Server cleaning up."
