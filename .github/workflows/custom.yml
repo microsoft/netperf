@@ -49,11 +49,11 @@ jobs:
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
-          $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_ipaddress" -Headers $headers
+          $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_ipaddress"
           do {
             Write-Output "Checking for ip address..."
             try {
-              $Response = Invoke-WebRequest -Uri $uri
+              $Response = Invoke-WebRequest -Uri $uri -Headers $headers
               if (!($Response.StatusCode -eq 200)) {
                 throw "Failed to get ip address. Status code: $($Response.StatusCode)"
               }
@@ -87,11 +87,11 @@ jobs:
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
-          $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_ack" -Headers $headers
+          $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_ack"
           do {
             Write-Output "Checking for ACK..."
             try {
-              $Response = Invoke-WebRequest -Uri $uri
+              $Response = Invoke-WebRequest -Uri $uri -Headers $headers
               if (!($Response.StatusCode -eq 200)) {
                 throw "Failed to get ACK. Status code: $($Response.StatusCode)"
               }
