@@ -200,7 +200,7 @@ jobs:
         dir .
         $profile = 0
         if ("${{inputs.profile}}" -eq "true") { $profile = 1 }
-        $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
+        $url = "https://raw.githubusercontent.com/Alan-Jowett/bpf_performance/update_cts_settings/scripts/two-machine-perf.ps1"
         iex "& { $(irm $url) } -CpuProfile $profile"
         if ($Profile) { Move-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl -NewName "${{ github.workspace }}\etl\cts_traffic_send_baseline.etl"}
         if ($Profile) { Rename-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl -NewName "${{ github.workspace }}\etl\cts_traffic_recv_baseline.etl" }
@@ -245,7 +245,7 @@ jobs:
         dir .
         $profile = 0
         if ("${{inputs.profile}}" -eq "true") { $profile = 1 }
-        $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
+        $url = "https://raw.githubusercontent.com/Alan-Jowett/bpf_performance/update_cts_settings/scripts/two-machine-perf.ps1"
         iex "& { $(irm $url) } -CpuProfile $profile"
 
     - name: Copy ETL files to ETL folder
