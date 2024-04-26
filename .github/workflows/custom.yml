@@ -20,8 +20,9 @@ jobs:
 # Cleanup temporary VMs
 #
   testjob:
-    matrix:
-      role: ["client", "server"]
+    strategy:
+      matrix:
+        role: ["client", "server"]
     runs-on: [self-hosted, 1ES.Pool=netperf-aztestpool]
     steps:
       - name: Print Role
