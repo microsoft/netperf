@@ -80,7 +80,7 @@ jobs:
             Write-Output "Checking for ACK..."
             try {
               $Response = Invoke-WebRequest -Uri $uri
-              if ($Response.StatusCode -neq 200) {
+              if (!($Response.StatusCode -eq 200)) {
                 throw "Failed to get ACK. Status code: $($Response.StatusCode)"
               }
               $ack = $Response.Content
