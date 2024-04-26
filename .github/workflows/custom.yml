@@ -34,7 +34,7 @@ jobs:
         if: ${{ matrix.role == 'server' }}
         run: |
           $ipAddress = (Get-NetIpAddress -AddressFamily IPv4).IpAddress
-          Invoke-WebRequest -Uri https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_ipaddress&value=$ipAddress
+          Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_ipaddress&value=$ipAddress"
         shell: pwsh
 
       - name: (Client) Poll for an ip address uploaded by the server
@@ -57,7 +57,7 @@ jobs:
             }
             catch {
               Write-Output "Ip Address not found: $_"
-              Start-Sleep -Seconds 30
+              Start-Sleep -Seconds 5
             }
           } while (-not $found)
 
@@ -68,7 +68,7 @@ jobs:
       - name: (Client) Upload ACK to shared cache
         if: ${{ matrix.role == 'client' }}
         run: |
-          Invoke-WebRequest -Uri https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_ack&value=ack
+          Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_ack&value=ack"
         shell: pwsh
 
       - name: (Server) Server polls for an ACK so it can clean up
@@ -89,7 +89,7 @@ jobs:
             }
             catch {
               Write-Output "ACK not found: $_"
-              Start-Sleep -Seconds 30
+              Start-Sleep -Seconds 5
             }
           } while (-not $found)
         shell: pwsh
