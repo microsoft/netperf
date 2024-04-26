@@ -28,50 +28,73 @@ jobs:
       - name: Print networking information
         run: Get-NetIpAddress -AddressFamily IPv4
         shell: pwsh
-      - name: Upload ip address as an .txt artifact
+      - name: Preparing to upload ip address as an .txt artifact
         if: ${{ matrix.role == 'server' }}
         run: |
-          Get-NetIpAddress -AddressFamily IPv4 | Out-File -FilePath $env:GITHUB_WORKSPACE\ipaddress.txt
-          Write-Host "##vso[task.uploadfile]$env:GITHUB_WORKSPACE\ipaddress.txt"
+          (Get-NetIpAddress -AddressFamily IPv4).IpAddress | Out-File -FilePath ipaddress.txt
+      - name: Upload ip address as an artifact
+        if: ${{ matrix.role == 'server' }}
+        uses: actions/upload-artifact@v2
+        with:
+          name: ipaddress
+          path: ipaddress.txt
         shell: pwsh
       - name: Poll for an ip address uploaded by the server
         if: ${{ matrix.role == 'client' }}
         run: |
-          $ipaddress = ""
-          $attempts = 0
-          while ($ipaddress -eq "" -and $attempts -lt 10) {
-            $ipaddress = Get-Content $env:GITHUB_WORKSPACE\ipaddress.txt
-            if ($ipaddress -eq "") {
-              Write-Host "Waiting for the server to upload the ip address..."
-              Start-Sleep -Seconds 10
-              $attempts++
+          $repo = "${{ github.repository }}"
+          $runId = "${{ github.run_id }}"
+          $found = $false
+          do {
+            Write-Output "Checking for artifact..."
+            $artifacts = gh artifact list --repo $repo --workflow-run-id $runId | Out-String
+            Write-Output $artifacts
+            if ($artifacts -like "*ipaddress*") {
+              Write-Output "Artifact 'ipaddress' found!"
+              $found = $true
+            } else {
+              Write-Output "Artifact 'ipaddress' not found. Waiting for 30 seconds..."
+              Start-Sleep -Seconds 30
             }
-          }
-          if ($ipaddress -eq "") {
-            Write-Error "Server did not upload the ip address"
-            exit 1
-          }
-          Write-Host "Server ip address: $ipaddress"
-          # Client uploads an ACK so the server can proceed to clean up
-          Write-Host "Run your test code and stuff here..."
-          Write-Host "ACK" | Out-File -FilePath $env:GITHUB_WORKSPACE\ack.txt
-          Write-Host "Uploaded ACK to server. Client cleaning up."
+          } while (-not $found)
         shell: pwsh
-      - name: Server polls for an ACK so it can cleanup
+      - name: Download ip address artifact
+        if: ${{ matrix.role == 'client' }}
+        uses: actions/download-artifact@v2
+        with:
+          name: ipaddress
+        shell: pwsh
+      - name: Print server ip address
+        if: ${{ matrix.role == 'client' }}
+        run: Get-Content ipaddress.txt
+        shell: pwsh
+      - name: Prepare to upload ACK as an artifact
+        if: ${{ matrix.role == 'client' }}
+        run: |
+          "ACK" | Out-File -FilePath ack.txt
+      - name: Upload ACK as an artifact
+        if: ${{ matrix.role == 'client' }}
+        uses: actions/upload-artifact@v2
+        with:
+          name: ack
+          path: ack.txt
+        shell: pwsh
+      - name: Server polls for an ACK so it can clean up
         if: ${{ matrix.role == 'server' }}
         run: |
-          $ack = ""
-          $attempts = 0
-          while ($ack -ne "ACK" -and $attempts -lt 10) {
-            $ack = Get-Content $env:GITHUB_WORKSPACE\ack.txt
-            if ($ack -ne "ACK") {
-              Write-Host "Waiting for the client to upload the ACK..."
-              Start-Sleep -Seconds 10
-              $attempts++
+          $repo = "${{ github.repository }}"
+          $runId = "${{ github.run_id }}"
+          $found = $false
+          do {
+            Write-Output "Checking for artifact..."
+            $artifacts = gh artifact list --repo $repo --workflow-run-id $runId | Out-String
+            Write-Output $artifacts
+            if ($artifacts -like "*ack*") {
+              Write-Output "Artifact 'ack' found!"
+              $found = $true
+            } else {
+              Write-Output "Artifact 'ack' not found. Waiting for 30 seconds..."
+              Start-Sleep -Seconds 30
             }
-          }
-          if ($ack -ne "ACK") {
-            Write-Error "Client did not upload the ACK"
-            exit 1
-          }
-          Write-Host "Client uploaded the ACK. Server cleaning up."
+          } while (-not $found)
+        shell: pwsh
