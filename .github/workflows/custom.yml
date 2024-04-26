@@ -30,110 +30,65 @@ jobs:
         run: Get-NetIpAddress -AddressFamily IPv4
         shell: pwsh
 
-      - name: (Server) Preparing to upload ip address as an .txt artifact
+      - name: (Server) Upload IP address to shared cache
         if: ${{ matrix.role == 'server' }}
         run: |
-          (Get-NetIpAddress -AddressFamily IPv4).IpAddress | Out-File -FilePath ipaddress.txt
+          $ipAddress = (Get-NetIpAddress -AddressFamily IPv4).IpAddress
+          Invoke-WebRequest -Uri https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_ipaddress&value=$ipAddress
         shell: pwsh
-
-      - name: (Server) Upload ip address as an artifact
-        if: ${{ matrix.role == 'server' }}
-        uses: actions/upload-artifact@v2
-        with:
-          name: ipaddress
-          path: ipaddress.txt
 
       - name: (Client) Poll for an ip address uploaded by the server
         if: ${{ matrix.role == 'client' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Ensure this is set in your repository's secrets
         run: |
-          $repo = "${{ github.repository }}"
-          $runId = "${{ github.run_id }}"
           $found = $false
+          $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_ipaddress"
           do {
-            Write-Output "Checking for artifact..."
-            $headers = @{
-              "Authorization" = "Bearer $env:GITHUB_TOKEN"
-              "Accept" = "application/vnd.github.v3+json"
-            }
-            $uri = "https://api.github.com/repos/$repo/actions/runs/$runId/artifacts"
+            Write-Output "Checking for ip address..."
             try {
-              $response = Invoke-WebRequest -Uri $uri -Method Get -Headers $headers -UseBasicParsing
-              $artifacts = ($response.Content | ConvertFrom-Json).artifacts
-              $artifactNames = $artifacts | ForEach-Object { $_.name }
-              Write-Output $artifactNames
-
-              if ($artifactNames -contains "ipaddress") {
-                Write-Output "Artifact 'ipaddress' found!"
-                $found = $true
-              } else {
-                Write-Output "Artifact 'ipaddress' not found. Waiting for 30 seconds..."
-                Start-Sleep -Seconds 30
+              $Response = Invoke-WebRequest -Uri $uri
+              if ($Response.StatusCode -neq 200) {
+                throw "Failed to get ip address. Status code: $($Response.StatusCode)"
               }
+              $ipAddress = $Response.Content
+              Write-Output "Ip Address found: $ipAddress"
+              $found = $true
             }
             catch {
-              Write-Output "Error accessing GitHub API: $_"
+              Write-Output "Ip Address not found: $_"
               Start-Sleep -Seconds 30
             }
           } while (-not $found)
+
+          Write-Host "Try pinging the server"
+          ping $ipAddress -n 5
         shell: pwsh
 
-      - name: (Client) Download ip address artifact
-        if: ${{ matrix.role == 'client' }}
-        uses: actions/download-artifact@v2
-        with:
-          name: ipaddress
-
-      - name: (Client) Print server ip address
-        if: ${{ matrix.role == 'client' }}
-        run: Get-Content ipaddress.txt
-        shell: pwsh
-
-      - name: (Client) Prepare to upload ACK as an artifact
+      - name: (Client) Upload ACK to shared cache
         if: ${{ matrix.role == 'client' }}
         run: |
-          "ACK" | Out-File -FilePath ack.txt
+          Invoke-WebRequest -Uri https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_ack&value=ack
         shell: pwsh
-
-      - name: (Client) Upload ACK as an artifact
-        if: ${{ matrix.role == 'client' }}
-        uses: actions/upload-artifact@v2
-        with:
-          name: ack
-          path: ack.txt
 
       - name: (Server) Server polls for an ACK so it can clean up
         if: ${{ matrix.role == 'server' }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Ensure this is set in your repository's secrets
         run: |
-          $repo = "${{ github.repository }}"
-          $runId = "${{ github.run_id }}"
           $found = $false
+          $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_ack"
           do {
-            Write-Output "Checking for artifact..."
-            $headers = @{
-              "Authorization" = "Bearer $env:GITHUB_TOKEN"
-              "Accept" = "application/vnd.github.v3+json"
-            }
-            $uri = "https://api.github.com/repos/$repo/actions/runs/$runId/artifacts"
+            Write-Output "Checking for ACK..."
             try {
-              $response = Invoke-WebRequest -Uri $uri -Method Get -Headers $headers -UseBasicParsing
-              $artifacts = ($response.Content | ConvertFrom-Json).artifacts
-              $artifactNames = $artifacts | ForEach-Object { $_.name }
-              Write-Output $artifactNames
-
-              if ($artifactNames -contains "ack") {
-                Write-Output "Artifact 'ack' found!"
-                $found = $true
-              } else {
-                Write-Output "Artifact 'ack' not found. Waiting for 30 seconds..."
-                Start-Sleep -Seconds 30
+              $Response = Invoke-WebRequest -Uri $uri
+              if ($Response.StatusCode -neq 200) {
+                throw "Failed to get ACK. Status code: $($Response.StatusCode)"
               }
+              $ack = $Response.Content
+              Write-Output "ACK found: $ack"
+              $found = $true
             }
             catch {
-              Write-Output "Error accessing GitHub API: $_"
+              Write-Output "ACK not found: $_"
               Start-Sleep -Seconds 30
             }
           } while (-not $found)
