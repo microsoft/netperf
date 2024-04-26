@@ -19,24 +19,8 @@ jobs:
 #
 # Cleanup temporary VMs
 #
-  job1:
-    runs-on: ubuntu-latest
-    outputs:
-      my_output: ${{ steps.set_output.outputs.value }}
-      matrix: ${{ steps.filter.outputs.matrix }}
+  testjob:
+    runs-on: [self-hosted, 1ES.Pool=netperf-aztestpool]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
-      - id: filter
-        run: echo "::set-output name=matrix::$(jq -c '.' ./.github/workflows/matrix.json)"
-
-  job2:
-    needs: job1
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include: ${{fromJson(needs.job1.outputs.matrix)}}
-    steps:
-      - name: Use output from job1
-        run: echo "The output from job1 is ${{ matrix.io }}"
-
