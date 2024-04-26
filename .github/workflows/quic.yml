@@ -124,14 +124,29 @@ jobs:
       os: ${{ matrix.os }}
       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
-  build-unix:
-    name: Build Unix
+  build-ubuntu20.04:
+    name: Build Ubuntu-20.04
     needs: []
     strategy:
       fail-fast: false
       matrix:
         os: ['ubuntu-20.04']
         tls: [openssl] # , openssl3]
+    uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml@main
+    with:
+      os: ${{ matrix.os }}
+      tls: ${{ matrix.tls }}
+      build: -Perf
+      ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+
+  build-ubuntu22.04:
+    name: Build Ubuntu-22.04
+    needs: []
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ['ubuntu-22.04']
+        tls: [openssl3]
     uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml@main
     with:
       os: ${{ matrix.os }}
@@ -163,7 +178,7 @@ jobs:
   #
   run-secnetperf: # This would be 1 enumeration, after CTS has setup the environment with the correct OS type and version.
     name: secnetperf
-    needs: [build-unix, build-windows, build-windows-kernel, create-azure-vms]
+    needs: [build-ubuntu20.04, build-ubuntu22.04, build-windows, build-windows-kernel, create-azure-vms]
     strategy:
       fail-fast: false
       matrix:
