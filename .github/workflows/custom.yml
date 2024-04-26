@@ -68,7 +68,6 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           name: ipaddress
-        shell: pwsh
 
       - name: Print server ip address
         if: ${{ matrix.role == 'client' }}
