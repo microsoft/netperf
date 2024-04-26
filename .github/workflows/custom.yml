@@ -34,6 +34,7 @@ jobs:
         if: ${{ matrix.role == 'server' }}
         run: |
           (Get-NetIpAddress -AddressFamily IPv4).IpAddress | Out-File -FilePath ipaddress.txt
+        shell: pwsh
 
       - name: Upload ip address as an artifact
         if: ${{ matrix.role == 'server' }}
@@ -78,6 +79,7 @@ jobs:
         if: ${{ matrix.role == 'client' }}
         run: |
           "ACK" | Out-File -FilePath ack.txt
+        shell: pwsh
 
       - name: Upload ACK as an artifact
         if: ${{ matrix.role == 'client' }}
@@ -85,8 +87,7 @@ jobs:
         with:
           name: ack
           path: ack.txt
-        shell: pwsh
-        
+
       - name: Server polls for an ACK so it can clean up
         if: ${{ matrix.role == 'server' }}
         run: |
