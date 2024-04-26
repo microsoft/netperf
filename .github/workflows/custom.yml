@@ -59,6 +59,8 @@ jobs:
               }
               $ipAddress = $Response.Content
               Write-Output "Ip Address found: $ipAddress"
+              $serverIp = $ipAddress.split(" ")[0]
+              Write-Output "Server IP: $serverIp"
               $found = $true
             }
             catch {
@@ -68,7 +70,7 @@ jobs:
           } while (-not $found)
 
           Write-Host "Try pinging the server"
-          ping $ipAddress -n 5
+          ping $serverIp -n 10
         shell: pwsh
 
       - name: (Client) Upload ACK to shared cache
@@ -101,7 +103,7 @@ jobs:
             }
             catch {
               Write-Output "ACK not found: $_"
-              Start-Sleep -Seconds 5
+              Start-Sleep -Seconds 10
             }
           } while (-not $found)
         shell: pwsh
