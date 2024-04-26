@@ -34,7 +34,10 @@ jobs:
         if: ${{ matrix.role == 'server' }}
         run: |
           $ipAddress = (Get-NetIpAddress -AddressFamily IPv4).IpAddress
-          Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_ipaddress&secret=${{ secrets.NETPERF_SYNCER_SECRET }}&value=$ipAddress"
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+          Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_ipaddress&value=$ipAddress" -Headers $headers
         shell: pwsh
 
       - name: (Client) Poll for an ip address uploaded by the server
@@ -43,7 +46,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Ensure this is set in your repository's secrets
         run: |
           $found = $false
-          $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_ipaddress&secret=${{ secrets.NETPERF_SYNCER_SECRET }}"
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+          $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_ipaddress" -Headers $headers
           do {
             Write-Output "Checking for ip address..."
             try {
@@ -68,14 +74,20 @@ jobs:
       - name: (Client) Upload ACK to shared cache
         if: ${{ matrix.role == 'client' }}
         run: |
-          Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_ack&value=ack&secret=${{ secrets.NETPERF_SYNCER_SECRET }}"
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+          Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_ack&value=ack" -Headers $headers
         shell: pwsh
 
       - name: (Server) Server polls for an ACK so it can clean up
         if: ${{ matrix.role == 'server' }}
         run: |
           $found = $false
-          $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_ack&secret=${{ secrets.NETPERF_SYNCER_SECRET }}"
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+          $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_ack" -Headers $headers
           do {
             Write-Output "Checking for ACK..."
             try {
