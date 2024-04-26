@@ -46,6 +46,7 @@ export default function ThroughputPage() {
     let rep = data[`${windowsOs}-${env}-iocp-schannel`][`tput-${testType}-tcp`]['data'].slice().reverse();
     let linuxRep = data[`${linuxOs}-${env}-epoll-openssl`][`tput-${testType}-tcp`]['data'].slice().reverse();
     let indices = Array.from({length: Math.max(rep.length, linuxRep.length)}, (_, i) => i);
+    indices.reverse();
 
     const tcpiocp = data[`${windowsOs}-${env}-iocp-schannel`][`tput-${testType}-tcp`]['data'].slice().reverse();
     const quiciocp = data[`${windowsOs}-${env}-iocp-schannel`][`tput-${testType}-quic`]['data'].slice().reverse();
@@ -114,7 +115,14 @@ export default function ThroughputPage() {
         fill: 'solid',
         data: quicwsk,
       },
-    ]} />
+    ]}
+
+    options={{
+      markers: {
+        size: 5
+      }
+    }}
+    />
   }
 
   const handleChange = (event) => {
