@@ -82,7 +82,10 @@ jobs:
     name: For ${{ github.event.client_payload.guid }}
     if: ${{ github.event_name == 'repository_dispatch' }}
     needs: []
-    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        os: ['ubuntu-20.04', 'ubuntu-22.04']
+    runs-on: ${{ matrix.os }}
     steps:
     - run: |
         echo "Parameters from repository_dispatch:"
@@ -124,36 +127,23 @@ jobs:
       os: ${{ matrix.os }}
       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
-  build-ubuntu20.04:
-    name: Build Ubuntu-20.04
+  build-unix:
+    name: Build Unix
     needs: []
     strategy:
       fail-fast: false
       matrix:
-        os: ['ubuntu-20.04']
-        tls: [openssl] # , openssl3]
+        include:
+          - os: 'ubuntu-20.04'
+            tls: 'openssl'
+          - os: 'ubuntu-22.04'
+            tls: 'openssl3'
     uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml@main
     with:
       os: ${{ matrix.os }}
       tls: ${{ matrix.tls }}
       build: -Perf
       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
-
-  build-ubuntu22.04:
-    name: Build Ubuntu-22.04
-    needs: []
-    strategy:
-      fail-fast: false
-      matrix:
-        os: ['ubuntu-22.04']
-        tls: [openssl3]
-    uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml@main
-    with:
-      os: ${{ matrix.os }}
-      tls: ${{ matrix.tls }}
-      build: -Perf
-      ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
-
 
   #
   # Manage and create temporary VMs
@@ -178,7 +168,7 @@ jobs:
   #
   run-secnetperf: # This would be 1 enumeration, after CTS has setup the environment with the correct OS type and version.
     name: secnetperf
-    needs: [build-ubuntu20.04, build-ubuntu22.04, build-windows, build-windows-kernel, create-azure-vms]
+    needs: [build-unix, build-windows, build-windows-kernel, create-azure-vms]
     strategy:
       fail-fast: false
       matrix:
@@ -254,7 +244,10 @@ jobs:
   generate-summary:
     name: Results
     needs: [run-secnetperf]
-    runs-on: 'ubuntu-20.04'
+    strategy:
+      matrix:
+        os: ['ubuntu-20.04', 'ubuntu-22.04']
+    runs-on: ${{ matrix.os }}
     steps:
     - name: Checkout repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -274,7 +267,9 @@ jobs:
     if: ${{ (github.event_name == 'repository_dispatch' && github.event.client_payload.pr == '') || inputs.commit }}
     strategy:
       fail-fast: false
-    runs-on: 'ubuntu-20.04'
+      matrix:
+        os: ['ubuntu-20.04', 'ubuntu-22.04']
+    runs-on: ${{ matrix.os }}
     steps:
     - name: Checkout repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -295,7 +290,9 @@ jobs:
     needs: [save-test-results]
     strategy:
       fail-fast: false
-    runs-on: 'ubuntu-20.04'
+      matrix:
+        os: ['ubuntu-20.04', 'ubuntu-22.04']
+    runs-on: ${{ matrix.os }}
     steps:
     - name: Checkout repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -316,7 +313,9 @@ jobs:
     needs: [update-intermediary-dashboard-json]
     strategy:
       fail-fast: false
-    runs-on: 'ubuntu-20.04'
+      matrix:
+        os: ['ubuntu-20.04', 'ubuntu-22.04']
+    runs-on: ${{ matrix.os }}
     steps:
     - name: Checkout repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
