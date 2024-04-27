@@ -53,6 +53,15 @@ jobs:
           name: Release-windows-windows-2022-x64-schannel-Perf
           path: artifacts
 
+      - name: Disable Windows Defender / Firewall
+        run: |
+          # Disable Windows defender / firewall.
+          Write-Host "Disabling Windows Defender / Firewall."
+          netsh.exe advfirewall set allprofiles state off
+          Set-MpPreference -EnableNetworkProtection Disabled
+          Set-MpPreference -DisableDatagramProcessing $True
+        shell: pwsh
+
       - name: (Server) Upload IP address to shared cache
         if: ${{ matrix.role == 'server' }}
         run: |
