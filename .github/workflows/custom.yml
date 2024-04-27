@@ -16,7 +16,24 @@ on:
 permissions: write-all
 
 jobs:
+  build-windows:
+    name: Build WinUser
+    needs: []
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ['windows-2022']
+        tls: [schannel] # , openssl, openssl3]
+    uses: microsoft/msquic/.github/workflows/build-reuse-win.yml@main
+    with:
+      os: ${{ matrix.os }}
+      tls: ${{ matrix.tls }}
+      build: -Perf
+      ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+
+
   testjob:
+    needs: [build-windows]
     strategy:
       matrix:
         role: ["client", "server"]
@@ -28,6 +45,17 @@ jobs:
 
       - name: Print networking information
         run: Get-NetIpAddress -AddressFamily IPv4
+        shell: pwsh
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+        with:
+          name: Release-windows-windows-2022-x64-schannel-Perf
+          path: artifacts
+
+      - name: (Server) Start MsQuic server
+        if: ${{ matrix.role == 'server' }}
+        run: .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe
         shell: pwsh
 
       - name: (Server) Upload IP address to shared cache
@@ -69,8 +97,12 @@ jobs:
             }
           } while (-not $found)
 
-          Write-Host "Test connectivity to the server..."
-          Test-NetConnection -ComputerName "$serverIp"
+          Write-Host "Preparing to run secnetperf"
+          "$serverIp netperf-peer" | Out-File -Encoding ASCII -Append "$env:SystemRoot\System32\drivers\etc\hosts"
+          Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer' -Force
+
+          Write-Host "Try running secnetperf"
+          .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -target:netperf-peer -exec:maxtput -down:12s -ptput:1 -io:iocp -pconn:1 -pstream:1
         shell: pwsh
 
       - name: (Client) Upload ACK to shared cache
