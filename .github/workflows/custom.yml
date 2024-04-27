@@ -69,8 +69,8 @@ jobs:
             }
           } while (-not $found)
 
-          Write-Host "Try pinging the server"
-          ping $serverIp -n 10
+          Write-Host "Test connectivity to the server..."
+          Test-NetConnection -ComputerName "$serverIp"
         shell: pwsh
 
       - name: (Client) Upload ACK to shared cache
