@@ -53,11 +53,6 @@ jobs:
           name: Release-windows-windows-2022-x64-schannel-Perf
           path: artifacts
 
-      - name: (Server) Start MsQuic server
-        if: ${{ matrix.role == 'server' }}
-        run: .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe
-        shell: pwsh
-
       - name: (Server) Upload IP address to shared cache
         if: ${{ matrix.role == 'server' }}
         run: |
@@ -66,6 +61,11 @@ jobs:
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
           Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_ipaddress&value=$ipAddress" -Headers $headers
+        shell: pwsh
+
+      - name: (Server) Start MsQuic server
+        if: ${{ matrix.role == 'server' }}
+        run: .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe
         shell: pwsh
 
       - name: (Client) Poll for an ip address uploaded by the server
@@ -102,7 +102,18 @@ jobs:
           Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer' -Force
 
           Write-Host "Try running secnetperf"
-          .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -target:netperf-peer -exec:maxtput -down:12s -ptput:1 -io:iocp -pconn:1 -pstream:1
+          $Attempts = 0
+          while ($Attempts -lt 5) {
+            try {
+              .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -target:netperf-peer -exec:maxtput -down:12s -ptput:1 -io:iocp -pconn:1 -pstream:1
+              break
+            }
+            catch {
+              Write-Output "Failed to run secnetperf: $_"
+              $Attempts++
+              Start-Sleep -Seconds 5
+            }
+          }
         shell: pwsh
 
       - name: (Client) Upload ACK to shared cache
