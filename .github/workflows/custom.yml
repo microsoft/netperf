@@ -65,13 +65,15 @@ jobs:
       - name: (Server) Start Secnetperf server
         if: ${{ matrix.role == 'server' }}
         run: |
-          Start-Job -Name "SecnetperfServer" -ScriptBlock {
+          $job = Start-Job -Name "SecnetperfServer" -ScriptBlock {
               .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe
           }
           Write-Host "Secnetperf server started as a background process"
           Write-Host "Waiting for a bit..."
           Start-Sleep -Seconds 10
-          Receive-Job -Name "SecnetperfServer"
+          Receive-Job $job
+          $job
+          Write-Host "$(Get-Date) finished spinning up server"
         shell: pwsh
 
       - name: (Server) Upload IP address to shared cache
@@ -117,7 +119,7 @@ jobs:
           "$serverIp netperf-peer" | Out-File -Encoding ASCII -Append "$env:SystemRoot\System32\drivers\etc\hosts"
           Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer' -Force
 
-          Write-Host "Try running secnetperf"
+          Write-Host "$(Get-Date) Try running secnetperf"
           $Attempts = 0
           while ($Attempts -lt 5) {
             try {
