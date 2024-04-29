@@ -71,7 +71,7 @@ jobs:
           Write-Host "Secnetperf server started as a background process"
           Write-Host "Waiting for a bit..."
           Start-Sleep -Seconds 10
-          shell: pwsh
+        shell: pwsh
 
       - name: (Server) Upload IP address to shared cache
         if: ${{ matrix.role == 'server' }}
