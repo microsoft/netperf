@@ -62,6 +62,17 @@ jobs:
           Set-MpPreference -DisableDatagramProcessing $True
         shell: pwsh
 
+      - name: (Server) Start Secnetperf server
+        if: ${{ matrix.role == 'server' }}
+        run: |
+        Start-Job -Name "SecnetperfServer" -ScriptBlock {
+            .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe
+        }
+        Write-Host "Secnetperf server started as a background process"
+        Write-Host "Waiting for a bit..."
+        Start-Sleep -Seconds 10
+        shell: pwsh
+
       - name: (Server) Upload IP address to shared cache
         if: ${{ matrix.role == 'server' }}
         run: |
@@ -70,11 +81,6 @@ jobs:
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
           Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_ipaddress&value=$ipAddress" -Headers $headers
-        shell: pwsh
-
-      - name: (Server) Start MsQuic server
-        if: ${{ matrix.role == 'server' }}
-        run: .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe
         shell: pwsh
 
       - name: (Client) Poll for an ip address uploaded by the server
