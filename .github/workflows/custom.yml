@@ -65,13 +65,13 @@ jobs:
       - name: (Server) Start Secnetperf server
         if: ${{ matrix.role == 'server' }}
         run: |
-        Start-Job -Name "SecnetperfServer" -ScriptBlock {
-            .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe
-        }
-        Write-Host "Secnetperf server started as a background process"
-        Write-Host "Waiting for a bit..."
-        Start-Sleep -Seconds 10
-        shell: pwsh
+          Start-Job -Name "SecnetperfServer" -ScriptBlock {
+              .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe
+          }
+          Write-Host "Secnetperf server started as a background process"
+          Write-Host "Waiting for a bit..."
+          Start-Sleep -Seconds 10
+          shell: pwsh
 
       - name: (Server) Upload IP address to shared cache
         if: ${{ matrix.role == 'server' }}
