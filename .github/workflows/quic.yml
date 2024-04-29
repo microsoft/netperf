@@ -82,10 +82,7 @@ jobs:
     name: For ${{ github.event.client_payload.guid }}
     if: ${{ github.event_name == 'repository_dispatch' }}
     needs: []
-    strategy:
-      matrix:
-        os: ['ubuntu-20.04', 'ubuntu-22.04']
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-20.04
     steps:
     - run: |
         echo "Parameters from repository_dispatch:"
@@ -244,10 +241,7 @@ jobs:
   generate-summary:
     name: Results
     needs: [run-secnetperf]
-    strategy:
-      matrix:
-        os: ['ubuntu-20.04', 'ubuntu-22.04']
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-20.04
     steps:
     - name: Checkout repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
