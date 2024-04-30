@@ -36,15 +36,14 @@ jobs:
     needs: [build-windows]
     strategy:
       matrix:
-        role: ["client", "server"]
+        vec: [
+          { role: "client", ip: "fe80::53a9:828f:51d8:6f8e", peer: "fe80::59ad:6e93:868f:f674" },
+          { role: "server", ip: "fe80::59ad:6e93:868f:f674", peer: "fe80::53a9:828f:51d8:6f8e" },
+        ]
     runs-on: [self-hosted, 1ES.Pool=netperf-aztestpool]
     steps:
       - name: Print Role
-        run: Write-Host "Role; ${{ matrix.role }}"
-        shell: pwsh
-
-      - name: Print networking information
-        run: Get-NetIpAddress -AddressFamily IPv4
+        run: Write-Host "Role; ${{ matrix.vec.role }}"
         shell: pwsh
 
       - name: Download Artifacts
@@ -62,8 +61,23 @@ jobs:
           Set-MpPreference -DisableDatagramProcessing $True
         shell: pwsh
 
+      - name: Set Link-Local IPv6 Address
+        run: |
+          $iIndex = (Get-NetIpAddress -AddressFamily IPv4).InterfaceIndex
+          $newAddr = ${{ matrix.vec.ip }}
+          New-NetIPAddress -InterfaceIndex $iIndex -IPAddress $newAddr -PrefixLength 64
+        shell: pwsh
+
+      - name: Print networking information
+        run: Get-NetIpAddress
+        shell: pwsh
+
+      - name: Ping Peer
+        run: ping -w 1000 -n 30 -a ${{ matrix.vec.peer }}
+        shell: pwsh
+
       - name: (Server) Upload IP address to shared cache
-        if: ${{ matrix.role == 'server' }}
+        if: ${{ matrix.vec.role == 'server' }}
         run: |
           $ipAddress = (Get-NetIpAddress -AddressFamily IPv4).IpAddress
           $headers = @{
@@ -72,9 +86,8 @@ jobs:
           Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_ipaddress&value=$ipAddress" -Headers $headers
         shell: pwsh
 
-
       - name: (Server) Start Secnetperf server and polls for an ACK.
-        if: ${{ matrix.role == 'server' }}
+        if: ${{ matrix.vec.role == 'server' }}
         run: |
           $found = $false
           $headers = @{
@@ -106,7 +119,7 @@ jobs:
         shell: pwsh
 
       - name: (Client) Poll for an ip address uploaded by the server
-        if: ${{ matrix.role == 'client' }}
+        if: ${{ matrix.vec.role == 'client' }}
         run: |
           $found = $false
           $headers = @{
@@ -164,7 +177,7 @@ jobs:
         shell: pwsh
 
       - name: (Client) Upload ACK to shared cache
-        if: ${{ matrix.role == 'client' }}
+        if: ${{ matrix.vec.role == 'client' }}
         run: |
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
@@ -173,7 +186,7 @@ jobs:
         shell: pwsh
 
       # - name: (Server) Server polls for an ACK so it can clean up
-      #   if: ${{ matrix.role == 'server' }}
+      #   if: ${{ matrix.vec.role == 'server' }}
       #   run: |
       #     $found = $false
       #     $headers = @{
