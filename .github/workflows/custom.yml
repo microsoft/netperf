@@ -37,8 +37,8 @@ jobs:
     strategy:
       matrix:
         vec: [
-          { role: "client", ip: "fe80::53a9:828f:51d8:6f8e", peer: "fe80::59ad:6e93:868f:f674" },
-          { role: "server", ip: "fe80::59ad:6e93:868f:f674", peer: "fe80::53a9:828f:51d8:6f8e" },
+          { role: "client", ip: "fd00:8b40:e672:e08e:aa87:1277:cd94:04b5", peer: "fd00:4ecf:74aa:6cbd:b64b:af2c:fe23:f47d" },
+          { role: "server", ip: "fd00:4ecf:74aa:6cbd:b64b:af2c:fe23:f47d", peer: "fd00:8b40:e672:e08e:aa87:1277:cd94:04b5" },
         ]
     runs-on: [self-hosted, 1ES.Pool=netperf-aztestpool]
     steps:
@@ -55,7 +55,7 @@ jobs:
           Set-MpPreference -DisableDatagramProcessing $True
         shell: pwsh
 
-      - name: Set Link-Local IPv6 Address
+      - name: New IPv6 Address
         run: |
           $iIndex = (Get-NetIpAddress -AddressFamily IPv4).InterfaceIndex[0]
           $newAddr = '${{ matrix.vec.ip }}'
