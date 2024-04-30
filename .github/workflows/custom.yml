@@ -135,32 +135,11 @@ jobs:
           Write-Host "Preparing to run secnetperf"
           "$serverIp netperf-peer" | Out-File -Encoding ASCII -Append "$env:SystemRoot\System32\drivers\etc\hosts"
           Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer' -Force
-
-          Write-Host "$(Get-Date) Try running secnetperf"
-          $FinishedTests = $false
-          $Attempts = 0
-          while ($Attempts -lt 5) {
-            try {
-              $res = .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -target:netperf-peer -exec:maxtput -down:12s -ptput:1 -io:iocp -pconn:1 -pstream:1
-              $didFail = $res | Where-Object { $_ -like "*No Successful Connections!*" }
-              if ($didFail) {
-                throw "Failed to run secnetperf: $res"
-              } else {
-                Write-Output "secnetperf succeeded: $res"
-                $FinishedTests = $true
-              }
-              break
-            }
-            catch {
-              Write-Output "Failed to run secnetperf: $_"
-              $Attempts += 1
-              Start-Sleep -Seconds 30
-            }
-          }
-
-          if (-not $FinishedTests) {
-            throw "Failed to run secnetperf after 5 attempts"
-          }
+          # Wait
+          Start-Sleep -Seconds 5
+          Write-Host "$(Get-Date) Try starting a remote session"
+          $session = New-PSSession -ComputerName netperf-peer
+          $session
         shell: pwsh
 
       - name: (Client) Upload ACK to shared cache
