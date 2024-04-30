@@ -46,12 +46,6 @@ jobs:
         run: Write-Host "Role; ${{ matrix.vec.role }}"
         shell: pwsh
 
-      - name: Download Artifacts
-        uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
-        with:
-          name: Release-windows-windows-2022-x64-schannel-Perf
-          path: artifacts
-
       - name: Disable Windows Defender / Firewall
         run: |
           # Disable Windows defender / firewall.
@@ -75,6 +69,12 @@ jobs:
       - name: Ping Peer
         run: ping -w 1000 -n 30 -a ${{ matrix.vec.peer }}
         shell: pwsh
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+        with:
+          name: Release-windows-windows-2022-x64-schannel-Perf
+          path: artifacts
 
       - name: (Server) Upload IP address to shared cache
         if: ${{ matrix.vec.role == 'server' }}
