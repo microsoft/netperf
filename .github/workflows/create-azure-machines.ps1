@@ -97,8 +97,7 @@ for ($i = 0; $i -lt $jobs.Count; $i += 2) {
 Write-Host "`n[$(Get-Date)] Jobs complete!`n"
 $jobs | Remove-Job -Force  # Clean up all the jobs
 if ($RequiredPlatforms.Count -ne $PlatformsCovered.Count) {
-    $MissingPlatforms = $RequiredPlatforms - $PlatformsCovered
-    Write-Error "Failed to create VMs for the following platforms: $MissingPlatforms"
+    Write-Error "Failed to create enough VMs."
     exit 1
 }
 
@@ -246,8 +245,7 @@ foreach ($index in $VMsSuccessfullyCreated) {
     }
 }
 if ($PlatformsSuccessfullyOnboardedToGitHub.Count -ne $RequiredPlatforms.Count) {
-    $MissingPlatforms = $RequiredPlatforms - $PlatformsSuccessfullyOnboardedToGitHub
-    Write-Error "Failed to onboard successfully created VMs to GitHub for the following platforms: $MissingPlatforms"
+    Write-Error "Failed to onboard successfully created VMs to GitHub for the required platforms"
     exit 1
 }
 
