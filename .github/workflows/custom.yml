@@ -64,7 +64,7 @@ jobs:
       - name: Set Link-Local IPv6 Address
         run: |
           $iIndex = (Get-NetIpAddress -AddressFamily IPv4).InterfaceIndex
-          $newAddr = ${{ matrix.vec.ip }}
+          $newAddr = '${{ matrix.vec.ip }}'
           New-NetIPAddress -InterfaceIndex $iIndex -IPAddress $newAddr -PrefixLength 64
         shell: pwsh
 
