@@ -74,13 +74,13 @@ def singular_datapoint_method():
     NOTE: For this method, we are not recording a "best ever" latency result as it's unclear how we should compare 2 distributions.
     Who is to say one distrobution with a lower P0 but a higher P99 is better than another?
     """
-
     NOISE = 0.3 # We allow future runs to be 30% less than the best-ever result.
-    regression_file = {}
 
+    watermark_regression_file = {}
     for json_file_path in glob.glob('*.json'):
         if not os.path.exists(f"{json_file_path}/{json_file_path}"):
             continue
+
         with open(f"{json_file_path}/{json_file_path}", 'r') as json_file:
             print("Processing file: {}".format(json_file_path))
             # Grab data
@@ -113,30 +113,33 @@ def singular_datapoint_method():
                 watermark_so_far = cursor.fetchall()
                 if not watermark_so_far:
                     cursor.execute(f"""
-                        INSERT INTO Secnetperf_tests_watermark (Secnetperf_test_ID, environment, BestResult) VALUES ('{testid}', '{env_str}', {new_result_avg})
+                        INSERT INTO Secnetperf_tests_watermark (Secnetperf_test_ID, environment, BestResult, BestResultCommit) VALUES ('{testid}', '{env_str}', {new_result_avg}, '{bestever_commit}')
                     """)
                     conn.commit()
                 else:
-                    watermark_so_far = watermark_so_far[0][0]
+                    bestever_result = watermark_so_far[0][0]
                     best_commit_so_far = watermark_so_far[0][1]
-                    if new_result_avg > watermark_so_far:
+                    if float(new_result_avg) > float(bestever_result):
                         cursor.execute(f"""
-                            UPDATE Secnetperf_tests_watermark SET BestResult = {new_result_avg} WHERE Secnetperf_test_ID = '{testid}' AND environment = '{env_str}'
+                            UPDATE Secnetperf_tests_watermark SET BestResult = {new_result_avg}, BestResultCommit = '{bestever_commit}' WHERE Secnetperf_test_ID = '{testid}' AND environment = '{env_str}'
                         """)
                         conn.commit()
                     else:
-                        bestever = watermark_so_far
+                        bestever = bestever_result
                         bestever_commit = best_commit_so_far
 
-                if testid not in regression_file:
-                    regression_file[testid] = {}
+                if testid not in watermark_regression_file:
+                    watermark_regression_file[testid] = {}
 
-                regression_file[testid][env_str] = {
+                watermark_regression_file[testid][env_str] = {
                     "BestResult": bestever,
                     "Noise": NOISE,
                     "baseline": bestever * (1 - NOISE),
                     "BestResultCommit": bestever_commit
                 }
+
+        with open('watermark_regression.json', 'w') as f:
+            json.dump(watermark_regression_file, f, indent=4)
 
 def compute_baseline_watermark(test_run_results, test):
     # Use a statistical approach to compute a baseline.
