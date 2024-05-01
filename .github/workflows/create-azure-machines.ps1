@@ -34,6 +34,8 @@ param (
 Set-StrictMode -Version "Latest"
 $PSDefaultParameterValues["*:ErrorAction"] = "Stop"
 
+throw "Currently undergoing maintenance due to Security work. Please try again later."
+
 $AzureMatrixJson = Get-Content -Path .\.github\workflows\azure-matrix.json | ConvertFrom-Json
 $FullMatrixJson = Get-Content -Path .\.github\workflows\processed-matrix.json | ConvertFrom-Json
 
