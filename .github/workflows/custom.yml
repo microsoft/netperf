@@ -95,8 +95,8 @@ jobs:
               Write-Output "Client not done testing yet. Spinning up server..."
               # We can poll for config here
               try {
-                Write-Host "Spin up server. Setup a watchdog timer for 30 seconds Waiting to serve the client."
-                .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -exec:maxtput -watchdog:30000
+                Write-Host "Spin up server. When the client wants to shut down the server, they will send a special UDP packet."
+                .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -exec:maxtput
               }
               catch {
                 Write-Output "Exit from server: $_"
@@ -156,6 +156,27 @@ jobs:
               $Attempts += 1
               Start-Sleep -Seconds 30
             }
+          }
+
+          function Stop-RemoteServer {
+              param ($RemoteAddress)
+              # Ping side-channel socket on 9999 to tell the app to die
+              $Socket = New-Object System.Net.Sockets.UDPClient
+              $BytesToSend = @(
+                  0x57, 0xe6, 0x15, 0xff, 0x26, 0x4f, 0x0e, 0x57,
+                  0x88, 0xab, 0x07, 0x96, 0xb2, 0x58, 0xd1, 0x1c
+              )
+              $Socket.Send($BytesToSend, $BytesToSend.Length, $RemoteAddress, 9999) | Out-Null
+          }
+
+          for ($i = 0; $i -lt 5; $i++) {
+            try {
+              Stop-RemoteServer -RemoteAddress "netperf-peer"
+            }
+            catch {
+              Write-Output "Failed to send special UDP packet: $_"
+            }
+            Start-Sleep -Seconds 5
           }
 
           if (-not $FinishedTests) {
