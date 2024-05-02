@@ -157,7 +157,20 @@ jobs:
               Start-Sleep -Seconds 30
             }
           }
+        shell: pwsh
 
+      - name: (Client) Upload ACK to shared cache
+        if: ${{ matrix.role == 'client' }}
+        run: |
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+          Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_ack&value=ack" -Headers $headers
+        shell: pwsh
+
+      - name: (Client) Tell Server to shut down
+        if: ${{ matrix.role == 'client' }}
+        run: |
           function Stop-RemoteServer {
               param ($RemoteAddress)
               # Ping side-channel socket on 9999 to tell the app to die
@@ -182,15 +195,6 @@ jobs:
           if (-not $FinishedTests) {
             throw "Failed to run secnetperf after 5 attempts"
           }
-        shell: pwsh
-
-      - name: (Client) Upload ACK to shared cache
-        if: ${{ matrix.role == 'client' }}
-        run: |
-          $headers = @{
-            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
-          }
-          Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_ack&value=ack" -Headers $headers
         shell: pwsh
 
       # - name: (Server) Server polls for an ACK so it can clean up
