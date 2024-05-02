@@ -251,6 +251,11 @@ jobs:
     - name: Generate Summary
       shell: pwsh # We never block the workflow if its a git merge or someone manually triggered a run with publish_results = true.
       run: ./.github/workflows/generate-summary.ps1 -BlockOnFailure ${{ github.event.client_payload.pr != '' && !inputs.commit }}
+    - name: Run manage-azure-vms.ps1 for cleanup
+      uses: azure/powershell@v2
+      with:
+        inlineScript: ./.github/workflows/manage-azure-vms.ps1 -GithubPatToken ${{ secrets.PERSONAL_ACCESS_TOKEN }} -MatrixFileName "quic_matrix.json" -ThisWorkflowId ${{ github.run_id}}
+        azPSVersion: '11.5.0'
 
   save-test-results:
     permissions: write-all

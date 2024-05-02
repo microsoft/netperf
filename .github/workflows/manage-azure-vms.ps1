@@ -27,7 +27,10 @@ param (
     [string]$MatrixFileName = "quic_matrix.json",
 
     [Parameter(Mandatory = $false)]
-    [string]$ResourceGroupName = "netperf-ex"
+    [string]$ResourceGroupName = "netperf-ex",
+
+    [Parameter(Mandatory = $false)]
+    [string]$ThisWorkflowId = "NULL"
 )
 
 function Remove-GitHubRunner {
@@ -102,7 +105,7 @@ try {
                 $_.workflow_id -eq $vmWorkflowId -and $_.status -eq 'in_progress'
             }
 
-            if ($WorkflowThatReferenceThisVm) {
+            if ($WorkflowThatReferenceThisVm -and !($vmWorkflowId -eq $ThisWorkflowId)) {
                 Write-Host "Ignoring VM: $($vm.Name) as it's in use by a running workflow. Workflow ID: $vmWorkflowId, Vm Creation Time: $vmCreationTime"
                 $aliveVm.Add($vm.Name)
                 continue
@@ -161,7 +164,7 @@ foreach ($entry in $MatrixJson) {
         $entry | Add-Member -MemberType NoteProperty -Name "runner_id" -Value $randomTag
         $AzureJson += $entry
         $ProcessedJson += $entry
-    } elseif ($entry.env -match "azure" -and $entry.os -match "ubuntu-2004") { # TODO: Remove this once the Azure security team is done with cluster migration and the scripts are more stable, we can add back Ubuntu creation.
+    } elseif ($entry.env -match "azure" -and $entry.os -match "ubuntu-20.04") { # TODO: Remove this once the Azure security team is done with cluster migration and the scripts are more stable, we can add back Ubuntu creation.
         continue
     } else {
         $ProcessedJson += $entry
