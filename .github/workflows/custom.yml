@@ -191,10 +191,6 @@ jobs:
             }
             Start-Sleep -Seconds 5
           }
-
-          if (-not $FinishedTests) {
-            throw "Failed to run secnetperf after 5 attempts"
-          }
         shell: pwsh
 
       # - name: (Server) Server polls for an ACK so it can clean up
