@@ -161,7 +161,7 @@ foreach ($entry in $MatrixJson) {
         $entry | Add-Member -MemberType NoteProperty -Name "runner_id" -Value $randomTag
         $AzureJson += $entry
         $ProcessedJson += $entry
-    } else if ($entry.env -match "azure" -and $entry.os -match "ubuntu-2004") { # TODO: Remove this once the Azure security team is done with cluster migration and the scripts are more stable, we can add back Ubuntu creation.
+    } elseif ($entry.env -match "azure" -and $entry.os -match "ubuntu-2004") { # TODO: Remove this once the Azure security team is done with cluster migration and the scripts are more stable, we can add back Ubuntu creation.
         continue
     } else {
         $ProcessedJson += $entry
