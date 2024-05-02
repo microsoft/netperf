@@ -16,7 +16,7 @@ param (
 
     [Parameter(Mandatory = $false)]
     [ValidateSet("Experimental_Boost4", "Standard_DS2_v2", "Standard_F8s_v2")]
-    [string]$VMSize = "Experimental_Boost4",
+    [string]$VMSize = "Standard_F8s_v2", # TODO; once the Azure security team is done cluster migration, change this back.
 
     [Parameter(Mandatory = $false)]
     [string]$ResourceGroupName = "netperf-ex",

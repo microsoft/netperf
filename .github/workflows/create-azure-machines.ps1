@@ -16,7 +16,7 @@ param (
 
     [Parameter(Mandatory = $false)]
     [ValidateSet("Experimental_Boost4", "Standard_DS2_v2", "Standard_F8s_v2")]
-    [string]$VMSize = "Experimental_Boost4",
+    [string]$VMSize = "Standard_F8s_v2", # TODO; once the Azure security team is done cluster migration, change this back. 
 
     [Parameter(Mandatory = $false)]
     [string]$ResourceGroupName = "netperf-ex",
@@ -33,8 +33,6 @@ param (
 
 Set-StrictMode -Version "Latest"
 $PSDefaultParameterValues["*:ErrorAction"] = "Stop"
-
-throw "Currently undergoing maintenance due to Security work. Please try again later."
 
 $AzureMatrixJson = Get-Content -Path .\.github\workflows\azure-matrix.json | ConvertFrom-Json
 $FullMatrixJson = Get-Content -Path .\.github\workflows\processed-matrix.json | ConvertFrom-Json
