@@ -173,9 +173,9 @@ jobs:
           $FinishedTests = $false
           $Attempts = 0
           while ($Attempts -lt 5) {
-            Write-Host "Trying with custom Ipv6 address..."
+            Write-Host "Trying with custom Ipv6 address... ${{ matrix.vec.peer }}"
             try {
-              $res = .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -target:new-netperf-peer -exec:maxtput -down:12s -ptput:1 -io:iocp -pconn:1 -pstream:1
+              $res = .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -target:${{ matrix.vec.peer }} -exec:maxtput -down:12s -ptput:1 -io:iocp -pconn:1 -pstream:1
               $didFail = $res | Where-Object { $_ -like "*No Successful Connections!*" }
               if ($didFail) {
                 throw "Failed to run secnetperf: $res"
