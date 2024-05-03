@@ -66,3 +66,49 @@ We also leverage Azure VMs to test realistic, production environments:
 - 25 Gbps Max Network Bandwidth
 
 The VMs are connected by a shared virtual network.
+
+
+# Set up
+
+The following instructions are required to set up each machine in the pool.
+
+## Configuration (Windows)
+
+The following steps are required to set up each machine in the pool.
+
+```PowerShell
+$username = 'secnetperf'
+$password = '************' # Ask for the password to use
+$token = '************'    # Find at https://github.com/microsoft/netperf/settings/actions/runners/new?arch=x64&os=win
+$machine1 = '10.1.0.8'     # This is the GitHub runner machine's IP address
+$machine2 = '10.1.0.9'     # This is the peer machine's IP address
+$url = "https://raw.githubusercontent.com/microsoft/netperf/main/setup-runner-windows.ps1"
+```
+
+```PowerShell
+# Run on GitHub runner machine
+iex "& { $(irm $url) } $username $password $machine2 $token"
+```
+
+```PowerShell
+# Run on peer machine
+iex "& { $(irm $url) } $username $password $machine1"
+```
+
+## Configuration (Linux)
+
+```
+curl https://raw.githubusercontent.com/microsoft/netperf/main/setup-runner-linux.sh -o setup-runner-linux.sh
+# Make sure to run this script twice to properly install everything (to account for lab vs. Azure environment differences)
+bash setup-runner-linux.sh -i <peerip> -g <github token *do this on client only> -n <no reboot *optional>
+# Do this on the client only:
+ssh-keygen
+ssh-copy-id <username of peer>@<peerip>
+```
+
+## Configure IP addresses for lab linux VMs
+
+Depending on your specific linux distro, the process varies a bit.
+
+But the main idea is to use the `ip` util built in to `net-tools` to add an IP to your mellanox NIC.
+The usual command is `sudo ip addr add (address / CIDR block) dev (NIC name)`. The problem is, if you reboot, Linux will revert your IP assignments. So what you do is you can create a startup script that runs on boot leveraging `systemd` or some other service depending on your Linux distro.
