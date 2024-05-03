@@ -80,11 +80,12 @@ jobs:
   # For automated identification of the workflow.
   name:
     name: For ${{ github.event.client_payload.guid }}
-    if: ${{ github.event_name == 'repository_dispatch' }}
     needs: []
     runs-on: ubuntu-20.04
     steps:
-    - run: |
+    - name: Print Parameters
+      if: ${{ github.event_name == 'repository_dispatch' }}
+      run: |
         echo "Parameters from repository_dispatch:"
         echo "guid: ${{ github.event.client_payload.guid }}"
         echo "sha: ${{ github.event.client_payload.sha }}"
@@ -92,6 +93,28 @@ jobs:
         echo "pr: ${{ github.event.client_payload.pr }}"
         echo "logs: ${{ github.event.client_payload.logs }}"
         echo "filter: ${{ github.event.client_payload.filter }}"
+    - name: Validate inputs for workflow dispatch
+      if: ${{ github.event_name == 'workflow_dispatch' }}
+      run: |
+        if [ "${{ inputs.commit }}" = "true" ] && [ "${{ inputs.ref }}" = "main" ]; then
+          echo "Error: If commit is set to true, ref should not be 'main'"
+          exit 1
+        fi
+    - name: Validate inputs for workflow call
+      if: ${{ github.event_name == 'workflow_call' }}
+      run: |
+        if [ "${{ inputs.commit }}" = "true" ] && [ "${{ inputs.ref }}" = "main" ]; then
+          echo "Error: If commit is set to true, ref should not be 'main'"
+          exit 1
+        fi
+    - name: Validate inputs for repository dispatch
+      if: ${{ github.event_name == 'repository_dispatch' }}
+      run: |
+        if [ "${{ github.event.client_payload.ref }}" = "main" ] && [ '${{ github.event.client_payload.pr }}' = '' ]; then
+          echo "Repository dispatch on merge events must have ref set to a SHA instead of a branch name."
+          exit 1
+        fi
+
 
   #
   # Build Jobs
