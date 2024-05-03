@@ -17,6 +17,12 @@ All the machines are connected by a 400 GbE [PowerSwitch Z9432F](https://www.del
 
 ### Setup
 
+First, make sure you set bootdebug to be off.
+
+Before restarting, run in an elevated powershell terminal:
+- bcdedit /set debug off
+- bcdedit /set bootdebug off
+
 #### BIOS Configuration
 
 The following changes must be made to each lab machine from the default configuration:
