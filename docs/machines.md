@@ -36,6 +36,9 @@ By default, hyper-V won't be enabled on the lab machines. You need to enable it 
 
 Just make sure to select all network adapters available on the host in the wizard. You should leave all others options to their default values.
 
+**Set Secure Boot To Off**
+Once you have downloaded and setup your VM on hyper-V, you need to turn secure boot off in the hyper-V settings.
+
 #### OS Deployment
 
 The easiest way to automate machine deployment is via `WorkflowCommandLine.exe`, which you need to install (installed automatically in Program Files if you have WTT Studio).
