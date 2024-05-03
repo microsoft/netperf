@@ -155,8 +155,14 @@ $ProcessedJson = @()
 
 # 2. Modify matrix.json.
 foreach ($entry in $MatrixJson) {
+
+    if ($entry.env -match "azure") {
+        # TODO: Remove this once Security has been sorted out.
+        continue
+    }
+
     # check if entry.env has substring "azure" in it
-    if ($entry.env -match "azure" -and $entry.os -match "windows-2022") { # TODO: Add support for windows-2025 and Linux.
+    if ($entry.env -match "azure" -and $entry.os -match "windows-2022") {
         $randomTag = [System.Guid]::NewGuid().ToString()
         # limit randomTag to 13 characters
         $randomTag = $randomTag.Substring(0, [Math]::Min(12, $randomTag.Length))
@@ -164,7 +170,7 @@ foreach ($entry in $MatrixJson) {
         $entry | Add-Member -MemberType NoteProperty -Name "runner_id" -Value $randomTag
         $AzureJson += $entry
         $ProcessedJson += $entry
-    } elseif ($entry.env -match "azure" -and $entry.os -match "ubuntu-20.04") { # TODO: Remove this once the Azure security team is done with cluster migration and the scripts are more stable, we can add back Ubuntu creation.
+    } elseif ($entry.env -match "azure" -and $entry.os -match "ubuntu-20.04") {
         continue
     } else {
         $ProcessedJson += $entry

@@ -16,7 +16,7 @@ param (
 
     [Parameter(Mandatory = $false)]
     [ValidateSet("Experimental_Boost4", "Standard_DS2_v2", "Standard_F8s_v2")]
-    [string]$VMSize = "Standard_F8s_v2", # TODO; once the Azure security team is done cluster migration, change this back. 
+    [string]$VMSize = "Standard_F8s_v2", # TODO; once the Azure security team is done cluster migration, change this back.
 
     [Parameter(Mandatory = $false)]
     [string]$ResourceGroupName = "netperf-ex",
@@ -33,6 +33,14 @@ param (
 
 Set-StrictMode -Version "Latest"
 $PSDefaultParameterValues["*:ErrorAction"] = "Stop"
+
+$FoundAzureMatrix = Test-Path .\.github\workflows\azure-matrix.json
+$FoundFullMatrix = Test-Path .\.github\workflows\processed-matrix.json
+
+if (-not $FoundAzureMatrix -or -not $FoundFullMatrix) {
+    Write-Host "Azure matrix or full matrix files not found."
+    exit 0
+}
 
 $AzureMatrixJson = Get-Content -Path .\.github\workflows\azure-matrix.json | ConvertFrom-Json
 $FullMatrixJson = Get-Content -Path .\.github\workflows\processed-matrix.json | ConvertFrom-Json
