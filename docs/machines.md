@@ -31,6 +31,11 @@ The following changes must be made to each lab machine from the default configur
 - Integrated Devices -> SR-IOV Global Enable -> Enabled
 - System Profile Settings -> System Profile -> Performance
 
+### Hyper-V
+By default, hyper-V won't be enabled on the lab machines. You need to enable it via "turn windows features on or off"
+
+Just make sure to select all network adapters available on the host in the wizard. You should leave all others options to their default values.
+
 #### OS Deployment
 
 The easiest way to automate machine deployment is via `WorkflowCommandLine.exe`, which you need to install (installed automatically in Program Files if you have WTT Studio).
