@@ -102,7 +102,6 @@ curl https://raw.githubusercontent.com/microsoft/netperf/main/setup-runner-linux
 # Make sure to run this script twice to properly install everything (to account for lab vs. Azure environment differences)
 bash setup-runner-linux.sh -i <peerip> -g <github token *do this on client only> -n <no reboot *optional>
 # Do this on the client only:
-ssh-keygen
 ssh-copy-id <username of peer>@<peerip>
 ```
 
