@@ -66,10 +66,6 @@ jobs:
         run: Get-NetIpAddress
         shell: pwsh
 
-      - name: Ping Peer
-        run: ping -w 1000 -n 30 -a ${{ matrix.vec.peer }}
-        shell: pwsh
-
       - name: Download Artifacts
         uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
         with:
@@ -149,12 +145,37 @@ jobs:
           "$serverIp netperf-peer" | Out-File -Encoding ASCII -Append "$env:SystemRoot\System32\drivers\etc\hosts"
           Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer' -Force
 
+          "${{ matrix.vec.peer }} new-netperf-peer" | Out-File -Encoding ASCII -Append "$env:SystemRoot\System32\drivers\etc\hosts"
+          Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'new-netperf-peer' -Force
+
           Write-Host "$(Get-Date) Try running secnetperf"
           $FinishedTests = $false
           $Attempts = 0
           while ($Attempts -lt 5) {
+            Write-Host "Trying with normal Ipv4 address..."
             try {
               $res = .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -target:netperf-peer -exec:maxtput -down:12s -ptput:1 -io:iocp -pconn:1 -pstream:1
+              $didFail = $res | Where-Object { $_ -like "*No Successful Connections!*" }
+              if ($didFail) {
+                throw "Failed to run secnetperf: $res"
+              } else {
+                Write-Output "secnetperf succeeded: $res"
+                $FinishedTests = $true
+              }
+              break
+            }
+            catch {
+              Write-Output "Failed to run secnetperf: $_"
+              $Attempts += 1
+              Start-Sleep -Seconds 30
+            }
+          }
+          $FinishedTests = $false
+          $Attempts = 0
+          while ($Attempts -lt 5) {
+            Write-Host "Trying with custom Ipv6 address..."
+            try {
+              $res = .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -target:new-netperf-peer -exec:maxtput -down:12s -ptput:1 -io:iocp -pconn:1 -pstream:1
               $didFail = $res | Where-Object { $_ -like "*No Successful Connections!*" }
               if ($didFail) {
                 throw "Failed to run secnetperf: $res"
