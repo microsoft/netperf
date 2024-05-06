@@ -100,11 +100,15 @@ def singular_datapoint_method():
             for testid in json_obj:
                 if testid == "commit" or testid == "os_version" or "-lat" in testid or testid == "run_args" or "regression" in testid:
                     continue
-                if "rps" in testid:
-                    # Remove this check once we figure out how we should compare 2 distributions.
-                    continue
+
                 env_str = f"{os_name}-{arch}-{context}-{io}-{tls}"
-                new_result_avg = sum([int(result) for result in json_obj[testid]]) / len(json_obj[testid])
+
+                if "rps" in testid:
+                    # NOTE: We are ignoring the percentiles and only considering requests per second because we don't have a way to compare 2 distributions.
+                    result = json_obj[testid] # Looks like [p0, p50 ... RPS, p0, p50, ... RPS], where RPS is every 9th element.
+                    new_result_avg = sum([int(result) for result in result[8::9]]) / len(result[8::9]) # [8::9] grabs every 9th element starting from the 9th element.
+                else:
+                    new_result_avg = sum([int(result) for result in json_obj[testid]]) / len(json_obj[testid])
                 cursor.execute(f"""
                     SELECT BestResult, BestResultCommit FROM Secnetperf_tests_watermark WHERE Secnetperf_test_ID = '{testid}' AND environment = '{env_str}'
                 """)
