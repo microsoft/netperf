@@ -261,9 +261,7 @@ jobs:
     if: ${{ (github.event_name == 'repository_dispatch' && github.event.client_payload.pr == '') || inputs.commit }}
     strategy:
       fail-fast: false
-      matrix:
-        os: ['ubuntu-20.04', 'ubuntu-22.04']
-    runs-on: ${{ matrix.os }}
+    runs-on: 'ubuntu-20.04'
     steps:
     - name: Checkout repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -284,9 +282,7 @@ jobs:
     needs: [save-test-results]
     strategy:
       fail-fast: false
-      matrix:
-        os: ['ubuntu-20.04', 'ubuntu-22.04']
-    runs-on: ${{ matrix.os }}
+    runs-on: 'ubuntu-20.04'
     steps:
     - name: Checkout repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -307,9 +303,7 @@ jobs:
     needs: [update-intermediary-dashboard-json]
     strategy:
       fail-fast: false
-      matrix:
-        os: ['ubuntu-20.04', 'ubuntu-22.04']
-    runs-on: ${{ matrix.os }}
+    runs-on: 'ubuntu-20.04'
     steps:
     - name: Checkout repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
