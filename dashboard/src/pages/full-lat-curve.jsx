@@ -83,6 +83,7 @@ const FullLatCurve = (props) => {
                     max:zoom*8
                 },
                 xaxis: {
+                    tickAmount: 8,
                     labels: {
                         hideOverlappingLabels: true,
                     }

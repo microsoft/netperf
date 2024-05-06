@@ -17,6 +17,12 @@ All the machines are connected by a 400 GbE [PowerSwitch Z9432F](https://www.del
 
 ### Setup
 
+First, make sure you set bootdebug to be off.
+
+Before restarting, run in an elevated powershell terminal:
+- bcdedit /set debug off
+- bcdedit /set bootdebug off
+
 #### BIOS Configuration
 
 The following changes must be made to each lab machine from the default configuration:
@@ -24,6 +30,14 @@ The following changes must be made to each lab machine from the default configur
 - Processor Settings -> Kernel DMA Protection -> Enabled
 - Integrated Devices -> SR-IOV Global Enable -> Enabled
 - System Profile Settings -> System Profile -> Performance
+
+### Hyper-V
+By default, hyper-V won't be enabled on the lab machines. You need to enable it via "turn windows features on or off"
+
+Just make sure to select all network adapters available on the host in the wizard. You should leave all others options to their default values.
+
+**Set Secure Boot To Off**
+Once you have downloaded and setup your VM on hyper-V, you need to turn secure boot off in the hyper-V settings.
 
 #### OS Deployment
 
@@ -52,3 +66,50 @@ We also leverage Azure VMs to test realistic, production environments:
 - 25 Gbps Max Network Bandwidth
 
 The VMs are connected by a shared virtual network.
+
+
+# Set up
+
+The following instructions are required to set up each machine in the pool.
+
+## Configuration (Windows)
+
+The following steps are required to set up each machine in the pool.
+
+```PowerShell
+$username = 'secnetperf'
+$password = '************' # Ask for the password to use
+$token = '************'    # Find at https://github.com/microsoft/netperf/settings/actions/runners/new?arch=x64&os=win
+$machine1 = '10.1.0.8'     # This is the GitHub runner machine's IP address
+$machine2 = '10.1.0.9'     # This is the peer machine's IP address
+$url = "https://raw.githubusercontent.com/microsoft/netperf/main/setup-runner-windows.ps1"
+```
+
+```PowerShell
+# Run on GitHub runner machine
+iex "& { $(irm $url) } $username $password $machine2 $token"
+```
+
+```PowerShell
+# Run on peer machine
+iex "& { $(irm $url) } $username $password $machine1"
+```
+
+## Configuration (Linux)
+
+```
+curl https://raw.githubusercontent.com/microsoft/netperf/main/setup-runner-linux.sh -o setup-runner-linux.sh
+# Make sure to run this script twice to properly install everything (to account for lab vs. Azure environment differences)
+bash setup-runner-linux.sh -i <peerip> -g <github token *do this on client only> -n <no reboot *optional>
+# Do this on the client only:
+ssh-copy-id <username of peer>@<peerip>
+```
+
+## Configure IP addresses for lab linux VMs
+
+Depending on your specific linux distro, the process varies a bit.
+
+But the main idea is to use the `ip` util built in to `net-tools` to add an IP to your mellanox NIC.
+The usual command is `sudo ip addr add (address / CIDR block) dev (NIC name)`. The problem is, if you reboot, Linux will revert your IP assignments. So what you do is you can create a startup script that runs on boot leveraging `systemd` or some other service depending on your Linux distro.
+
+Our convention is to set the IP address to `192.168.0.(machine ID + 1)`. So machine RR1-NETPERF-20 would get assigned IP address `192.168.0.21`.

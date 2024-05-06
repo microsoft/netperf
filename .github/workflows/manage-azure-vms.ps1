@@ -27,7 +27,10 @@ param (
     [string]$MatrixFileName = "quic_matrix.json",
 
     [Parameter(Mandatory = $false)]
-    [string]$ResourceGroupName = "netperf-ex"
+    [string]$ResourceGroupName = "netperf-ex",
+
+    [Parameter(Mandatory = $false)]
+    [string]$ThisWorkflowId = "NULL"
 )
 
 function Remove-GitHubRunner {
@@ -96,13 +99,13 @@ try {
         $vm = $_
         $vmCreationTime = $vm.Tags["CreationTime"]
         $vmWorkflowId = $vm.Tags["WorkflowId"]
-        if (!($vm.Name.Contains("ex-"))) {
+        if (!($vm.Name.Contains("ex-")) -or !($vm.Name.Contains("f4-")) -or !($vm.Name.Contains("f8-"))) {
 
             $WorkflowThatReferenceThisVm = $WorkflowRuns.workflow_runs | Where-Object {
                 $_.workflow_id -eq $vmWorkflowId -and $_.status -eq 'in_progress'
             }
 
-            if ($WorkflowThatReferenceThisVm) {
+            if ($WorkflowThatReferenceThisVm -and !($vmWorkflowId -eq $ThisWorkflowId)) {
                 Write-Host "Ignoring VM: $($vm.Name) as it's in use by a running workflow. Workflow ID: $vmWorkflowId, Vm Creation Time: $vmCreationTime"
                 $aliveVm.Add($vm.Name)
                 continue
@@ -148,21 +151,34 @@ try {
 }
 
 $AzureJson = @()
+$ProcessedJson = @()
+
 # 2. Modify matrix.json.
 foreach ($entry in $MatrixJson) {
+
+    if ($entry.env -match "azure") {
+        # TODO: Remove this once Security has been sorted out.
+        continue
+    }
+
     # check if entry.env has substring "azure" in it
-    if ($entry.env -match "azure" -and $entry.os -match "windows-2022") { # TODO: Add support for windows-2025 and Linux.
+    if ($entry.env -match "azure" -and $entry.os -match "windows-2022") {
         $randomTag = [System.Guid]::NewGuid().ToString()
         # limit randomTag to 13 characters
         $randomTag = $randomTag.Substring(0, [Math]::Min(12, $randomTag.Length))
         $randomTag = "a" + $randomTag
         $entry | Add-Member -MemberType NoteProperty -Name "runner_id" -Value $randomTag
         $AzureJson += $entry
+        $ProcessedJson += $entry
+    } elseif ($entry.env -match "azure" -and $entry.os -match "ubuntu-20.04") {
+        continue
+    } else {
+        $ProcessedJson += $entry
     }
 }
 
 # Save JSON to file
-$MatrixJson | ConvertTo-Json | Set-Content -Path .\.github\workflows\processed-matrix.json
+$ProcessedJson | ConvertTo-Json | Set-Content -Path .\.github\workflows\processed-matrix.json
 $AzureJson | ConvertTo-Json | Set-Content -Path .\.github\workflows\azure-matrix.json
 
 # 3. TODO; load management with Abstract Pool Queue Logic here.

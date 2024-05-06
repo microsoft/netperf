@@ -55,7 +55,7 @@ export default function HpsPage() {
     // const quicwsk = data[`${windowsOs}-${env}-wsk-schannel`][`${testType}-quic`]['data'].slice().reverse();
 
     uploadThroughput =
-      <GraphView title={`${testType === 'up' ? 'Upload' : 'Download'} Throughput`}
+      <GraphView title={`Handshakes Per Second Throughput`}
     subheader={`Tested using ${windowsOs}, ${linuxOs}, taking the max of 3 runs. `}
     labels={indices}
     map={(index) => {
