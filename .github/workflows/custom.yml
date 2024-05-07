@@ -31,6 +31,14 @@ jobs:
         run: Get-NetIpAddress -AddressFamily IPv4
         shell: pwsh
 
+      - name: Get WinRM info
+        run: Get-Service WinRM
+        shell: pwsh
+
+      - name: WinRM quickconfig
+        run: echo Y | winrm quickconfig
+        shell: pwsh
+
       - name: Disable Windows Defender / Firewall
         run: |
           # Disable Windows defender / firewall.
