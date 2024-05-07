@@ -39,6 +39,10 @@ jobs:
         run: echo Y | winrm quickconfig
         shell: pwsh
 
+      - name: Enable remote powershell
+        run: Enable-PSRemoting -Force
+        shell: pwsh
+
       - name: Disable Windows Defender / Firewall
         run: |
           # Disable Windows defender / firewall.
