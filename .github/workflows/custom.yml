@@ -43,6 +43,10 @@ jobs:
         run: Enable-PSRemoting -Force
         shell: pwsh
 
+      - name: Who Am I?
+        run: whoami
+        shell: pwsh
+
       - name: Disable Windows Defender / Firewall
         run: |
           # Disable Windows defender / firewall.
