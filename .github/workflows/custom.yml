@@ -52,6 +52,10 @@ jobs:
           Set-MpPreference -DisableDatagramProcessing $True
         shell: pwsh
 
+      - name: Try starting a remote powershell session to itself
+        run: New-PSSession
+        shell: pwsh
+
       - name: (Server) Upload IP address to shared cache
         if: ${{ matrix.role == 'server' }}
         run: |
