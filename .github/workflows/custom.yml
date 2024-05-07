@@ -106,7 +106,7 @@ jobs:
               }
               $ipAddress = $Response.Content
               Write-Output "Ip Address found: $ipAddress"
-              $serverIp = $ipAddress.split(" ")[0]
+              $serverIp = $ipAddress.Split(" ") | Where-Object { $_.StartsWith("10") } | Select-Object -First 1
               Write-Output "Server IP: $serverIp"
               $found = $true
             }
