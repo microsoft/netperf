@@ -78,15 +78,9 @@ jobs:
               $found = $true
             }
             catch {
-              Write-Output "Client not done testing yet. Spinning up server..."
+              Write-Output "Client not done testing yet. Waiting for ACK..."
               # We can poll for config here
-              try {
-                Write-Host "Spin up server. Setup a watchdog timer for 30 seconds Waiting to serve the client."
-                .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -exec:maxtput -watchdog:30000
-              }
-              catch {
-                Write-Output "Exit from server: $_"
-              }
+              Start-Sleep -Seconds 30
             }
           } while (-not $found)
         shell: pwsh
