@@ -47,6 +47,10 @@ jobs:
         run: whoami
         shell: pwsh
 
+      - name: Print local users
+        run: Get-LocalUser
+        shell: pwsh
+
       - name: Disable Windows Defender / Firewall
         run: |
           # Disable Windows defender / firewall.
