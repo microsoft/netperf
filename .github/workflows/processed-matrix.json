@@ -1,0 +1,30 @@
+[
+  {
+    "env": "lab",
+    "os": "windows-2022",
+    "arch": "x64",
+    "tls": "schannel",
+    "io": "iocp"
+  },
+  {
+    "env": "lab",
+    "os": "windows-2022",
+    "arch": "x64",
+    "tls": "schannel",
+    "io": "xdp"
+  },
+  {
+    "env": "lab",
+    "os": "windows-2022",
+    "arch": "x64",
+    "tls": "schannel",
+    "io": "wsk"
+  },
+  {
+    "env": "lab",
+    "os": "ubuntu-20.04",
+    "arch": "x64",
+    "tls": "openssl",
+    "io": "epoll"
+  }
+]

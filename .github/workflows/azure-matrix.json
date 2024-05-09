@@ -1,0 +1,102 @@
+[
+  {
+    "env": "azure",
+    "os": "ubuntu-20.04",
+    "arch": "x64",
+    "tls": "openssl",
+    "io": "epoll",
+    "assigned_pool": "netperf-aztestpool-linux",
+    "role": "client",
+    "env_str": "ubuntu-20.04-x64-openssl-epoll"
+  },
+  {
+    "env": "azure",
+    "os": "ubuntu-20.04",
+    "arch": "x64",
+    "tls": "openssl",
+    "io": "epoll",
+    "assigned_pool": "netperf-aztestpool-linux",
+    "role": "server",
+    "env_str": "ubuntu-20.04-x64-openssl-epoll"
+  },
+  {
+    "env": "azure",
+    "os": "windows-2022",
+    "arch": "x64",
+    "tls": "schannel",
+    "io": "iocp",
+    "assigned_pool": "netperf-aztestpool",
+    "role": "client",
+    "env_str": "windows-2022-x64-schannel-iocp"
+  },
+  {
+    "env": "azure",
+    "os": "windows-2022",
+    "arch": "x64",
+    "tls": "schannel",
+    "io": "iocp",
+    "assigned_pool": "netperf-aztestpool",
+    "role": "server",
+    "env_str": "windows-2022-x64-schannel-iocp"
+  },
+  {
+    "env": "azure",
+    "os": "windows-2022",
+    "arch": "x64",
+    "tls": "schannel",
+    "io": "xdp",
+    "assigned_pool": "netperf-aztestpool",
+    "role": "client",
+    "env_str": "windows-2022-x64-schannel-xdp"
+  },
+  {
+    "env": "azure",
+    "os": "windows-2022",
+    "arch": "x64",
+    "tls": "schannel",
+    "io": "xdp",
+    "assigned_pool": "netperf-aztestpool",
+    "role": "server",
+    "env_str": "windows-2022-x64-schannel-xdp"
+  },
+  {
+    "env": "azure",
+    "os": "windows-2022",
+    "arch": "x64",
+    "tls": "schannel",
+    "io": "rio",
+    "assigned_pool": "netperf-aztestpool",
+    "role": "client",
+    "env_str": "windows-2022-x64-schannel-rio"
+  },
+  {
+    "env": "azure",
+    "os": "windows-2022",
+    "arch": "x64",
+    "tls": "schannel",
+    "io": "rio",
+    "assigned_pool": "netperf-aztestpool",
+    "role": "server",
+    "env_str": "windows-2022-x64-schannel-rio"
+  },
+  {
+    "env": "azure",
+    "os": "windows-2022",
+    "arch": "x64",
+    "tls": "schannel",
+    "io": "wsk",
+    "assigned_pool": "netperf-aztestpool",
+    "role": "client",
+    "env_str": "windows-2022-x64-schannel-wsk"
+  },
+  {
+    "env": "azure",
+    "os": "windows-2022",
+    "arch": "x64",
+    "tls": "schannel",
+    "io": "wsk",
+    "assigned_pool": "netperf-aztestpool",
+    "role": "server",
+    "env_str": "windows-2022-x64-schannel-wsk"
+  }
+]

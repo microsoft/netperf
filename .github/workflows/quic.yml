@@ -139,35 +139,195 @@ jobs:
       build: -Perf
       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
-
-  #
-  # Manage and create temporary VMs
-  # NOTE: tag == env
-  #
-  create-azure-vms:
-    name: Manage and Create Temporary VMs
-    uses: microsoft/netperf/.github/workflows/create-azure-vms.yml@main
+  prepare-matrix:
+    name: Prepare lab matrix, and Azure 1ES matrix.
+    uses: microsoft/netperf/.github/workflows/prepare-matrix.yml@jackhe/1es-azure-pools
     with:
       matrix_filename: 'quic_matrix.json'
       workflowId: ${{ github.run_id }}
-    secrets:
-      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-      VM_PASSWORD: ${{ secrets.VM_PASSWORD }}
 
+  run-secnetperf-1es:
+    name: secnetperf-1es
+    needs: [build-unix, build-windows, build-windows-kernel, prepare-matrix]
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{fromJson(needs.prepare-matrix.outputs.azure-matrix)}}
+    runs-on:
+    - self-hosted
+    - 1ES.Pool=${{ matrix.assigned_pool }}
+    steps:
+      - name: Print Role
+        run: Write-Host "Role; ${{ matrix.role }}"
+        shell: pwsh
+
+      - name: Print networking information
+        run: Get-NetIpAddress -AddressFamily IPv4
+        shell: pwsh
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+        with:
+          name: Release-${{env.OS}}-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-Perf
+          path: artifacts
+
+      - name: Download Kernel Artifacts
+        uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+        if: ${{ matrix.io == 'wsk' }}
+        with:
+          name: Release-winkernel-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}
+          path: artifacts
+
+      - name: Disable Windows Defender / Firewall
+        run: |
+          # Disable Windows defender / firewall.
+          Write-Host "Disabling Windows Defender / Firewall."
+          netsh.exe advfirewall set allprofiles state off
+          Set-MpPreference -EnableNetworkProtection Disabled
+          Set-MpPreference -DisableDatagramProcessing $True
+        shell: pwsh
+
+      - name: (Server) Upload IP address to shared cache
+        if: ${{ matrix.role == 'server' }}
+        run: |
+          $ipAddress = (Get-NetIpAddress -AddressFamily IPv4).IpAddress
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+          Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_ipaddress&value=$ipAddress" -Headers $headers
+        shell: pwsh
+
+
+      - name: (Server) Start Secnetperf server and polls for an ACK.
+        if: ${{ matrix.role == 'server' }}
+        run: |
+          $found = $false
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+          $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_ack"
+          do {
+            try {
+              $Response = Invoke-WebRequest -Uri $uri -Headers $headers
+              if (!($Response.StatusCode -eq 200)) {
+                throw "Failed to get ACK. Status code: $($Response.StatusCode)"
+              }
+              $ack = $Response.Content
+              Write-Output "ACK found: $ack"
+              $found = $true
+            }
+            catch {
+              Write-Output "Client not done testing yet. Spinning up server..."
+              # We can poll for config here
+              try {
+                Write-Host "Spin up server. When the client wants to shut down the server, they will send a special UDP packet."
+                .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -exec:maxtput
+              }
+              catch {
+                Write-Output "Exit from server: $_"
+              }
+            }
+          } while (-not $found)
+        shell: pwsh
+
+      - name: (Client) Poll for an ip address uploaded by the server
+        if: ${{ matrix.role == 'client' }}
+        run: |
+          $found = $false
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+          $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_ipaddress"
+          do {
+            Write-Output "Checking for ip address..."
+            try {
+              $Response = Invoke-WebRequest -Uri $uri -Headers $headers
+              if (!($Response.StatusCode -eq 200)) {
+                throw "Failed to get ip address. Status code: $($Response.StatusCode)"
+              }
+              $ipAddress = $Response.Content
+              Write-Output "Ip Address found: $ipAddress"
+              $serverIp = $ipAddress.split(" ")[0]
+              Write-Output "Server IP: $serverIp"
+              $found = $true
+            }
+            catch {
+              Write-Output "Ip Address not found: $_"
+              Start-Sleep -Seconds 5
+            }
+          } while (-not $found)
+
+          Write-Host "Preparing to run secnetperf"
+          "$serverIp netperf-peer" | Out-File -Encoding ASCII -Append "$env:SystemRoot\System32\drivers\etc\hosts"
+          Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer' -Force
+
+          Write-Host "$(Get-Date) Try running secnetperf"
+          $FinishedTests = $false
+          $Attempts = 0
+          while ($Attempts -lt 5) {
+            try {
+              $res = .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -target:netperf-peer -exec:maxtput -down:12s -ptput:1 -io:iocp -pconn:1 -pstream:1
+              $didFail = $res | Where-Object { $_ -like "*No Successful Connections!*" }
+              if ($didFail) {
+                throw "Failed to run secnetperf: $res"
+              } else {
+                Write-Output "secnetperf succeeded: $res"
+                $FinishedTests = $true
+              }
+              break
+            }
+            catch {
+              Write-Output "Failed to run secnetperf: $_"
+              $Attempts += 1
+              Start-Sleep -Seconds 30
+            }
+          }
+        shell: pwsh
+
+      - name: (Client) Upload ACK to shared cache
+        if: ${{ matrix.role == 'client' }}
+        run: |
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+          Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_ack&value=ack" -Headers $headers
+        shell: pwsh
+
+      - name: (Client) Tell Server to shut down
+        if: ${{ matrix.role == 'client' }}
+        run: |
+          function Stop-RemoteServer {
+              param ($RemoteAddress)
+              # Ping side-channel socket on 9999 to tell the app to die
+              $Socket = New-Object System.Net.Sockets.UDPClient
+              $BytesToSend = @(
+                  0x57, 0xe6, 0x15, 0xff, 0x26, 0x4f, 0x0e, 0x57,
+                  0x88, 0xab, 0x07, 0x96, 0xb2, 0x58, 0xd1, 0x1c
+              )
+              $Socket.Send($BytesToSend, $BytesToSend.Length, $RemoteAddress, 9999) | Out-Null
+          }
+
+          for ($i = 0; $i -lt 5; $i++) {
+            try {
+              Stop-RemoteServer -RemoteAddress "netperf-peer"
+            }
+            catch {
+              Write-Output "Failed to send special UDP packet: $_"
+            }
+            Start-Sleep -Seconds 5
+          }
+        shell: pwsh
   #
   # Test Jobs.
   # NOTE: tag == env
   #
   run-secnetperf: # This would be 1 enumeration, after CTS has setup the environment with the correct OS type and version.
     name: secnetperf
-    needs: [build-unix, build-windows, build-windows-kernel, create-azure-vms]
+    needs: [build-unix, build-windows, build-windows-kernel, prepare-matrix]
     strategy:
       fail-fast: false
       matrix:
-        include: ${{fromJson(needs.create-azure-vms.outputs.full-matrix)}}
+        include: ${{fromJson(needs.prepare-matrix.outputs.full-matrix)}}
     runs-on:
     - self-hosted
     - ${{ matrix.runner_id || matrix.env }} # Use auto-generated 'runner id' if present, otherwise assign to 'env'.
@@ -238,7 +398,7 @@ jobs:
   #
   generate-summary:
     name: Results
-    needs: [run-secnetperf]
+    needs: [run-secnetperf, run-secnetperf-1es]
     runs-on: 'ubuntu-20.04'
     steps:
     - name: Checkout repository
