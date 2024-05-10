@@ -72,6 +72,8 @@ The VMs are connected by a shared virtual network.
 
 The following instructions are required to set up each machine in the pool.
 
+### NOTE: For lab scenarios, you need to assign an IP address to the VM.
+
 ## Configuration (Windows)
 
 The following steps are required to set up each machine in the pool.
@@ -95,6 +97,30 @@ iex "& { $(irm $url) } $username $password $machine2 $token"
 iex "& { $(irm $url) } $username $password $machine1"
 ```
 
+## Lab Configuration (Windows)
+
+```PowerShell
+$username = 'secnetperf'
+$password = '************' # Ask for the password to use
+$token = '************'    # Find at https://github.com/microsoft/netperf/settings/actions/runners/new?arch=x64&os=win
+$machine1 = '192.168.0.XXX' # This is the GitHub runner machine's IP address (XXX is host machine ID + 1)
+$machine2 = '192.168.0.YYY' # This is the peer machine's IP address (YYY is host machine ID + 1)
+$url = "https://raw.githubusercontent.com/microsoft/netperf/main/setup-runner-windows.ps1"
+$labels = "whatever_labels_you_want_tagged"
+```
+
+```PowerShell
+# Run on GitHub runner machine
+# Download $url script
+Invoke-Command ".\setup-runner-windows.ps1 --Username $username --Password $password --PeerIp $machine2 --GithubToken $token --NewIpAddress $machine1 --RunnerLabels $labels"
+```
+
+```PowerShell
+# Run on peer machine
+# Download $url script
+Invoke-Command ".\setup-runner-windows.ps1 --Username $username --Password $password --PeerIp $machine1 --NewIpAddress $machine2 --RunnerLabels $labels"
+```
+
 ## Configuration (Linux)
 
 ```
@@ -105,11 +131,13 @@ bash setup-runner-linux.sh -i <peerip> -g <github token *do this on client only>
 ssh-copy-id <username of peer>@<peerip>
 ```
 
-## Configure IP addresses for lab linux VMs
+## Lab Configuration (Linux)
 
-Depending on your specific linux distro, the process varies a bit.
+First, do all the steps in Configuration (Linux).
 
-But the main idea is to use the `ip` util built in to `net-tools` to add an IP to your mellanox NIC.
+Next, you need to use the `ip` util to assign an IP to the VM, and create a startup script that assigns that IP. The IP address should be a fixed value depending on the machine ID of the lab host.
+
+To use the `ip` util built in to `net-tools` to add an IP to your mellanox NIC:
 The usual command is `sudo ip addr add (address / CIDR block) dev (NIC name)`. The problem is, if you reboot, Linux will revert your IP assignments. So what you do is you can create a startup script that runs on boot leveraging `systemd` or some other service depending on your Linux distro.
 
 Our convention is to set the IP address to `192.168.0.(machine ID + 1)`. So machine RR1-NETPERF-20 would get assigned IP address `192.168.0.21`.
