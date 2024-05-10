@@ -15,6 +15,21 @@ on:
 
 permissions: write-all
 
+build-windows:
+    name: Build WinUser
+    needs: []
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ['windows-2022']
+        tls: [schannel] # , openssl, openssl3]
+    uses: microsoft/msquic/.github/workflows/build-reuse-win.yml@main
+    with:
+      os: ${{ matrix.os }}
+      tls: ${{ matrix.tls }}
+      build: -Perf
+      ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+
 jobs:
   testjob:
     needs: []
@@ -51,6 +66,12 @@ jobs:
         run: Get-LocalUser
         shell: pwsh
 
+      - name: Download Artifacts
+        uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+        with:
+          name: Release-windows-windows-2022-x64-schannel-Perf
+          path: artifacts
+
       - name: Disable Windows Defender / Firewall
         run: |
           # Disable Windows defender / firewall.
@@ -58,10 +79,6 @@ jobs:
           netsh.exe advfirewall set allprofiles state off
           Set-MpPreference -EnableNetworkProtection Disabled
           Set-MpPreference -DisableDatagramProcessing $True
-        shell: pwsh
-
-      - name: Try starting a remote powershell session to itself
-        run: New-PSSession
         shell: pwsh
 
       - name: (Server) Upload IP address to shared cache
@@ -75,7 +92,7 @@ jobs:
         shell: pwsh
 
 
-      - name: (Server) Start Secnetperf server and polls for an ACK.
+      - name: (Server) Polls for an ACK from the client
         if: ${{ matrix.role == 'server' }}
         run: |
           $found = $false
@@ -138,6 +155,36 @@ jobs:
           pwsh --version
           $Session = New-PSSession -ComputerName netperf-peer
           $session
+
+          Write-Host "Using remote powershell session to start Secnetperf"
+          Invoke-Command -Session $Session -ScriptBlock {
+            .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -exec:maxtput
+          }
+          Write-Host "Wait for remote powershell to start server on server"
+          Start-Sleep -Seconds 10
+
+          Write-Host "$(Get-Date) Try running secnetperf"
+          $FinishedTests = $false
+          $Attempts = 0
+          while ($Attempts -lt 5) {
+            try {
+              $res = .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -target:netperf-peer -exec:maxtput -down:12s -ptput:1 -io:iocp -pconn:1 -pstream:1
+              $didFail = $res | Where-Object { $_ -like "*No Successful Connections!*" }
+              if ($didFail) {
+                throw "Failed to run secnetperf: $res"
+              } else {
+                Write-Output "secnetperf succeeded: $res"
+                $FinishedTests = $true
+              }
+              break
+            }
+            catch {
+              Write-Output "Failed to run secnetperf: $_"
+              $Attempts += 1
+              Start-Sleep -Seconds 30
+            }
+          }
+
         shell: pwsh
 
       - name: (Client) Upload ACK to shared cache
