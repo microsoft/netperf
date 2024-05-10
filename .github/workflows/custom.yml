@@ -72,6 +72,10 @@ jobs:
           name: Release-windows-windows-2022-x64-schannel-Perf
           path: artifacts
 
+      - name: Copy Artifact directory to known directory
+        run: Copy-Item -Path .\artifacts -Destination C:\ -Recurse
+        shell: pwsh
+
       - name: Disable Windows Defender / Firewall
         run: |
           # Disable Windows defender / firewall.
@@ -158,7 +162,7 @@ jobs:
 
           Write-Host "Using remote powershell session to start Secnetperf"
           Invoke-Command -Session $Session -ScriptBlock {
-            .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -exec:maxtput
+            C:\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -exec:maxtput
           }
           Write-Host "Wait for remote powershell to start server on server"
           Start-Sleep -Seconds 10
