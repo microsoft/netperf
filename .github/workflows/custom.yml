@@ -165,9 +165,9 @@ jobs:
           Invoke-Command -Session $Session -ScriptBlock {
             New-Item -ItemType File -Name "Sanity-check.txt" -Path "C:\"
           }
+          Write-Host "Try starting secnetperf.exe on server"
           Invoke-Command -Session $Session -ScriptBlock {
-            Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process -Force
-            C:\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -exec:maxtput
+            Start-Process -FilePath "C:\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe" -ArgumentList "-exec:maxtput" -Wait
           }
           Write-Host "Wait for remote powershell to start server on server"
           Start-Sleep -Seconds 10
