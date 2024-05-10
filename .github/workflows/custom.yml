@@ -59,7 +59,7 @@ jobs:
         shell: pwsh
 
       - name: Print networking information
-        run: Get-NetIpAddress -AddressFamily IPv4
+        run: ip addr
         shell: pwsh
 
       - name: Download Artifacts
@@ -71,7 +71,7 @@ jobs:
       - name: (Server) Upload IP address to shared cache
         if: ${{ matrix.role == 'server' }}
         run: |
-          $ipAddress = (Get-NetIpAddress -AddressFamily IPv4).IpAddress
+          $ipAddress = ip addr | grep inet
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
