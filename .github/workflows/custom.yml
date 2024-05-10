@@ -136,10 +136,7 @@ jobs:
           Write-Host "$(Get-Date) Try starting a remote session"
           Write-Host "Print powershell version information: "
           pwsh --version
-          $username = "secnetperf"
-          $password = {{ secrets.VM_PASSWORD }} | ConvertTo-SecureString -AsPlainText -Force
-          $cred = New-Object System.Management.Automation.PSCredential ($username, $password)
-          $Session = New-PSSession -ComputerName netperf-peer -Credential $cred -ConfigurationName PowerShell.7
+          $Session = New-PSSession -ComputerName netperf-peer
           $session
         shell: pwsh
 
