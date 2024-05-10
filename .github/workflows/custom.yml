@@ -15,7 +15,8 @@ on:
 
 permissions: write-all
 
-build-windows:
+jobs:
+  build-windows:
     name: Build WinUser
     needs: []
     strategy:
@@ -30,9 +31,8 @@ build-windows:
       build: -Perf
       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
-jobs:
   testjob:
-    needs: []
+    needs: [build-windows]
     strategy:
       matrix:
         role: ["client", "server"]
