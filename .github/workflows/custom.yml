@@ -31,6 +31,173 @@ jobs:
       build: -Perf
       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
+  build-unix:
+    name: Build Unix
+    needs: []
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ['ubuntu-20.04']
+        tls: [openssl] # , openssl3]
+    uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml@main
+    with:
+      os: ${{ matrix.os }}
+      tls: ${{ matrix.tls }}
+      build: -Perf
+      ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+
+
+  testjob-linux:
+    needs: [build-unix]
+    strategy:
+      matrix:
+        role: ["client", "server"]
+    runs-on: [self-hosted, 1ES.Pool=netperf-aztestpool-linux]
+    steps:
+      - name: Print Role
+        run: Write-Host "Role; ${{ matrix.role }}"
+        shell: pwsh
+
+      - name: Print networking information
+        run: Get-NetIpAddress -AddressFamily IPv4
+        shell: pwsh
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+        with:
+          name: Release-linux-ubuntu-20.04-x64-schannel-Perf
+          path: artifacts
+
+      - name: (Server) Upload IP address to shared cache
+        if: ${{ matrix.role == 'server' }}
+        run: |
+          $ipAddress = (Get-NetIpAddress -AddressFamily IPv4).IpAddress
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+          Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_ipaddress&value=$ipAddress" -Headers $headers
+        shell: pwsh
+
+      - name: (Server) Start Secnetperf server and polls for an ACK.
+        if: ${{ matrix.role == 'server' }}
+        run: |
+          $found = $false
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+          $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_ack"
+          do {
+            try {
+              $Response = Invoke-WebRequest -Uri $uri -Headers $headers
+              if (!($Response.StatusCode -eq 200)) {
+                throw "Failed to get ACK. Status code: $($Response.StatusCode)"
+              }
+              $ack = $Response.Content
+              Write-Output "ACK found: $ack"
+              $found = $true
+            }
+            catch {
+              Write-Output "Client not done testing yet. Spinning up server..."
+              # We can poll for config here
+              try {
+                Write-Host "Spin up server. When the client wants to shut down the server, they will send a special UDP packet."
+                .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -exec:maxtput
+              }
+              catch {
+                Write-Output "Exit from server: $_"
+              }
+            }
+          } while (-not $found)
+        shell: pwsh
+
+      - name: (Client) Poll for an ip address uploaded by the server
+        if: ${{ matrix.role == 'client' }}
+        run: |
+          $found = $false
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+          $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_ipaddress"
+          do {
+            Write-Output "Checking for ip address..."
+            try {
+              $Response = Invoke-WebRequest -Uri $uri -Headers $headers
+              if (!($Response.StatusCode -eq 200)) {
+                throw "Failed to get ip address. Status code: $($Response.StatusCode)"
+              }
+              $ipAddress = $Response.Content
+              Write-Output "Ip Address found: $ipAddress"
+              $serverIp = $ipAddress.split(" ")[0]
+              Write-Output "Server IP: $serverIp"
+              $found = $true
+            }
+            catch {
+              Write-Output "Ip Address not found: $_"
+              Start-Sleep -Seconds 5
+            }
+          } while (-not $found)
+
+          Write-Host "Preparing to run secnetperf"
+          "$serverIp netperf-peer" | Out-File -Encoding ASCII -Append "$env:SystemRoot\System32\drivers\etc\hosts"
+          Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer' -Force
+
+          Write-Host "$(Get-Date) Try running secnetperf"
+          $FinishedTests = $false
+          $Attempts = 0
+          while ($Attempts -lt 5) {
+            try {
+              $res = .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -target:netperf-peer -exec:maxtput -down:12s -ptput:1 -io:iocp -pconn:1 -pstream:1
+              $didFail = $res | Where-Object { $_ -like "*No Successful Connections!*" }
+              if ($didFail) {
+                throw "Failed to run secnetperf: $res"
+              } else {
+                Write-Output "secnetperf succeeded: $res"
+                $FinishedTests = $true
+              }
+              break
+            }
+            catch {
+              Write-Output "Failed to run secnetperf: $_"
+              $Attempts += 1
+              Start-Sleep -Seconds 30
+            }
+          }
+        shell: pwsh
+
+      - name: (Client) Upload ACK to shared cache
+        if: ${{ matrix.role == 'client' }}
+        run: |
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+          Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_ack&value=ack" -Headers $headers
+        shell: pwsh
+
+      - name: (Client) Tell Server to shut down
+        if: ${{ matrix.role == 'client' }}
+        run: |
+          function Stop-RemoteServer {
+              param ($RemoteAddress)
+              # Ping side-channel socket on 9999 to tell the app to die
+              $Socket = New-Object System.Net.Sockets.UDPClient
+              $BytesToSend = @(
+                  0x57, 0xe6, 0x15, 0xff, 0x26, 0x4f, 0x0e, 0x57,
+                  0x88, 0xab, 0x07, 0x96, 0xb2, 0x58, 0xd1, 0x1c
+              )
+              $Socket.Send($BytesToSend, $BytesToSend.Length, $RemoteAddress, 9999) | Out-Null
+          }
+
+          for ($i = 0; $i -lt 5; $i++) {
+            try {
+              Stop-RemoteServer -RemoteAddress "netperf-peer"
+            }
+            catch {
+              Write-Output "Failed to send special UDP packet: $_"
+            }
+            Start-Sleep -Seconds 5
+          }
+        shell: pwsh
+
 
   testjob:
     needs: [build-windows]
