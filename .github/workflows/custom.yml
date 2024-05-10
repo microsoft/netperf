@@ -106,6 +106,7 @@ jobs:
           $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_ack"
           do {
             try {
+              ls C:\
               $Response = Invoke-WebRequest -Uri $uri -Headers $headers
               if (!($Response.StatusCode -eq 200)) {
                 throw "Failed to get ACK. Status code: $($Response.StatusCode)"
@@ -161,6 +162,9 @@ jobs:
           $session
 
           Write-Host "Using remote powershell session to start Secnetperf"
+          Invoke-Command -Session $Session -ScriptBlock {
+            New-Item -ItemType File -Name "Sanity-check.txt" -Path "C:\"
+          }
           Invoke-Command -Session $Session -ScriptBlock {
             C:\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -exec:maxtput
           }
