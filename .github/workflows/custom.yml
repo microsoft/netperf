@@ -76,11 +76,6 @@ jobs:
         run: Copy-Item -Path .\artifacts -Destination C:\ -Recurse
         shell: pwsh
 
-      - name: Try running secnetperf locally
-        run: |
-          pwd
-          C:\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -exec:maxtput
-
       - name: Disable Windows Defender / Firewall
         run: |
           # Disable Windows defender / firewall.
@@ -163,9 +158,9 @@ jobs:
           Write-Host "$(Get-Date) Try starting a remote session"
           Write-Host "Print powershell version information: "
           pwsh --version
-          $Session = New-PSSession -ComputerName netperf-peer
-          $session
-
+          $Cred = Get-Credential
+          $Session = New-PSSession -ComputerName netperf-peer -Credential $Cred
+          $Session
           Write-Host "Using remote powershell session to start Secnetperf"
           Invoke-Command -Session $Session -ScriptBlock {
             New-Item -ItemType File -Name "Sanity-check.txt" -Path "C:\"
