@@ -167,7 +167,7 @@ jobs:
           }
           Write-Host "Try starting secnetperf.exe on server"
           Invoke-Command -Session $Session -ScriptBlock {
-            Start-Process -FilePath "C:\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe" -ArgumentList "-exec:maxtput" -Wait
+            iex "C:\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -exec:maxtput"
           }
           Write-Host "Wait for remote powershell to start server on server"
           Start-Sleep -Seconds 10
