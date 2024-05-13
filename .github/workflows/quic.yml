@@ -195,13 +195,16 @@ jobs:
       - name: (Server) Upload IP address to shared cache
         if: ${{ matrix.role == 'server' }}
         run: |
-          $ipAddress = (Get-NetIpAddress -AddressFamily IPv4).IpAddress
+          if ($isWindows) {
+            $ipAddress = (Get-NetIpAddress -AddressFamily IPv4).IpAddress
+          } else {
+            $ipAddress = ip addr | grep 'inet ' | grep '10' | awk '{print $2}' | cut -d'/' -f1
+          }
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
           Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_ipaddress&value=$ipAddress" -Headers $headers
         shell: pwsh
-
 
       - name: (Server) Start Secnetperf server and polls for an ACK.
         if: ${{ matrix.role == 'server' }}
@@ -226,7 +229,13 @@ jobs:
               # We can poll for config here
               try {
                 Write-Host "Spin up server. When the client wants to shut down the server, they will send a special UDP packet."
-                .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -exec:maxtput
+                if ($isWindows) {
+                  .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -exec:maxtput
+                } else {
+                  $env:LD_LIBRARY_PATH = "$env:LD_LIBRARY_PATH:$(pwd)/artifacts/bin/linux/x64_Release_openssl"
+                  chmod +x ./artifacts/bin/linux/x64_Release_openssl/secnetperf
+                  ./artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:maxtput
+                }
               }
               catch {
                 Write-Output "Exit from server: $_"
@@ -252,7 +261,11 @@ jobs:
               }
               $ipAddress = $Response.Content
               Write-Output "Ip Address found: $ipAddress"
-              $serverIp = $ipAddress.split(" ")[0]
+              if ($isWindows) {
+                $serverIp = $ipAddress.Split(" ") | Where-Object { $_.StartsWith("10") } | Select-Object -First 1
+              } else {
+                $serverIp = $ipAddress
+              }
               Write-Output "Server IP: $serverIp"
               $found = $true
             }
@@ -263,15 +276,23 @@ jobs:
           } while (-not $found)
 
           Write-Host "Preparing to run secnetperf"
-          "$serverIp netperf-peer" | Out-File -Encoding ASCII -Append "$env:SystemRoot\System32\drivers\etc\hosts"
-          Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer' -Force
+          if ($isWindows) {
+            "$serverIp netperf-peer" | Out-File -Encoding ASCII -Append "$env:SystemRoot\System32\drivers\etc\hosts"
+            Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer' -Force
+          } else {
+            echo "$serverIp netperf-peer" | sudo tee -a /etc/hosts
+          }
 
           Write-Host "$(Get-Date) Try running secnetperf"
           $FinishedTests = $false
           $Attempts = 0
           while ($Attempts -lt 5) {
             try {
-              $res = .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -target:netperf-peer -exec:maxtput -down:12s -ptput:1 -io:iocp -pconn:1 -pstream:1
+              if ($isWindows) {
+                $res = .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -target:netperf-peer -exec:maxtput -down:12s -ptput:1 -io:iocp -pconn:1 -pstream:1
+              } else {
+                $res = ./artifacts/bin/linux/x64_Release_openssl/secnetperf -target:netperf-peer -exec:maxtput -down:12s -ptput:1 -io:poll -pconn:1 -pstream:1
+              }
               $didFail = $res | Where-Object { $_ -like "*No Successful Connections!*" }
               if ($didFail) {
                 throw "Failed to run secnetperf: $res"
