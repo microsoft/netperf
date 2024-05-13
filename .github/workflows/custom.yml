@@ -59,7 +59,7 @@ jobs:
         shell: pwsh
 
       - name: Print networking information
-        run: ip addr
+        run: ip addr | grep 'inet ' | grep '10' | awk '{print $2}' | cut -d'/' -f1
         shell: pwsh
 
       - name: Download Artifacts
@@ -71,11 +71,11 @@ jobs:
       - name: (Server) Upload IP address to shared cache
         if: ${{ matrix.role == 'server' }}
         run: |
-          $ipAddress = ip addr | grep inet
+          $ipAddress = ip addr | grep 'inet ' | grep '10' | awk '{print $2}' | cut -d'/' -f1
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
-          Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_ipaddress&value=$ipAddress" -Headers $headers
+          Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_linux_ipaddress&value=$ipAddress" -Headers $headers
         shell: pwsh
 
       - name: (Server) Start Secnetperf server and polls for an ACK.
@@ -85,7 +85,7 @@ jobs:
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
-          $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_ack"
+          $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_linux_ack"
           do {
             try {
               $Response = Invoke-WebRequest -Uri $uri -Headers $headers
@@ -117,7 +117,7 @@ jobs:
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
-          $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_ipaddress"
+          $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_linux_ipaddress"
           do {
             Write-Output "Checking for ip address..."
             try {
@@ -127,7 +127,7 @@ jobs:
               }
               $ipAddress = $Response.Content
               Write-Output "Ip Address found: $ipAddress"
-              $serverIp = $ipAddress.split(" ")[0]
+              $serverIp = $ipAddress
               Write-Output "Server IP: $serverIp"
               $found = $true
             }
@@ -170,7 +170,7 @@ jobs:
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
-          Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_ack&value=ack" -Headers $headers
+          Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_linux_ack&value=ack" -Headers $headers
         shell: pwsh
 
       - name: (Client) Tell Server to shut down
@@ -289,7 +289,7 @@ jobs:
               }
               $ipAddress = $Response.Content
               Write-Output "Ip Address found: $ipAddress"
-              $serverIp = $ipAddress.split(" ")[0]
+              $serverIp = $ipAddress.Split(" ") | Where-Object { $_.StartsWith("10") } | Select-Object -First 1
               Write-Output "Server IP: $serverIp"
               $found = $true
             }
