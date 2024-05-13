@@ -101,7 +101,7 @@ jobs:
               # We can poll for config here
               try {
                 Write-Host "Spin up server. When the client wants to shut down the server, they will send a special UDP packet."
-                .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -exec:maxtput
+                ./artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:maxtput
               }
               catch {
                 Write-Output "Exit from server: $_"
@@ -138,15 +138,12 @@ jobs:
           } while (-not $found)
 
           Write-Host "Preparing to run secnetperf"
-          "$serverIp netperf-peer" | Out-File -Encoding ASCII -Append "$env:SystemRoot\System32\drivers\etc\hosts"
-          Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer' -Force
-
           Write-Host "$(Get-Date) Try running secnetperf"
           $FinishedTests = $false
           $Attempts = 0
           while ($Attempts -lt 5) {
             try {
-              $res = .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -target:netperf-peer -exec:maxtput -down:12s -ptput:1 -io:iocp -pconn:1 -pstream:1
+              $res = ./artifacts/bin/linux/x64_Release_openssl/secnetperf -target:$serverIp -exec:maxtput -down:12s -ptput:1 -io:iocp -pconn:1 -pstream:1
               $didFail = $res | Where-Object { $_ -like "*No Successful Connections!*" }
               if ($didFail) {
                 throw "Failed to run secnetperf: $res"
