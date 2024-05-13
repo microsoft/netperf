@@ -141,13 +141,14 @@ jobs:
 
           Write-Host "Preparing to run secnetperf"
           Write-Host "$(Get-Date) Try running secnetperf"
+          echo "$serverIp netperf-peer" | sudo tee -a /etc/hosts
           $env:LD_LIBRARY_PATH = "$env:LD_LIBRARY_PATH:$(pwd)/artifacts/bin/linux/x64_Release_openssl"
           chmod +x ./artifacts/bin/linux/x64_Release_openssl/secnetperf
           $FinishedTests = $false
           $Attempts = 0
           while ($Attempts -lt 5) {
             try {
-              $res = ./artifacts/bin/linux/x64_Release_openssl/secnetperf -target:$serverIp -exec:maxtput -down:12s -ptput:1 -io:iocp -pconn:1 -pstream:1
+              $res = ./artifacts/bin/linux/x64_Release_openssl/secnetperf -target:netperf-peer -exec:maxtput -down:12s -ptput:1 -io:iocp -pconn:1 -pstream:1
               $didFail = $res | Where-Object { $_ -like "*No Successful Connections!*" }
               if ($didFail) {
                 throw "Failed to run secnetperf: $res"
