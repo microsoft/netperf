@@ -68,6 +68,13 @@ jobs:
           name: Release-linux-ubuntu-20.04-x64-openssl-Perf
           path: artifacts
 
+      - name: Update LD_LIBRARY_PATH
+        run: $env:LD_LIBRARY_PATH = "$env:LD_LIBRARY_PATH:$(pwd)/artifacts/bin/linux/x64_Release_openssl"
+
+      - name: Updating secnetperf permissions
+        run: chmod +x ./artifacts/bin/linux/x64_Release_openssl/secnetperf
+        shell: pwsh
+
       - name: (Server) Upload IP address to shared cache
         if: ${{ matrix.role == 'server' }}
         run: |
