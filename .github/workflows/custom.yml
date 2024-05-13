@@ -68,14 +68,6 @@ jobs:
           name: Release-linux-ubuntu-20.04-x64-openssl-Perf
           path: artifacts
 
-      - name: Update LD_LIBRARY_PATH
-        run: $env:LD_LIBRARY_PATH = "$env:LD_LIBRARY_PATH:$(pwd)/artifacts/bin/linux/x64_Release_openssl"
-        shell: pwsh
-
-      - name: Updating secnetperf permissions
-        run: chmod +x ./artifacts/bin/linux/x64_Release_openssl/secnetperf
-        shell: pwsh
-
       - name: (Server) Upload IP address to shared cache
         if: ${{ matrix.role == 'server' }}
         run: |
@@ -109,6 +101,8 @@ jobs:
               # We can poll for config here
               try {
                 Write-Host "Spin up server. When the client wants to shut down the server, they will send a special UDP packet."
+                $env:LD_LIBRARY_PATH = "$env:LD_LIBRARY_PATH:$(pwd)/artifacts/bin/linux/x64_Release_openssl"
+                chmod +x ./artifacts/bin/linux/x64_Release_openssl/secnetperf
                 ./artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:maxtput
               }
               catch {
@@ -147,6 +141,8 @@ jobs:
 
           Write-Host "Preparing to run secnetperf"
           Write-Host "$(Get-Date) Try running secnetperf"
+          $env:LD_LIBRARY_PATH = "$env:LD_LIBRARY_PATH:$(pwd)/artifacts/bin/linux/x64_Release_openssl"
+          chmod +x ./artifacts/bin/linux/x64_Release_openssl/secnetperf
           $FinishedTests = $false
           $Attempts = 0
           while ($Attempts -lt 5) {
