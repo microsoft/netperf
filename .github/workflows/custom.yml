@@ -62,6 +62,12 @@ jobs:
         run: whoami
         shell: pwsh
 
+      - name: Check registry is setup
+        run: |
+          $username = (Get-ItemProperty 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon').DefaultUserName
+          Write-Host "REG ADDED Username: $username"
+        shell: pwsh
+
       - name: Print local users
         run: Get-LocalUser
         shell: pwsh
