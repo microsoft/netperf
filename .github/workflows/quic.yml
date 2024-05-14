@@ -147,7 +147,7 @@ jobs:
       workflowId: ${{ github.run_id }}
 
   run-secnetperf-1es:
-    name: 1es-${{ matrix.role }}
+    name: azure-${{ matrix.role }}-${{ matrix.os }}-${{ matrix.io }}-${{ matrix.tls }}-${{ matrix.arch }}
     needs: [build-unix, build-windows, build-windows-kernel, prepare-matrix]
     strategy:
       fail-fast: false
@@ -277,6 +277,8 @@ jobs:
             Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer' -Force
           } else {
             echo "$serverIp netperf-peer" | sudo tee -a /etc/hosts
+            $env:LD_LIBRARY_PATH = "$env:LD_LIBRARY_PATH:$(pwd)/artifacts/bin/linux/x64_Release_openssl"
+            chmod +x ./artifacts/bin/linux/x64_Release_openssl/secnetperf
           }
 
           Write-Host "$(Get-Date) Try running secnetperf"
