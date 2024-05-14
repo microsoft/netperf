@@ -158,8 +158,7 @@ jobs:
           Write-Host "$(Get-Date) Try starting a remote session"
           Write-Host "Print powershell version information: "
           pwsh --version
-          $Cred = Get-Credential
-          $Session = New-PSSession -ComputerName netperf-peer -Credential $Cred
+          $Session = New-PSSession -ComputerName netperf-peer
           $Session
           Write-Host "Using remote powershell session to start Secnetperf"
           Invoke-Command -Session $Session -ScriptBlock {
