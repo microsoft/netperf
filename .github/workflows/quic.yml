@@ -147,7 +147,7 @@ jobs:
       workflowId: ${{ github.run_id }}
 
   run-secnetperf-1es:
-    name: secnetperf-1es
+    name: 1es-${{ matrix.role }}
     needs: [build-unix, build-windows, build-windows-kernel, prepare-matrix]
     strategy:
       fail-fast: false
@@ -159,10 +159,6 @@ jobs:
     steps:
       - name: Print Role
         run: Write-Host "Role; ${{ matrix.role }}"
-        shell: pwsh
-
-      - name: Print networking information
-        run: Get-NetIpAddress -AddressFamily IPv4
         shell: pwsh
 
       - name: Lowercase runner.os
