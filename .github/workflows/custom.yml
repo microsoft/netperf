@@ -68,6 +68,19 @@ jobs:
           Write-Host "REG ADDED Username: $username"
         shell: pwsh
 
+      - name: Add some reg stuff
+        run:
+          |
+          REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v AutoAdminLogon /t REG_SZ /d 1 /f
+          REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v DefaultUserName /t REG_SZ /d secnetperf /f
+          REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v DefaultPassword /t REG_SZ /d ${{ secrets.VM_PASSWORD }} /f
+
+      - name: Check registry is setup
+        run: |
+          $username = (Get-ItemProperty 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon').DefaultUserName
+          Write-Host "REG ADDED Username: $username"
+        shell: pwsh
+
       - name: Print local users
         run: Get-LocalUser
         shell: pwsh
