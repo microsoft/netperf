@@ -185,6 +185,9 @@ jobs:
           }
           Write-Host "Try starting secnetperf.exe on server"
           Invoke-Command -Session $Session -ScriptBlock {
+            Write-Host "(Server) Who am i?"
+            whoami
+            Write-Host "Start secnetperf server"
             iex "C:\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -exec:maxtput"
           }
           Write-Host "Wait for remote powershell to start server on server"
