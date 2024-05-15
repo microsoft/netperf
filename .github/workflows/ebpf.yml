@@ -103,6 +103,7 @@ jobs:
     steps:
     - name: Setup workspace
       run: |
+        Get-ChildItem  | % { Remove-Item -Recurse $_ }
         $process = Start-Process -FilePath "msiexec" -ArgumentList "/x {022C44B5-8969-4B75-8DB0-73F98B1BD7DC} /quiet /qn /norestart /log uninstall.log" -Wait -NoNewWindow
         $process = Start-Process -FilePath "msiexec" -ArgumentList "/x {9363C0E3-4DE9-4067-9F5E-6A1A06034B59} /quiet /qn /norestart /log uninstall.log" -Wait -NoNewWindow
         $url = "https://raw.githubusercontent.com/microsoft/ebpf-for-windows/main/scripts/Cleanup-Installer.ps1"
@@ -197,6 +198,14 @@ jobs:
         name: "cts-traffic Release"
         path: ${{ github.workspace }}\cts-traffic
 
+    - name: Start TCPIP tracing - Baseline
+      if: ${{ github.event.inputs.tcp_ip_tracing }}
+      run: |
+        wpr -cancel 2>$null; $global:LASTEXITCODE = 0
+        if (Test-Path "tcpip.wprp") { Remove-Item -Force "tcpip.wprp" }
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/main/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
+        wpr -start tcpip.wprp -filemode
+
     # Run CTS traffic without XDP installed to establish a baseline.
     - name: Run CTS cts-traffic baseline
       working-directory: ${{ github.workspace }}\cts-traffic
@@ -206,11 +215,15 @@ jobs:
         $profile = 0
         if ("${{inputs.profile}}" -eq "true") { $profile = 1 }
         $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
-        if ("${{inputs.tcp_ip_tracing}}" -eq "true") { wpr -start ${{ github.workspace }}\.github\workflows\tcpip.wprp }
         iex "& { $(irm $url) } -CpuProfile $profile"
-        if ("${{inputs.tcp_ip_tracing}}" -eq "true") { wpr -stop ${{ github.workspace }}\ETL\tcpip_baseline.etl }
         if ($Profile) { Move-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl -NewName "${{ github.workspace }}\etl\cts_traffic_send_baseline.etl"}
         if ($Profile) { Rename-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl -NewName "${{ github.workspace }}\etl\cts_traffic_recv_baseline.etl" }
+        dir ${{ github.workspace }}\etl
+
+    - name: Stop TCPIP tracing - Baseline
+      if: ${{ github.event.inputs.tcp_ip_tracing }}
+      run: |
+        wpr -stop ${{ github.workspace }}\ETL\tcpip_baseline.etl
 
     # The resulting CSV file's header is updated to match the format produced by the BPF performance tests.
     # The "Average Duration (ns)" column is the metric of interest.
@@ -244,6 +257,15 @@ jobs:
         bpftool prog show
         Test-Connection -ComputerName netperf-peer -Count 1 -Ping
 
+    - name: Start TCPIP tracing - XDP
+      if: ${{ github.event.inputs.tcp_ip_tracing }}
+      run: |
+        Get-PSDrive -PSProvider FileSystem
+        wpr -cancel; $global:LASTEXITCODE = 0
+        if (Test-Path "tcpip.wprp") { Remove-Item -Force "tcpip.wprp" }
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/main/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
+        wpr -start tcpip.wprp -filemode
+
     # Run CTS traffic with XDP installed to measure the impact of XDP on performance.
     - name: Run CTS cts-traffic xdp
       working-directory: ${{ github.workspace }}\cts-traffic
@@ -253,9 +275,16 @@ jobs:
         $profile = 0
         if ("${{inputs.profile}}" -eq "true") { $profile = 1 }
         $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
+        if (Test-Path "tcpip.wprp") { Remove-Item -Force "tcpip.wprp" }
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/main/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
         if ("${{inputs.tcp_ip_tracing}}" -eq "true") { wpr -start ${{ github.workspace }}\.github\workflows\tcpip.wprp }
         iex "& { $(irm $url) } -CpuProfile $profile"
         if ("${{inputs.tcp_ip_tracing}}" -eq "true") { wpr -stop ${{ github.workspace }}\ETL\tcpip_xdp.etl }
+
+    - name: Stop TCPIP tracing - Baseline
+      if: ${{ github.event.inputs.tcp_ip_tracing }}
+      run: |
+        wpr -stop ${{ github.workspace }}\ETL\tcpip_baseline.etl
 
     - name: Copy ETL files to ETL folder
       run: |
