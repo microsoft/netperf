@@ -201,7 +201,9 @@ jobs:
         $profile = 0
         if ("${{inputs.profile}}" -eq "true") { $profile = 1 }
         $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
+        wpr -start ${{ github.workspace }}\.github\workflows\tcpip.wprp
         iex "& { $(irm $url) } -CpuProfile $profile"
+        wpr -stop ${{ github.workspace }}\ETL\tcpip_baseline.etl
         if ($Profile) { Move-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl -NewName "${{ github.workspace }}\etl\cts_traffic_send_baseline.etl"}
         if ($Profile) { Rename-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl -NewName "${{ github.workspace }}\etl\cts_traffic_recv_baseline.etl" }
 
@@ -246,7 +248,9 @@ jobs:
         $profile = 0
         if ("${{inputs.profile}}" -eq "true") { $profile = 1 }
         $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
+        wpr -start ${{ github.workspace }}\.github\workflows\tcpip.wprp
         iex "& { $(irm $url) } -CpuProfile $profile"
+        wpr -stop ${{ github.workspace }}\ETL\tcpip_xdp.etl
 
     - name: Copy ETL files to ETL folder
       run: |
@@ -320,6 +324,12 @@ jobs:
       with:
         name: CPU_Profile_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: ETL
+
+    - name: Upload TCPIP ETL
+      uses: actions/upload-artifact@v2
+      with:
+        name: TCPIP_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        path: ${{ github.workspace }}\ETL
 
     - name: Cleanup workspace
       if: always()
