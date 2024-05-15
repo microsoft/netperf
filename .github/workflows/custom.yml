@@ -91,18 +91,14 @@ jobs:
           name: Release-windows-windows-2022-x64-schannel-Perf
           path: artifacts
 
-      - name: Copy Artifact directory to known directory
-        run: Copy-Item -Path .\artifacts -Destination C:\ -Recurse
-        shell: pwsh
-
       - name: Create temporary script
         run: |
           pwd
           $script = @"
           Write-Host "About to start server"
-          iex "C:\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -exec:maxtput -watchdog:10000"
+          iex "C:\vss-agent\2.316.1\_work\netperf\netperf\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -exec:maxtput -watchdog:10000"
           "@
-          $script | Out-File -FilePath C:\start-server.ps1 -Encoding ASCII
+          $script | Out-File -FilePath C:\vss-agent\2.316.1\_work\netperf\netperf\start-server.ps1 -Encoding ASCII
         shell: pwsh
 
       - name: Try out the script
@@ -221,7 +217,7 @@ jobs:
             Write-Host "(Server) Who am i?"
             whoami
             Write-Host "Start secnetperf server"
-            C:\start-server.ps1
+            C:\vss-agent\2.316.1\_work\netperf\netperf\start-server.ps1
           }
           Write-Host "Wait for remote powershell to start server on server"
           Start-Sleep -Seconds 10
