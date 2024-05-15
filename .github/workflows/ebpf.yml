@@ -20,6 +20,11 @@ on:
         required: false
         default: false
         type: boolean
+      tcp_ip_tracing:
+        description: 'Capture TCP/IP tracing'
+        required: false
+        default: false
+        type: boolean
 
   pull_request:
     branches:
@@ -201,9 +206,9 @@ jobs:
         $profile = 0
         if ("${{inputs.profile}}" -eq "true") { $profile = 1 }
         $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
-        wpr -start ${{ github.workspace }}\.github\workflows\tcpip.wprp
+        if ("${{inputs.tcp_ip_tracing}}" -eq "true") { wpr -start ${{ github.workspace }}\.github\workflows\tcpip.wprp }
         iex "& { $(irm $url) } -CpuProfile $profile"
-        wpr -stop ${{ github.workspace }}\ETL\tcpip_baseline.etl
+        if ("${{inputs.tcp_ip_tracing}}" -eq "true") { wpr -stop ${{ github.workspace }}\ETL\tcpip_baseline.etl }
         if ($Profile) { Move-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl -NewName "${{ github.workspace }}\etl\cts_traffic_send_baseline.etl"}
         if ($Profile) { Rename-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl -NewName "${{ github.workspace }}\etl\cts_traffic_recv_baseline.etl" }
 
@@ -248,9 +253,9 @@ jobs:
         $profile = 0
         if ("${{inputs.profile}}" -eq "true") { $profile = 1 }
         $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
-        wpr -start ${{ github.workspace }}\.github\workflows\tcpip.wprp
+        if ("${{inputs.tcp_ip_tracing}}" -eq "true") { wpr -start ${{ github.workspace }}\.github\workflows\tcpip.wprp }
         iex "& { $(irm $url) } -CpuProfile $profile"
-        wpr -stop ${{ github.workspace }}\ETL\tcpip_xdp.etl
+        if ("${{inputs.tcp_ip_tracing}}" -eq "true") { wpr -stop ${{ github.workspace }}\ETL\tcpip_xdp.etl }
 
     - name: Copy ETL files to ETL folder
       run: |
@@ -326,6 +331,7 @@ jobs:
         path: ETL
 
     - name: Upload TCPIP ETL
+      if: ${{ inputs.tcp_ip_tracing == true }}
       uses: actions/upload-artifact@v2
       with:
         name: TCPIP_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
