@@ -95,6 +95,20 @@ jobs:
         run: Copy-Item -Path .\artifacts -Destination C:\ -Recurse
         shell: pwsh
 
+      - name: Create temporary script
+        run: |
+          pwd
+          $script = @"
+          Write-Host "About to start server"
+          iex "C:\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -exec:maxtput -watchdog:10000"
+          "@
+          $script | Out-File -FilePath C:\start-server.ps1 -Encoding ASCII
+        shell: pwsh
+
+      - name: Try out the script
+        run: C:\start-server.ps1
+        shell: pwsh
+
       - name: Disable Windows Defender / Firewall
         run: |
           # Disable Windows defender / firewall.
@@ -207,7 +221,7 @@ jobs:
             Write-Host "(Server) Who am i?"
             whoami
             Write-Host "Start secnetperf server"
-            iex "C:\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -exec:maxtput"
+            C:\start-server.ps1
           }
           Write-Host "Wait for remote powershell to start server on server"
           Start-Sleep -Seconds 10
