@@ -100,7 +100,7 @@ iex "& { $(irm $url) } $username $password $machine1"
 ## Lab Configuration (Windows)
 
 ```PowerShell
-$username = 'secnetperf'
+$username = 'Administrator'
 $password = '************' # Ask for the password to use
 $token = '************'    # Find at https://github.com/microsoft/netperf/settings/actions/runners/new?arch=x64&os=win
 $machine1 = '192.168.0.XXX' # This is the GitHub runner machine's IP address (XXX is host machine ID + 1)
@@ -113,14 +113,14 @@ $labels = "whatever_labels_you_want_tagged"
 # Run on GitHub runner machine
 # Download the script from $url
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-Invoke-Command ".\setup-runner-windows.ps1 --Username $username --Password $password --PeerIp $machine2 --GithubToken $token --NewIpAddress $machine1 --RunnerLabels $labels"
+Invoke-Command ".\setup-runner-windows.ps1 -Username $username -Password $password -PeerIp $machine2 -GithubToken $token -NewIpAddress $machine1 -RunnerLabels $labels"
 ```
 
 ```PowerShell
 # Run on peer machine
 # Download the script from $url
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-Invoke-Command ".\setup-runner-windows.ps1 --Username $username --Password $password --PeerIp $machine1 --NewIpAddress $machine2 --RunnerLabels $labels"
+Invoke-Command ".\setup-runner-windows.ps1 -Username $username -Password $password -PeerIp $machine1 -NewIpAddress $machine2 -RunnerLabels $labels"
 ```
 
 ## Configuration (Linux)
