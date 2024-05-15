@@ -104,6 +104,25 @@ jobs:
           Set-MpPreference -DisableDatagramProcessing $True
         shell: pwsh
 
+      - name: Enabling ServiceLogonRight
+        run: |
+          # Make sure the user has the rights to log on.
+          function Add-ServiceLogonRight ($Username) {
+              $tmp = New-TemporaryFile
+              secedit /export /cfg "$tmp.inf" | Out-Null
+              (Get-Content -Encoding ascii "$tmp.inf") -replace '^SeServiceLogonRight .+', "`$0,$Username" | Set-Content -Encoding ascii "$tmp.inf"
+              secedit /import /cfg "$tmp.inf" /db "$tmp.sdb" | Out-Null
+              secedit /configure /db "$tmp.sdb" /cfg "$tmp.inf" | Out-Null
+              Remove-Item $tmp* -ErrorAction SilentlyContinue
+          }
+          Write-Host "Enabling ServiceLogonRight."
+          Add-ServiceLogonRight -Username "secnetperf"
+        shell: pwsh
+
+      - name: Set local user
+        run: Set-LocalUser -Name "secnetperf" -PasswordNeverExpires $true
+        shell: pwsh
+
       - name: (Server) Upload IP address to shared cache
         if: ${{ matrix.role == 'server' }}
         run: |
