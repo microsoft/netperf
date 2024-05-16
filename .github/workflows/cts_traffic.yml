@@ -19,6 +19,11 @@ on:
         required: false
         default: false
         type: boolean
+      duration:
+        description: 'Duration of the test in seconds'
+        required: false
+        default: 60
+        type: number
 
   pull_request:
     branches:
@@ -84,8 +89,14 @@ jobs:
         name: "cts-traffic Release"
         path: ${{ github.workspace }}\cts-traffic
 
+    - name: Capture pktmon counters - start
+      run: |
+        pktmon stop
+        pktmon start --counters-only
+        pktmon counters -t all -z -i --json | Out-File -FilePath ${{ github.workspace }}\cts-traffic\pktmon_counters_start.json
+
     - name: Start TCPIP tracing
-      if: ${{ github.event.inputs.tcp_ip_tracing }}
+      if: inputs.tcp_ip_tracing == true
       run: |
         wpr -cancel 2>$null; $global:LASTEXITCODE = 0
         if (Test-Path "tcpip.wprp") { Remove-Item -Force "tcpip.wprp" }
@@ -98,12 +109,17 @@ jobs:
         $profile = 0
         if ("${{inputs.profile}}" -eq "true") { $profile = 1 }
         $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
-        iex "& { $(irm $url) } -CpuProfile $profile"
+        iex "& { $(irm $url) } -CpuProfile $profile -Duration ${{inputs.duration}}"
 
     - name: Stop TCPIP tracing
-      if: ${{ github.event.inputs.tcp_ip_tracing }}
+      if: inputs.tcp_ip_tracing == true
       run: |
         wpr -stop ${{ github.workspace }}\ETL\tcpip.etl
+
+    - name: Capture pktmon counters - end
+      run: |
+        pktmon counters -t all -z -i --json | Out-File -FilePath ${{ github.workspace }}\cts-traffic\pktmon_counters_end.json
+        pktmon stop
 
     - name: Move ETL files to ETLfolder 
       working-directory: ${{ github.workspace }}\cts-traffic
@@ -121,11 +137,18 @@ jobs:
         path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv 
 
     - name: Upload ETL
-      if: ${{ github.event.inputs.profile }} || ${{ github.event.inputs.tcp_ip_tracing }}
+      if: inputs.profile == true || inputs.tcp_ip_tracing == true
       uses: actions/upload-artifact@v2
       with:
         name: cts_traffic_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}_ETL
         path: ${{ github.workspace }}\ETL\*.etl
+
+    - name: Upload pktmon counters
+      if: always()
+      uses: actions/upload-artifact@v2
+      with:
+        name: cts_traffic_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}_pktmon_counters
+        path: ${{ github.workspace }}\cts-traffic\pktmon_counters_*.json
 
     - name: Cleanup workspace
       if: always()

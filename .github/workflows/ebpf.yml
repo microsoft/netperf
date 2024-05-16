@@ -25,6 +25,11 @@ on:
         required: false
         default: false
         type: boolean
+      duration:
+        description: 'Duration of the test in seconds'
+        required: false
+        default: 60
+        type: number
 
   pull_request:
     branches:
@@ -198,8 +203,14 @@ jobs:
         name: "cts-traffic Release"
         path: ${{ github.workspace }}\cts-traffic
 
+    - name: Capture pktmon counters - start - baseline
+      run: |
+        pktmon stop
+        pktmon start --counters-only
+        pktmon counters -t all -z -i --json | Out-File -FilePath ${{ github.workspace }}\cts-traffic\pktmon_counters_baseline_start.json
+
     - name: Start TCPIP tracing - Baseline
-      if: ${{ github.event.inputs.tcp_ip_tracing }}
+      if: inputs.tcp_ip_tracing == true
       run: |
         wpr -cancel 2>$null; $global:LASTEXITCODE = 0
         if (Test-Path "tcpip.wprp") { Remove-Item -Force "tcpip.wprp" }
@@ -215,15 +226,20 @@ jobs:
         $profile = 0
         if ("${{inputs.profile}}" -eq "true") { $profile = 1 }
         $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
-        iex "& { $(irm $url) } -CpuProfile $profile"
+        iex "& { $(irm $url) } -CpuProfile $profile -Duration ${{inputs.duration}}"
         if ($Profile) { Move-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl -NewName "${{ github.workspace }}\etl\cts_traffic_send_baseline.etl"}
         if ($Profile) { Rename-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl -NewName "${{ github.workspace }}\etl\cts_traffic_recv_baseline.etl" }
         dir ${{ github.workspace }}\etl
 
     - name: Stop TCPIP tracing - Baseline
-      if: ${{ github.event.inputs.tcp_ip_tracing }}
+      if: inputs.tcp_ip_tracing == true
       run: |
         wpr -stop ${{ github.workspace }}\ETL\tcpip_baseline.etl
+
+    - name: Capture pktmon counters - end - baseline
+      run: |
+        pktmon counters -t all -z -i --json | Out-File -FilePath ${{ github.workspace }}\cts-traffic\pktmon_counters_baseline_end.json
+        pktmon stop
 
     # The resulting CSV file's header is updated to match the format produced by the BPF performance tests.
     # The "Average Duration (ns)" column is the metric of interest.
@@ -257,8 +273,14 @@ jobs:
         bpftool prog show
         Test-Connection -ComputerName netperf-peer -Count 1 -Ping
 
+    - name: Capture pktmon counters - start - xdp
+      run: |
+        pktmon stop
+        pktmon start --counters-only
+        pktmon counters -t all -z -i --json | Out-File -FilePath ${{ github.workspace }}\cts-traffic\pktmon_counters_xdp_start.json
+
     - name: Start TCPIP tracing - XDP
-      if: ${{ github.event.inputs.tcp_ip_tracing }}
+      if: inputs.tcp_ip_tracing == true
       run: |
         Get-PSDrive -PSProvider FileSystem
         wpr -cancel; $global:LASTEXITCODE = 0
@@ -282,9 +304,14 @@ jobs:
         if ("${{inputs.tcp_ip_tracing}}" -eq "true") { wpr -stop ${{ github.workspace }}\ETL\tcpip_xdp.etl }
 
     - name: Stop TCPIP tracing - Baseline
-      if: ${{ github.event.inputs.tcp_ip_tracing }}
+      if: inputs.tcp_ip_tracing == true
       run: |
         wpr -stop ${{ github.workspace }}\ETL\tcpip_baseline.etl
+
+    - name: Capture pktmon counters - end - xdp
+      run: |
+        pktmon counters -t all -z -i --json | Out-File -FilePath ${{ github.workspace }}\cts-traffic\pktmon_counters_baseline_end.json
+        pktmon stop
 
     - name: Copy ETL files to ETL folder
       run: |
@@ -353,18 +380,25 @@ jobs:
         path: ${{ github.workspace }}\bpf_performance\ebpf.csv
 
     - name: Upload CPU profile
-      if: ${{ inputs.profile == true }}
+      if: inputs.profile == true
       uses: actions/upload-artifact@v2
       with:
         name: CPU_Profile_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: ETL
 
     - name: Upload TCPIP ETL
-      if: ${{ inputs.tcp_ip_tracing == true }}
+      if: inputs.tcp_ip_tracing == true
       uses: actions/upload-artifact@v2
       with:
         name: TCPIP_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: ${{ github.workspace }}\ETL
+
+    - name: Upload pktmon counters
+      if: always()
+      uses: actions/upload-artifact@v2
+      with:
+        name: cts_traffic_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}_pktmon_counters
+        path: ${{ github.workspace }}\cts-traffic\pktmon_counters_*.json
 
     - name: Cleanup workspace
       if: always()
