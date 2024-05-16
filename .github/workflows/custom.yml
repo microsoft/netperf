@@ -16,23 +16,23 @@ on:
 permissions: write-all
 
 jobs:
-  build-windows:
-    name: Build WinUser
-    needs: []
-    strategy:
-      fail-fast: false
-      matrix:
-        os: ['windows-2022']
-        tls: [schannel] # , openssl, openssl3]
-    uses: microsoft/msquic/.github/workflows/build-reuse-win.yml@main
-    with:
-      os: ${{ matrix.os }}
-      tls: ${{ matrix.tls }}
-      build: -Perf
-      ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+  # build-windows:
+  #   name: Build WinUser
+  #   needs: []
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       os: ['windows-2022']
+  #       tls: [schannel] # , openssl, openssl3]
+  #   uses: microsoft/msquic/.github/workflows/build-reuse-win.yml@main
+  #   with:
+  #     os: ${{ matrix.os }}
+  #     tls: ${{ matrix.tls }}
+  #     build: -Perf
+  #     ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
   testjob:
-    needs: [build-windows]
+    # needs: [build-windows]
     strategy:
       matrix:
         role: ["client", "server"]
@@ -140,30 +140,21 @@ jobs:
         shell: pwsh
 
 
-      - name: (Server) Polls for an ACK from the client
+      - name: (Server) Polls for a "done.txt" file from the client
         if: ${{ matrix.role == 'server' }}
         run: |
           $found = $false
-          $headers = @{
-            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
-          }
-          $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_ack"
           do {
-            try {
-              ls C:\
-              $Response = Invoke-WebRequest -Uri $uri -Headers $headers
-              if (!($Response.StatusCode -eq 200)) {
-                throw "Failed to get ACK. Status code: $($Response.StatusCode)"
+              $path = "C:\done.txt"
+              Write-Output "Checking for done.txt..."
+              if (Test-Path $path) {
+                Write-Output "done.txt found"
+                $found = $true
               }
-              $ack = $Response.Content
-              Write-Output "ACK found: $ack"
-              $found = $true
-            }
-            catch {
-              Write-Output "Client not done testing yet. Waiting for ACK..."
-              # We can poll for config here
-              Start-Sleep -Seconds 30
-            }
+              else {
+                Write-Output "done.txt not found"
+                Start-Sleep -Seconds 30
+              }
           } while (-not $found)
         shell: pwsh
 
@@ -212,7 +203,7 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
         with:
           repository: microsoft/msquic
-          ref: '82f554c0b62135f9a200280dd8c0365032cd8835'
+          ref: 'jackhe/1es-azure-pools'
 
       - name: (Client) Run Secnetperf Script
         if: ${{ matrix.role == 'client' }}
