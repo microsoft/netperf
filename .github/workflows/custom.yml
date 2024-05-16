@@ -167,7 +167,7 @@ jobs:
           } while (-not $found)
         shell: pwsh
 
-      - name: (Client) Poll for an ip address uploaded by the server
+      - name: (Client) Poll for an ip address uploaded by the server, set netperf-peer.
         if: ${{ matrix.role == 'client' }}
         run: |
           $found = $false
@@ -197,8 +197,6 @@ jobs:
           Write-Host "Preparing to run enable remote powershell session"
           "$serverIp netperf-peer" | Out-File -Encoding ASCII -Append "$env:SystemRoot\System32\drivers\etc\hosts"
           Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer' -Force
-          # Wait
-          Start-Sleep -Seconds 5
           Write-Host "$(Get-Date) Try starting a remote session"
           Write-Host "Print powershell version information: "
           pwsh --version
@@ -208,39 +206,28 @@ jobs:
           Invoke-Command -Session $Session -ScriptBlock {
             New-Item -ItemType File -Name "Sanity-check.txt" -Path "C:\"
           }
-          Write-Host "Try starting secnetperf.exe on server"
-          Invoke-Command -Session $Session -ScriptBlock {
-            Write-Host "(Server) Who am i?"
-            whoami
-            Write-Host "Start secnetperf server"
-            C:\vss-agent\2.316.1\_work\netperf\netperf\start-server.ps1
-          }
-          Write-Host "Wait for remote powershell to start server on server"
-          Start-Sleep -Seconds 10
-
-          Write-Host "$(Get-Date) Try running secnetperf"
-          $FinishedTests = $false
-          $Attempts = 0
-          while ($Attempts -lt 5) {
-            try {
-              $res = .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -target:netperf-peer -exec:maxtput -down:12s -ptput:1 -io:iocp -pconn:1 -pstream:1
-              $didFail = $res | Where-Object { $_ -like "*No Successful Connections!*" }
-              if ($didFail) {
-                throw "Failed to run secnetperf: $res"
-              } else {
-                Write-Output "secnetperf succeeded: $res"
-                $FinishedTests = $true
-              }
-              break
-            }
-            catch {
-              Write-Output "Failed to run secnetperf: $_"
-              $Attempts += 1
-              Start-Sleep -Seconds 30
-            }
-          }
-
         shell: pwsh
+
+      - name: Checkout microsoft/msquic
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          repository: microsoft/msquic
+          ref: '82f554c0b62135f9a200280dd8c0365032cd8835'
+
+      - name: (Client) Run Secnetperf Script
+        if: ${{ matrix.role == 'client' }}
+        shell: pwsh
+        timeout-minutes: 20
+        run: ./scripts/secnetperf.ps1 `
+            -LogProfile 'NULL' `
+            -MsQuicCommit 'TODO' `
+            -environment 'azure' `
+            -plat 'windows' `
+            -os 'windows-2022' `
+            -arch 'x64' `
+            -tls 'schannel' `
+            -io 'iocp' `
+            -filter ''
 
       - name: (Client) Upload ACK to shared cache
         if: ${{ matrix.role == 'client' }}
@@ -250,29 +237,3 @@ jobs:
           }
           Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_ack&value=ack" -Headers $headers
         shell: pwsh
-
-      # - name: (Server) Server polls for an ACK so it can clean up
-      #   if: ${{ matrix.role == 'server' }}
-      #   run: |
-      #     $found = $false
-      #     $headers = @{
-      #       "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
-      #     }
-      #     $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_ack"
-      #     do {
-      #       Write-Output "Checking for ACK..."
-      #       try {
-      #         $Response = Invoke-WebRequest -Uri $uri -Headers $headers
-      #         if (!($Response.StatusCode -eq 200)) {
-      #           throw "Failed to get ACK. Status code: $($Response.StatusCode)"
-      #         }
-      #         $ack = $Response.Content
-      #         Write-Output "ACK found: $ack"
-      #         $found = $true
-      #       }
-      #       catch {
-      #         Write-Output "ACK not found: $_"
-      #         Start-Sleep -Seconds 30
-      #       }
-      #     } while (-not $found)
-      #   shell: pwsh
