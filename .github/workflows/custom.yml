@@ -16,23 +16,23 @@ on:
 permissions: write-all
 
 jobs:
-  # build-windows:
-  #   name: Build WinUser
-  #   needs: []
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       os: ['windows-2022']
-  #       tls: [schannel] # , openssl, openssl3]
-  #   uses: microsoft/msquic/.github/workflows/build-reuse-win.yml@main
-  #   with:
-  #     os: ${{ matrix.os }}
-  #     tls: ${{ matrix.tls }}
-  #     build: -Perf
-  #     ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+  build-windows:
+    name: Build WinUser
+    needs: []
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ['windows-2022']
+        tls: [schannel] # , openssl, openssl3]
+    uses: microsoft/msquic/.github/workflows/build-reuse-win.yml@main
+    with:
+      os: ${{ matrix.os }}
+      tls: ${{ matrix.tls }}
+      build: -Perf
+      ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
   testjob:
-    # needs: [build-windows]
+    needs: [build-windows]
     strategy:
       matrix:
         role: ["client", "server"]
@@ -85,11 +85,11 @@ jobs:
         run: Get-LocalUser
         shell: pwsh
 
-      # - name: Download Artifacts
-      #   uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
-      #   with:
-      #     name: Release-windows-windows-2022-x64-schannel-Perf
-      #     path: artifacts
+      - name: Download Artifacts
+        uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+        with:
+          name: Release-windows-windows-2022-x64-schannel-Perf
+          path: artifacts
 
       - name: Create temporary script
         run: |
