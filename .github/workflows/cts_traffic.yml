@@ -126,6 +126,10 @@ jobs:
       run: |
         get-counter "\Network Adapter(*)\packets received discarded"
 
+    - name: Query RSS settings
+      run: |
+        Get-NetAdapterRss
+
     - name: Move ETL files to ETLfolder 
       working-directory: ${{ github.workspace }}\cts-traffic
       run: |
