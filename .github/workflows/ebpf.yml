@@ -224,9 +224,10 @@ jobs:
       run: |
         dir .
         $profile = 0
+        $duration = ${{inputs.duration}}
         if ("${{inputs.profile}}" -eq "true") { $profile = 1 }
         $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
-        iex "& { $(irm $url) } -CpuProfile $profile -Duration ${{inputs.duration}}"
+        iex "& { $(irm $url) } -CpuProfile $profile -Duration $duration"
         if ($Profile) { Move-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl -NewName "${{ github.workspace }}\etl\cts_traffic_send_baseline.etl"}
         if ($Profile) { Rename-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl -NewName "${{ github.workspace }}\etl\cts_traffic_recv_baseline.etl" }
         dir ${{ github.workspace }}\etl
@@ -295,12 +296,13 @@ jobs:
       run: |
         dir .
         $profile = 0
+        $duration = ${{inputs.duration}}
         if ("${{inputs.profile}}" -eq "true") { $profile = 1 }
         $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
         if (Test-Path "tcpip.wprp") { Remove-Item -Force "tcpip.wprp" }
         Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/main/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
         if ("${{inputs.tcp_ip_tracing}}" -eq "true") { wpr -start ${{ github.workspace }}\.github\workflows\tcpip.wprp }
-        iex "& { $(irm $url) } -CpuProfile $profile"
+        iex "& { $(irm $url) } -CpuProfile $profile -Duration $duration"
         if ("${{inputs.tcp_ip_tracing}}" -eq "true") { wpr -stop ${{ github.workspace }}\ETL\tcpip_xdp.etl }
 
     - name: Stop TCPIP tracing - Baseline
