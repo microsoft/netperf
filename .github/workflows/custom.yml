@@ -38,14 +38,6 @@ jobs:
         role: ["client", "server"]
     runs-on: [self-hosted, 1ES.Pool=netperf-aztestpool]
     steps:
-      - name: Print Role
-        run: Write-Host "Role; ${{ matrix.role }}"
-        shell: pwsh
-
-      - name: Print networking information
-        run: Get-NetIpAddress -AddressFamily IPv4
-        shell: pwsh
-
       - name: Get WinRM info
         run: Get-Service WinRM
         shell: pwsh
@@ -56,49 +48,6 @@ jobs:
 
       - name: Enable remote powershell
         run: Enable-PSRemoting -Force
-        shell: pwsh
-
-      - name: Who Am I?
-        run: whoami
-        shell: pwsh
-
-      - name: Check registry is setup
-        run: |
-          $username = (Get-ItemProperty 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon').DefaultUserName
-          Write-Host "REG ADDED Username: $username"
-        shell: pwsh
-
-      - name: Add some reg stuff
-        run:
-          |
-          REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v AutoAdminLogon /t REG_SZ /d 1 /f
-          REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v DefaultUserName /t REG_SZ /d secnetperf /f
-          REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v DefaultPassword /t REG_SZ /d ${{ secrets.VM_PASSWORD }} /f
-
-      - name: Check registry is setup
-        run: |
-          $username = (Get-ItemProperty 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon').DefaultUserName
-          Write-Host "REG ADDED Username: $username"
-        shell: pwsh
-
-      - name: Print local users
-        run: Get-LocalUser
-        shell: pwsh
-
-      - name: Download Artifacts
-        uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
-        with:
-          name: Release-windows-windows-2022-x64-schannel-Perf
-          path: artifacts
-
-      - name: Create temporary script
-        run: |
-          pwd
-          $script = @"
-          Write-Host "About to start server"
-          iex "C:\vss-agent\2.316.1\_work\netperf\netperf\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -exec:maxtput"
-          "@
-          $script | Out-File -FilePath C:\vss-agent\2.316.1\_work\netperf\netperf\start-server.ps1 -Encoding ASCII
         shell: pwsh
 
       - name: Disable Windows Defender / Firewall
@@ -198,11 +147,19 @@ jobs:
           }
         shell: pwsh
 
-      - name: Checkout microsoft/msquic
+      - name: (Client) Checkout microsoft/msquic
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
         with:
           repository: microsoft/msquic
           ref: 'jackhe/1es-azure-pools'
+
+      - name: (Client) Download Artifacts
+        if: ${{ matrix.role == 'client' }}
+        uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+        with:
+          name: Release-windows-windows-2022-x64-schannel-Perf
+          path: artifacts
+
 
       - name: (Client) Run Secnetperf Script
         if: ${{ matrix.role == 'client' }}
