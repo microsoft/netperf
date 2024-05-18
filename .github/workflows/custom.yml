@@ -160,6 +160,10 @@ jobs:
           name: Release-windows-windows-2022-x64-schannel-Perf
           path: artifacts
 
+      - name: (Client) Download Watermark_Regression.json file
+        if: ${{ matrix.role == 'client' }}
+        run: Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/watermark_regression.json" -OutFile "watermark_regression.json"
+
       - name: (Client) Run Secnetperf Script
         if: ${{ matrix.role == 'client' }}
         shell: pwsh
