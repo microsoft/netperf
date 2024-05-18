@@ -147,6 +147,11 @@ jobs:
           }
         shell: pwsh
 
+      - name: (Client) Delegate credentials to peer
+        if: ${{ matrix.role == 'client' }}
+        run: Enable-WSManCredSSP -Role "Client" -DelegateComputer "netperf-peer"
+        shell: pwsh
+
       - name: (Client) Checkout microsoft/msquic
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
         with:
@@ -159,7 +164,6 @@ jobs:
         with:
           name: Release-windows-windows-2022-x64-schannel-Perf
           path: artifacts
-
 
       - name: (Client) Run Secnetperf Script
         if: ${{ matrix.role == 'client' }}
