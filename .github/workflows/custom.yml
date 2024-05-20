@@ -93,16 +93,38 @@ jobs:
         run: |
           $found = $false
           do {
-              $path = "C:\done.txt"
+              $donepath = "C:\done.txt"
               Write-Output "Checking for done.txt..."
-              if (Test-Path $path) {
+              if (Test-Path $donepath) {
                 Write-Output "done.txt found"
                 $found = $true
-              }
-              else {
+              } else {
                 Write-Output "done.txt not found"
-                Start-Sleep -Seconds 30
               }
+
+              $StatePath = "C:\_state"
+              if (Test-Path $StatePath) {
+                # Fetch all files in the _state directory
+                $files = Get-ChildItem -Path $StatePath -File
+                # Find the highest lexicographically sorted file name
+                $max = 0
+                foreach ($file in $files) {
+                    $num = [int]($file.Name -replace "[^0-9]", "")
+                    if ($num -gt $max) {
+                        $max = $num
+                    }
+                }
+                # Check if there is a corresponding "completed" file
+                $ExecuteFileExist = Test-Path "$StatePath\execute_$($max).ps1"
+                $CompletedFileExist = Test-Path "$StatePath\completed_$($max).txt"
+                if ($ExecuteFileExist -and !$CompletedFileExist) {
+                    Write-Host "Executing $StatePath\execute_$($max).ps1"
+                    Invoke-Expression "$StatePath\execute_$($max).ps1"
+                    Write-Host "Creating $StatePath\completed_$($max).txt"
+                    New-Item -ItemType File -Name "completed_$($max).txt" -Path $StatePath
+                }
+              }
+              Start-Sleep -Seconds 10
           } while (-not $found)
         shell: pwsh
 
@@ -178,12 +200,11 @@ jobs:
             -tls 'schannel' `
             -io 'iocp' `
             -filter ''
-
-      - name: (Client) Upload ACK to shared cache
+      - name: (Client) Creates a 'done.txt' file to signal the server
         if: ${{ matrix.role == 'client' }}
         run: |
-          $headers = @{
-            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          $Session = New-PSSession -ComputerName netperf-peer
+          Invoke-Command -Session $Session -ScriptBlock {
+            New-Item -ItemType File -Name "done.txt" -Path "C:\"
           }
-          Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_ack&value=ack" -Headers $headers
         shell: pwsh
