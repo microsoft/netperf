@@ -118,14 +118,16 @@ jobs:
                 # Check if there is a corresponding "completed" file
                 $ExecuteFileExist = Test-Path "$StatePath\execute_$($max).ps1"
                 $CompletedFileExist = Test-Path "$StatePath\completed_$($max).txt"
-                if ($ExecuteFileExist -and !$CompletedFileExist) {
+                if ($ExecuteFileExist -and !($CompletedFileExist)) {
                     Write-Host "Executing $StatePath\execute_$($max).ps1"
                     Invoke-Expression "$StatePath\execute_$($max).ps1"
                     Write-Host "Creating $StatePath\completed_$($max).txt"
                     New-Item -ItemType File -Name "completed_$($max).txt" -Path $StatePath
+                } else {
+                    Write-Host "No outstanding script to execute... Highest order script found so far: $max"
                 }
               } else {
-                Write-Output "State directory not found"
+                Write-Host "State directory not found"
               }
               Start-Sleep -Seconds 10
           } while (-not $found)
