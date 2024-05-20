@@ -104,6 +104,7 @@ jobs:
 
               $StatePath = "C:\_state"
               if (Test-Path $StatePath) {
+                ls $StatePath
                 # Fetch all files in the _state directory
                 $files = Get-ChildItem -Path $StatePath -File
                 # Find the highest lexicographically sorted file name
@@ -123,6 +124,8 @@ jobs:
                     Write-Host "Creating $StatePath\completed_$($max).txt"
                     New-Item -ItemType File -Name "completed_$($max).txt" -Path $StatePath
                 }
+              } else {
+                Write-Output "State directory not found"
               }
               Start-Sleep -Seconds 10
           } while (-not $found)
