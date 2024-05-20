@@ -110,7 +110,8 @@ jobs:
                 # Find the highest lexicographically sorted file name
                 $max = 0
                 foreach ($file in $files) {
-                    $num = [int]($file.Name -replace "[^0-9]", "")
+                    $filename = $file.Name.split(".")[0]
+                    $num = [int]($filename -replace "[^0-9]", "")
                     if ($num -gt $max) {
                         $max = $num
                     }
