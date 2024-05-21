@@ -43,7 +43,7 @@ jobs:
       - name: (Server) Upload IP address to shared cache
         if: ${{ matrix.role == 'server' }}
         run: |
-          $ipAddress = (Get-NetIpAddress -AddressFamily IPv4).IpAddress
+          $ipAddress = ip addr | grep 'inet ' | grep '10' | awk '{print $2}' | cut -d'/' -f1
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
@@ -114,7 +114,7 @@ jobs:
               }
               $ipAddress = $Response.Content
               Write-Output "Ip Address found: $ipAddress"
-              $serverIp = $ipAddress.Split(" ") | Where-Object { $_.StartsWith("10") } | Select-Object -First 1
+              $serverIp = $ipAddress
               Write-Output "Server IP: $serverIp"
               $found = $true
             }
