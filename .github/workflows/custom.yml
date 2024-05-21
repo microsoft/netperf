@@ -40,6 +40,48 @@ jobs:
           sudo systemctl restart ssh
         shell: bash
 
+      - name: (Client) Upload public key to server
+        if: ${{ matrix.role == 'client' }}
+        run: |
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+          ssh-keygen -t rsa -N "" -f ~/.ssh/id_rsa
+          $publicKey = Get-Content ~/.ssh/id_rsa.pub
+          $uri = "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_publickey&value=$publicKey"
+          Invoke-WebRequest -Uri $uri -Headers $headers
+        shell: pwsh
+
+      - name: (Server) Poll for a public key uploaded by the client, set authorized_keys.
+        if: ${{ matrix.role == 'server' }}
+        run: |
+          $found = $false
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+          $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_publickey"
+          do {
+            Write-Output "Checking for public key..."
+            try {
+              $Response = Invoke-WebRequest -Uri $uri -Headers $headers
+              if (!($Response.StatusCode -eq 200)) {
+                throw "Failed to get public key. Status code: $($Response.StatusCode)"
+              }
+              $publicKey = $Response.Content
+              Write-Output "Public Key found: $publicKey"
+              $authorizedKeysPath = "~/.ssh/authorized_keys"
+              Write-Output "Authorized Keys Path: $authorizedKeysPath"
+              Write-Output "Adding public key to authorized_keys..."
+              echo $publicKey | sudo tee -a $authorizedKeysPath
+              $found = $true
+            }
+            catch {
+              Write-Output "Public Key not found: $_"
+              Start-Sleep -Seconds 5
+            }
+          } while (-not $found)
+        shell: pwsh
+
       - name: (Server) Upload IP address to shared cache
         if: ${{ matrix.role == 'server' }}
         run: |
