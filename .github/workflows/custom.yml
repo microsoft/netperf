@@ -16,67 +16,27 @@ on:
 permissions: write-all
 
 jobs:
-  build-windows:
-    name: Build WinUser
-    needs: []
-    strategy:
-      fail-fast: false
-      matrix:
-        os: ['windows-2022']
-        tls: [schannel] # , openssl, openssl3]
-    uses: microsoft/msquic/.github/workflows/build-reuse-win.yml@main
-    with:
-      os: ${{ matrix.os }}
-      tls: ${{ matrix.tls }}
-      build: -Perf
-      ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
-
   testjob:
-    needs: [build-windows]
+    needs: []
     strategy:
       matrix:
         role: ["client", "server"]
-    runs-on: [self-hosted, 1ES.Pool=netperf-aztestpool]
+    runs-on: [self-hosted, 1ES.Pool=netperf-aztestpool-linux]
     steps:
-      - name: Get WinRM info
-        run: Get-Service WinRM
+      - name: Get Local Users
+        run: Get-LocalUser
         shell: pwsh
 
-      - name: WinRM quickconfig
-        run: echo Y | winrm quickconfig
+      - name: Who Am I
+        run: whoami
         shell: pwsh
 
-      - name: Enable remote powershell
-        run: Enable-PSRemoting -Force
-        shell: pwsh
-
-      - name: Disable Windows Defender / Firewall
+      - name: Configure SSH
         run: |
-          # Disable Windows defender / firewall.
-          Write-Host "Disabling Windows Defender / Firewall."
-          netsh.exe advfirewall set allprofiles state off
-          Set-MpPreference -EnableNetworkProtection Disabled
-          Set-MpPreference -DisableDatagramProcessing $True
-        shell: pwsh
-
-      - name: Enabling ServiceLogonRight
-        run: |
-          # Make sure the user has the rights to log on.
-          function Add-ServiceLogonRight ($Username) {
-              $tmp = New-TemporaryFile
-              secedit /export /cfg "$tmp.inf" | Out-Null
-              (Get-Content -Encoding ascii "$tmp.inf") -replace '^SeServiceLogonRight .+', "`$0,$Username" | Set-Content -Encoding ascii "$tmp.inf"
-              secedit /import /cfg "$tmp.inf" /db "$tmp.sdb" | Out-Null
-              secedit /configure /db "$tmp.sdb" /cfg "$tmp.inf" | Out-Null
-              Remove-Item $tmp* -ErrorAction SilentlyContinue
-          }
-          Write-Host "Enabling ServiceLogonRight."
-          Add-ServiceLogonRight -Username "secnetperf"
-        shell: pwsh
-
-      - name: Set local user
-        run: Set-LocalUser -Name "secnetperf" -PasswordNeverExpires $true
-        shell: pwsh
+          echo "Subsystem powershell /usr/bin/pwsh -sshs -NoLogo -NoProfile" | sudo tee -a /etc/ssh/sshd_config
+          sudo systemctl restart sshd
+          sudo systemctl restart ssh
+        shell: bash
 
       - name: (Server) Upload IP address to shared cache
         if: ${{ matrix.role == 'server' }}
@@ -93,7 +53,7 @@ jobs:
         run: |
           $found = $false
           do {
-              $donepath = "C:\done.txt"
+              $donepath = "\var\done.txt"
               Write-Output "Checking for done.txt..."
               if (Test-Path $donepath) {
                 Write-Output "done.txt found"
@@ -103,7 +63,7 @@ jobs:
                 Write-Output "done.txt not found"
               }
 
-              $StatePath = "C:\_state"
+              $StatePath = "\var\_state"
               if (Test-Path $StatePath) {
                 ls $StatePath
                 # Fetch all files in the _state directory
@@ -163,55 +123,19 @@ jobs:
           } while (-not $found)
 
           Write-Host "Preparing to run enable remote powershell session"
-          "$serverIp netperf-peer" | Out-File -Encoding ASCII -Append "$env:SystemRoot\System32\drivers\etc\hosts"
-          Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer' -Force
+          echo "$serverIp netperf-peer" | sudo tee -a /etc/hosts
+
           Write-Host "$(Get-Date) Try starting a remote session"
           Write-Host "Print powershell version information: "
           pwsh --version
-          $Session = New-PSSession -ComputerName netperf-peer
+          $Session = New-PSSession -HostName netperf-peer -UserName secnetperf -SSHTransport
           $Session
-          Write-Host "Using remote powershell session to start Secnetperf"
-          Invoke-Command -Session $Session -ScriptBlock {
-            New-Item -ItemType File -Name "Sanity-check.txt" -Path "C:\"
-          }
         shell: pwsh
 
-      - name: (Client) Checkout microsoft/msquic
-        if: ${{ matrix.role == 'client' }}
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
-        with:
-          repository: microsoft/msquic
-          ref: 'jackhe/1es-azure-pools'
-
-      - name: (Client) Download Artifacts
-        if: ${{ matrix.role == 'client' }}
-        uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
-        with:
-          name: Release-windows-windows-2022-x64-schannel-Perf
-          path: artifacts
-
-      - name: (Client) Download Watermark_Regression.json file
-        if: ${{ matrix.role == 'client' }}
-        run: Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/watermark_regression.json" -OutFile "watermark_regression.json"
-
-      - name: (Client) Run Secnetperf Script
-        if: ${{ matrix.role == 'client' }}
-        shell: pwsh
-        timeout-minutes: 20
-        run: ./scripts/secnetperf.ps1 `
-            -LogProfile 'NULL' `
-            -MsQuicCommit 'TODO' `
-            -environment 'azure' `
-            -plat 'windows' `
-            -os 'windows-2022' `
-            -arch 'x64' `
-            -tls 'schannel' `
-            -io 'iocp' `
-            -filter ''
       - name: (Client) Creates a 'done.txt' file to signal the server
         if: ${{ matrix.role == 'client' }}
         run: |
-          $Session = New-PSSession -ComputerName netperf-peer
+          $Session = New-PSSession -HostName netperf-peer -UserName secnetperf -SSHTransport
           Invoke-Command -Session $Session -ScriptBlock {
             New-Item -ItemType File -Name "done.txt" -Path "C:\"
           }
