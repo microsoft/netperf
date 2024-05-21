@@ -33,13 +33,6 @@ jobs:
         run: whoami
         shell: pwsh
 
-      - name: Configure SSH
-        run: |
-          echo "Subsystem powershell /usr/bin/pwsh -sshs -NoLogo -NoProfile" | sudo tee -a /etc/ssh/sshd_config
-          sudo systemctl restart sshd
-          sudo systemctl restart ssh
-        shell: bash
-
       - name: (Client) Upload public key to server
         if: ${{ matrix.role == 'client' }}
         run: |
@@ -68,11 +61,15 @@ jobs:
                 throw "Failed to get public key. Status code: $($Response.StatusCode)"
               }
               $publicKey = $Response.Content
-              Write-Output "Public Key found: $publicKey"
-              $authorizedKeysPath = "~/.ssh/authorized_keys"
+              # Run the script
+              $authorizedKeysPath = "$HOME/.ssh/authorized_keys"
               Write-Output "Authorized Keys Path: $authorizedKeysPath"
               Write-Output "Adding public key to authorized_keys..."
-              echo $publicKey | sudo tee -a $authorizedKeysPath
+              echo $publicKey | sudo tee -a $authorizedKeysPath | Out-Null
+              Write-Output "Public Key added to authorized_keys"
+              sudo chmod 600 $authorizedKeysPath
+              sudo chmod 700 $HOME/.ssh
+              Write-Output "Permissions set on authorized_keys and .ssh directory"
               $found = $true
             }
             catch {
@@ -81,6 +78,13 @@ jobs:
             }
           } while (-not $found)
         shell: pwsh
+
+      - name: Configure SSH
+        run: |
+          echo "Subsystem powershell /usr/bin/pwsh -sshs -NoLogo -NoProfile" | sudo tee -a /etc/ssh/sshd_config
+          sudo systemctl restart sshd
+          sudo systemctl restart ssh
+        shell: bash
 
       - name: (Server) Upload IP address to shared cache
         if: ${{ matrix.role == 'server' }}
