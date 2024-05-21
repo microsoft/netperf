@@ -24,7 +24,9 @@ jobs:
     runs-on: [self-hosted, 1ES.Pool=netperf-aztestpool-linux]
     steps:
       - name: Get Local Users
-        run: Get-LocalUser
+        run: |
+          pwsh --version
+          cat /etc/passwd
         shell: pwsh
 
       - name: Who Am I
