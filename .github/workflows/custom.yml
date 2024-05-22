@@ -204,6 +204,9 @@ jobs:
           Write-Host "Preparing to run enable remote powershell session"
           echo "$serverIp netperf-peer" | sudo tee -a /etc/hosts
 
+          Write-Host "Adding server IP to hosts file"
+          ssh-keyscan -H "netperf-peer" >> $HOME/.ssh/known_hosts
+
           Write-Host "$(Get-Date) Try starting a remote session"
           Write-Host "Print powershell version information: "
           pwsh --version
