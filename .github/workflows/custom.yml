@@ -31,7 +31,7 @@ jobs:
 
       - name: Switch to user secnetperf
         run: |
-          su - secnetperf
+          sudo su - secnetperf
           whoami
         shell: pwsh
 
@@ -85,11 +85,27 @@ jobs:
           } while (-not $found)
         shell: pwsh
 
+      - name: Init SSH
+        run: |
+          sudo apt update
+          sudo apt install openssh-server
+          sudo systemctl start ssh
+          sudo systemctl enable ssh
+          sudo systemctl status sshd
+          sudo systemctl status ssh
+        shell: bash
+
       - name: Configure SSH
         run: |
           echo "Subsystem powershell /usr/bin/pwsh -sshs -NoLogo -NoProfile" | sudo tee -a /etc/ssh/sshd_config
           sudo systemctl restart sshd
           sudo systemctl restart ssh
+        shell: bash
+
+      - name: Check SSH
+        run: |
+          sudo systemctl status sshd
+          sudo systemctl status ssh
         shell: bash
 
       - name: (Server) Upload IP address to shared cache
@@ -182,6 +198,8 @@ jobs:
           Write-Host "$(Get-Date) Try starting a remote session"
           Write-Host "Print powershell version information: "
           pwsh --version
+          Write-Host "Check sshd_config"
+          cat /etc/ssh/sshd_config
           $Session = New-PSSession -HostName netperf-peer -SSHTransport
           $Session
         shell: pwsh
