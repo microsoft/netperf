@@ -41,11 +41,11 @@ jobs:
 
       - name: Powershell remoting please
         run: |
-          sudo apt-get install -y wget apt-transport-https software-properties-common
+          sudo apt-get install -y wget apt-transport-https software-properties-common --allow-change-held-packages
           wget -q https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb
           sudo dpkg -i packages-microsoft-prod.deb
           sudo apt-get update
-          sudo apt-get install -y powershell
+          sudo apt-get install -y powershell --allow-change-held-packages
         shell: bash
 
       - name: (Client) Upload public key to server
