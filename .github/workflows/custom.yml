@@ -212,7 +212,7 @@ jobs:
           pwsh --version
           Write-Host "Check sshd_config"
           cat /etc/ssh/sshd_config
-          $Session = New-PSSession -HostName netperf-peer -SSHTransport
+          $Session = New-PSSession -HostName netperf-peer -Username cloudtest -SSHTransport
           $Session
         shell: pwsh
 
