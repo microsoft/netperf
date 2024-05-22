@@ -29,6 +29,12 @@ jobs:
           cat /etc/passwd
         shell: pwsh
 
+      - name: Switch to user secnetperf
+        run: |
+          sudo su - secnetperf
+          whoami
+        shell: pwsh
+
       - name: Who Am I
         run: whoami
         shell: pwsh
@@ -176,7 +182,7 @@ jobs:
           Write-Host "$(Get-Date) Try starting a remote session"
           Write-Host "Print powershell version information: "
           pwsh --version
-          $Session = New-PSSession -HostName netperf-peer -UserName cloudtest -SSHTransport
+          $Session = New-PSSession -HostName netperf-peer -UserName secnetperf -SSHTransport
           $Session
         shell: pwsh
 
