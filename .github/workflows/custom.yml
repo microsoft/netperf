@@ -212,7 +212,8 @@ jobs:
           pwsh --version
           Write-Host "Check sshd_config"
           cat /etc/ssh/sshd_config
-          $Session = New-PSSession -HostName netperf-peer -Username secnetperf -Password ${{ secrets.VM_PASSWORD }} -SSHTransport
+          $cred = New-Object System.Management.Automation.PSCredential (secnetperf, ${{ secrets.VM_PASSWORD }})
+          $Session = New-PSSession -HostName netperf-peer -Username secnetperf -SSHTransport -Credential $cred
           $Session
         shell: pwsh
 
