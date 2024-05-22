@@ -176,7 +176,7 @@ jobs:
           Write-Host "$(Get-Date) Try starting a remote session"
           Write-Host "Print powershell version information: "
           pwsh --version
-          $Session = New-PSSession -HostName netperf-peer -UserName secnetperf -SSHTransport
+          $Session = New-PSSession -HostName netperf-peer -UserName cloudtest -SSHTransport
           $Session
         shell: pwsh
 
