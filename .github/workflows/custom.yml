@@ -57,7 +57,7 @@ jobs:
           mkdir /home/secnetperf/.ssh
           mkdir /home/secnetperf/.ssh/id_rsa
           ssh-keygen -t rsa -N "" -f /home/secnetperf/.ssh/id_rsa
-          $publicKey = Get-Content /home/secnetperf/.ssh/id_rsa.pub
+          $publicKey = Get-Content /home/secnetperf/.ssh/id_rsa/id_rsa.pub
           sudo chmod 777 /home/secnetperf/.ssh/id_rsa
           $uri = "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_publickey&value=$publicKey"
           Invoke-WebRequest -Uri $uri -Headers $headers
