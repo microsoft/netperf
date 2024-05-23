@@ -83,18 +83,13 @@ jobs:
               }
               $publicKey = $Response.Content
               # Run the script
-              # sudo mkdir /root/.ssh
-              # sudo touch /root/.ssh/authorized_keys
               $authorizedKeysPath = "/root/.ssh/authorized_keys"
               Write-Output "Authorized Keys Path: $authorizedKeysPath"
               Write-Output "Adding public key to authorized_keys..."
               sudo echo $publicKey | sudo tee -a $authorizedKeysPath | Out-Null
               Write-Output "Public Key added to authorized_keys"
-              sudo chmod 777 /root/.ssh
-              sudo chmod 777 $authorizedKeysPath
               Write-Output "Authorized Keys File: "
               sudo cat $authorizedKeysPath
-              Write-Output "Permissions set on authorized_keys and .ssh directory"
               $found = $true
             }
             catch {
@@ -222,7 +217,9 @@ jobs:
           pwsh --version
           Write-Host "Check sshd_config"
           cat /etc/ssh/sshd_config
+          sudo chmod 644 /root/.ssh/id_rsa
           $Session = New-PSSession -HostName netperf-peer -Username root -SSHTransport -KeyFilePath "/root/.ssh/id_rsa"
+          sudo chmod 600 /root/.ssh/id_rsa
           $Session
         shell: pwsh
 
