@@ -218,7 +218,9 @@ jobs:
           Write-Host "Check sshd_config"
           cat /etc/ssh/sshd_config
           sudo chmod 644 /root/.ssh/id_rsa
-          $Session = New-PSSession -HostName netperf-peer -Username root -SSHTransport -KeyFilePath "/root/.ssh/id_rsa"
+          mkdir /home/cloudtest/kkeyy
+          sudo cp /root/.ssh/id_rsa /home/cloudtest/kkeyy
+          $Session = New-PSSession -HostName netperf-peer -Username root -SSHTransport -KeyFilePath "/home/cloudtest/kkeyy/id_rsa"
           sudo chmod 600 /root/.ssh/id_rsa
           $Session
         shell: pwsh
