@@ -55,7 +55,7 @@ jobs:
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
           sudo mkdir /home/secnetperf/.ssh
-          ssh-keygen -t rsa -N "" -f /home/secnetperf/.ssh/id_rsa
+          sudo ssh-keygen -t rsa -N "" -f /home/secnetperf/.ssh/id_rsa
           $publicKey = Get-Content /home/secnetperf/.ssh/id_rsa/id_rsa.pub
           sudo chmod 777 /home/secnetperf/.ssh/id_rsa
           $uri = "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_publickey&value=$publicKey"
