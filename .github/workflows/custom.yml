@@ -54,8 +54,9 @@ jobs:
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
-          ssh-keygen -t rsa -N "" -f ~/.ssh/id_rsa
-          $publicKey = Get-Content ~/.ssh/id_rsa.pub
+          ssh-keygen -t rsa -N "" -f /home/secnetperf/.ssh/id_rsa
+          $publicKey = Get-Content /home/secnetperf/.ssh/id_rsa.pub
+          sudo chmod 777 /home/secnetperf/.ssh
           $uri = "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_publickey&value=$publicKey"
           Invoke-WebRequest -Uri $uri -Headers $headers
         shell: pwsh
@@ -77,13 +78,12 @@ jobs:
               }
               $publicKey = $Response.Content
               # Run the script
-              $authorizedKeysPath = "$HOME/.ssh/authorized_keys"
+              $authorizedKeysPath = "/home/secnetperf/.ssh/authorized_keys"
               Write-Output "Authorized Keys Path: $authorizedKeysPath"
               Write-Output "Adding public key to authorized_keys..."
               echo $publicKey | sudo tee -a $authorizedKeysPath | Out-Null
               Write-Output "Public Key added to authorized_keys"
-              sudo chmod 600 $authorizedKeysPath
-              sudo chmod 700 $HOME/.ssh
+              sudo chmod 777 /home/secnetperf/.ssh
               Write-Output "Permissions set on authorized_keys and .ssh directory"
               $found = $true
             }
@@ -212,8 +212,7 @@ jobs:
           pwsh --version
           Write-Host "Check sshd_config"
           cat /etc/ssh/sshd_config
-          $cred = New-Object System.Management.Automation.PSCredential ("secnetperf", "${{ secrets.VM_PASSWORD }}")
-          $Session = New-PSSession -HostName netperf-peer -Username secnetperf -SSHTransport -Credential $cred
+          $Session = New-PSSession -HostName netperf-peer -Username secnetperf -SSHTransport -KeyFilePath "/home/secnetperf/.ssh/id_rsa"
           $Session
         shell: pwsh
 
