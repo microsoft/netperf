@@ -29,12 +29,6 @@ jobs:
           cat /etc/passwd
         shell: pwsh
 
-      - name: Switch to user secnetperf
-        run: |
-          sudo su - secnetperf
-          whoami
-        shell: pwsh
-
       - name: Who Am I
         run: whoami
         shell: pwsh
@@ -54,10 +48,10 @@ jobs:
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
-          sudo mkdir /home/secnetperf/.ssh
-          sudo -u secnetperf ssh-keygen -t rsa -N "" -f /home/secnetperf/.ssh/id_rsa
-          $publicKey = Get-Content /home/secnetperf/.ssh/id_rsa.pub
-          sudo chmod 777 /home/secnetperf/.ssh/id_rsa
+          # sudo mkdir /home/root/.ssh
+          sudo -u root ssh-keygen -t rsa -N "" -f /home/root/.ssh/id_rsa
+          $publicKey = Get-Content /home/root/.ssh/id_rsa.pub
+          sudo chmod 777 /home/root/.ssh/id_rsa
           $uri = "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_publickey&value=$publicKey"
           Invoke-WebRequest -Uri $uri -Headers $headers
         shell: pwsh
@@ -79,14 +73,14 @@ jobs:
               }
               $publicKey = $Response.Content
               # Run the script
-              sudo mkdir /home/secnetperf/.ssh
-              sudo touch /home/secnetperf/.ssh/authorized_keys
-              $authorizedKeysPath = "/home/secnetperf/.ssh/authorized_keys"
+              # sudo mkdir /home/root/.ssh
+              # sudo touch /home/root/.ssh/authorized_keys
+              $authorizedKeysPath = "/home/root/.ssh/authorized_keys"
               Write-Output "Authorized Keys Path: $authorizedKeysPath"
               Write-Output "Adding public key to authorized_keys..."
-              echo $publicKey | sudo tee -a $authorizedKeysPath | Out-Null
+              sudo echo $publicKey | sudo tee -a $authorizedKeysPath | Out-Null
               Write-Output "Public Key added to authorized_keys"
-              sudo chmod 777 /home/secnetperf/.ssh
+              sudo chmod 777 /home/root/.ssh
               sudo chmod 777 $authorizedKeysPath
               Write-Output "Authorized Keys File: "
               cat $authorizedKeysPath
@@ -218,14 +212,14 @@ jobs:
           pwsh --version
           Write-Host "Check sshd_config"
           cat /etc/ssh/sshd_config
-          $Session = New-PSSession -HostName netperf-peer -Username secnetperf -SSHTransport -KeyFilePath "/home/secnetperf/.ssh/id_rsa"
+          $Session = New-PSSession -HostName netperf-peer -Username root -SSHTransport -KeyFilePath "/home/root/.ssh/id_rsa"
           $Session
         shell: pwsh
 
       - name: (Client) Creates a 'done.txt' file to signal the server
         if: ${{ matrix.role == 'client' }}
         run: |
-          $Session = New-PSSession -HostName netperf-peer -UserName secnetperf -SSHTransport
+          $Session = New-PSSession -HostName netperf-peer -UserName root -SSHTransport
           Invoke-Command -Session $Session -ScriptBlock {
             New-Item -ItemType File -Name "done.txt" -Path "C:\"
           }
