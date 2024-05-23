@@ -48,9 +48,9 @@ jobs:
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
-          if (!(Test-Path /root/.ssh)) {
-            sudo mkdir /root/.ssh
-          }
+          # if (!(Test-Path /root/.ssh)) {
+          #   sudo mkdir /root/.ssh
+          # }
           sudo -u root ssh-keygen -t rsa -N "" -f /root/.ssh/id_rsa
           $publicKey = Get-Content /root/.ssh/id_rsa.pub
           sudo chmod 777 /root/.ssh/id_rsa
