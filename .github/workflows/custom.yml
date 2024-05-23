@@ -29,6 +29,11 @@ jobs:
           cat /etc/passwd
         shell: pwsh
 
+      - name: Switch to user root
+        run: |
+          sudo su
+        shell: bash
+
       - name: Who Am I
         run: whoami
         shell: pwsh
@@ -52,7 +57,9 @@ jobs:
           #   sudo mkdir /root/.ssh
           # }
           sudo -u root ssh-keygen -t rsa -N "" -f /root/.ssh/id_rsa
-          $publicKey = sudo Get-Content /root/.ssh/id_rsa.pub
+          # Get public key value with sudo
+          sudo cat /root/.ssh/id_rsa.pub
+          $publicKey = (Get-Content /root/.ssh/id_rsa.pub -Raw)
           sudo chmod 777 /root/.ssh/id_rsa
           $uri = "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_publickey&value=$publicKey"
           Invoke-WebRequest -Uri $uri -Headers $headers
