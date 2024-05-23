@@ -16,122 +16,87 @@ on:
 permissions: write-all
 
 jobs:
-  build-windows:
-    name: Build WinUser
+  build-unix:
+    name: Build Unix
     needs: []
     strategy:
       fail-fast: false
       matrix:
-        os: ['windows-2022']
-        tls: [schannel] # , openssl, openssl3]
-    uses: microsoft/msquic/.github/workflows/build-reuse-win.yml@main
+        os: ['ubuntu-20.04']
+        tls: [openssl] # , openssl3]
+    uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml@main
     with:
       os: ${{ matrix.os }}
       tls: ${{ matrix.tls }}
       build: -Perf
       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
+
   testjob:
-    needs: [build-windows]
+    needs: [build-unix]
     strategy:
       matrix:
         role: ["client", "server"]
-    runs-on: [self-hosted, 1ES.Pool=netperf-aztestpool]
+    runs-on: [self-hosted, 1ES.Pool=netperf-aztestpool-linux]
     steps:
-      - name: Get WinRM info
-        run: Get-Service WinRM
-        shell: pwsh
-
-      - name: WinRM quickconfig
-        run: echo Y | winrm quickconfig
-        shell: pwsh
-
-      - name: Enable remote powershell
-        run: Enable-PSRemoting -Force
-        shell: pwsh
-
-      - name: Disable Windows Defender / Firewall
-        run: |
-          # Disable Windows defender / firewall.
-          Write-Host "Disabling Windows Defender / Firewall."
-          netsh.exe advfirewall set allprofiles state off
-          Set-MpPreference -EnableNetworkProtection Disabled
-          Set-MpPreference -DisableDatagramProcessing $True
-        shell: pwsh
-
-      - name: Enabling ServiceLogonRight
-        run: |
-          # Make sure the user has the rights to log on.
-          function Add-ServiceLogonRight ($Username) {
-              $tmp = New-TemporaryFile
-              secedit /export /cfg "$tmp.inf" | Out-Null
-              (Get-Content -Encoding ascii "$tmp.inf") -replace '^SeServiceLogonRight .+', "`$0,$Username" | Set-Content -Encoding ascii "$tmp.inf"
-              secedit /import /cfg "$tmp.inf" /db "$tmp.sdb" | Out-Null
-              secedit /configure /db "$tmp.sdb" /cfg "$tmp.inf" | Out-Null
-              Remove-Item $tmp* -ErrorAction SilentlyContinue
-          }
-          Write-Host "Enabling ServiceLogonRight."
-          Add-ServiceLogonRight -Username "secnetperf"
-        shell: pwsh
-
-      - name: Set local user
-        run: Set-LocalUser -Name "secnetperf" -PasswordNeverExpires $true
-        shell: pwsh
-
       - name: (Server) Upload IP address to shared cache
         if: ${{ matrix.role == 'server' }}
         run: |
-          $ipAddress = (Get-NetIpAddress -AddressFamily IPv4).IpAddress
+          $ipAddress = ip addr | grep 'inet ' | grep '10' | awk '{print $2}' | cut -d'/' -f1
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
           Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_ipaddress&value=$ipAddress" -Headers $headers
         shell: pwsh
 
-      - name: (Server) Polls for a "done.txt" file from the client
+      - name: Download Artifacts
+        uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+        with:
+          name: Release-linux-ubuntu-18.04-x64-openssl-Perf
+          path: artifacts
+
+      - name: (Server) Polls for client instructions
         if: ${{ matrix.role == 'server' }}
         run: |
           $found = $false
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+          $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_state"
           do {
-              $donepath = "C:\done.txt"
-              Write-Output "Checking for done.txt..."
-              if (Test-Path $donepath) {
-                Write-Output "done.txt found"
+            Write-Output "Polling for client state..."
+            try {
+              $Response = Invoke-WebRequest -Uri $uri -Headers $headers
+              if (!($Response.StatusCode -eq 200)) {
+                throw "Failed to get client instructions: $($Response.StatusCode)"
+              }
+              $data = $Response.Content
+              if ($data -eq "done") {
+                Write-Output "Client done tests"
                 $found = $true
                 break
-              } else {
-                Write-Output "done.txt not found"
               }
-
-              $StatePath = "C:\_state"
-              if (Test-Path $StatePath) {
-                ls $StatePath
-                # Fetch all files in the _state directory
-                $files = Get-ChildItem -Path $StatePath -File
-                # Find the highest lexicographically sorted file name
-                $max = 0
-                foreach ($file in $files) {
-                    $filename = $file.Name.split(".")[0]
-                    $num = [int]($filename -replace "[^0-9]", "")
-                    if ($num -gt $max) {
-                        $max = $num
-                    }
-                }
-                # Check if there is a corresponding "completed" file
-                $ExecuteFileExist = Test-Path "$StatePath\execute_$($max).ps1"
-                $CompletedFileExist = Test-Path "$StatePath\completed_$($max).txt"
-                if ($ExecuteFileExist -and !($CompletedFileExist)) {
-                    Write-Host "Executing $StatePath\execute_$($max).ps1"
-                    Invoke-Expression "$StatePath\execute_$($max).ps1"
-                    Write-Host "Creating $StatePath\completed_$($max).txt"
-                    New-Item -ItemType File -Name "completed_$($max).txt" -Path $StatePath
-                } else {
-                    Write-Host "No outstanding script to execute... Highest order script found so far: $max"
-                }
-              } else {
-                Write-Host "State directory not found"
+              if ($data -eq "maxtput") {
+                # Run server with maxtput settings
+                Write-Output "Client requested maxtput"
+                # ...
+                # Upload indicator that server is done
+                Start-Sleep -Seconds 10
+                continue
               }
+              if ($data -eq "lowlat") {
+                # Run server with lowlat settings
+                Write-Output "Client requested lowlat"
+                # ...
+                # Upload indicator that server is done
+                Start-Sleep -Seconds 10
+                continue
+              }
+            }
+            catch {
+              Write-Output "Client instructions not done yet: $_"
               Start-Sleep -Seconds 10
+            }
           } while (-not $found)
         shell: pwsh
 
@@ -152,7 +117,7 @@ jobs:
               }
               $ipAddress = $Response.Content
               Write-Output "Ip Address found: $ipAddress"
-              $serverIp = $ipAddress.Split(" ") | Where-Object { $_.StartsWith("10") } | Select-Object -First 1
+              $serverIp = $ipAddress
               Write-Output "Server IP: $serverIp"
               $found = $true
             }
@@ -162,18 +127,9 @@ jobs:
             }
           } while (-not $found)
 
-          Write-Host "Preparing to run enable remote powershell session"
-          "$serverIp netperf-peer" | Out-File -Encoding ASCII -Append "$env:SystemRoot\System32\drivers\etc\hosts"
-          Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer' -Force
-          Write-Host "$(Get-Date) Try starting a remote session"
-          Write-Host "Print powershell version information: "
-          pwsh --version
-          $Session = New-PSSession -ComputerName netperf-peer
-          $Session
-          Write-Host "Using remote powershell session to start Secnetperf"
-          Invoke-Command -Session $Session -ScriptBlock {
-            New-Item -ItemType File -Name "Sanity-check.txt" -Path "C:\"
-          }
+          Write-Host "Setting netperf-peer to $serverIp"
+          echo "$serverIp netperf-peer" | sudo tee -a /etc/hosts
+
         shell: pwsh
 
       - name: (Client) Checkout microsoft/msquic
@@ -182,13 +138,6 @@ jobs:
         with:
           repository: microsoft/msquic
           ref: 'jackhe/1es-azure-pools'
-
-      - name: (Client) Download Artifacts
-        if: ${{ matrix.role == 'client' }}
-        uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
-        with:
-          name: Release-windows-windows-2022-x64-schannel-Perf
-          path: artifacts
 
       - name: (Client) Download Watermark_Regression.json file
         if: ${{ matrix.role == 'client' }}
@@ -202,17 +151,17 @@ jobs:
             -LogProfile 'NULL' `
             -MsQuicCommit 'TODO' `
             -environment 'azure' `
-            -plat 'windows' `
-            -os 'windows-2022' `
+            -plat 'linux' `
+            -os 'ubuntu-18.04' `
             -arch 'x64' `
-            -tls 'schannel' `
-            -io 'iocp' `
+            -tls 'openssl' `
+            -io 'epoll' `
             -filter ''
-      - name: (Client) Creates a 'done.txt' file to signal the server
+      - name: (Client) Uploads ACK to shared cache
         if: ${{ matrix.role == 'client' }}
         run: |
-          $Session = New-PSSession -ComputerName netperf-peer
-          Invoke-Command -Session $Session -ScriptBlock {
-            New-Item -ItemType File -Name "done.txt" -Path "C:\"
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
+          Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_state&value=done" -Headers $headers
         shell: pwsh
