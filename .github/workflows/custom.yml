@@ -48,12 +48,12 @@ jobs:
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
-          if (!(Test-Path /home/root/.ssh)) {
-            sudo mkdir /home/root/.ssh
+          if (!(Test-Path /root/.ssh)) {
+            sudo mkdir /root/.ssh
           }
-          sudo -u root ssh-keygen -t rsa -N "" -f /home/root/.ssh/id_rsa
-          $publicKey = Get-Content /home/root/.ssh/id_rsa.pub
-          sudo chmod 777 /home/root/.ssh/id_rsa
+          sudo -u root ssh-keygen -t rsa -N "" -f /root/.ssh/id_rsa
+          $publicKey = Get-Content /root/.ssh/id_rsa.pub
+          sudo chmod 777 /root/.ssh/id_rsa
           $uri = "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_publickey&value=$publicKey"
           Invoke-WebRequest -Uri $uri -Headers $headers
         shell: pwsh
@@ -75,14 +75,14 @@ jobs:
               }
               $publicKey = $Response.Content
               # Run the script
-              # sudo mkdir /home/root/.ssh
-              # sudo touch /home/root/.ssh/authorized_keys
-              $authorizedKeysPath = "/home/root/.ssh/authorized_keys"
+              # sudo mkdir /root/.ssh
+              # sudo touch /root/.ssh/authorized_keys
+              $authorizedKeysPath = "/root/.ssh/authorized_keys"
               Write-Output "Authorized Keys Path: $authorizedKeysPath"
               Write-Output "Adding public key to authorized_keys..."
               sudo echo $publicKey | sudo tee -a $authorizedKeysPath | Out-Null
               Write-Output "Public Key added to authorized_keys"
-              sudo chmod 777 /home/root/.ssh
+              sudo chmod 777 /root/.ssh
               sudo chmod 777 $authorizedKeysPath
               Write-Output "Authorized Keys File: "
               cat $authorizedKeysPath
@@ -214,7 +214,7 @@ jobs:
           pwsh --version
           Write-Host "Check sshd_config"
           cat /etc/ssh/sshd_config
-          $Session = New-PSSession -HostName netperf-peer -Username root -SSHTransport -KeyFilePath "/home/root/.ssh/id_rsa"
+          $Session = New-PSSession -HostName netperf-peer -Username root -SSHTransport -KeyFilePath "/root/.ssh/id_rsa"
           $Session
         shell: pwsh
 
