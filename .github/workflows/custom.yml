@@ -55,8 +55,8 @@ jobs:
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
           sudo mkdir /home/secnetperf/.ssh
-          sudo ssh-keygen -t rsa -N "" -f /home/secnetperf/.ssh/id_rsa
-          $publicKey = Get-Content /home/secnetperf/.ssh/id_rsa/id_rsa.pub
+          sudo -u secnetperf ssh-keygen -t rsa -N "" -f /home/secnetperf/.ssh/id_rsa
+          $publicKey = Get-Content /home/secnetperf/.ssh/id_rsa.pub
           sudo chmod 777 /home/secnetperf/.ssh/id_rsa
           $uri = "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_publickey&value=$publicKey"
           Invoke-WebRequest -Uri $uri -Headers $headers
@@ -87,6 +87,9 @@ jobs:
               echo $publicKey | sudo tee -a $authorizedKeysPath | Out-Null
               Write-Output "Public Key added to authorized_keys"
               sudo chmod 777 /home/secnetperf/.ssh
+              sudo chmod 777 $authorizedKeysPath
+              Write-Output "Authorized Keys File: "
+              cat $authorizedKeysPath
               Write-Output "Permissions set on authorized_keys and .ssh directory"
               $found = $true
             }
