@@ -29,9 +29,9 @@ jobs:
           cat /etc/passwd
         shell: pwsh
 
-      - name: Switch to user secnetperf
+      - name: Switch to user cloudtest
         run: |
-          sudo su - secnetperf
+          sudo su - cloudtest
           whoami
         shell: pwsh
 
@@ -54,9 +54,9 @@ jobs:
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
-          ssh-keygen -t rsa -N "" -f /home/secnetperf/.ssh/id_rsa
-          $publicKey = Get-Content /home/secnetperf/.ssh/id_rsa.pub
-          sudo chmod 777 /home/secnetperf/.ssh
+          ssh-keygen -t rsa -N "" -f /home/cloudtest/.ssh/id_rsa
+          $publicKey = Get-Content /home/cloudtest/.ssh/id_rsa.pub
+          sudo chmod 777 /home/cloudtest/.ssh
           $uri = "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_publickey&value=$publicKey"
           Invoke-WebRequest -Uri $uri -Headers $headers
         shell: pwsh
@@ -78,12 +78,12 @@ jobs:
               }
               $publicKey = $Response.Content
               # Run the script
-              $authorizedKeysPath = "/home/secnetperf/.ssh/authorized_keys"
+              $authorizedKeysPath = "/home/cloudtest/.ssh/authorized_keys"
               Write-Output "Authorized Keys Path: $authorizedKeysPath"
               Write-Output "Adding public key to authorized_keys..."
               echo $publicKey | sudo tee -a $authorizedKeysPath | Out-Null
               Write-Output "Public Key added to authorized_keys"
-              sudo chmod 777 /home/secnetperf/.ssh
+              sudo chmod 777 /home/cloudtest/.ssh
               Write-Output "Permissions set on authorized_keys and .ssh directory"
               $found = $true
             }
@@ -212,14 +212,14 @@ jobs:
           pwsh --version
           Write-Host "Check sshd_config"
           cat /etc/ssh/sshd_config
-          $Session = New-PSSession -HostName netperf-peer -Username secnetperf -SSHTransport -KeyFilePath "/home/secnetperf/.ssh/id_rsa"
+          $Session = New-PSSession -HostName netperf-peer -Username cloudtest -SSHTransport -KeyFilePath "/home/cloudtest/.ssh/id_rsa"
           $Session
         shell: pwsh
 
       - name: (Client) Creates a 'done.txt' file to signal the server
         if: ${{ matrix.role == 'client' }}
         run: |
-          $Session = New-PSSession -HostName netperf-peer -UserName secnetperf -SSHTransport
+          $Session = New-PSSession -HostName netperf-peer -UserName cloudtest -SSHTransport
           Invoke-Command -Session $Session -ScriptBlock {
             New-Item -ItemType File -Name "done.txt" -Path "C:\"
           }
