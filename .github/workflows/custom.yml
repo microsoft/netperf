@@ -54,8 +54,8 @@ jobs:
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
-          mkdir /home/secnetperf/.ssh
-          mkdir /home/secnetperf/.ssh/id_rsa
+          sudo mkdir /home/secnetperf/.ssh
+          sudo mkdir /home/secnetperf/.ssh/id_rsa
           ssh-keygen -t rsa -N "" -f /home/secnetperf/.ssh/id_rsa
           $publicKey = Get-Content /home/secnetperf/.ssh/id_rsa/id_rsa.pub
           sudo chmod 777 /home/secnetperf/.ssh/id_rsa
@@ -80,8 +80,8 @@ jobs:
               }
               $publicKey = $Response.Content
               # Run the script
-              mkdir /home/secnetperf/.ssh
-              touch /home/secnetperf/.ssh/authorized_keys
+              sudo mkdir /home/secnetperf/.ssh
+              sudo touch /home/secnetperf/.ssh/authorized_keys
               $authorizedKeysPath = "/home/secnetperf/.ssh/authorized_keys"
               Write-Output "Authorized Keys Path: $authorizedKeysPath"
               Write-Output "Adding public key to authorized_keys..."
