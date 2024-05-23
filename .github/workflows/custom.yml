@@ -93,7 +93,7 @@ jobs:
               sudo chmod 777 /root/.ssh
               sudo chmod 777 $authorizedKeysPath
               Write-Output "Authorized Keys File: "
-              cat $authorizedKeysPath
+              sudo cat $authorizedKeysPath
               Write-Output "Permissions set on authorized_keys and .ssh directory"
               $found = $true
             }
