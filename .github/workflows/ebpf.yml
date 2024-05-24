@@ -177,13 +177,20 @@ jobs:
           Write-Output "Installing XDP for Windows"
           CertUtil.exe -addstore Root bin\CoreNetSignRoot.cer
           CertUtil.exe -addstore TrustedPublisher bin\CoreNetSignRoot.cer
-          $process = Start-Process msiexec.exe -Wait -ArgumentList "/i xdp-for-windows.${{env.XDP_VERSION}}.msi INSTALLFOLDER=$installPath /qn" -PassThru
+          $process = Start-Process msiexec.exe -Wait -ArgumentList "/i xdp-for-windows.${{env.XDP_VERSION}}.msi INSTALLFOLDER=$installPath /qn /log install.log" -PassThru
           if ($process.ExitCode -ne 0) { exit $process.ExitCode }
           Write-Output "XDP for Windows installed"
           sc.exe query xdp
           reg.exe add HKLM\SYSTEM\CurrentControlSet\Services\xdp\Parameters /v XdpEbpfEnabled /d 1 /t REG_DWORD /f
           sc.exe stop xdp
           sc.exe start xdp
+
+    - name: Upload xdp install log
+      if: always()
+      uses: actions/upload-artifact@v2
+      with:
+        name: xdp_install_log_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        path: ${{ github.workspace }}\xdp\install.log
 
     - name: Download bpf_performance repository artifacts
       working-directory: ${{ github.workspace }}\bpf_performance
