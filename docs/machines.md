@@ -74,7 +74,7 @@ The following instructions are required to set up each machine in the pool.
 
 ### NOTE: For lab scenarios, you need to assign an IP address to the VM.
 
-## Configuration (Windows)
+## Azure Configuration (Windows - Deprecated)
 
 The following steps are required to set up each machine in the pool.
 
@@ -82,7 +82,7 @@ The following steps are required to set up each machine in the pool.
 $username = 'secnetperf'
 $password = '************' # Ask for the password to use
 $token = '************'    # Find at https://github.com/microsoft/netperf/settings/actions/runners/new?arch=x64&os=win
-$machine1 = '10.1.0.8'     # This is the GitHub runner machine's IP address
+$machine1 = '10.1.0.8'     # This is the GitHub runner machine's IP address. Find on the Azure Portal.
 $machine2 = '10.1.0.9'     # This is the peer machine's IP address
 $url = "https://raw.githubusercontent.com/microsoft/netperf/main/setup-runner-windows.ps1"
 ```
@@ -123,23 +123,57 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 Invoke-Command ".\setup-runner-windows.ps1 -Username $username -Password $password -PeerIp $machine1 -NewIpAddress $machine2 -RunnerLabels $labels"
 ```
 
-## Configuration (Linux)
+## Azure Configuration (Linux - Deprecated)
 
-```
+```Shell
+# Run on Github runner machine
 curl https://raw.githubusercontent.com/microsoft/netperf/main/setup-runner-linux.sh -o setup-runner-linux.sh
-# Make sure to run this script twice to properly install everything (to account for lab vs. Azure environment differences)
-bash setup-runner-linux.sh -i <peerip> -g <github token *do this on client only> -n <no reboot *optional>
-# Do this on the client only:
-ssh-copy-id <username of peer>@<peerip>
+
+CLIENTIP='10.0.0.1' # This is the Github runner machine's IP address. Find on the Azure Portal.
+SERVERIP='10.0.0.2'
+TOKEN='...obtain from https://github.com/microsoft/netperf/settings/actions/runners/new?arch=x64&os=win...'
+USERNAME='secnetperf'
+PASSWORD='...' # Choose a password. Make this consistent.
+
+bash setup-runner-linux.sh -i $SERVERIP -g $TOKEN -u $USERNAME -p $PASSWORD -n
+ssh-copy-id $USERNAME@$SERVERIP # or you can run ssh-copy-id $USERNAME@netperf-peer
+```
+
+```Shell
+# Run on Peer machine
+curl https://raw.githubusercontent.com/microsoft/netperf/main/setup-runner-linux.sh -o setup-runner-linux.sh
+
+CLIENTIP='10.0.0.1' # This is the Github runner machine's IP address. Find on the Azure Portal.
+SERVERIP='10.0.0.2'
+USERNAME='secnetperf'
+PASSWORD='...' # Choose a password. Make this consistent.
+
+bash setup-runner-linux.sh -i $SERVERIP -g $TOKEN -u $USERNAME -p $PASSWORD -n
 ```
 
 ## Lab Configuration (Linux)
 
-First, do all the steps in Configuration (Linux).
+```Shell
+# Run on Github runner machine
+curl https://raw.githubusercontent.com/microsoft/netperf/main/setup-runner-linux.sh -o setup-runner-linux.sh
 
-Next, you need to use the `ip` util to assign an IP to the VM, and create a startup script that assigns that IP. The IP address should be a fixed value depending on the machine ID of the lab host.
+# As per our conventions, XXX should be the host ID (RR1-NETPERF-20) plus 1. So 192.168.0.21 for the example.
+LOCALIP='192.168.0.XXX'
+PEERIP='192.168.0.YYY'
+TOKEN='...obtain from https://github.com/microsoft/netperf/settings/actions/runners/new?arch=x64&os=win...'
+USERNAME='Administrator'
 
-To use the `ip` util built in to `net-tools` to add an IP to your mellanox NIC:
-The usual command is `sudo ip addr add (address / CIDR block) dev (NIC name)`. The problem is, if you reboot, Linux will revert your IP assignments. So what you do is you can create a startup script that runs on boot leveraging `systemd` or some other service depending on your Linux distro.
+sudo apt install net-tools -y
+
+ifconfig
+# From the output of ifconfig, look for the netadapter (eth0 or eth1 ...) WITHOUT an inet ipv4 address
+# usually, this will be eth1.
+
+sudo ipaddr 
+```
+
+On Lab Linux, our setup-ipaddr-linux.sh scripts use the `ip` util to assign an IP to the VM, and create a startup script that assigns that do the same thing. The IP address should be a fixed value depending on the machine ID of the lab host.
+
+Our script will run: `sudo ip addr add (address / CIDR block) dev (NIC name)`. This solves the problem where if you reboot, Linux will revert your IP assignments. So what you do is you can create a startup script that runs on boot leveraging `systemd` or some other service depending on your Linux distro.
 
 Our convention is to set the IP address to `192.168.0.(machine ID + 1)`. So machine RR1-NETPERF-20 would get assigned IP address `192.168.0.21`.
