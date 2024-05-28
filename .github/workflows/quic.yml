@@ -162,6 +162,7 @@ jobs:
     with:
       os: ${{ matrix.os }}
       tls: ${{ matrix.tls }}
+      xdp: ${{ matrix.io == 'xdp' && '-UseXdp' || '' }}
       build: -Perf
       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
