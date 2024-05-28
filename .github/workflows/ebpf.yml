@@ -192,6 +192,11 @@ jobs:
         name: xdp_install_log_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: ${{ github.workspace }}\xdp\install.log
 
+    - name: Query list of drivers installed
+      if: always()
+      run: |
+        Get-WmiObject -Class Win32_SystemDriver | Select-Object -Property Name, State, StartMode, PathName
+
     - name: Download bpf_performance repository artifacts
       working-directory: ${{ github.workspace }}\bpf_performance
       env:
