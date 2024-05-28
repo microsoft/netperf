@@ -74,7 +74,7 @@ The following instructions are required to set up each machine in the pool.
 
 ### NOTE: For lab scenarios, you need to assign an IP address to the VM.
 
-## Azure Configuration (Windows - Deprecated)
+## Windows Azure Configuration (Deprecated in favor of 1ES)
 
 The following steps are required to set up each machine in the pool.
 
@@ -97,7 +97,7 @@ iex "& { $(irm $url) } $username $password $machine2 $token"
 iex "& { $(irm $url) } $username $password $machine1"
 ```
 
-## Lab Configuration (Windows)
+## Windows Lab Configuration
 
 ```PowerShell
 $username = 'Administrator'
@@ -123,7 +123,7 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 Invoke-Command ".\setup-runner-windows.ps1 -Username $username -Password $password -PeerIp $machine1 -NewIpAddress $machine2 -RunnerLabels $labels"
 ```
 
-## Azure Configuration (Linux - Deprecated)
+## Linux Azure Configuration (Deprecated in favor of 1ES)
 
 ```Shell
 # Run on Github runner machine
@@ -131,7 +131,7 @@ curl https://raw.githubusercontent.com/microsoft/netperf/main/setup-runner-linux
 
 CLIENTIP='10.0.0.1' # This is the Github runner machine's IP address. Find on the Azure Portal.
 SERVERIP='10.0.0.2'
-TOKEN='...obtain from https://github.com/microsoft/netperf/settings/actions/runners/new?arch=x64&os=win...'
+TOKEN='obtain from https://github.com/microsoft/netperf/settings/actions/runners/new?arch=x64&os=win'
 USERNAME='secnetperf'
 PASSWORD='...' # Choose a password. Make this consistent.
 
@@ -148,28 +148,59 @@ SERVERIP='10.0.0.2'
 USERNAME='secnetperf'
 PASSWORD='...' # Choose a password. Make this consistent.
 
-bash setup-runner-linux.sh -i $SERVERIP -g $TOKEN -u $USERNAME -p $PASSWORD -n
+bash setup-runner-linux.sh -i $CLIENTIP -g $TOKEN -u $USERNAME -p $PASSWORD -n
 ```
 
-## Lab Configuration (Linux)
+## Linux Lab Configuration
 
 ```Shell
 # Run on Github runner machine
 curl https://raw.githubusercontent.com/microsoft/netperf/main/setup-runner-linux.sh -o setup-runner-linux.sh
 
-# As per our conventions, XXX should be the host ID (RR1-NETPERF-20) plus 1. So 192.168.0.21 for the example.
-LOCALIP='192.168.0.XXX'
-PEERIP='192.168.0.YYY'
-TOKEN='...obtain from https://github.com/microsoft/netperf/settings/actions/runners/new?arch=x64&os=win...'
-USERNAME='Administrator'
-
+# As per our conventions, XXX should be the host ID (RR1-NETPERF-20) plus 1 (192.168.0.21 for the example)
+CLIENTIP='192.168.0.XXX/24'
 sudo apt install net-tools -y
 
-ifconfig
-# From the output of ifconfig, look for the netadapter (eth0 or eth1 ...) WITHOUT an inet ipv4 address
-# usually, this will be eth1.
+ifconfig # From the output of ifconfig, look for the netadapter (eth0 or eth1 ...) WITHOUT an inet ipv4 address. Usually, this will be eth1.
+sudo ip addr add $CLIENTIP dev eth1 # make sure eth1 is indeed the netadapter without an inet ipv4 address.
+```
 
-sudo ipaddr 
+```Shell
+# Run on peer machine
+curl https://raw.githubusercontent.com/microsoft/netperf/main/setup-runner-linux.sh -o setup-runner-linux.sh
+
+CLIENTIP='192.168.0.XXX'
+SERVERIP='192.168.0.YYY/24'
+USERNAME='secnetperf'
+PASSWORD='...' # Choose a secure password, remember to keep it consistent.
+
+sudo apt install net-tools -y
+ifconfig # From the output of ifconfig, look for the netadapter (eth0 or eth1 ...) WITHOUT an inet ipv4 address. Usually, this will be eth1.
+
+sudo ip addr add $SERVERIP dev eth1 # make sure eth1 is indeed the netadapter without an inet ipv4 address.
+bash setup-runner-linux.sh -i $CLIENTIP -u $USERNAME -p $PASSWORD -n
+```
+
+```Shell
+# Run on the Github Runner machine
+TOKEN='obtain from https://github.com/microsoft/netperf/settings/actions/runners/new?arch=x64&os=linux'
+USERNAME='secnetperf'
+PASSWORD='...' # Choose a secure password, remember to keep it consistent.
+SERVERIP='192.168.0.YYY'
+bash setup-runner-linux.sh -i $SERVERIP -g $TOKEN -u $USERNAME -p $PASSWORD -n
+
+ping netperf-peer # Sanity check
+ssh-keygen -t rsa -N "" -f $HOME/.ssh/id_rsa
+sudo ssh-copy-id $USERNAME@$SERVERIP # Or sudo ssh-copy-id $USERNAME@netperf-peer
+
+pwsh
+```
+Once loaded up in powershell:
+```Powershell
+# Still on the Github Runner machine:
+# Final Sanity Check to make sure the pair of VMs / machines are fully onboarded.
+$Username = "secnetperf"
+$Session = New-PSSession -HostName "netperf-peer" -UserName $UserName -SSHTransport # Make sure no errors here.
 ```
 
 On Lab Linux, our setup-ipaddr-linux.sh scripts use the `ip` util to assign an IP to the VM, and create a startup script that assigns that do the same thing. The IP address should be a fixed value depending on the machine ID of the lab host.
