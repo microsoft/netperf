@@ -163,6 +163,8 @@ sudo apt install net-tools -y
 
 ifconfig # From the output of ifconfig, look for the netadapter (eth0 or eth1 ...) WITHOUT an inet ipv4 address. Usually, this will be eth1.
 sudo ip addr add $CLIENTIP dev eth1 # make sure eth1 is indeed the netadapter without an inet ipv4 address.
+# Also create a startup script that runs "sudo ip addr add $CLIENTIP dev eth_" so when the VM restarts, the ip persists.
+
 ```
 
 ```Shell
@@ -178,6 +180,8 @@ sudo apt install net-tools -y
 ifconfig # From the output of ifconfig, look for the netadapter (eth0 or eth1 ...) WITHOUT an inet ipv4 address. Usually, this will be eth1.
 
 sudo ip addr add $SERVERIP dev eth1 # make sure eth1 is indeed the netadapter without an inet ipv4 address.
+# Also create a startup script that runs "sudo ip addr add $CLIENTIP dev eth_" so when the VM restarts, the ip persists.
+
 bash setup-runner-linux.sh -i $CLIENTIP -u $USERNAME -p $PASSWORD -n
 ```
 
