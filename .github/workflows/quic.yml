@@ -214,7 +214,7 @@ jobs:
       uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
       if: ${{ matrix.os == 'ubuntu-22.04' }} # xdp build includes epoll io
       with:
-        name: Release-${{env.OS}}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}${{ matrix.io == 'xdp' && '-UseXdp' || '' }}-Perf
+        name: Release-${{env.OS}}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-UseXdp-Perf
         path: artifacts
     - name: Download Kernel Artifacts
       uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
