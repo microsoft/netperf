@@ -40,7 +40,7 @@
     "react-helmet-async": "^2.0.4",
     "react-hook-form": "^7.50.1",
     "react-router-dom": "^6.21.3",
-    "simplebar-react": "^3.2.4",
+    "simplebar-react": "^3.2.5",
     "sql.js": "^1.10.2"
   },
   "devDependencies": {
