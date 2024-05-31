@@ -21,8 +21,9 @@ As a workaround, we have found a way to utilize remote powershell on Windows in 
 
 ## So what?
 
-Our entire netperf project has the abstraction where the testing scripts are owned by the repositories of the product code itself, and we simply provide the infrastructure for facilitating and collecting + dashboarding the results. 
+Our entire netperf project has the abstraction where the testing scripts are owned by the repositories of the product code itself, and we simply provide the infrastructure for facilitating and collecting + dashboarding the results.
 
 As a result, here is our most up-to-date control-flow for running performance tests using 1ES:
 
 
+![Netperf Architecture](./netperf-arch.png)
