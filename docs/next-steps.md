@@ -5,6 +5,8 @@
     - 90% success rate minimum. ("success" is defined as no test crashes due to environment conflicts)
 - Robust and reliable performance testing for Lab scenarios
     - 90% success rate minimum.
+- Onboard at least 40% of lab hardware to be used in netperf
+- Have a way to at least partially automate updating and running Windows 2025 perf tests based on a branch/build.
 
 ### What needs to be done:
 
