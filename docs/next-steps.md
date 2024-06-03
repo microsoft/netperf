@@ -25,3 +25,4 @@
     -  Eliminate any dependency on a 3rd party web service to facilitate inter-agent communication.
 - Fully onboard custom hardware lab to 1ES infrastructure (~ 2 months)
     - Eliminate any manual intervention / setup. Get rid of our statitically onboarded lab perf machines/VMs in favor of the hardware pool.
+    - Windows builds can trigger Netperf and run performance tests on the custom hardware lab / Azure.
