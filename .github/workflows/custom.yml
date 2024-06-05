@@ -16,27 +16,203 @@ on:
 permissions: write-all
 
 jobs:
-#
-# Cleanup temporary VMs
-#
-  job1:
-    runs-on: ubuntu-latest
-    outputs:
-      my_output: ${{ steps.set_output.outputs.value }}
-      matrix: ${{ steps.filter.outputs.matrix }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
-      - id: filter
-        run: echo "::set-output name=matrix::$(jq -c '.' ./.github/workflows/matrix.json)"
+  build-windows:
+    name: Build WinUser
+    needs: []
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ['windows-2022']
+        tls: [schannel] # , openssl, openssl3]
+    uses: microsoft/msquic/.github/workflows/build-reuse-win.yml@main
+    with:
+      os: ${{ matrix.os }}
+      tls: ${{ matrix.tls }}
+      build: -Perf
+      ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
-  job2:
-    needs: job1
-    runs-on: ubuntu-latest
+  testjob:
+    needs: [build-windows]
     strategy:
       matrix:
-        include: ${{fromJson(needs.job1.outputs.matrix)}}
+        role: ["client", "server"]
+    runs-on: [self-hosted, netperf-aztestpool-boosted-windows]
     steps:
-      - name: Use output from job1
-        run: echo "The output from job1 is ${{ matrix.io }}"
+      - name: Get WinRM info
+        run: Get-Service WinRM
+        shell: pwsh
 
+      - name: WinRM quickconfig
+        run: echo Y | winrm quickconfig
+        shell: pwsh
+
+      - name: Enable remote powershell
+        run: Enable-PSRemoting -Force
+        shell: pwsh
+
+      - name: Disable Windows Defender / Firewall
+        run: |
+          # Disable Windows defender / firewall.
+          Write-Host "Disabling Windows Defender / Firewall."
+          netsh.exe advfirewall set allprofiles state off
+          Set-MpPreference -EnableNetworkProtection Disabled
+          Set-MpPreference -DisableDatagramProcessing $True
+        shell: pwsh
+
+      - name: Enabling ServiceLogonRight
+        run: |
+          # Make sure the user has the rights to log on.
+          function Add-ServiceLogonRight ($Username) {
+              $tmp = New-TemporaryFile
+              secedit /export /cfg "$tmp.inf" | Out-Null
+              (Get-Content -Encoding ascii "$tmp.inf") -replace '^SeServiceLogonRight .+', "`$0,$Username" | Set-Content -Encoding ascii "$tmp.inf"
+              secedit /import /cfg "$tmp.inf" /db "$tmp.sdb" | Out-Null
+              secedit /configure /db "$tmp.sdb" /cfg "$tmp.inf" | Out-Null
+              Remove-Item $tmp* -ErrorAction SilentlyContinue
+          }
+          Write-Host "Enabling ServiceLogonRight."
+          Add-ServiceLogonRight -Username "secnetperf"
+        shell: pwsh
+
+      - name: Set local user
+        run: Set-LocalUser -Name "secnetperf" -PasswordNeverExpires $true
+        shell: pwsh
+
+      - name: (Server) Upload IP address to shared cache
+        if: ${{ matrix.role == 'server' }}
+        run: |
+          $ipAddress = (Get-NetIpAddress -AddressFamily IPv4).IpAddress
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+          Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_ipaddress&value=$ipAddress" -Headers $headers
+        shell: pwsh
+
+      - name: (Server) Polls for a "done.txt" file from the client
+        if: ${{ matrix.role == 'server' }}
+        run: |
+          $found = $false
+          do {
+              $donepath = "C:\done.txt"
+              Write-Output "Checking for done.txt..."
+              if (Test-Path $donepath) {
+                Write-Output "done.txt found"
+                $found = $true
+                break
+              } else {
+                Write-Output "done.txt not found"
+              }
+
+              $StatePath = "C:\_state"
+              if (Test-Path $StatePath) {
+                ls $StatePath
+                # Fetch all files in the _state directory
+                $files = Get-ChildItem -Path $StatePath -File
+                # Find the highest lexicographically sorted file name
+                $max = 0
+                foreach ($file in $files) {
+                    $filename = $file.Name.split(".")[0]
+                    $num = [int]($filename -replace "[^0-9]", "")
+                    if ($num -gt $max) {
+                        $max = $num
+                    }
+                }
+                # Check if there is a corresponding "completed" file
+                $ExecuteFileExist = Test-Path "$StatePath\execute_$($max).ps1"
+                $CompletedFileExist = Test-Path "$StatePath\completed_$($max).txt"
+                if ($ExecuteFileExist -and !($CompletedFileExist)) {
+                    Write-Host "Executing $StatePath\execute_$($max).ps1"
+                    Invoke-Expression "$StatePath\execute_$($max).ps1"
+                    Write-Host "Creating $StatePath\completed_$($max).txt"
+                    New-Item -ItemType File -Name "completed_$($max).txt" -Path $StatePath
+                } else {
+                    Write-Host "No outstanding script to execute... Highest order script found so far: $max"
+                }
+              } else {
+                Write-Host "State directory not found"
+              }
+              Start-Sleep -Seconds 10
+          } while (-not $found)
+        shell: pwsh
+
+      - name: (Client) Poll for an ip address uploaded by the server, set netperf-peer.
+        if: ${{ matrix.role == 'client' }}
+        run: |
+          $found = $false
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+          $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_ipaddress"
+          do {
+            Write-Output "Checking for ip address..."
+            try {
+              $Response = Invoke-WebRequest -Uri $uri -Headers $headers
+              if (!($Response.StatusCode -eq 200)) {
+                throw "Failed to get ip address. Status code: $($Response.StatusCode)"
+              }
+              $ipAddress = $Response.Content
+              Write-Output "Ip Address found: $ipAddress"
+              $serverIp = $ipAddress.Split(" ") | Where-Object { $_.StartsWith("10") } | Select-Object -First 1
+              Write-Output "Server IP: $serverIp"
+              $found = $true
+            }
+            catch {
+              Write-Output "Ip Address not found: $_"
+              Start-Sleep -Seconds 5
+            }
+          } while (-not $found)
+
+          Write-Host "Preparing to run enable remote powershell session"
+          "$serverIp netperf-peer" | Out-File -Encoding ASCII -Append "$env:SystemRoot\System32\drivers\etc\hosts"
+          Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer' -Force
+          Write-Host "$(Get-Date) Try starting a remote session"
+          Write-Host "Print powershell version information: "
+          pwsh --version
+          $Session = New-PSSession -ComputerName netperf-peer
+          $Session
+          Write-Host "Using remote powershell session to start Secnetperf"
+          Invoke-Command -Session $Session -ScriptBlock {
+            New-Item -ItemType File -Name "Sanity-check.txt" -Path "C:\"
+          }
+        shell: pwsh
+
+      - name: (Client) Checkout microsoft/msquic
+        if: ${{ matrix.role == 'client' }}
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          repository: microsoft/msquic
+          ref: 'jackhe/1es-azure-pools'
+
+      - name: (Client) Download Artifacts
+        if: ${{ matrix.role == 'client' }}
+        uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+        with:
+          name: Release-windows-windows-2022-x64-schannel-Perf
+          path: artifacts
+
+      - name: (Client) Download Watermark_Regression.json file
+        if: ${{ matrix.role == 'client' }}
+        run: Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/watermark_regression.json" -OutFile "watermark_regression.json"
+
+      - name: (Client) Run Secnetperf Script
+        if: ${{ matrix.role == 'client' }}
+        shell: pwsh
+        timeout-minutes: 20
+        run: ./scripts/secnetperf.ps1 `
+            -LogProfile 'NULL' `
+            -MsQuicCommit 'TODO' `
+            -environment 'azure' `
+            -plat 'windows' `
+            -os 'windows-2022' `
+            -arch 'x64' `
+            -tls 'schannel' `
+            -io 'iocp' `
+            -filter ''
+      - name: (Client) Creates a 'done.txt' file to signal the server
+        if: ${{ matrix.role == 'client' }}
+        run: |
+          $Session = New-PSSession -ComputerName netperf-peer
+          Invoke-Command -Session $Session -ScriptBlock {
+            New-Item -ItemType File -Name "done.txt" -Path "C:\"
+          }
+        shell: pwsh
