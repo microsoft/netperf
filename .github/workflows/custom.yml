@@ -36,7 +36,7 @@ jobs:
     strategy:
       matrix:
         role: ["client", "server"]
-    runs-on: [self-hosted, 1ES.Pool=netperf-aztestpool-boosted-windows]
+    runs-on: [self-hosted, 1ES.Pool=netperf-boosted-windows-pool]
     steps:
       - name: Get WinRM info
         run: Get-Service WinRM
