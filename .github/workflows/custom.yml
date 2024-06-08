@@ -55,6 +55,13 @@ jobs:
           name: Release-linux-ubuntu-20.04-x64-openssl-Perf
           path: artifacts
 
+      - name: (Server) Checkout netperf repo
+        if: ${{ matrix.role == 'server' }}
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          repository: microsoft/netperf
+          ref: 'jackhe/1es-azure-pools'
+
       - name: (Server) Polls for client instructions
         if: ${{ matrix.role == 'server' }}
         run: |
@@ -63,6 +70,7 @@ jobs:
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
           $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_state"
+          $ApprovedCommandsJson = Get-Content -Path "approved-commands.json" -Raw
           do {
             Write-Output "Polling for client state..."
             try {
@@ -72,10 +80,20 @@ jobs:
               }
               $data = $Response.Content
               $dataJson = ConvertFrom-Json $data
+              if ($dataJson.SeqNum < dataJson.Commands.Count) {
+                $command = $dataJson.Commands[$dataJson.SeqNum]
+                $dataJson.SeqNum++
+                $dataJsonString = $dataJson | ConvertTo-Json
+                $Update = Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=state_${{ github.run_id }}&value=$dataJsonString" -Headers $headers
+                if (!($Update.StatusCode -eq 200)) {
+                  throw "Failed to update client state: $($Update.StatusCode)"
+                }
+                iex $command
+              }
             }
             catch {
               Write-Output "Client instructions not done yet: $_"
-              Start-Sleep -Seconds 10
+              Start-Sleep -Seconds 30
             }
           } while (-not $found)
         shell: pwsh
