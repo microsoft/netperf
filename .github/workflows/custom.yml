@@ -69,12 +69,12 @@ jobs:
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
-          $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_state"
+          $url = "https://netperfapiwebapp.azurewebsites.net"
           $ApprovedCommandsJson = Get-Content -Path "approved-commands.json" -Raw
           do {
             Write-Output "Polling for client state..."
             try {
-              $Response = Invoke-WebRequest -Uri $uri -Headers $headers
+              $Response = Invoke-WebRequest -Uri "$url/getkeyvalue?key=${{ github.run_id }}_state" -Headers $headers
               if (!($Response.StatusCode -eq 200)) {
                 throw "Failed to get client instructions: $($Response.StatusCode)"
               }
@@ -83,12 +83,12 @@ jobs:
               if ($dataJson.SeqNum < dataJson.Commands.Count) {
                 $command = $dataJson.Commands[$dataJson.SeqNum]
                 $dataJson.SeqNum++
-                $dataJsonString = $dataJson | ConvertTo-Json
-                $Update = Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=state_${{ github.run_id }}&value=$dataJsonString" -Headers $headers
+                $body = $dataJson | ConvertTo-Json
+                $Update = Invoke-WebRequest -Uri "$url/setkeyvalue?key=${{ github.run_id }}_state" -Headers $headers -Method Put -Body $body -ContentType "application/json"
                 if (!($Update.StatusCode -eq 200)) {
                   throw "Failed to update client state: $($Update.StatusCode)"
                 }
-                iex $command
+                iex $ApprovedCommandsJson[$command]
               }
             }
             catch {
