@@ -88,7 +88,12 @@ jobs:
                 if (!($Update.StatusCode -eq 200)) {
                   throw "Failed to update client state: $($Update.StatusCode)"
                 }
-                iex $ApprovedCommandsJson[$command]
+                Write-Host "Executing command: $command"
+                if ($ApprovedCommandsJson.contains($command)) {
+                  Invoke-Expression $command
+                } else {
+                  Write-Output "Command not approved: $command"
+                }
               }
             }
             catch {
