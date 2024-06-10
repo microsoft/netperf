@@ -80,7 +80,7 @@ jobs:
               }
               $data = $Response.Content
               $dataJson = ConvertFrom-Json $data
-              if ($dataJson.SeqNum < dataJson.Commands.Count) {
+              if ($dataJson.SeqNum -lt dataJson.Commands.Count) {
                 $command = $dataJson.Commands[$dataJson.SeqNum]
                 $dataJson.SeqNum++
                 $body = $dataJson | ConvertTo-Json
@@ -161,6 +161,8 @@ jobs:
             -io 'epoll' `
             -filter ''
             -RemotePowershellSupported 'FALSE'
+            -RunId ${{ github.run_id }}
+            -SyncerSecret ${{ secrets.NETPERF_SYNCER_SECRET }}
       - name: (Client) Uploads ACK to shared cache
         if: ${{ matrix.role == 'client' }}
         run: |
