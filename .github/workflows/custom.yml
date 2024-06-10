@@ -145,7 +145,8 @@ jobs:
       - name: (Client) Download Watermark_Regression.json file
         if: ${{ matrix.role == 'client' }}
         run: Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/watermark_regression.json" -OutFile "watermark_regression.json"
-
+        shell: pwsh
+        
       - name: (Client) Run Secnetperf Script
         if: ${{ matrix.role == 'client' }}
         shell: pwsh
