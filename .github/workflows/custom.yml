@@ -84,7 +84,7 @@ jobs:
                 $command = $dataJson.Commands[$dataJson.SeqNum]
                 $dataJson.SeqNum++
                 $body = $dataJson | ConvertTo-Json
-                $Update = Invoke-WebRequest -Uri "$url/setkeyvalue?key=${{ github.run_id }}_state" -Headers $headers -Method Put -Body $body -ContentType "application/json"
+                $Update = Invoke-WebRequest -Uri "$url/setkeyvalue?key=${{ github.run_id }}_state" -Headers $headers -Method POST -Body $body -ContentType "application/json"
                 if (!($Update.StatusCode -eq 200)) {
                   throw "Failed to update client state: $($Update.StatusCode)"
                 }
@@ -146,7 +146,7 @@ jobs:
         if: ${{ matrix.role == 'client' }}
         run: Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/watermark_regression.json" -OutFile "watermark_regression.json"
         shell: pwsh
-        
+
       - name: (Client) Run Secnetperf Script
         if: ${{ matrix.role == 'client' }}
         shell: pwsh
