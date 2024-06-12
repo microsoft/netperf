@@ -83,6 +83,9 @@ jobs:
               if ($dataJson.SeqNum -lt $dataJson.Commands.Count) {
                 $command = $dataJson.Commands[$dataJson.SeqNum]
                 $dataJson.SeqNum++
+                $dataJson = @{
+                  value=$dataJson
+                }
                 $body = $dataJson | ConvertTo-Json
                 $Update = Invoke-WebRequest -Uri "$url/setkeyvalue?key=${{ github.run_id }}_state" -Headers $headers -Method POST -Body $body -ContentType "application/json"
                 if (!($Update.StatusCode -eq 200)) {
