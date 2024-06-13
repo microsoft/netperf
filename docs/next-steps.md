@@ -7,6 +7,8 @@
     - 90% success rate minimum.
 - Onboard at least 40% of lab hardware to be used in netperf
 - Have a way to at least partially automate updating and running Windows 2025 perf tests based on a branch/build.
+    - Self update - have the VM self host a branch, and set it to update during downtime.
+- Windows OS Project - Some reliable dependence.
 
 ### What needs to be done:
 
