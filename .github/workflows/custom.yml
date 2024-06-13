@@ -61,7 +61,7 @@ jobs:
           $fullPath = "${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl"
           $SecNetPerfPath = "$fullPath/secnetperf"
           $env:LD_LIBRARY_PATH = "${env:LD_LIBRARY_PATH}:$fullPath"
-          chmod +x "./$SecNetPerfPath"
+          chmod +x "$SecNetPerfPath"
         shell: pwsh
 
       - name: (Server) Checkout netperf repo
