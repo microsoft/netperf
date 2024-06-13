@@ -75,9 +75,6 @@ jobs:
             Write-Output "Polling for client state..."
             try {
               $Response = Invoke-WebRequest -Uri "$url/getkeyvalue?key=${{ github.run_id }}_state" -Headers $headers
-              if (!($Response.StatusCode -eq 200)) {
-                throw "Failed to get client instructions: $($Response.StatusCode)"
-              }
               $data = $Response.Content
               $dataJson = ConvertFrom-Json $data
               if ($dataJson.SeqNum -lt $dataJson.Commands.Count) {
@@ -87,20 +84,17 @@ jobs:
                   value=$dataJson
                 }
                 $body = $dataJson | ConvertTo-Json
-                $Update = Invoke-WebRequest -Uri "$url/setkeyvalue?key=${{ github.run_id }}_state" -Headers $headers -Method POST -Body $body -ContentType "application/json"
-                if (!($Update.StatusCode -eq 200)) {
-                  throw "Failed to update client state: $($Update.StatusCode)"
-                }
                 Write-Host "Executing command: $command"
                 if ($ApprovedCommandsJson.contains($command)) {
-                  Invoke-Expression $command
+                  Invoke-WebRequest -Uri "$url/setkeyvalue?key=${{ github.run_id }}_state" -Headers $headers -Method POST -Body $body -ContentType "application/json"
+                  Invoke-Expression "./artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:maxtput -io:epoll -stats:1"
                 } else {
                   Write-Output "Command not approved: $command"
                 }
               }
             }
             catch {
-              Write-Output "Client instructions not done yet: $_"
+              Write-Output "Client not done yet. Exit reason: $_"
               Start-Sleep -Seconds 30
             }
           } while (-not $found)

@@ -1,3 +1,6 @@
 {
-    "START_MAXTPUT_SERVER": "Approved"
+    "/home/secnetperf/_work/quic/artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:maxtput -io:epoll -stats:1": {
+        "project": "MsQuic",
+        "description": "Starts the MaxTput server"
+    }
 }
