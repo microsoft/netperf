@@ -93,7 +93,7 @@ jobs:
                   value=$dataJson
                 }
                 $body = $dataJson | ConvertTo-Json
-                Write-Host "Executing command: $command"
+                Write-Host "Workspace looks like: ${{ github.workspace }}"
                 if ($ApprovedCommandsJson.contains($command)) {
                   Invoke-WebRequest -Uri "$url/setkeyvalue?key=${{ github.run_id }}_state" -Headers $headers -Method POST -Body $body -ContentType "application/json"
                   chmod +x ${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl/secnetperf
