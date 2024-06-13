@@ -96,7 +96,7 @@ jobs:
                 Write-Host "Executing command: $command"
                 if ($ApprovedCommandsJson.contains($command)) {
                   Invoke-WebRequest -Uri "$url/setkeyvalue?key=${{ github.run_id }}_state" -Headers $headers -Method POST -Body $body -ContentType "application/json"
-                  Invoke-Expression "${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:maxtput -io:epoll -stats:1"
+                  ${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:maxtput -io:epoll -stats:1
                 } else {
                   Write-Output "Command not approved: $command"
                 }
