@@ -62,7 +62,7 @@ jobs:
           $SecNetPerfPath = "$fullPath/secnetperf"
           $env:LD_LIBRARY_PATH = "${env:LD_LIBRARY_PATH}:$fullPath"
           chmod +x "./$SecNetPerfPath"
-        shell: bash
+        shell: pwsh
 
       - name: (Server) Checkout netperf repo
         if: ${{ matrix.role == 'server' }}
