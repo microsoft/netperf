@@ -113,14 +113,14 @@ $labels = "whatever_labels_you_want_tagged"
 # Run on GitHub runner machine
 # Download the script from $url
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-Invoke-Command ".\setup-runner-windows.ps1 -Username $username -Password $password -PeerIp $machine2 -GithubToken $token -NewIpAddress $machine1 -RunnerLabels $labels"
+.\setup-runner-windows.ps1 -Username $username -Password $password -PeerIp $machine2 -GithubToken $token -NewIpAddress $machine1 -RunnerLabels $labels
 ```
 
 ```PowerShell
 # Run on peer machine
 # Download the script from $url
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-Invoke-Command ".\setup-runner-windows.ps1 -Username $username -Password $password -PeerIp $machine1 -NewIpAddress $machine2 -RunnerLabels $labels"
+.\setup-runner-windows.ps1 -Username $username -Password $password -PeerIp $machine1 -NewIpAddress $machine2 -RunnerLabels $labels
 ```
 
 ## Linux Azure Configuration (Deprecated in favor of 1ES)
