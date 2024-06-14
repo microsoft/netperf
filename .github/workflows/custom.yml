@@ -56,7 +56,7 @@ jobs:
           repository: microsoft/netperf
           ref: 'jackhe/1es-azure-pools'
 
-       - name: Download Artifacts
+      - name: Download Artifacts
         uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
         with:
           name: Release-linux-ubuntu-20.04-x64-openssl-Perf
