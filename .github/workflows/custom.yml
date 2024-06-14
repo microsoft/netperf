@@ -62,15 +62,6 @@ jobs:
           name: Release-linux-ubuntu-20.04-x64-openssl-Perf
           path: artifacts
 
-      - name: (Server) Set environment path
-        if: ${{ matrix.role == 'server' }}
-        run: |
-          $fullPath = "${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl"
-          $SecNetPerfPath = "$fullPath/secnetperf"
-          $env:LD_LIBRARY_PATH = "${env:LD_LIBRARY_PATH}:$fullPath"
-          chmod +x "$SecNetPerfPath"
-        shell: pwsh
-
       - name: (Server) Polls for client instructions
         if: ${{ matrix.role == 'server' }}
         run: |
@@ -96,9 +87,11 @@ jobs:
                 ls ${{ github.workspace }}
                 if ($ApprovedCommandsJson.contains($command)) {
                   Invoke-WebRequest -Uri "$url/setkeyvalue?key=${{ github.run_id }}_state" -Headers $headers -Method POST -Body $body -ContentType "application/json"
-                  chmod +x ${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl/secnetperf
+                  $fullPath = "${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl"
+                  $SecNetPerfPath = "$fullPath/secnetperf"
+                  $env:LD_LIBRARY_PATH = "${env:LD_LIBRARY_PATH}:$fullPath"
+                  chmod +x "$SecNetPerfPath"
                   ${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:maxtput -io:epoll -stats:1
-                  exit 1
                 } else {
                   Write-Output "Command not approved: $command"
                 }
