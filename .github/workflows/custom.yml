@@ -84,6 +84,7 @@ jobs:
               $Response = Invoke-WebRequest -Uri "$url/getkeyvalue?key=${{ github.run_id }}_state" -Headers $headers
               $data = $Response.Content
               $dataJson = ConvertFrom-Json $data
+              $dataJson
               if ($dataJson.SeqNum -lt $dataJson.Commands.Count) {
                 $command = $dataJson.Commands[$dataJson.SeqNum]
                 $dataJson.SeqNum++
