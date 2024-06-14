@@ -56,6 +56,13 @@ jobs:
           repository: microsoft/netperf
           ref: 'jackhe/1es-azure-pools'
 
+      - name: (Client) Checkout microsoft/msquic
+        if: ${{ matrix.role == 'client' }}
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          repository: microsoft/msquic
+          ref: 'jackhe/1es-azure-pools'
+
       - name: Download Artifacts
         uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
         with:
@@ -135,13 +142,6 @@ jobs:
           echo "$serverIp netperf-peer" | sudo tee -a /etc/hosts
 
         shell: pwsh
-
-      - name: (Client) Checkout microsoft/msquic
-        if: ${{ matrix.role == 'client' }}
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
-        with:
-          repository: microsoft/msquic
-          ref: 'jackhe/1es-azure-pools'
 
       - name: (Client) Download Watermark_Regression.json file
         if: ${{ matrix.role == 'client' }}
