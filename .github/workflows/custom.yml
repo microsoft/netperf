@@ -79,12 +79,14 @@ jobs:
           $url = "https://netperfapiwebapp.azurewebsites.net"
           $ApprovedCommandsJson = Get-Content -Path "approved-commands.json" -Raw
           do {
-            Write-Output "Polling for client state..."
             try {
               $Response = Invoke-WebRequest -Uri "$url/getkeyvalue?key=${{ github.run_id }}_state" -Headers $headers
               $data = $Response.Content
+              if ($data -eq "done") {
+                $found = $true
+                break
+              }
               $dataJson = ConvertFrom-Json $data
-              $dataJson
               if ($dataJson.SeqNum -lt $dataJson.Commands.Count) {
                 $command = $dataJson.Commands[$dataJson.SeqNum]
                 $dataJson.SeqNum++
@@ -99,10 +101,19 @@ jobs:
                   $SecNetPerfPath = "$fullPath/secnetperf"
                   $env:LD_LIBRARY_PATH = "${env:LD_LIBRARY_PATH}:$fullPath"
                   chmod +x "$SecNetPerfPath"
-                  ${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:maxtput -io:epoll -stats:1
+                  if ($command.contains("lowlat")) {
+                    ${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:lowlat -io:epoll -stats:1 | Out-Null
+                  } else {
+                    ${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:maxtput -io:epoll -stats:1 | Out-Null
+                  }
                 } else {
                   Write-Output "Command not approved: $command"
                 }
+                Write-Host "Data: "
+                $dataStr = $dataJson.toString()
+                Write-Host $dataStr
+              } else {
+                Start-Sleep -Seconds 10
               }
             }
             catch {
@@ -172,5 +183,5 @@ jobs:
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
-          Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_state&value=done" -Headers $headers
+          Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_state&value=done" -Headers $headers -Method Post
         shell: pwsh
