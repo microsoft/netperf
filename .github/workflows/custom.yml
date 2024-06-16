@@ -94,7 +94,6 @@ jobs:
                   value=$dataJson
                 }
                 $body = $dataJson | ConvertTo-Json
-                ls ${{ github.workspace }}
                 if ($ApprovedCommandsJson.contains($command)) {
                   Invoke-WebRequest -Uri "$url/setkeyvalue?key=${{ github.run_id }}_state" -Headers $headers -Method POST -Body $body -ContentType "application/json"
                   $fullPath = "${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl"
@@ -109,9 +108,8 @@ jobs:
                 } else {
                   Write-Output "Command not approved: $command"
                 }
-                Write-Host "Data: "
-                $dataStr = $dataJson.toString()
-                Write-Host $dataStr
+                Write-Host "Data JSON: "
+                $dataJson
               } else {
                 Start-Sleep -Seconds 10
               }
