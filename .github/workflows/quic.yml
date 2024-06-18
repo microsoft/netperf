@@ -160,34 +160,29 @@ jobs:
     - name: Lowercase runner.os
       shell: pwsh
       run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
-
     - name: Checkout microsoft/msquic
       if: ${{ matrix.role == 'client' }}
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       with:
         repository: microsoft/msquic
         ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
-
     - name: Checkout netperf
       if: ${{ matrix.role == 'server' && matrix.remote_powershell_supported == 'FALSE'}}
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       with:
         repository: microsoft/netperf
         ref: 'jackhe/1es-azure-pools'
-
     - name: Download Artifacts
       uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
       with:
         name: Release-${{env.OS}}-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-Perf
         path: artifacts
-
     - name: Download Kernel Artifacts
       uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
       if: ${{ matrix.io == 'wsk' }}
       with:
         name: Release-winkernel-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}
         path: artifacts
-
     - name: Disable Windows Defender / Firewall
       if: ${{ env.OS == 'windows' }}
       run: |
@@ -197,7 +192,6 @@ jobs:
         Set-MpPreference -EnableNetworkProtection Disabled
         Set-MpPreference -DisableDatagramProcessing $True
       shell: pwsh
-
     - name: (Server) Upload IP address to shared cache
       if: ${{ matrix.role == 'server' }}
       run: |
@@ -257,7 +251,6 @@ jobs:
             Start-Sleep -Seconds 10
         } while (-not $found)
       shell: pwsh
-
     - name: (Client) Poll for an ip address uploaded by the server, set netperf-peer.
       if: ${{ matrix.role == 'client' }}
       run: |
@@ -296,7 +289,6 @@ jobs:
           echo "$serverIp netperf-peer" | sudo tee -a /etc/hosts
         }
       shell: pwsh
-
     - name: (Server | yes remote pwsh) Polls for a "done.txt" file from the client
       if: ${{ matrix.role == 'server' && matrix.remote_powershell_supported == 'TRUE' }}
       run: |
@@ -393,7 +385,6 @@ jobs:
           }
         } while (-not $found)
       shell: pwsh
-
     - name: (Client | yes remote pwsh) Run Secnetperf Script
       if: ${{ matrix.role == 'client' && matrix.remote_powershell_supported == 'TRUE' }}
       shell: pwsh
@@ -416,7 +407,6 @@ jobs:
           New-Item -ItemType File -Name "done.txt" -Path "C:\"
         }
       shell: pwsh
-
     - name: (Client | no remote pwsh) Run Secnetperf Script
           if: ${{ matrix.role == 'client' }}
           shell: pwsh
