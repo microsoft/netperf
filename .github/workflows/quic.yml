@@ -191,7 +191,6 @@ jobs:
         netsh.exe advfirewall set allprofiles state off
         Set-MpPreference -EnableNetworkProtection Disabled
         Set-MpPreference -DisableDatagramProcessing $True
-      shell: pwsh
     - name: (Server) Upload IP address to shared cache
       if: ${{ matrix.role == 'server' }}
       run: |
