@@ -160,6 +160,54 @@ jobs:
     - name: Lowercase runner.os
       shell: pwsh
       run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
+    - name: Get WinRM info
+      if: ${{ env.OS == 'windows' && matrix.remote_powershell_supported == 'TRUE' }}
+      run: Get-Service WinRM
+      shell: pwsh
+
+    - name: WinRM quickconfig
+      if: ${{ env.OS == 'windows' && matrix.remote_powershell_supported == 'TRUE' }}
+      run: echo Y | winrm quickconfig
+      shell: pwsh
+
+    - name: Enable remote powershell
+      if: ${{ env.OS == 'windows' && matrix.remote_powershell_supported == 'TRUE' }}
+      run: Enable-PSRemoting -Force
+      shell: pwsh
+
+    - name: Disable Windows Defender / Firewall
+      if: ${{ env.OS == 'windows' && matrix.remote_powershell_supported == 'TRUE' }}
+      run: |
+        # Disable Windows defender / firewall.
+        Write-Host "Disabling Windows Defender / Firewall."
+        netsh.exe advfirewall set allprofiles state off
+        Set-MpPreference -EnableNetworkProtection Disabled
+        Set-MpPreference -DisableDatagramProcessing $True
+      shell: pwsh
+
+    - name: Enabling ServiceLogonRight
+      if: ${{ env.OS == 'windows' && matrix.remote_powershell_supported == 'TRUE' }}
+      run: |
+        # Make sure the user has the rights to log on.
+        function Add-ServiceLogonRight ($Username) {
+            $tmp = New-TemporaryFile
+            secedit /export /cfg "$tmp.inf" | Out-Null
+            (Get-Content -Encoding ascii "$tmp.inf") -replace '^SeServiceLogonRight .+', "`$0,$Username" | Set-Content -Encoding ascii "$tmp.inf"
+            secedit /import /cfg "$tmp.inf" /db "$tmp.sdb" | Out-Null
+            secedit /configure /db "$tmp.sdb" /cfg "$tmp.inf" | Out-Null
+            Remove-Item $tmp* -ErrorAction SilentlyContinue
+        }
+        Write-Host "Enabling ServiceLogonRight."
+        Add-ServiceLogonRight -Username "secnetperf"
+      shell: pwsh
+
+    - name: Set local user
+      if: ${{ env.OS == 'windows' && matrix.remote_powershell_supported == 'TRUE' }}
+      run: |
+        Set-LocalUser -Name "secnetperf" -PasswordNeverExpires $true
+        whoami
+      shell: pwsh
+
     - name: Checkout microsoft/msquic
       if: ${{ matrix.role == 'client' }}
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -183,15 +231,6 @@ jobs:
       with:
         name: Release-winkernel-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}
         path: artifacts
-    - name: Disable Windows Defender / Firewall
-      if: ${{ env.OS == 'windows' }}
-      run: |
-        # Disable Windows defender / firewall.
-        Write-Host "Disabling Windows Defender / Firewall."
-        netsh.exe advfirewall set allprofiles state off
-        Set-MpPreference -EnableNetworkProtection Disabled
-        Set-MpPreference -DisableDatagramProcessing $True
-      shell: pwsh
     - name: (Server) Upload IP address to shared cache
       if: ${{ matrix.role == 'server' }}
       run: |
@@ -384,6 +423,10 @@ jobs:
             Start-Sleep -Seconds 30
           }
         } while (-not $found)
+      shell: pwsh
+    - name: (Client) Download Watermark_Regression.json file
+      if: ${{ matrix.role == 'client' }}
+      run: Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/watermark_regression.json" -OutFile "watermark_regression.json"
       shell: pwsh
     - name: (Client | yes remote pwsh) Run Secnetperf Script
       if: ${{ matrix.role == 'client' && matrix.remote_powershell_supported == 'TRUE' }}
