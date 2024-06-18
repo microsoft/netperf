@@ -191,6 +191,7 @@ jobs:
         netsh.exe advfirewall set allprofiles state off
         Set-MpPreference -EnableNetworkProtection Disabled
         Set-MpPreference -DisableDatagramProcessing $True
+      shell: pwsh
     - name: (Server) Upload IP address to shared cache
       if: ${{ matrix.role == 'server' }}
       run: |
@@ -205,9 +206,9 @@ jobs:
         Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_ipaddress&value=$ipAddress" -Headers $headers
       shell: pwsh
 
-      - name: (Server) Polls for a "done.txt" file from the client
-        if: ${{ matrix.role == 'server' && matrix.remote_powershell_supported == 'TRUE' }}
-        run: |
+    - name: (Server) Polls for a "done.txt" file from the client
+      if: ${{ matrix.role == 'server' && matrix.remote_powershell_supported == 'TRUE' }}
+      run: |
         $found = $false
         do {
             $donepath = "C:\done.txt"
@@ -407,22 +408,22 @@ jobs:
         }
       shell: pwsh
     - name: (Client | no remote pwsh) Run Secnetperf Script
-          if: ${{ matrix.role == 'client' }}
-          shell: pwsh
-          timeout-minutes: 20
-          run: ./scripts/secnetperf.ps1 `
-              -LogProfile ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }} `
-              -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} `
-              -environment ${{ matrix.env }} `
-              -plat ${{env.OS}} `
-              -os ${{ matrix.os }} `
-              -arch ${{ matrix.arch }} `
-              -tls ${{ matrix.tls }} `
-              -io ${{ matrix.io }} `
-              -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
-              -RemotePowershellSupported 'FALSE'
-              -RunId ${{ github.run_id }}_${{ matrix.env_str }}_state
-              -SyncerSecret ${{ secrets.NETPERF_SYNCER_SECRET }}
+      if: ${{ matrix.role == 'client' }}
+      shell: pwsh
+      timeout-minutes: 20
+      run: ./scripts/secnetperf.ps1 `
+          -LogProfile ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }} `
+          -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} `
+          -environment ${{ matrix.env }} `
+          -plat ${{env.OS}} `
+          -os ${{ matrix.os }} `
+          -arch ${{ matrix.arch }} `
+          -tls ${{ matrix.tls }} `
+          -io ${{ matrix.io }} `
+          -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
+          -RemotePowershellSupported 'FALSE'
+          -RunId ${{ github.run_id }}_${{ matrix.env_str }}_state
+          -SyncerSecret ${{ secrets.NETPERF_SYNCER_SECRET }}
     - name: (Client | no remote pwsh) Uploads ACK to remote cache
       if: ${{ matrix.role == 'client' }}
       run: |
