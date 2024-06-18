@@ -384,7 +384,7 @@ jobs:
         $ApprovedCommandsJson = Get-Content -Path "approved-commands.json" -Raw
         do {
           try {
-            $Response = Invoke-WebRequest -Uri "$url/getkeyvalue?key=${{ github.run_id }}_${{ github.env_str }}_state" -Headers $headers
+            $Response = Invoke-WebRequest -Uri "$url/getkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_state" -Headers $headers
             $data = $Response.Content
             if ($data -eq "done") {
               $found = $true
@@ -399,7 +399,7 @@ jobs:
               }
               $body = $dataJson | ConvertTo-Json
               if ($ApprovedCommandsJson.contains($command)) {
-                Invoke-WebRequest -Uri "$url/setkeyvalue?key=${{ github.run_id }}_${{ github.env_str }}_state" -Headers $headers -Method POST -Body $body -ContentType "application/json"
+                Invoke-WebRequest -Uri "$url/setkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_state" -Headers $headers -Method POST -Body $body -ContentType "application/json"
                 $fullPath = "${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl"
                 $SecNetPerfPath = "$fullPath/secnetperf"
                 $env:LD_LIBRARY_PATH = "${env:LD_LIBRARY_PATH}:$fullPath"
@@ -451,7 +451,7 @@ jobs:
         }
       shell: pwsh
     - name: (Client | no remote pwsh) Run Secnetperf Script
-      if: ${{ matrix.role == 'client' }}
+      if: ${{ matrix.role == 'client' && matrix.remote_powershell_supported == 'FALSE' }}
       shell: pwsh
       timeout-minutes: 20
       run: ./scripts/secnetperf.ps1 `
