@@ -157,13 +157,23 @@ jobs:
     - self-hosted
     - 1ES.Pool=${{ matrix.assigned_pool }}
     steps:
-      - name: Print Role
-        run: Write-Host "Role; ${{ matrix.role }}"
-        shell: pwsh
-
       - name: Lowercase runner.os
         shell: pwsh
         run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
+
+      - name: Checkout microsoft/msquic
+        if: ${{ matrix.role == 'client' }}
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          repository: microsoft/msquic
+          ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+
+      - name: Checkout netperf
+        if: ${{ matrix.role == 'server' && matrix.remote_powershell_supported == 'FALSE'}}
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          repository: microsoft/netperf
+          ref: 'jackhe/1es-azure-pools'
 
       - name: Download Artifacts
         uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
@@ -202,45 +212,53 @@ jobs:
           Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_ipaddress&value=$ipAddress" -Headers $headers
         shell: pwsh
 
-      - name: (Server) Start Secnetperf server and polls for an ACK.
-        if: ${{ matrix.role == 'server' }}
-        run: |
+       - name: (Server) Polls for a "done.txt" file from the client
+         if: ${{ matrix.role == 'server' && matrix.remote_powershell_supported == 'TRUE' }}
+         run: |
           $found = $false
-          $headers = @{
-            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
-          }
-          $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_ack"
           do {
-            try {
-              $Response = Invoke-WebRequest -Uri $uri -Headers $headers
-              if (!($Response.StatusCode -eq 200)) {
-                throw "Failed to get ACK. Status code: $($Response.StatusCode)"
+              $donepath = "C:\done.txt"
+              Write-Output "Checking for done.txt..."
+              if (Test-Path $donepath) {
+                Write-Output "done.txt found"
+                $found = $true
+                break
+              } else {
+                Write-Output "done.txt not found"
               }
-              $ack = $Response.Content
-              Write-Output "ACK found: $ack"
-              $found = $true
-            }
-            catch {
-              Write-Output "Client not done testing yet. Spinning up server..."
-              # We can poll for config here
-              try {
-                Write-Host "Spin up server. When the client wants to shut down the server, they will send a special UDP packet."
-                if ($isWindows) {
-                  .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -exec:maxtput
-                } else {
-                  $env:LD_LIBRARY_PATH = "$env:LD_LIBRARY_PATH:$(pwd)/artifacts/bin/linux/x64_Release_openssl"
-                  chmod +x ./artifacts/bin/linux/x64_Release_openssl/secnetperf
-                  ./artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:maxtput
+              $StatePath = "C:\_state"
+              if (Test-Path $StatePath) {
+                ls $StatePath
+                # Fetch all files in the _state directory
+                $files = Get-ChildItem -Path $StatePath -File
+                # Find the highest lexicographically sorted file name
+                $max = 0
+                foreach ($file in $files) {
+                    $filename = $file.Name.split(".")[0]
+                    $num = [int]($filename -replace "[^0-9]", "")
+                    if ($num -gt $max) {
+                        $max = $num
+                    }
                 }
+                # Check if there is a corresponding "completed" file
+                $ExecuteFileExist = Test-Path "$StatePath\execute_$($max).ps1"
+                $CompletedFileExist = Test-Path "$StatePath\completed_$($max).txt"
+                if ($ExecuteFileExist -and !($CompletedFileExist)) {
+                    Write-Host "Executing $StatePath\execute_$($max).ps1"
+                    Invoke-Expression "$StatePath\execute_$($max).ps1"
+                    Write-Host "Creating $StatePath\completed_$($max).txt"
+                    New-Item -ItemType File -Name "completed_$($max).txt" -Path $StatePath
+                } else {
+                    Write-Host "No outstanding script to execute... Highest order script found so far: $max"
+                }
+              } else {
+                Write-Host "State directory not found"
               }
-              catch {
-                Write-Output "Exit from server: $_"
-              }
-            }
+              Start-Sleep -Seconds 10
           } while (-not $found)
         shell: pwsh
 
-      - name: (Client) Poll for an ip address uploaded by the server
+      - name: (Client) Poll for an ip address uploaded by the server, set netperf-peer.
         if: ${{ matrix.role == 'client' }}
         run: |
           $found = $false
@@ -270,77 +288,163 @@ jobs:
               Start-Sleep -Seconds 5
             }
           } while (-not $found)
-
-          Write-Host "Preparing to run secnetperf"
+          Write-Host "Setting netperf-peer"
           if ($isWindows) {
             "$serverIp netperf-peer" | Out-File -Encoding ASCII -Append "$env:SystemRoot\System32\drivers\etc\hosts"
             Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer' -Force
           } else {
             echo "$serverIp netperf-peer" | sudo tee -a /etc/hosts
-            $env:LD_LIBRARY_PATH = "$env:LD_LIBRARY_PATH:$(pwd)/artifacts/bin/linux/x64_Release_openssl"
-            chmod +x ./artifacts/bin/linux/x64_Release_openssl/secnetperf
-          }
-
-          Write-Host "$(Get-Date) Try running secnetperf"
-          $FinishedTests = $false
-          $Attempts = 0
-          while ($Attempts -lt 5) {
-            try {
-              if ($isWindows) {
-                $res = .\artifacts\bin\windows\x64_Release_schannel\secnetperf.exe -target:netperf-peer -exec:maxtput -down:12s -ptput:1 -io:iocp -pconn:1 -pstream:1
-              } else {
-                $res = ./artifacts/bin/linux/x64_Release_openssl/secnetperf -target:netperf-peer -exec:maxtput -down:12s -ptput:1 -io:poll -pconn:1 -pstream:1
-              }
-              $didFail = $res | Where-Object { $_ -like "*No Successful Connections!*" }
-              if ($didFail) {
-                throw "Failed to run secnetperf: $res"
-              } else {
-                Write-Output "secnetperf succeeded: $res"
-                $FinishedTests = $true
-              }
-              break
-            }
-            catch {
-              Write-Output "Failed to run secnetperf: $_"
-              $Attempts += 1
-              Start-Sleep -Seconds 30
-            }
           }
         shell: pwsh
 
-      - name: (Client) Upload ACK to shared cache
+      - name: (Server | yes remote pwsh) Polls for a "done.txt" file from the client
+        if: ${{ matrix.role == 'server' && matrix.remote_powershell_supported == 'TRUE' }}
+        run: |
+          $found = $false
+          do {
+              $donepath = "C:\done.txt"
+              Write-Output "Checking for done.txt..."
+              if (Test-Path $donepath) {
+                Write-Output "done.txt found"
+                $found = $true
+                break
+              } else {
+                Write-Output "done.txt not found"
+              }
+              $StatePath = "C:\_state"
+              if (Test-Path $StatePath) {
+                ls $StatePath
+                # Fetch all files in the _state directory
+                $files = Get-ChildItem -Path $StatePath -File
+                # Find the highest lexicographically sorted file name
+                $max = 0
+                foreach ($file in $files) {
+                    $filename = $file.Name.split(".")[0]
+                    $num = [int]($filename -replace "[^0-9]", "")
+                    if ($num -gt $max) {
+                        $max = $num
+                    }
+                }
+                # Check if there is a corresponding "completed" file
+                $ExecuteFileExist = Test-Path "$StatePath\execute_$($max).ps1"
+                $CompletedFileExist = Test-Path "$StatePath\completed_$($max).txt"
+                if ($ExecuteFileExist -and !($CompletedFileExist)) {
+                    Write-Host "Executing $StatePath\execute_$($max).ps1"
+                    Invoke-Expression "$StatePath\execute_$($max).ps1"
+                    Write-Host "Creating $StatePath\completed_$($max).txt"
+                    New-Item -ItemType File -Name "completed_$($max).txt" -Path $StatePath
+                } else {
+                    Write-Host "No outstanding script to execute... Highest order script found so far: $max"
+                }
+              } else {
+                Write-Host "State directory not found"
+              }
+              Start-Sleep -Seconds 10
+          } while (-not $found)
+        shell: pwsh
+      - name: (Server | no remote pwsh) Polls for client instructions from remote cache
+        if: ${{ matrix.role == 'server' && matrix.remote_powershell_supported == 'FALSE' }}
+        run: |
+          $found = $false
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+          $url = "https://netperfapiwebapp.azurewebsites.net"
+          $ApprovedCommandsJson = Get-Content -Path "approved-commands.json" -Raw
+          do {
+            try {
+              $Response = Invoke-WebRequest -Uri "$url/getkeyvalue?key=${{ github.run_id }}_${{ github.env_str }}_state" -Headers $headers
+              $data = $Response.Content
+              if ($data -eq "done") {
+                $found = $true
+                break
+              }
+              $dataJson = ConvertFrom-Json $data
+              if ($dataJson.SeqNum -lt $dataJson.Commands.Count) {
+                $command = $dataJson.Commands[$dataJson.SeqNum]
+                $dataJson.SeqNum++
+                $dataJson = @{
+                  value=$dataJson
+                }
+                $body = $dataJson | ConvertTo-Json
+                if ($ApprovedCommandsJson.contains($command)) {
+                  Invoke-WebRequest -Uri "$url/setkeyvalue?key=${{ github.run_id }}_${{ github.env_str }}_state" -Headers $headers -Method POST -Body $body -ContentType "application/json"
+                  $fullPath = "${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl"
+                  $SecNetPerfPath = "$fullPath/secnetperf"
+                  $env:LD_LIBRARY_PATH = "${env:LD_LIBRARY_PATH}:$fullPath"
+                  chmod +x "$SecNetPerfPath"
+                  if ($command.contains("lowlat")) {
+                    ${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:lowlat -io:epoll -stats:1 | Out-Null
+                  } else {
+                    ${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:maxtput -io:epoll -stats:1 | Out-Null
+                  }
+                } else {
+                  Write-Output "Command not approved: $command"
+                }
+                Write-Host "Data JSON: "
+                $dataJson
+              } else {
+                Start-Sleep -Seconds 10
+              }
+            }
+            catch {
+              Write-Output "Client not done yet. Exit reason: $_"
+              Start-Sleep -Seconds 30
+            }
+          } while (-not $found)
+        shell: pwsh
+
+      - name: (Client | yes remote pwsh) Run Secnetperf Script
+        if: ${{ matrix.role == 'client' && matrix.remote_powershell_supported == 'TRUE' }}
+        shell: pwsh
+        timeout-minutes: 20
+        run: ./scripts/secnetperf.ps1 `
+            -LogProfile ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }} `
+            -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} `
+            -environment ${{ matrix.env }} `
+            -plat ${{env.OS}} `
+            -os ${{ matrix.os }} `
+            -arch ${{ matrix.arch }} `
+            -tls ${{ matrix.tls }} `
+            -io ${{ matrix.io }} `
+            -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
+      - name: (Client | yes remote pwsh) Creates a 'done.txt' file to signal the server
+        if: ${{ matrix.role == 'client' && matrix.remote_powershell_supported == 'TRUE' }}
+        run: |
+          $Session = New-PSSession -ComputerName netperf-peer
+          Invoke-Command -Session $Session -ScriptBlock {
+            New-Item -ItemType File -Name "done.txt" -Path "C:\"
+          }
+        shell: pwsh
+
+      - name: (Client | no remote pwsh) Run Secnetperf Script
+            if: ${{ matrix.role == 'client' }}
+            shell: pwsh
+            timeout-minutes: 20
+            run: ./scripts/secnetperf.ps1 `
+                -LogProfile ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }} `
+                -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} `
+                -environment ${{ matrix.env }} `
+                -plat ${{env.OS}} `
+                -os ${{ matrix.os }} `
+                -arch ${{ matrix.arch }} `
+                -tls ${{ matrix.tls }} `
+                -io ${{ matrix.io }} `
+                -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
+                -RemotePowershellSupported 'FALSE'
+                -RunId ${{ github.run_id }}_${{ matrix.env_str }}_state
+                -SyncerSecret ${{ secrets.NETPERF_SYNCER_SECRET }}
+      - name: (Client | no remote pwsh) Uploads ACK to remote cache
         if: ${{ matrix.role == 'client' }}
         run: |
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
-          Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_ack&value=ack" -Headers $headers
+          Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_state&value=done" -Headers $headers -Method Post
         shell: pwsh
 
-      - name: (Client) Tell Server to shut down
-        if: ${{ matrix.role == 'client' }}
-        run: |
-          function Stop-RemoteServer {
-              param ($RemoteAddress)
-              # Ping side-channel socket on 9999 to tell the app to die
-              $Socket = New-Object System.Net.Sockets.UDPClient
-              $BytesToSend = @(
-                  0x57, 0xe6, 0x15, 0xff, 0x26, 0x4f, 0x0e, 0x57,
-                  0x88, 0xab, 0x07, 0x96, 0xb2, 0x58, 0xd1, 0x1c
-              )
-              $Socket.Send($BytesToSend, $BytesToSend.Length, $RemoteAddress, 9999) | Out-Null
-          }
 
-          for ($i = 0; $i -lt 5; $i++) {
-            try {
-              Stop-RemoteServer -RemoteAddress "netperf-peer"
-            }
-            catch {
-              Write-Output "Failed to send special UDP packet: $_"
-            }
-            Start-Sleep -Seconds 5
-          }
-        shell: pwsh
+
   #
   # Test Jobs.
   # NOTE: tag == env

@@ -28,6 +28,8 @@ foreach ($entry in $MatrixJson) {
             $server | Add-Member -MemberType NoteProperty -Name "role" -Value "server"
             $client | Add-Member -MemberType NoteProperty -Name "env_str" -Value $env_str
             $server | Add-Member -MemberType NoteProperty -Name "env_str" -Value $env_str
+            $client | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'TRUE'
+            $server | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'TRUE'
             $AzureJson += $client
             $AzureJson += $server
         }
@@ -38,6 +40,8 @@ foreach ($entry in $MatrixJson) {
             $server | Add-Member -MemberType NoteProperty -Name "role" -Value "server"
             $client | Add-Member -MemberType NoteProperty -Name "env_str" -Value $env_str
             $server | Add-Member -MemberType NoteProperty -Name "env_str" -Value $env_str
+            $client | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
+            $server | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
             $AzureJson += $client
             $AzureJson += $server
         }
