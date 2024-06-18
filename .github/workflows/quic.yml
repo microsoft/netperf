@@ -165,7 +165,7 @@ jobs:
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       with:
         repository: microsoft/msquic
-        ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+        ref: jackhe/1es-azure-pools
     - name: Checkout netperf
       if: ${{ matrix.role == 'server' && matrix.remote_powershell_supported == 'FALSE'}}
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
