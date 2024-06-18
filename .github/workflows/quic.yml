@@ -203,7 +203,7 @@ jobs:
         $headers = @{
           "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
         }
-        Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_ipaddress&value=$ipAddress" -Headers $headers
+        Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_ipaddress&value=$ipAddress" -Headers $headers -Method Post
       shell: pwsh
 
     - name: (Server) Polls for a "done.txt" file from the client
