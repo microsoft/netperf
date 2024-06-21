@@ -16,27 +16,170 @@ on:
 permissions: write-all
 
 jobs:
-#
-# Cleanup temporary VMs
-#
-  job1:
-    runs-on: ubuntu-latest
-    outputs:
-      my_output: ${{ steps.set_output.outputs.value }}
-      matrix: ${{ steps.filter.outputs.matrix }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
-      - id: filter
-        run: echo "::set-output name=matrix::$(jq -c '.' ./.github/workflows/matrix.json)"
+  build-unix:
+    name: Build Unix
+    needs: []
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ['ubuntu-20.04']
+        tls: [openssl] # , openssl3]
+    uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml@main
+    with:
+      os: ${{ matrix.os }}
+      tls: ${{ matrix.tls }}
+      build: -Perf
+      ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
-  job2:
-    needs: job1
-    runs-on: ubuntu-latest
+
+  testjob:
+    needs: [build-unix]
     strategy:
       matrix:
-        include: ${{fromJson(needs.job1.outputs.matrix)}}
+        role: ["client", "server"]
+    runs-on: [self-hosted, 1ES.Pool=netperf-aztestpool-linux]
     steps:
-      - name: Use output from job1
-        run: echo "The output from job1 is ${{ matrix.io }}"
+      - name: (Server) Upload IP address to shared cache
+        if: ${{ matrix.role == 'server' }}
+        run: |
+          $ipAddress = ip addr | grep 'inet ' | grep '10' | awk '{print $2}' | cut -d'/' -f1
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+          Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_ipaddress&value=$ipAddress" -Headers $headers -Method Post
+        shell: pwsh
 
+      - name: (Server) Checkout netperf repo
+        if: ${{ matrix.role == 'server' }}
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          repository: microsoft/netperf
+          ref: 'jackhe/1es-azure-pools'
+
+      - name: (Client) Checkout microsoft/msquic
+        if: ${{ matrix.role == 'client' }}
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          repository: microsoft/msquic
+          ref: 'jackhe/1es-azure-pools'
+
+      - name: Download Artifacts
+        uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+        with:
+          name: Release-linux-ubuntu-20.04-x64-openssl-Perf
+          path: artifacts
+
+      - name: (Server) Polls for client instructions
+        if: ${{ matrix.role == 'server' }}
+        run: |
+          $found = $false
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+          $url = "https://netperfapiwebapp.azurewebsites.net"
+          $ApprovedCommandsJson = Get-Content -Path "approved-commands.json" -Raw
+          do {
+            try {
+              $Response = Invoke-WebRequest -Uri "$url/getkeyvalue?key=${{ github.run_id }}_state" -Headers $headers
+              $data = $Response.Content
+              if ($data -eq "done") {
+                $found = $true
+                break
+              }
+              $dataJson = ConvertFrom-Json $data
+              if ($dataJson.SeqNum -lt $dataJson.Commands.Count) {
+                $command = $dataJson.Commands[$dataJson.SeqNum]
+                $dataJson.SeqNum++
+                $dataJson = @{
+                  value=$dataJson
+                }
+                $body = $dataJson | ConvertTo-Json
+                if ($ApprovedCommandsJson.contains($command)) {
+                  Invoke-WebRequest -Uri "$url/setkeyvalue?key=${{ github.run_id }}_state" -Headers $headers -Method POST -Body $body -ContentType "application/json"
+                  $fullPath = "${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl"
+                  $SecNetPerfPath = "$fullPath/secnetperf"
+                  $env:LD_LIBRARY_PATH = "${env:LD_LIBRARY_PATH}:$fullPath"
+                  chmod +x "$SecNetPerfPath"
+                  if ($command.contains("lowlat")) {
+                    ${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:lowlat -io:epoll -stats:1 | Out-Null
+                  } else {
+                    ${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:maxtput -io:epoll -stats:1 | Out-Null
+                  }
+                } else {
+                  Write-Output "Command not approved: $command"
+                }
+                Write-Host "Data JSON: "
+                $dataJson
+              } else {
+                Start-Sleep -Seconds 10
+              }
+            }
+            catch {
+              Write-Output "Client not done yet. Exit reason: $_"
+              Start-Sleep -Seconds 30
+            }
+          } while (-not $found)
+        shell: pwsh
+
+      - name: (Client) Poll for an ip address uploaded by the server, set netperf-peer.
+        if: ${{ matrix.role == 'client' }}
+        run: |
+          $found = $false
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+          $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_ipaddress"
+          do {
+            Write-Output "Checking for ip address..."
+            try {
+              $Response = Invoke-WebRequest -Uri $uri -Headers $headers
+              if (!($Response.StatusCode -eq 200)) {
+                throw "Failed to get ip address. Status code: $($Response.StatusCode)"
+              }
+              $ipAddress = $Response.Content
+              Write-Output "Ip Address found: $ipAddress"
+              $serverIp = $ipAddress
+              Write-Output "Server IP: $serverIp"
+              $found = $true
+            }
+            catch {
+              Write-Output "Ip Address not found: $_"
+              Start-Sleep -Seconds 5
+            }
+          } while (-not $found)
+
+          Write-Host "Setting netperf-peer to $serverIp"
+          echo "$serverIp netperf-peer" | sudo tee -a /etc/hosts
+
+        shell: pwsh
+
+      - name: (Client) Download Watermark_Regression.json file
+        if: ${{ matrix.role == 'client' }}
+        run: Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/watermark_regression.json" -OutFile "watermark_regression.json"
+        shell: pwsh
+
+      - name: (Client) Run Secnetperf Script
+        if: ${{ matrix.role == 'client' }}
+        shell: pwsh
+        timeout-minutes: 20
+        run: ./scripts/secnetperf.ps1 `
+            -LogProfile 'NULL' `
+            -MsQuicCommit 'TODO' `
+            -environment 'azure' `
+            -plat 'linux' `
+            -os 'ubuntu-18.04' `
+            -arch 'x64' `
+            -tls 'openssl' `
+            -io 'epoll' `
+            -filter ''
+            -RemotePowershellSupported 'FALSE'
+            -RunId ${{ github.run_id }}_state
+            -SyncerSecret ${{ secrets.NETPERF_SYNCER_SECRET }}
+      - name: (Client) Uploads ACK to shared cache
+        if: ${{ matrix.role == 'client' }}
+        run: |
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+          Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_state&value=done" -Headers $headers -Method Post
+        shell: pwsh

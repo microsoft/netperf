@@ -1,0 +1,55 @@
+name: Prepare Matrix
+
+on:
+  workflow_dispatch:
+    inputs:
+      matrix_filename:
+        description: 'Matrix of jobs and their respective environments'
+        required: false
+        default: 'quic_matrix.json'
+        type: string
+      workflowId:
+        description: 'The ID of the caller workflow'
+        required: false
+        default: 'manual'
+        type: string
+
+  workflow_call:
+    inputs:
+      matrix_filename:
+        description: "Matrix of jobs and their respective environments"
+        required: false
+        default: 'quic_matrix.json'
+        type: string
+      workflowId:
+        description: "The ID of the caller workflow"
+        required: true
+        type: string
+    outputs:
+      full-matrix:
+        description: "The full list of jobs to be run in secnetperf"
+        value: ${{ jobs.prepare-matrix.outputs.full-matrix }}
+      azure-matrix:
+        description: "The list of jobs to be run on Azure VMs"
+        value: ${{ jobs.prepare-matrix.outputs.azure-matrix }}
+
+permissions: write-all
+
+jobs:
+  prepare-matrix:
+    name: Preparing the lab and 1es azure matrix.
+    outputs:
+      full-matrix: ${{ steps.generate-full-matrix.outputs.matrix }}
+      azure-matrix: ${{ steps.generate-azure-matrix.outputs.matrix }}
+    runs-on: windows-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Run Prepare Matrix
+      run: ./.github/workflows/prepare-matrix.ps1
+    - id: generate-full-matrix
+      run: echo "matrix=$(jq -c '.' ./.github/workflows/processed-matrix.json)" >> $GITHUB_OUTPUT
+      shell: bash
+    - id: generate-azure-matrix
+      run: echo "matrix=$(jq -c '.' ./.github/workflows/azure-matrix.json)" >> $GITHUB_OUTPUT
+      shell: bash
