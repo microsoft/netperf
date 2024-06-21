@@ -32,6 +32,7 @@ on:
       azure-matrix:
         description: "The list of jobs to be run on Azure VMs"
         value: ${{ jobs.prepare-matrix.outputs.azure-matrix }}
+
 permissions: write-all
 
 jobs:
