@@ -58,24 +58,24 @@ runs:
     shell: pwsh
   - name: Set local user
   - name: Checkout netperf
-      if: ${{ matrix.role == 'server' && matrix.remote_powershell_supported == 'FALSE'}}
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
-      with:
-        repository: microsoft/netperf
-        ref: main
+    if: ${{ matrix.role == 'server' && matrix.remote_powershell_supported == 'FALSE'}}
+    uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+    with:
+      repository: microsoft/netperf
+      ref: main
   - name: (Server) Upload IP address to shared cache
-      if: ${{ matrix.role == 'server' }}
-      run: |
-        if ($isWindows) {
-          $ipAddress = (Get-NetIpAddress -AddressFamily IPv4).IpAddress
-        } else {
-          $ipAddress = ip addr | grep 'inet ' | grep '10' | awk '{print $2}' | cut -d'/' -f1
-        }
-        $headers = @{
-          "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
-        }
-        Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_ipaddress&value=$ipAddress" -Headers $headers -Method Post
-      shell: pwsh
+    if: ${{ matrix.role == 'server' }}
+    run: |
+      if ($isWindows) {
+        $ipAddress = (Get-NetIpAddress -AddressFamily IPv4).IpAddress
+      } else {
+        $ipAddress = ip addr | grep 'inet ' | grep '10' | awk '{print $2}' | cut -d'/' -f1
+      }
+      $headers = @{
+        "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+      }
+      Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_ipaddress&value=$ipAddress" -Headers $headers -Method Post
+    shell: pwsh
   - name: (Server) Polls for a "done.txt" file from the client
     if: ${{ matrix.role == 'server' && matrix.remote_powershell_supported == 'TRUE' }}
     run: |
