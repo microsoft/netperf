@@ -187,6 +187,13 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+    - name: Sanity Check
+      run: |
+        ls "${{ github.workspace }}"
+        ls "${{ github.workspace }}/.github"
+        ls "${{ github.workspace }}/.github/actions"
+        ls "${{ github.workspace }}/.github/actions/start-1es-machine"
+      shell: pwsh
     - name: Start 1ES Machine
       uses: ./.github/actions/start-1es-machine/action.yml
       with:
