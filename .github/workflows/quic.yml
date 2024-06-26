@@ -192,17 +192,14 @@ jobs:
       if: ${{ env.OS == 'windows' && matrix.remote_powershell_supported == 'TRUE' }}
       run: Get-Service WinRM
       shell: pwsh
-
     - name: WinRM quickconfig
       if: ${{ env.OS == 'windows' && matrix.remote_powershell_supported == 'TRUE' }}
       run: echo Y | winrm quickconfig
       shell: pwsh
-
     - name: Enable remote powershell
       if: ${{ env.OS == 'windows' && matrix.remote_powershell_supported == 'TRUE' }}
       run: Enable-PSRemoting -Force
       shell: pwsh
-
     - name: Disable Windows Defender / Firewall
       if: ${{ env.OS == 'windows' && matrix.remote_powershell_supported == 'TRUE' }}
       run: |
@@ -212,7 +209,6 @@ jobs:
         Set-MpPreference -EnableNetworkProtection Disabled
         Set-MpPreference -DisableDatagramProcessing $True
       shell: pwsh
-
     - name: Enabling ServiceLogonRight
       if: ${{ env.OS == 'windows' && matrix.remote_powershell_supported == 'TRUE' }}
       run: |
@@ -228,14 +224,12 @@ jobs:
         Write-Host "Enabling ServiceLogonRight."
         Add-ServiceLogonRight -Username "secnetperf"
       shell: pwsh
-
     - name: Set local user
       if: ${{ env.OS == 'windows' && matrix.remote_powershell_supported == 'TRUE' }}
       run: |
         Set-LocalUser -Name "secnetperf" -PasswordNeverExpires $true
         whoami
       shell: pwsh
-
     - name: Checkout microsoft/msquic
       if: ${{ matrix.role == 'client' }}
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -272,7 +266,6 @@ jobs:
         }
         Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_ipaddress&value=$ipAddress" -Headers $headers -Method Post
       shell: pwsh
-
     - name: (Server) Polls for a "done.txt" file from the client
       if: ${{ matrix.role == 'server' && matrix.remote_powershell_supported == 'TRUE' }}
       run: |

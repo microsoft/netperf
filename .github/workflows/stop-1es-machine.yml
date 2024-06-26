@@ -1,0 +1,15 @@
+# .github/actions/my-composite-action/action.yml
+name: "My Composite Action"
+description: "This action runs multiple steps as a composite action."
+inputs:
+  my-input:
+    description: "An input parameter"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Step 1
+      run: echo "This is step 1"
+    - name: Step 2
+      run: echo "This is step 2 with input ${{ inputs.my-input }}"
+      
