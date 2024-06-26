@@ -1,17 +1,21 @@
 name: "Start 1ES Machine"
 description: "This action runs multiple steps as a composite action."
 inputs:
-  remote-powershell-supported:
+  remote_powershell_supported:
     description: "Whether or not remote powershell is supported on the target machine."
     required: false
     default: "TRUE"
     type: string
-  syncer-secret:
-    description: "To use with the remote cache"
-    required: true
-    type: string
   os:
     description: "The host OS of the 1ES Machine"
+    required: true
+    type: string
+  role:
+    description: "The role of the 1ES Machine"
+    required: true
+    type: string
+  env_str:
+    description: "The environment string of the 1ES Machine"
     required: true
     type: string
 runs:
@@ -21,19 +25,19 @@ runs:
     shell: pwsh
     run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
   - name: Get WinRM info
-    if: ${{ env.OS == 'windows' && matrix.remote_powershell_supported == 'TRUE' }}
+    if: ${{ env.OS == 'windows' && inputs.remote_powershell_supported == 'TRUE' }}
     run: Get-Service WinRM
     shell: pwsh
   - name: WinRM quickconfig
-    if: ${{ env.OS == 'windows' && matrix.remote_powershell_supported == 'TRUE' }}
+    if: ${{ env.OS == 'windows' && inputs.remote_powershell_supported == 'TRUE' }}
     run: echo Y | winrm quickconfig
     shell: pwsh
   - name: Enable remote powershell
-    if: ${{ env.OS == 'windows' && matrix.remote_powershell_supported == 'TRUE' }}
+    if: ${{ env.OS == 'windows' && inputs.remote_powershell_supported == 'TRUE' }}
     run: Enable-PSRemoting -Force
     shell: pwsh
   - name: Disable Windows Defender / Firewall
-    if: ${{ env.OS == 'windows' && matrix.remote_powershell_supported == 'TRUE' }}
+    if: ${{ env.OS == 'windows' && inputs.remote_powershell_supported == 'TRUE' }}
     run: |
       # Disable Windows defender / firewall.
       Write-Host "Disabling Windows Defender / Firewall."
@@ -42,7 +46,7 @@ runs:
       Set-MpPreference -DisableDatagramProcessing $True
     shell: pwsh
   - name: Enabling ServiceLogonRight
-    if: ${{ env.OS == 'windows' && matrix.remote_powershell_supported == 'TRUE' }}
+    if: ${{ env.OS == 'windows' && inputs.remote_powershell_supported == 'TRUE' }}
     run: |
       # Make sure the user has the rights to log on.
       function Add-ServiceLogonRight ($Username) {
@@ -58,13 +62,13 @@ runs:
     shell: pwsh
   - name: Set local user
   - name: Checkout netperf
-    if: ${{ matrix.role == 'server' && matrix.remote_powershell_supported == 'FALSE'}}
+    if: ${{ inputs.role == 'server' && inputs.remote_powershell_supported == 'FALSE'}}
     uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
     with:
       repository: microsoft/netperf
       ref: main
   - name: (Server) Upload IP address to shared cache
-    if: ${{ matrix.role == 'server' }}
+    if: ${{ inputs.role == 'server' }}
     run: |
       if ($isWindows) {
         $ipAddress = (Get-NetIpAddress -AddressFamily IPv4).IpAddress
@@ -74,10 +78,10 @@ runs:
       $headers = @{
         "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
       }
-      Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_ipaddress&value=$ipAddress" -Headers $headers -Method Post
+      Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_${{ inputs.env_str }}_ipaddress&value=$ipAddress" -Headers $headers -Method Post
     shell: pwsh
   - name: (Server) Polls for a "done.txt" file from the client
-    if: ${{ matrix.role == 'server' && matrix.remote_powershell_supported == 'TRUE' }}
+    if: ${{ inputs.role == 'server' && inputs.remote_powershell_supported == 'TRUE' }}
     run: |
       $found = $false
       do {
@@ -122,13 +126,13 @@ runs:
       } while (-not $found)
     shell: pwsh
   - name: (Client) Poll for an ip address uploaded by the server, set netperf-peer.
-    if: ${{ matrix.role == 'client' }}
+    if: ${{ inputs.role == 'client' }}
     run: |
       $found = $false
       $headers = @{
         "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
       }
-      $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_ipaddress"
+      $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_${{ inputs.env_str }}_ipaddress"
       do {
         Write-Output "Checking for ip address..."
         try {
@@ -160,7 +164,7 @@ runs:
       }
     shell: pwsh
   - name: (Server | yes remote pwsh) Polls for a "done.txt" file from the client
-    if: ${{ matrix.role == 'server' && matrix.remote_powershell_supported == 'TRUE' }}
+    if: ${{ inputs.role == 'server' && inputs.remote_powershell_supported == 'TRUE' }}
     run: |
       $found = $false
       do {
@@ -205,7 +209,7 @@ runs:
       } while (-not $found)
     shell: pwsh
   - name: (Server | no remote pwsh) Polls for client instructions from remote cache
-    if: ${{ matrix.role == 'server' && matrix.remote_powershell_supported == 'FALSE' }}
+    if: ${{ inputs.role == 'server' && inputs.remote_powershell_supported == 'FALSE' }}
     run: |
       $found = $false
       $headers = @{
@@ -215,7 +219,7 @@ runs:
       $ApprovedCommandsJson = Get-Content -Path "approved-commands.json" -Raw
       do {
         try {
-          $Response = Invoke-WebRequest -Uri "$url/getkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_state" -Headers $headers
+          $Response = Invoke-WebRequest -Uri "$url/getkeyvalue?key=${{ github.run_id }}_${{ inputs.env_str }}_state" -Headers $headers
           $data = $Response.Content
           if ($data -eq "done") {
             $found = $true
@@ -230,7 +234,7 @@ runs:
             }
             $body = $dataJson | ConvertTo-Json
             if ($ApprovedCommandsJson.contains($command)) {
-              Invoke-WebRequest -Uri "$url/setkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_state" -Headers $headers -Method POST -Body $body -ContentType "application/json"
+              Invoke-WebRequest -Uri "$url/setkeyvalue?key=${{ github.run_id }}_${{ inputs.env_str }}_state" -Headers $headers -Method POST -Body $body -ContentType "application/json"
               $fullPath = "${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl"
               $SecNetPerfPath = "$fullPath/secnetperf"
               $env:LD_LIBRARY_PATH = "${env:LD_LIBRARY_PATH}:$fullPath"
