@@ -188,7 +188,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
     - name: Start 1ES Machine
-      uses: ./.github/workflows/start-1es-machine.yml
+      uses: ./.github/actions/start-1es-machine.yml
       with:
         os: ${{ matrix.os }}
         remote_powershell_supported: ${{ matrix.remote_powershell_supported }}
