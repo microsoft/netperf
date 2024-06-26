@@ -3,8 +3,7 @@ description: "This action runs multiple steps as a composite action."
 inputs:
   remote_powershell_supported:
     description: "Whether or not remote powershell is supported on the target machine."
-    required: false
-    default: "TRUE"
+    required: true
     type: string
   os:
     description: "The host OS of the 1ES Machine"
@@ -61,12 +60,11 @@ runs:
       Add-ServiceLogonRight -Username "secnetperf"
     shell: pwsh
   - name: Set local user
-  - name: Checkout netperf
-    if: ${{ inputs.role == 'server' && inputs.remote_powershell_supported == 'FALSE'}}
-    uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
-    with:
-      repository: microsoft/netperf
-      ref: main
+    if: ${{ env.OS == 'windows' && inputs.remote_powershell_supported == 'TRUE' }}
+    run: |
+      Set-LocalUser -Name "secnetperf" -PasswordNeverExpires $true
+      whoami
+    shell: pwsh
   - name: (Server) Upload IP address to shared cache
     if: ${{ inputs.role == 'server' }}
     run: |
