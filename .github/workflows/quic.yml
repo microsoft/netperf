@@ -190,7 +190,7 @@ jobs:
     - name: Sanity Check
       run: |
         ls "${{ github.workspace }}"
-        Write-Host "==========================!"
+        Write-Host "=========================="
         ls "${{ github.workspace }}/.github"
         Write-Host "=========================="
         ls "${{ github.workspace }}/.github/actions"
@@ -199,7 +199,7 @@ jobs:
         Write-Host "=========================="
       shell: pwsh
     - name: Start 1ES Machine
-      uses: "${{ github.workspace }}/.github/actions/start-1es-machine/action.yml"
+      uses: ./.github/actions/start-1es-machine
       with:
         os: ${{ matrix.os }}
         remote_powershell_supported: ${{ matrix.remote_powershell_supported }}
