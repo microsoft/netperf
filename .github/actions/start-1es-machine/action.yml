@@ -17,6 +17,10 @@ inputs:
     description: "The environment string of the 1ES Machine"
     required: true
     type: string
+  syncer_secret:
+    description: "Token required to interact with the remote cache"
+    required: true
+    type: string
 runs:
   using: "composite"
   steps:
@@ -74,7 +78,7 @@ runs:
         $ipAddress = ip addr | grep 'inet ' | grep '10' | awk '{print $2}' | cut -d'/' -f1
       }
       $headers = @{
-        "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+        "secret" = "${{ inputs.syncer_secret }}"
       }
       Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_${{ inputs.env_str }}_ipaddress&value=$ipAddress" -Headers $headers -Method Post
     shell: pwsh
@@ -128,7 +132,7 @@ runs:
     run: |
       $found = $false
       $headers = @{
-        "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+        "secret" = "${{ inputs.syncer_secret }}"
       }
       $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_${{ inputs.env_str }}_ipaddress"
       do {
@@ -211,7 +215,7 @@ runs:
     run: |
       $found = $false
       $headers = @{
-        "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+        "secret" = "${{ inputs.syncer_secret }}"
       }
       $url = "https://netperfapiwebapp.azurewebsites.net"
       $ApprovedCommandsJson = Get-Content -Path "approved-commands.json" -Raw

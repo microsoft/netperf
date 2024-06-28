@@ -205,6 +205,7 @@ jobs:
         remote_powershell_supported: ${{ matrix.remote_powershell_supported }}
         role: ${{ matrix.role }}
         env_str: ${{ matrix.env_str }}
+        syncer_secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
     - name: Checkout microsoft/msquic
       if: ${{ matrix.role == 'client' }}
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
