@@ -199,7 +199,7 @@ jobs:
         Write-Host "=========================="
       shell: pwsh
     - name: Start 1ES Machine
-      uses: ${{ github.workspace }}/.github/actions/start-1es-machine/action.yml
+      uses: "${{ github.workspace }}/.github/actions/start-1es-machine/action.yml"
       with:
         os: ${{ matrix.os }}
         remote_powershell_supported: ${{ matrix.remote_powershell_supported }}
