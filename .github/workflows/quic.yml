@@ -190,7 +190,7 @@ jobs:
     - name: Sanity Check
       run: |
         ls "${{ github.workspace }}"
-        Write-Host "=========================="
+        Write-Host "==========================!"
         ls "${{ github.workspace }}/.github"
         Write-Host "=========================="
         ls "${{ github.workspace }}/.github/actions"
