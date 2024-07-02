@@ -218,7 +218,7 @@ runs:
         "secret" = "${{ inputs.syncer_secret }}"
       }
       $url = "https://netperfapiwebapp.azurewebsites.net"
-      $ApprovedCommandsJson = Get-Content -Path "approved-commands.json" -Raw
+      $ApprovedCommandsJson = Get-Content -Path "netperfrepo/approved-commands.json" -Raw
       do {
         try {
           $Response = Invoke-WebRequest -Uri "$url/getkeyvalue?key=${{ github.run_id }}_${{ inputs.env_str }}_state" -Headers $headers

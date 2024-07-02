@@ -188,25 +188,27 @@ jobs:
     - name: Lowercase runner.os
       shell: pwsh
       run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
-    - name: Checkout code
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
-    - name: Sanity Check
-      run: |
-        ls "${{ github.workspace }}"
-        Write-Host "=========================="
-        ls "${{ github.workspace }}/.github"
-        Write-Host "=========================="
-        ls "${{ github.workspace }}/.github/actions"
-        Write-Host "=========================="
-        ls "${{ github.workspace }}/.github/actions/start-1es-machine"
-        Write-Host "=========================="
-      shell: pwsh
     - name: Checkout microsoft/msquic
       if: ${{ matrix.role == 'client' }}
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       with:
         repository: microsoft/msquic
         ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+    - name: Checkout code
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      with:
+        path: netperfrepo
+    - name: Sanity Check
+      run: |
+        ls "${{ github.workspace }}"
+        Write-Host "=========================="
+        ls "${{ github.workspace }}/netperfrepo/.github"
+        Write-Host "=========================="
+        ls "${{ github.workspace }}/netperfrepo/.github/actions"
+        Write-Host "=========================="
+        ls "${{ github.workspace }}/netperfrepo/.github/actions/start-1es-machine"
+        Write-Host "=========================="
+      shell: pwsh
     - name: Download Artifacts
       uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
       with:
@@ -219,7 +221,7 @@ jobs:
         name: Release-winkernel-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}
         path: artifacts
     - name: Start 1ES Machine
-      uses: ./.github/actions/start-1es-machine
+      uses: ./netperfrepo/.github/actions/start-1es-machine
       with:
         os: ${{ matrix.os }}
         remote_powershell_supported: ${{ matrix.remote_powershell_supported }}
