@@ -185,6 +185,9 @@ jobs:
     - self-hosted
     - 1ES.Pool=${{ matrix.assigned_pool }}
     steps:
+    - name: Lowercase runner.os
+      shell: pwsh
+      run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
     - name: Checkout code
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
     - name: Sanity Check
