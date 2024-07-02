@@ -198,14 +198,6 @@ jobs:
         ls "${{ github.workspace }}/.github/actions/start-1es-machine"
         Write-Host "=========================="
       shell: pwsh
-    - name: Start 1ES Machine
-      uses: ./.github/actions/start-1es-machine
-      with:
-        os: ${{ matrix.os }}
-        remote_powershell_supported: ${{ matrix.remote_powershell_supported }}
-        role: ${{ matrix.role }}
-        env_str: ${{ matrix.env_str }}
-        syncer_secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
     - name: Checkout microsoft/msquic
       if: ${{ matrix.role == 'client' }}
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -223,6 +215,14 @@ jobs:
       with:
         name: Release-winkernel-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}
         path: artifacts
+    - name: Start 1ES Machine
+      uses: ./.github/actions/start-1es-machine
+      with:
+        os: ${{ matrix.os }}
+        remote_powershell_supported: ${{ matrix.remote_powershell_supported }}
+        role: ${{ matrix.role }}
+        env_str: ${{ matrix.env_str }}
+        syncer_secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
     - name: (Client) Download Watermark_Regression.json file
       if: ${{ matrix.role == 'client' }}
       run: Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/watermark_regression.json" -OutFile "watermark_regression.json"
