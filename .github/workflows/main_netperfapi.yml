@@ -32,6 +32,7 @@ jobs:
         run: |
           cd ./netperf-1es-syncer
           zip release.zip ./* -r
+          cp release.zip ..
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v3
