@@ -4,7 +4,7 @@
   "description": "1es synchronizer",
   "main": "app.js",
   "scripts": {
-    "test": "echo "No tests. Ignoring.",
+    "test": "echo \"No tests. Ignoring.\"",
     "start": "node app.js"
   },
   "dependencies": {
