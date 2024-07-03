@@ -277,7 +277,7 @@ jobs:
         $headers = @{
           "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
         }
-        Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_state&value=done" -Headers $headers -Method Post
+        Invoke-WebRequest -Uri "https://netperfapi.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_state&value=done" -Headers $headers -Method Post
       shell: pwsh
     - name: Upload Test Results JSON
       if: ${{ always() }}
@@ -394,7 +394,7 @@ jobs:
         $headers = @{
           "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
         }
-        $url = "https://netperfapiwebapp.azurewebsites.net/cleanuprun?runid=${{ github.run_id }}"
+        $url = "https://netperfapi.azurewebsites.net/cleanuprun?runid=${{ github.run_id }}"
         Invoke-WebRequest -Uri $url -Headers $headers
 
   #
