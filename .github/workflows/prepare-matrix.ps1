@@ -17,7 +17,7 @@ $LabJson = @()
 foreach ($entry in $MatrixJson) {
     if ($entry.env -match "azure") {
         $Windows2022Pool = "netperf-aztestpool"
-        $Ubuntu2004Pool = "netperf-boosted-windows-pool"
+        $Ubuntu2004Pool = "netperf-boosted-linux-pool"
         $client = $entry.PSObject.Copy()
         $server = $entry.PSObject.Copy()
         $env_str = "$($entry.os)-$($entry.arch)-$($entry.tls)-$($entry.io)"
