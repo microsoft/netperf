@@ -140,7 +140,7 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
         with:
           repository: microsoft/msquic
-          ref: 'main'
+          ref: jackhe/cleanup-az1es
 
       - name: Download Artifacts
         uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
