@@ -37,7 +37,7 @@ jobs:
     strategy:
       matrix:
         role: ["client", "server"]
-    runs-on: [self-hosted, 1ES.Pool=netperf-boosted-linux-pool]
+    runs-on: [self-hosted, 1ES.Pool=netperf-boosted-windows-pool]
     steps:
       - name: Install powershell
         run: |
