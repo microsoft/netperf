@@ -188,6 +188,12 @@ jobs:
     - name: Lowercase runner.os
       shell: pwsh
       run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
+    - name: Serialize matrix
+      id: matrix
+      shell: pwsh
+      run: |
+        $matrixJson = ConvertTo-Json -InputObject ${{ toJson(matrix) }} -Compress
+        Write-Output "::set-output name=data::$matrixJson"
     - name: Checkout microsoft/msquic
       if: ${{ matrix.role == 'client' }}
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -198,16 +204,6 @@ jobs:
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       with:
         path: netperfrepo
-    - name: Sanity Check
-      run: |
-        ls "${{ github.workspace }}"
-        Write-Host "=========================="
-        ls "${{ github.workspace }}/netperfrepo/.github"
-        Write-Host "=========================="
-        ls "${{ github.workspace }}/netperfrepo/.github/actions"
-        Write-Host "=========================="
-        ls "${{ github.workspace }}/netperfrepo/.github/actions/start-1es-machine"
-        Write-Host "=========================="
       shell: pwsh
     - name: Download Artifacts
       uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
@@ -236,7 +232,12 @@ jobs:
       if: ${{ matrix.role == 'client' && matrix.remote_powershell_supported == 'TRUE' }}
       shell: pwsh
       timeout-minutes: 20
-      run: ./scripts/secnetperf.ps1 `
+      run: |
+          ./netperfrepo/set-netperf-context.ps1 -Matrix ${{ steps.matrix.outputs.data }} -GithubRunId ${{ github.run_id }}
+
+          Import-Module ./netperfrepo/netperf-lib.psm1
+
+          ./scripts/secnetperf.ps1 `
           -LogProfile ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }} `
           -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} `
           -environment ${{ matrix.env }} `
@@ -246,19 +247,16 @@ jobs:
           -tls ${{ matrix.tls }} `
           -io ${{ matrix.io }} `
           -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
-    - name: (Client | yes remote pwsh) Creates a 'done.txt' file to signal the server
-      if: ${{ matrix.role == 'client' && matrix.remote_powershell_supported == 'TRUE' }}
-      run: |
-        $Session = New-PSSession -ComputerName netperf-peer
-        Invoke-Command -Session $Session -ScriptBlock {
-          New-Item -ItemType File -Name "done.txt" -Path "C:\"
-        }
-      shell: pwsh
     - name: (Client | no remote pwsh) Run Secnetperf Script
       if: ${{ matrix.role == 'client' && matrix.remote_powershell_supported == 'FALSE' }}
       shell: pwsh
       timeout-minutes: 20
-      run: ./scripts/secnetperf.ps1 `
+      run: |
+          ./netperfrepo/set-netperf-context.ps1 -Matrix ${{ steps.matrix.outputs.data }} -GithubRunId ${{ github.run_id }}
+
+          Import-Module ./netperfrepo/netperf-lib.psm1
+          
+          ./scripts/secnetperf.ps1 `
           -LogProfile ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }} `
           -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} `
           -environment ${{ matrix.env }} `
@@ -269,16 +267,13 @@ jobs:
           -io ${{ matrix.io }} `
           -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
           -RemotePowershellSupported 'FALSE'
-          -RunId ${{ github.run_id }}_${{ matrix.env_str }}_state
+          -RunId ${{ github.run_id }}-${{ matrix.env_str }}-state
           -SyncerSecret ${{ secrets.NETPERF_SYNCER_SECRET }}
-    - name: (Client | no remote pwsh) Uploads ACK to remote cache
-      if: ${{ matrix.role == 'client' }}
-      run: |
-        $headers = @{
-          "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
-        }
-        Invoke-WebRequest -Uri "https://netperfapi.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_state&value=done" -Headers $headers -Method Post
-      shell: pwsh
+    - name: Stop 1ES Machine
+      uses: ./netperfrepo/.github/actions/stop-1es-machine
+      with:
+        matrix: ${{ steps.matrix.outputs.data }}
+        syncer_secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
     - name: Upload Test Results JSON
       if: ${{ always() }}
       uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3

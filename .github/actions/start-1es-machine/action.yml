@@ -221,7 +221,7 @@ runs:
       $ApprovedCommandsJson = Get-Content -Path "netperfrepo/approved-commands.json" -Raw
       do {
         try {
-          $Response = Invoke-WebRequest -Uri "$url/getkeyvalue?key=${{ github.run_id }}_${{ inputs.env_str }}_state" -Headers $headers
+          $Response = Invoke-WebRequest -Uri "$url/getkeyvalue?key=${{ github.run_id }}-${{ inputs.env_str }}-state" -Headers $headers
           $data = $Response.Content
           if ($data -eq "done") {
             $found = $true
@@ -236,7 +236,7 @@ runs:
             }
             $body = $dataJson | ConvertTo-Json
             if ($ApprovedCommandsJson.contains($command)) {
-              Invoke-WebRequest -Uri "$url/setkeyvalue?key=${{ github.run_id }}_${{ inputs.env_str }}_state" -Headers $headers -Method POST -Body $body -ContentType "application/json"
+              Invoke-WebRequest -Uri "$url/setkeyvalue?key=${{ github.run_id }}-${{ inputs.env_str }}-state" -Headers $headers -Method POST -Body $body -ContentType "application/json"
               $fullPath = "${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl"
               $SecNetPerfPath = "$fullPath/secnetperf"
               $env:LD_LIBRARY_PATH = "${env:LD_LIBRARY_PATH}:$fullPath"

@@ -1,22 +1,35 @@
 name: "My Composite Action"
 description: "This action runs multiple steps as a composite action."
 inputs:
-  remote-powershell-supported:
-    description: "Whether or not remote powershell is supported"
+  matrix:
+    description: "The serialized matrix of values to use for the composite action."
+    required: true
+  syncer_secret:
+    description: "The secret to use for the syncer."
     required: true
 runs:
   using: "composite"
   steps:
+    - name: Deserializes the matrix input
+      id: deserialize
+      run: |
+        $matrix = ConvertFrom-Json "${{ inputs.matrix }}"
+        $remote_powershell_supported = $matrix.remote_powershell_supported
+        $role = $matrix.role
+        $env_str = $matrix.env_str
+        Write-Output "::set-output name=remote-powershell-supported::$remote_powershell_supported"
+        Write-Output "::set-output name=role::$role"
+        Write-Output "::set-output name=env_str::$env_str"
     - name: (Client | no remote pwsh) Uploads ACK to remote cache
-      if: ${{ matrix.role == 'client' }}
+      if: ${{ steps.deserialize.remote-powershell-supported == 'FALSE' && steps.deserialize.role == 'client' }}
       run: |
         $headers = @{
-          "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          "secret" = "${{ inputs.syncer_secret }}"
         }
-        Invoke-WebRequest -Uri "https://netperfapi.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_state&value=done" -Headers $headers -Method Post
+        Invoke-WebRequest -Uri "https://netperfapi.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_${{ steps.deserialize.env_str }}_state&value=done" -Headers $headers -Method Post
       shell: pwsh
     - name: (Client | yes remote pwsh) Creates a 'done.txt' file to signal the server
-      if: ${{ matrix.role == 'client' && matrix.remote_powershell_supported == 'TRUE' }}
+      if: ${{ steps.deserialize.remote-powershell-supported == 'FALSE' && steps.deserialize.role == 'client' }}
       run: |
         $Session = New-PSSession -ComputerName netperf-peer
         Invoke-Command -Session $Session -ScriptBlock {
