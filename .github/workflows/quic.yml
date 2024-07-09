@@ -204,7 +204,6 @@ jobs:
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       with:
         path: netperfrepo
-      shell: pwsh
     - name: Download Artifacts
       uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
       with:
@@ -255,7 +254,7 @@ jobs:
           ./netperfrepo/set-netperf-context.ps1 -Matrix ${{ steps.matrix.outputs.data }} -GithubRunId ${{ github.run_id }}
 
           Import-Module ./netperfrepo/netperf-lib.psm1
-          
+
           ./scripts/secnetperf.ps1 `
           -LogProfile ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }} `
           -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} `
