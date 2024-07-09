@@ -188,12 +188,6 @@ jobs:
     - name: Lowercase runner.os
       shell: pwsh
       run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
-    - name: Serialize matrix
-      id: matrix
-      shell: pwsh
-      run: |
-        $matrixJson = ConvertTo-Json -InputObject ${{ toJson(matrix) }} -Compress
-        Write-Output "::set-output name=data::$matrixJson"
     - name: Checkout microsoft/msquic
       if: ${{ matrix.role == 'client' }}
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -232,7 +226,7 @@ jobs:
       shell: pwsh
       timeout-minutes: 20
       run: |
-          ./netperfrepo/set-netperf-context.ps1 -Matrix ${{ steps.matrix.outputs.data }} -GithubRunId ${{ github.run_id }}
+          ./netperfrepo/set-netperf-context.ps1 -Matrix ${{ matrix }} -GithubRunId ${{ github.run_id }}
 
           Import-Module ./netperfrepo/netperf-lib.psm1
 
@@ -251,7 +245,7 @@ jobs:
       shell: pwsh
       timeout-minutes: 20
       run: |
-          ./netperfrepo/set-netperf-context.ps1 -Matrix ${{ steps.matrix.outputs.data }} -GithubRunId ${{ github.run_id }}
+          ./netperfrepo/set-netperf-context.ps1 -Matrix ${{ matrix }} -GithubRunId ${{ github.run_id }}
 
           Import-Module ./netperfrepo/netperf-lib.psm1
 
@@ -271,7 +265,7 @@ jobs:
     - name: Stop 1ES Machine
       uses: ./netperfrepo/.github/actions/stop-1es-machine
       with:
-        matrix: ${{ steps.matrix.outputs.data }}
+        matrix: ${{ matrix }}
         syncer_secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
     - name: Upload Test Results JSON
       if: ${{ always() }}
