@@ -1,13 +1,26 @@
 name: "My Composite Action"
 description: "This action runs multiple steps as a composite action."
 inputs:
-  my-input:
-    description: "An input parameter"
+  remote-powershell-supported:
+    description: "Whether or not remote powershell is supported"
     required: true
 runs:
   using: "composite"
   steps:
-    - name: Step 1
-      run: echo "This is step 1"
-    - name: Step 2
-      run: echo "This is step 2 with input ${{ inputs.my-input }}"
+    - name: (Client | no remote pwsh) Uploads ACK to remote cache
+      if: ${{ matrix.role == 'client' }}
+      run: |
+        $headers = @{
+          "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+        }
+        Invoke-WebRequest -Uri "https://netperfapi.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_state&value=done" -Headers $headers -Method Post
+      shell: pwsh
+    - name: (Client | yes remote pwsh) Creates a 'done.txt' file to signal the server
+      if: ${{ matrix.role == 'client' && matrix.remote_powershell_supported == 'TRUE' }}
+      run: |
+        $Session = New-PSSession -ComputerName netperf-peer
+        Invoke-Command -Session $Session -ScriptBlock {
+          New-Item -ItemType File -Name "done.txt" -Path "C:\"
+        }
+      shell: pwsh
+
