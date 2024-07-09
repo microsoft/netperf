@@ -2,7 +2,10 @@
 
 ## Adding a New Test
 
-TODO
+### Testing on Azure
+
+### Testing on Lab infrastructure
+
 
 ## Triggering a netperf Run
 
