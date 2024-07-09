@@ -273,8 +273,9 @@ jobs:
         Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_ipaddress&value=$ipAddress" -Headers $headers -Method Post
       shell: pwsh
 
-    - name: (Server) Polls for a "done.txt" file from the client
+    - name: (Server | yes remote pwsh) Polls for a "done.txt" file from the client
       if: ${{ matrix.role == 'server' && matrix.remote_powershell_supported == 'TRUE' }}
+      timeout-minutes: 20
       run: |
         $found = $false
         do {
@@ -356,53 +357,9 @@ jobs:
           echo "$serverIp netperf-peer" | sudo tee -a /etc/hosts
         }
       shell: pwsh
-    - name: (Server | yes remote pwsh) Polls for a "done.txt" file from the client
-      if: ${{ matrix.role == 'server' && matrix.remote_powershell_supported == 'TRUE' }}
-      run: |
-        $found = $false
-        do {
-            $donepath = "C:\done.txt"
-            Write-Output "Checking for done.txt..."
-            if (Test-Path $donepath) {
-              Write-Output "done.txt found"
-              $found = $true
-              break
-            } else {
-              Write-Output "done.txt not found"
-            }
-            $StatePath = "C:\_state"
-            if (Test-Path $StatePath) {
-              ls $StatePath
-              # Fetch all files in the _state directory
-              $files = Get-ChildItem -Path $StatePath -File
-              # Find the highest lexicographically sorted file name
-              $max = 0
-              foreach ($file in $files) {
-                  $filename = $file.Name.split(".")[0]
-                  $num = [int]($filename -replace "[^0-9]", "")
-                  if ($num -gt $max) {
-                      $max = $num
-                  }
-              }
-              # Check if there is a corresponding "completed" file
-              $ExecuteFileExist = Test-Path "$StatePath\execute_$($max).ps1"
-              $CompletedFileExist = Test-Path "$StatePath\completed_$($max).txt"
-              if ($ExecuteFileExist -and !($CompletedFileExist)) {
-                  Write-Host "Executing $StatePath\execute_$($max).ps1"
-                  Invoke-Expression "$StatePath\execute_$($max).ps1"
-                  Write-Host "Creating $StatePath\completed_$($max).txt"
-                  New-Item -ItemType File -Name "completed_$($max).txt" -Path $StatePath
-              } else {
-                  Write-Host "No outstanding script to execute... Highest order script found so far: $max"
-              }
-            } else {
-              Write-Host "State directory not found"
-            }
-            Start-Sleep -Seconds 10
-        } while (-not $found)
-      shell: pwsh
     - name: (Server | no remote pwsh) Polls for client instructions from remote cache
       if: ${{ matrix.role == 'server' && matrix.remote_powershell_supported == 'FALSE' }}
+      timeout-minutes: 20
       run: |
         $found = $false
         $headers = @{
