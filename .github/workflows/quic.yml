@@ -311,7 +311,7 @@ jobs:
       shell: pwsh
       timeout-minutes: 20
       run: |
-          ./netperfrepo/set-netperf-context.ps1 -Matrix ${{ matrix }} -GithubRunId ${{ github.run_id }}
+          ./netperfrepo/set-netperf-context.ps1 -Matrix ${{ toJson(matrix) }} -GithubRunId ${{ github.run_id }}
 
           Import-Module ./netperfrepo/netperf-lib.psm1
 
@@ -330,7 +330,7 @@ jobs:
       shell: pwsh
       timeout-minutes: 20
       run: |
-          ./netperfrepo/set-netperf-context.ps1 -Matrix ${{ matrix }} -GithubRunId ${{ github.run_id }}
+          ./netperfrepo/set-netperf-context.ps1 -Matrix ${{ toJson(matrix) }} -GithubRunId ${{ github.run_id }}
 
           Import-Module ./netperfrepo/netperf-lib.psm1
 
@@ -350,7 +350,7 @@ jobs:
     - name: Stop 1ES Machine
       uses: ./netperfrepo/.github/actions/stop-1es-machine
       with:
-        matrix: ${{ matrix }}
+        matrix: ${{ toJson(matrix) }}
         syncer_secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
     - name: Upload Test Results JSON
       if: ${{ always() }}
