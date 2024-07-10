@@ -350,7 +350,7 @@ jobs:
     - name: Stop 1ES Machine
       uses: ./netperfrepo/.github/actions/stop-1es-machine
       with:
-        matrix: ${{ toJson(matrix) }}
+        matrix: '${{ toJson(matrix) }}'
         syncer_secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
     - name: Upload Test Results JSON
       if: ${{ always() }}
