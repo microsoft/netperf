@@ -232,7 +232,7 @@ jobs:
       shell: pwsh
       timeout-minutes: 20
       run: |
-          ./netperfrepo/set-netperf-context.ps1 -Matrix ${{ steps.matrix.outputs.data }} -GithubRunId ${{ github.run_id }}
+          ./netperfrepo/set-netperf-context.ps1 -Matrix '${{ steps.matrix.outputs.data }}' -GithubRunId '${{ github.run_id }}'
 
           Import-Module ./netperfrepo/netperf-lib.psm1
 
@@ -251,7 +251,7 @@ jobs:
       shell: pwsh
       timeout-minutes: 20
       run: |
-          ./netperfrepo/set-netperf-context.ps1 -Matrix ${{ steps.matrix.outputs.data }} -GithubRunId ${{ github.run_id }}
+          ./netperfrepo/set-netperf-context.ps1 -Matrix '${{ steps.matrix.outputs.data }}' -GithubRunId '${{ github.run_id }}'
 
           Import-Module ./netperfrepo/netperf-lib.psm1
 
