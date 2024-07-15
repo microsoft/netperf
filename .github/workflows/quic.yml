@@ -302,6 +302,7 @@ jobs:
         role: ${{ matrix.role }}
         env_str: ${{ matrix.env_str }}
         syncer_secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
+      timeout-minutes: 30
     - name: (Client) Download Watermark_Regression.json file
       if: ${{ matrix.role == 'client' }}
       run: Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/watermark_regression.json" -OutFile "watermark_regression.json"

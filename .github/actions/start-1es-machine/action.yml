@@ -122,7 +122,6 @@ runs:
     shell: pwsh
   - name: (Server | yes remote pwsh) Polls for a "done.txt" file from the client
     if: ${{ inputs.role == 'server' && inputs.remote_powershell_supported == 'TRUE' }}
-    timeout-minutes: 22
     run: |
       $found = $false
       do {
@@ -168,7 +167,6 @@ runs:
     shell: pwsh
   - name: (Server | no remote pwsh) Polls for client instructions from remote cache
     if: ${{ inputs.role == 'server' && inputs.remote_powershell_supported == 'FALSE' }}
-    timeout-minutes: 22
     run: |
       $found = $false
       $headers = @{
