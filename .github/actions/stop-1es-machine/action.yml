@@ -15,7 +15,7 @@ runs:
     - name: Deserializes the matrix input
       id: deserialize
       run: |
-        $matrix = ConvertFrom-Json "${{ inputs.matrix }}"
+        $matrix = ConvertFrom-Json '${{ inputs.matrix }}'
         $remote_powershell_supported = $matrix.remote_powershell_supported
         $role = $matrix.role
         $env_str = $matrix.env_str
