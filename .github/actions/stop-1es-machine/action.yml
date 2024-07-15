@@ -29,7 +29,7 @@ runs:
         $headers = @{
           "secret" = "${{ inputs.syncer_secret }}"
         }
-        Invoke-WebRequest -Uri "https://netperfapi.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_${{ env.env_str }}_state&value=done" -Headers $headers -Method Post
+        Invoke-WebRequest -Uri "https://netperfapi.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}-${{ env.env_str }}-state&value=done" -Headers $headers -Method Post
       shell: pwsh
     - name: (Client | yes remote pwsh) Creates a 'done.txt' file to signal the server
       if: ${{ env.role == 'client' && env.remote_powershell_supported == 'TRUE' }}
