@@ -3,9 +3,11 @@ description: "This action runs multiple steps as a composite action."
 inputs:
   matrix:
     description: "The serialized matrix of values to use for the composite action."
+    type: string
     required: true
   syncer_secret:
     description: "The secret to use for the syncer."
+    type: string
     required: true
 runs:
   using: "composite"
