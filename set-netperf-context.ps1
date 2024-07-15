@@ -1,6 +1,7 @@
 param (
     [string]$Matrix,
-    [string]$GithubRunId
+    [string]$GithubRunId,
+    [string]$SyncerSecret
 )
 
 $DeserializedMatrix = ConvertFrom-Json $Matrix
@@ -30,3 +31,5 @@ Write-Host "Current environment string: $envstr"
 $env:remote_powershell_supported = $DeserializedMatrix.remote_powershell_supported
 $env:role = $DeserializedMatrix.role
 $env:run_id = "$GithubRunId-$envstr-state"
+$env:api_url = "https://netperfapi.azurewebsites.net"
+$env:syncer_secret = $SyncerSecret

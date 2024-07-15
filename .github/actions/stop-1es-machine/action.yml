@@ -19,20 +19,20 @@ runs:
         $remote_powershell_supported = $matrix.remote_powershell_supported
         $role = $matrix.role
         $env_str = $matrix.env_str
-        Write-Output "::set-output name=remote-powershell-supported::$remote_powershell_supported"
-        Write-Output "::set-output name=role::$role"
-        Write-Output "::set-output name=env_str::$env_str"
+        echo "remote_powershell_supported=$remote_powershell_supported" >> $env:GITHUB_ENV
+        echo "role=$role" >> $env:GITHUB_ENV
+        echo "env_str=$env_str" >> $env:GITHUB_ENV
       shell: pwsh
     - name: (Client | no remote pwsh) Uploads ACK to remote cache
-      if: ${{ steps.deserialize.remote-powershell-supported == 'FALSE' && steps.deserialize.role == 'client' }}
+      if: ${{ env.role == 'client' && env.remote_powershell_supported == 'FALSE' }}
       run: |
         $headers = @{
           "secret" = "${{ inputs.syncer_secret }}"
         }
-        Invoke-WebRequest -Uri "https://netperfapi.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_${{ steps.deserialize.env_str }}_state&value=done" -Headers $headers -Method Post
+        Invoke-WebRequest -Uri "https://netperfapi.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_${{ env.env_str }}_state&value=done" -Headers $headers -Method Post
       shell: pwsh
     - name: (Client | yes remote pwsh) Creates a 'done.txt' file to signal the server
-      if: ${{ steps.deserialize.remote-powershell-supported == 'FALSE' && steps.deserialize.role == 'client' }}
+      if: ${{ env.role == 'client' && env.remote_powershell_supported == 'TRUE' }}
       run: |
         $Session = New-PSSession -ComputerName netperf-peer
         Invoke-Command -Session $Session -ScriptBlock {
