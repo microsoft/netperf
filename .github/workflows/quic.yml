@@ -343,10 +343,10 @@ jobs:
           -arch ${{ matrix.arch }} `
           -tls ${{ matrix.tls }} `
           -io ${{ matrix.io }} `
-          -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
-          -RemotePowershellSupported 'FALSE'
-          -RunId ${{ github.run_id }}-${{ matrix.env_str }}-state
-          -SyncerSecret ${{ secrets.NETPERF_SYNCER_SECRET }}
+          -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}' `
+          -RemotePowershellSupported 'FALSE' `
+          -RunId ${{ github.run_id }}-${{ matrix.env_str }}-state `
+          -SyncerSecret ${{ secrets.NETPERF_SYNCER_SECRET }} `
     - name: Stop 1ES Machine
       uses: ./netperfrepo/.github/actions/stop-1es-machine
       with:
