@@ -22,6 +22,7 @@ runs:
         Write-Output "::set-output name=remote-powershell-supported::$remote_powershell_supported"
         Write-Output "::set-output name=role::$role"
         Write-Output "::set-output name=env_str::$env_str"
+      shell: pwsh
     - name: (Client | no remote pwsh) Uploads ACK to remote cache
       if: ${{ steps.deserialize.remote-powershell-supported == 'FALSE' && steps.deserialize.role == 'client' }}
       run: |
