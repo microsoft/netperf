@@ -1,12 +1,3 @@
-# Onboarding a New Project
-
-## Adding a New Test
-
-### Testing on Azure
-
-### Testing on Lab infrastructure
-
-
 ## Triggering a netperf Run
 
 The [run-workflow.ps1](../run-workflow.ps1) script is used to trigger the appropriate test and wait for it to complete. The script leverages the [GitHub REST API](https://docs.github.com/en/rest) to trigger the workflow, wait for it to complete and then use the result to pass or fail the original caller.  For example:
