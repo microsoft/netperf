@@ -1,4 +1,4 @@
-name: "My Composite Action"
+name: "Stop 1ES Machine"
 description: "This action runs multiple steps as a composite action."
 inputs:
   matrix:
