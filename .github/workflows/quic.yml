@@ -297,10 +297,8 @@ jobs:
     - name: Start 1ES Machine
       uses: ./netperfrepo/.github/actions/start-1es-machine
       with:
-        os: ${{ matrix.os }}
-        remote_powershell_supported: ${{ matrix.remote_powershell_supported }}
-        role: ${{ matrix.role }}
-        env_str: ${{ matrix.env_str }}
+        matrix: '${{ toJson(matrix) }}'
+        callback-script: ./netperfrepo/quic_callback.ps1
         syncer_secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
       timeout-minutes: 30
     - name: (Client) Download Watermark_Regression.json file

@@ -27,9 +27,13 @@ if ($envstr.Length -lt 1 -or $GithubRunId.Length -lt 1) {
 }
 
 Write-Host "Current environment string: $envstr"
+if ($DeserializedMatrix.remote_powershell_supported -eq 'TRUE') {
+    $env:netperf_remote_powershell_supported = $true
+} else {
+    $env:netperf_remote_powershell_supported = $false
+}
 
-$env:remote_powershell_supported = $DeserializedMatrix.remote_powershell_supported
-$env:role = $DeserializedMatrix.role
-$env:run_id = "$GithubRunId-$envstr-state"
-$env:api_url = "https://netperfapi.azurewebsites.net"
-$env:syncer_secret = $SyncerSecret
+$env:netperf_role = $DeserializedMatrix.role
+$env:netperf_run_id = "$GithubRunId-$envstr-state"
+$env:netperf_api_url = "https://netperfapi.azurewebsites.net"
+$env:netperf_syncer_secret = $SyncerSecret

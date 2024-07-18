@@ -26,12 +26,15 @@ on:
         required: true
         type: string
     outputs:
-      full-matrix:
+      lab-matrix:
         description: "The full list of jobs to be run in secnetperf"
         value: ${{ jobs.prepare-matrix.outputs.full-matrix }}
       azure-matrix:
         description: "The list of jobs to be run on Azure VMs"
         value: ${{ jobs.prepare-matrix.outputs.azure-matrix }}
+      full-matrix:
+        description: "The full list of jobs to be run in secnetperf"
+        value: ${{ jobs.prepare-matrix.outputs.full-matrix }}
 
 permissions: write-all
 
@@ -39,17 +42,21 @@ jobs:
   prepare-matrix:
     name: Preparing the lab and 1es azure matrix.
     outputs:
-      full-matrix: ${{ steps.generate-full-matrix.outputs.matrix }}
+      lab-matrix: ${{ steps.generate-lab-matrix.outputs.matrix }}
       azure-matrix: ${{ steps.generate-azure-matrix.outputs.matrix }}
+      full-matrix: ${{ steps.generate-full-matrix.outputs.matrix }}
     runs-on: windows-latest
     steps:
     - name: Checkout
       uses: actions/checkout@v2
     - name: Run Prepare Matrix
       run: ./.github/workflows/prepare-matrix.ps1
-    - id: generate-full-matrix
+    - id: generate-lab-matrix
       run: echo "matrix=$(jq -c '.' ./.github/workflows/processed-matrix.json)" >> $GITHUB_OUTPUT
       shell: bash
     - id: generate-azure-matrix
       run: echo "matrix=$(jq -c '.' ./.github/workflows/azure-matrix.json)" >> $GITHUB_OUTPUT
+      shell: bash
+    - id: generate-full-matrix
+      run: echo "matrix=$(jq -c '.' ./.github/workflows/full-matrix.json)" >> $GITHUB_OUTPUT
       shell: bash
