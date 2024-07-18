@@ -5,7 +5,7 @@ inputs:
     description: "The serialized matrix of values to use for the composite action."
     type: string
     required: true
-  callback-script:
+  callback-script-path:
     description: "The script to run in the callback on the server process."
     type: string
     required: true
@@ -190,20 +190,12 @@ runs:
               value=$dataJson
             }
             $body = $dataJson | ConvertTo-Json
-            if ($ApprovedCommandsJson.contains($command)) {
-              Invoke-WebRequest -Uri "$url/setkeyvalue?key=${{ github.run_id }}-${{ env.env_str }}-state" -Headers $headers -Method POST -Body $body -ContentType "application/json"
-              $fullPath = "${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl"
-              $SecNetPerfPath = "$fullPath/secnetperf"
-              $env:LD_LIBRARY_PATH = "${env:LD_LIBRARY_PATH}:$fullPath"
-              chmod +x "$SecNetPerfPath"
-              if ($command.contains("lowlat")) {
-                ${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:lowlat -io:epoll -stats:1 | Out-Null
-              } else {
-                ${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:maxtput -io:epoll -stats:1 | Out-Null
-              }
-            } else {
-              Write-Output "Command not approved: $command"
-            }
+            Invoke-WebRequest -Uri "$url/setkeyvalue?key=${{ github.run_id }}-${{ env.env_str }}-state" -Headers $headers -Method POST -Body $body -ContentType "application/json"
+            $fullPath = "${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl"
+            $SecNetPerfPath = "$fullPath/secnetperf"
+            $env:LD_LIBRARY_PATH = "${env:LD_LIBRARY_PATH}:$fullPath"
+            chmod +x "$SecNetPerfPath"
+            ${{ inputs.callback-script-path }} -Command $command
             Write-Host "Data JSON: "
             $dataJson
           } else {
