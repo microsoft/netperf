@@ -4,13 +4,8 @@ runs:
   using: "composite"
   steps:
   - name: Install powershell if needed
+    if: ${{ runner.os != 'Windows' }}
     run: |
-      if [[ "$OSTYPE" == "cygwin" ]] || [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
-          echo "This is a Windows system."
-          exit 0
-      else
-          echo "This is not a Windows system."
-      fi
       # Update the list of packages
       sudo apt-get update
       # Install pre-requisite packages.

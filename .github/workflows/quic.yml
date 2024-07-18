@@ -274,7 +274,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{fromJson(needs.prepare-matrix.outputs.full-matrix)}}
+        include: ${{fromJson(needs.prepare-matrix.outputs.lab-matrix)}}
     runs-on:
     - self-hosted
     - ${{ matrix.runner_id || matrix.env }} # Use auto-generated 'runner id' if present, otherwise assign to 'env'.
