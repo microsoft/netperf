@@ -8,6 +8,10 @@ if ($Command -eq "/home/secnetperf/_work/quic/artifacts/bin/linux/x64_Release_op
     ./artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:lowlat -io:epoll -stats:1 | Out-Null
 } elseif ($Command -eq "/home/secnetperf/_work/quic/artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:maxtput -io:epoll -stats:1") {
     ./artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:maxtput -io:epoll -stats:1 | Out-Null
+} elseif ($Command -eq "/home/secnetperf/_work/quic/artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:maxtput -io:epoll") {
+    ./artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:maxtput -io:epoll | Out-Null
+} elseif ($Command -eq "/home/secnetperf/_work/quic/artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:lowlat -io:epoll") {
+    ./artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:lowlat -io:epoll | Out-Null
 } else {
     throw "Invalid command: $Command"
 }
