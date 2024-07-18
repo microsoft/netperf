@@ -169,7 +169,7 @@ jobs:
 
   prepare-matrix:
     name: Prepare lab matrix, and Azure 1ES matrix.
-    uses: microsoft/netperf/.github/workflows/prepare-matrix.yml@main
+    uses: microsoft/netperf/.github/workflows/prepare-matrix.yml@jackhe/cleanup-az1es
     with:
       matrix_filename: 'quic_matrix.json'
       workflowId: ${{ github.run_id }}
@@ -212,7 +212,7 @@ jobs:
       uses: ./netperfrepo/.github/actions/start-1es-machine
       with:
         matrix: '${{ toJson(matrix) }}'
-        callback-script: ./netperfrepo/quic_callback.ps1
+        callback-script-path: ${{ github.workspace }}/netperfrepo/.github/workflows/quic_callback.ps1
         syncer_secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
       timeout-minutes: 30
     - name: (Client) Download Watermark_Regression.json file
