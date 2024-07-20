@@ -271,7 +271,7 @@ jobs:
   #
   run-secnetperf: # This would be 1 enumeration, after CTS has setup the environment with the correct OS type and version.
     name: secnetperf
-    needs: [build-unix, build-windows, build-windows-kernel, prepare-matrix]
+    needs: [prepare-matrix]
     strategy:
       fail-fast: false
       matrix:
