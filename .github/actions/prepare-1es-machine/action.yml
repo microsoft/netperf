@@ -121,10 +121,15 @@ runs:
   - name: Lowercase runner.os
     if: ${{ runner.os == 'Windows' }}
     run: |
-        powershell -Command "Write-Host 'Powershell within cmd."
+        powershell -Command "Write-Host 'Powershell within cmd.'"
         echo "OS=$('${{runner.os}}'.ToLower())" >> $GITHUB_ENV
     shell: cmd
   - name: Lowercase runner.os
     if: ${{ runner.os != 'Windows' }}
     shell: pwsh
     run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
+  - name: Test
+    run: |
+        pwsh
+        Write-Host "OS is currently set to: $env:OS"
+    shell: pwsh
