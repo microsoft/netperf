@@ -112,11 +112,19 @@ runs:
             echo Installing PowerShell 7...
             msiexec /i %msi_path% /quiet /norestart
             echo PowerShell 7 installation completed.
+            echo Check Program Files
+            dir "C:\Program Files\PowerShell\"
         ) else (
             echo Failed to download the PowerShell 7 installer.
         )
 
         endlocal
+    shell: cmd
+  - name: Configure PATH to include powershell
+    if: ${{ runner.os == 'Windows' }}
+    run: |
+        echo "Adding PowerShell to PATH..."
+        setx PATH "%PATH%;C:\Program Files\PowerShell\7"
     shell: cmd
   - name: Lowercase runner.os
     if: ${{ runner.os == 'Windows' }}
@@ -128,8 +136,3 @@ runs:
     if: ${{ runner.os != 'Windows' }}
     shell: pwsh
     run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
-  - name: Test
-    run: |
-        pwsh
-        Write-Host "OS is currently set to: $env:OS"
-    shell: pwsh
