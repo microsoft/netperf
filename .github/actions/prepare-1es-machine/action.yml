@@ -119,5 +119,12 @@ runs:
         endlocal
     shell: cmd
   - name: Lowercase runner.os
+    if: ${{ runner.os == 'Windows' }}
+    run: |
+        powershell -Command "Write-Host 'Powershell within cmd."
+        echo "OS=$('${{runner.os}}'.ToLower())" >> $GITHUB_ENV
+    shell: cmd
+  - name: Lowercase runner.os
+    if: ${{ runner.os != 'Windows' }}
     shell: pwsh
     run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
