@@ -19,7 +19,12 @@ runs:
   - name: Deserialize Matrix
     if: ${{ env.OS == 'windows' }}
     run: |
-      "C:\Program Files\PowerShell\7\pwsh.exe" -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Deserialize_matrix' -GithubContextInput '${{ inputs.matrix }}'"
+      set json=%3A{{ inputs.matrix }}
+      set json=%json:"=\"%
+      set json=%json:\r\n= %
+      set json=%json:\n= %
+      set json=%json:\r= %
+      "C:\Program Files\PowerShell\7\pwsh.exe" -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Deserialize_matrix' -GithubContextInput '%json%'"
     shell: cmd
   - name: Deserialize Matrix
     if: ${{ env.OS != 'windows' }}
@@ -29,12 +34,7 @@ runs:
   - name: Disable Windows Defender / Firewall
     if: ${{ env.OS == 'windows' }}
     run: |
-      set json=%3A{{ inputs.matrix }}
-      set json=%json:"=\"%
-      set json=%json:\r\n= %
-      set json=%json:\n= %
-      set json=%json:\r= %
-      "C:\Program Files\PowerShell\7\pwsh.exe" -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Deserialize_matrix' -GithubContextInput '%json%'"
+      "C:\Program Files\PowerShell\7\pwsh.exe" -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Disable_Windows_Defender'"
     shell: cmd
   - name: (Server) Upload IP address to shared cache
     if: ${{ env.role == 'server' }}
