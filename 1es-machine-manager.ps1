@@ -1,6 +1,6 @@
 param (
     [string]$Action,
-    [string]$GithubContextInput = "",
+    [string]$GithubContextInput = ""
 )
 
 Write-Host "Executing action: $Action"
