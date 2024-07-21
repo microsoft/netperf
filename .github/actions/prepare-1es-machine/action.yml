@@ -127,5 +127,10 @@ runs:
     run: echo "::add-path::C:\Program Files\PowerShell\7"
     shell: cmd
   - name: Lowercase runner.os
+    if: ${{ runner.os != 'Windows' }}
     run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
     shell: pwsh
+  - name: Lowercase runner.os
+    if: ${{ runner.os == 'Windows' }}
+    run: "C:\Program Files\PowerShell\7\pwsh.exe" -Command "echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV"
+    shell: cmd
