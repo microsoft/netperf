@@ -83,39 +83,6 @@ runs:
           rm -r "$tmpDir"
       fi
     shell: bash
-  - name: Install Powershell On Windows
-    if: ${{ runner.os == 'Windows' }}
-    run: |
-        @echo off
-        setlocal
-
-        rem Define the URL for the PowerShell 7 MSI installer
-        set "url=https://github.com/PowerShell/PowerShell/releases/download/v7.4.3/PowerShell-7.4.3-win-x64.msi"
-
-        rem Define the download location
-        set "msi_path=%TEMP%\PowerShell-7.4.3-win-x64.msi"
-
-        rem Download the PowerShell 7 MSI installer
-        echo Downloading PowerShell 7 installer...
-        powershell -Command "Invoke-WebRequest -Uri %url% -OutFile %msi_path%"
-
-        rem Check if the MSI file was downloaded successfully
-        if exist %msi_path% (
-            echo Installing PowerShell 7...
-            msiexec.exe /quiet /norestart ADD_EXPLORER_CONTEXT_MENU_OPENPOWERSHELL=1 ADD_FILE_CONTEXT_MENU_RUNPOWERSHELL=1 ENABLE_PSREMOTING=1 REGISTER_MANIFEST=1 USE_MU=1 ENABLE_MU=1 ADD_PATH=1
-            echo PowerShell 7 installation completed.
-            echo Check Program Files
-            dir "C:\Program Files\PowerShell\"
-        ) else (
-            echo Failed to download the PowerShell 7 installer.
-        )
-
-        endlocal
-    shell: cmd
-  - name: Check powershell is properly installed
-    if: ${{ runner.os == 'Windows' }}
-    run: C:\Program Files\PowerShell\7\pwsh.exe -v
-    shell: cmd
   - name: Lowercase runner.os
     shell: pwsh
     run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
