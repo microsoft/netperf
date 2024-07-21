@@ -19,12 +19,12 @@ runs:
   - name: Deserialize Matrix
     if: ${{ env.OS == 'windows' }}
     run: |
-      "C:\Program Files\PowerShell\7\pwsh.exe" -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Deserialize_matrix' -GithubContextInput ${{ inputs.matrix }}"
+      "C:\Program Files\PowerShell\7\pwsh.exe" -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Deserialize_matrix' -GithubContextInput '${{ inputs.matrix }}'"
     shell: cmd
   - name: Deserialize Matrix
     if: ${{ env.OS != 'windows' }}
     run: |
-      ./netperfrepo/1es-machine-manager.sh -Action 'Deserialize_matrix' -GithubContextInput ${{ inputs.matrix }}
+      ./netperfrepo/1es-machine-manager.sh -Action 'Deserialize_matrix' -GithubContextInput '${{ inputs.matrix }}'
     shell: pwsh
   - name: Disable Windows Defender / Firewall
     if: ${{ env.OS == 'windows' }}

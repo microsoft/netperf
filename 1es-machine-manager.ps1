@@ -3,6 +3,8 @@ param (
     [string]$GithubContextInput = "",
 )
 
+Write-Host "Executing action: $Action"
+
 if ($Action -eq "Deserialize_matrix") {
     $matrix = ConvertFrom-Json $GithubContextInput
     $remote_powershell_supported = $matrix.remote_powershell_supported
