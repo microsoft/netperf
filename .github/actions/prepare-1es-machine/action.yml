@@ -132,5 +132,5 @@ runs:
     shell: pwsh
   - name: Lowercase runner.os
     if: ${{ runner.os == 'Windows' }}
-    run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
+    run: C:\Program Files\PowerShell\7\pwsh.exe" -Command 'echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV'
     shell: cmd
