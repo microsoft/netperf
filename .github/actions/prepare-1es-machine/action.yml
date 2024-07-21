@@ -83,14 +83,6 @@ runs:
           rm -r "$tmpDir"
       fi
     shell: bash
-  - name: Check available shells on Windows
-    if: ${{ runner.os == 'Windows' }}
-    run: |
-        echo "Available shells:"
-        echo "PowerShell: $(Get-Command powershell | Select-Object -ExpandProperty Definition)"
-        echo "Command Prompt: $(Get-Command cmd | Select-Object -ExpandProperty Definition)"
-        echo "Git Bash: $(Get-Command bash | Select-Object -ExpandProperty Definition -ErrorAction SilentlyContinue)"
-    shell: cmd
   - name: Install Powershell On Windows
     if: ${{ runner.os == 'Windows' }}
     run: |
@@ -120,11 +112,14 @@ runs:
 
         endlocal
     shell: cmd
-  - name: Configure PATH to include powershell
-    if: ${{ runner.os == 'Windows' }}
+  - name: Add PowerShell to PATH
     run: |
-        echo "Adding PowerShell to PATH..."
-        setx PATH "%PATH%;C:\Program Files\PowerShell\7"
+      $env:Path += ';C:\Program Files\PowerShell\7'
+      [System.Environment]::SetEnvironmentVariable('Path', $env:Path, [System.EnvironmentVariableTarget]::Machine)
+    shell: cmd
+  - name: Check powershell is properly installed
+    if: ${{ runner.os == 'Windows' }}
+    run: C:\Program Files\PowerShell\7\pwsh.exe -v
     shell: cmd
   - name: Lowercase runner.os
     shell: pwsh
