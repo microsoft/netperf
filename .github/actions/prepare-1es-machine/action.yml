@@ -83,6 +83,10 @@ runs:
           rm -r "$tmpDir"
       fi
     shell: bash
+  - name: Print information about the current windows system
+    if: ${{ runner.os == 'Windows' }}
+    run: systeminfo
+    shell: cmd
   - name: Lowercase runner.os
     shell: pwsh
     run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
