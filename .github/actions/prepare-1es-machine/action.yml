@@ -130,7 +130,17 @@ runs:
     if: ${{ runner.os != 'Windows' }}
     run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
     shell: pwsh
-  - name: Lowercase runner.os
+  - name: Lowercase OS and Set Environment Variable
     if: ${{ runner.os == 'Windows' }}
-    run: "C:\Program Files\PowerShell\7\pwsh.exe" -Command "$tmp = '${{runner.os}}'.ToLower(); echo 'OS=$tmp' >> $env:GITHUB_ENV"
+    run: |
+      @echo off
+      setlocal
+
+      REM Use PowerShell to convert the runner OS string to lowercase
+      for /f "delims=" %%i in ('powershell -Command "$tmp = \'${{ runner.os }}\'.ToLower(); echo OS=$tmp"') do set "result=%%i"
+
+      REM Output to the GitHub environment file
+      echo %result% >> %GITHUB_ENV%
+
+      endlocal
     shell: cmd
