@@ -120,12 +120,12 @@ runs:
     shell: cmd
   - name: Verify powershell installation
     run: |
-      C:\Program Files\PowerShell\pwsh.exe -c "Write-Host 'PowerShell 7 installed successfully'"
+      C:\Program Files\PowerShell\7\pwsh.exe -c "Write-Host 'PowerShell 7 installed successfully'"
     shell: cmd
   - name: Lowercase runner.os
     if: ${{ runner.os == 'Windows' }}
     run: |
-      C:\Program Files\PowerShell\pwsh.exe
+      C:\Program Files\PowerShell\7\pwsh.exe
       Write-Host "Setting OS env"
       echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
     shell: cmd
