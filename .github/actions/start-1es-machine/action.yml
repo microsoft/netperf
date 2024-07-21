@@ -18,57 +18,21 @@ runs:
   steps:
   - name: Deserialize Matrix
     id: deserialize
+    if: ${{ env.OS == 'windows' }}
     run: |
-      $matrix = ConvertFrom-Json '${{ inputs.matrix }}'
-      $remote_powershell_supported = $matrix.remote_powershell_supported
-      $role = $matrix.role
-      $env_str = $matrix.env_str
-      echo "remote_powershell_supported=$remote_powershell_supported" >> $env:GITHUB_ENV
-      echo "role=$role" >> $env:GITHUB_ENV
-      echo "env_str=$env_str" >> $env:GITHUB_ENV
-    shell: pwsh
-  - name: Get WinRM info
-    if: ${{ env.OS == 'windows' && env.remote_powershell_supported == 'TRUE' }}
-    run: Get-Service WinRM
-    shell: pwsh
-  - name: WinRM quickconfig
-    if: ${{ env.OS == 'windows' && env.remote_powershell_supported == 'TRUE' }}
-    run: echo Y | winrm quickconfig
-    shell: pwsh
-  - name: Enable remote powershell
-    if: ${{ env.OS == 'windows' && env.remote_powershell_supported == 'TRUE' }}
-    run: Enable-PSRemoting -Force
+      "C:\Program Files\PowerShell\7\pwsh.exe" -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Deserialize_matrix' -GithubContextInput ${{ inputs.matrix }}"
+    shell: cmd
+  - name: Deserialize Matrix
+    id: deserialize
+    if: ${{ env.OS != 'windows' }}
+    run: |
+      ./netperfrepo/1es-machine-manager.sh -Action 'Deserialize_matrix' -GithubContextInput ${{ inputs.matrix }}
     shell: pwsh
   - name: Disable Windows Defender / Firewall
-    if: ${{ env.OS == 'windows' && env.remote_powershell_supported == 'TRUE' }}
+    if: ${{ env.OS == 'windows' }}
     run: |
-      # Disable Windows defender / firewall.
-      Write-Host "Disabling Windows Defender / Firewall."
-      netsh.exe advfirewall set allprofiles state off
-      Set-MpPreference -EnableNetworkProtection Disabled
-      Set-MpPreference -DisableDatagramProcessing $True
-    shell: pwsh
-  - name: Enabling ServiceLogonRight
-    if: ${{ env.OS == 'windows' && env.remote_powershell_supported == 'TRUE' }}
-    run: |
-      # Make sure the user has the rights to log on.
-      function Add-ServiceLogonRight ($Username) {
-          $tmp = New-TemporaryFile
-          secedit /export /cfg "$tmp.inf" | Out-Null
-          (Get-Content -Encoding ascii "$tmp.inf") -replace '^SeServiceLogonRight .+', "`$0,$Username" | Set-Content -Encoding ascii "$tmp.inf"
-          secedit /import /cfg "$tmp.inf" /db "$tmp.sdb" | Out-Null
-          secedit /configure /db "$tmp.sdb" /cfg "$tmp.inf" | Out-Null
-          Remove-Item $tmp* -ErrorAction SilentlyContinue
-      }
-      Write-Host "Enabling ServiceLogonRight."
-      Add-ServiceLogonRight -Username "secnetperf"
-    shell: pwsh
-  - name: Set local user
-    if: ${{ env.OS == 'windows' && env.remote_powershell_supported == 'TRUE' }}
-    run: |
-      Set-LocalUser -Name "secnetperf" -PasswordNeverExpires $true
-      whoami
-    shell: pwsh
+      "C:\Program Files\PowerShell\7\pwsh.exe" -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Disable_Windows_Defender'"
+    shell: cmd
   - name: (Server) Upload IP address to shared cache
     if: ${{ env.role == 'server' }}
     run: |
