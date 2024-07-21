@@ -17,13 +17,11 @@ runs:
   using: "composite"
   steps:
   - name: Deserialize Matrix
-    id: deserialize
     if: ${{ env.OS == 'windows' }}
     run: |
       "C:\Program Files\PowerShell\7\pwsh.exe" -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Deserialize_matrix' -GithubContextInput ${{ inputs.matrix }}"
     shell: cmd
   - name: Deserialize Matrix
-    id: deserialize
     if: ${{ env.OS != 'windows' }}
     run: |
       ./netperfrepo/1es-machine-manager.sh -Action 'Deserialize_matrix' -GithubContextInput ${{ inputs.matrix }}
