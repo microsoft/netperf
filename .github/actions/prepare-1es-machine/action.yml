@@ -106,7 +106,6 @@ runs:
           echo PowerShell 7 installation completed.
           echo Check Program Files
           dir "C:\Program Files\PowerShell\"
-          dir "C:\Program Files\PowerShell\7\"
           echo Add Powershell to PATH
           setx PATH "%PATH%;C:\Program Files\PowerShell"
       ) else (
@@ -121,30 +120,12 @@ runs:
     shell: cmd
   - name: Verify powershell installation
     run: |
-      "C:\Program Files\PowerShell\7\pwsh.exe" -Command "Write-Host 'PowerShell 7 installed successfully'"
-    shell: cmd
-  - name: Lowercase runner.os
-    if: ${{ runner.os == 'Windows' }}
-    run: |
-      "C:\Program Files\PowerShell\7\pwsh.exe"
-      Write-Host "Setting OS env"
-      echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
+      "C:\Program Files\PowerShell\7\pwsh.exe" -Command "$PSVersionTable.PSVersion"
     shell: cmd
   - name: Add to PATH in GitHub Actions
     if: ${{ runner.os == 'Windows' }}
     run: echo "::add-path::C:\Program Files\PowerShell\7"
     shell: cmd
-  - name: Test path added
-    if: ${{ runner.os == 'Windows' }}
-    run: |
-      pwsh
-      Write-Host "Installation Complete 1"
-    shell: cmd
-  - name: Test path added 2
-    if: ${{ runner.os == 'Windows' }}
-    run: Write-Host "Installation Complete 2"
-    shell: pwsh
   - name: Lowercase runner.os
-    if: ${{ runner.os != 'Windows' }}
     run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
     shell: pwsh
