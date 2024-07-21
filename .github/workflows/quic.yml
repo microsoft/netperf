@@ -120,20 +120,20 @@ jobs:
   # Build Jobs
   #
 
-  build-windows:
-    name: Build WinUser
-    needs: []
-    strategy:
-      fail-fast: false
-      matrix:
-        os: ['windows-2022']
-        tls: [schannel] # , openssl, openssl3]
-    uses: microsoft/msquic/.github/workflows/build-reuse-win.yml@main
-    with:
-      os: ${{ matrix.os }}
-      tls: ${{ matrix.tls }}
-      build: -Perf
-      ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+  # build-windows:
+  #   name: Build WinUser
+  #   needs: []
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       os: ['windows-2022']
+  #       tls: [schannel] # , openssl, openssl3]
+  #   uses: microsoft/msquic/.github/workflows/build-reuse-win.yml@main
+  #   with:
+  #     os: ${{ matrix.os }}
+  #     tls: ${{ matrix.tls }}
+  #     build: -Perf
+  #     ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
   # build-windows-kernel:
   #   name: Build WinKernel
@@ -176,7 +176,7 @@ jobs:
 
   run-secnetperf-1es:
     name: azure-${{ matrix.role }}-${{ matrix.os }}-${{ matrix.io }}-${{ matrix.tls }}-${{ matrix.arch }}
-    needs: [prepare-matrix, build-windows]
+    needs: [prepare-matrix]
     strategy:
       fail-fast: false
       matrix:

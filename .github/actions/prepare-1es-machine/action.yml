@@ -102,20 +102,15 @@ runs:
         rem Check if the MSI file was downloaded successfully
         if exist %msi_path% (
             echo Installing PowerShell 7...
-            msiexec /i %msi_path% /quiet /norestart
+            msiexec.exe /package PowerShell-7.4.3-win-x64.msi /quiet ADD_EXPLORER_CONTEXT_MENU_OPENPOWERSHELL=1 ADD_FILE_CONTEXT_MENU_RUNPOWERSHELL=1 ENABLE_PSREMOTING=1 REGISTER_MANIFEST=1 USE_MU=1 ENABLE_MU=1 ADD_PATH=1
             echo PowerShell 7 installation completed.
-            echo Check Program Files
+            echo Check Program Files:
             dir "C:\Program Files\PowerShell\"
         ) else (
             echo Failed to download the PowerShell 7 installer.
         )
 
         endlocal
-    shell: cmd
-  - name: Add PowerShell to PATH
-    run: |
-      $env:Path += ';C:\Program Files\PowerShell\7'
-      [System.Environment]::SetEnvironmentVariable('Path', $env:Path, [System.EnvironmentVariableTarget]::Machine)
     shell: cmd
   - name: Check powershell is properly installed
     if: ${{ runner.os == 'Windows' }}
