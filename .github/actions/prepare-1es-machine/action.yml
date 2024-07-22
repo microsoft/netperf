@@ -135,3 +135,9 @@ runs:
     run: |
       "C:\Program Files\PowerShell\7\pwsh.exe" -Command "echo 'OS=windows' >> $env:GITHUB_ENV"
     shell: cmd
+  - name: Set up Python
+    if: ${{ env.OS == 'windows' }}
+    uses: actions/setup-python@v2
+    with:
+      python-version: '3.x'
+      

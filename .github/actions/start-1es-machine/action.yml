@@ -16,11 +16,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-  - name: Set up Python
-    if: ${{ env.OS == 'windows' }}
-    uses: actions/setup-python@v2
-    with:
-      python-version: '3.x'
   - name: Run Python Script to Escape JSON
     if: ${{ env.OS == 'windows' }}
     id: escape_json

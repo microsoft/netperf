@@ -1,4 +1,4 @@
-name: "Stop 1ES Machine"
+name: "Run Test Script"
 description: "This action runs multiple steps as a composite action."
 inputs:
   matrix:
