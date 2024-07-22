@@ -19,7 +19,7 @@ runs:
   - name: Deserialize Matrix
     if: ${{ env.OS == 'windows' }}
     run: |
-      set json=%3A{{ inputs.matrix }}
+      set json=%3${{ inputs.matrix }}
       set json=%json:"=\"%
       set json=%json:\r\n= %
       set json=%json:\n= %
