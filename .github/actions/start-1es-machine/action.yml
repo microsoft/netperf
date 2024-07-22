@@ -16,15 +16,24 @@ inputs:
 runs:
   using: "composite"
   steps:
+  - name: Set up Python
+    if: ${{ env.OS == 'windows' }}
+    uses: actions/setup-python@v2
+    with:
+      python-version: '3.x'
+  - name: Run Python Script to Escape JSON
+    if: ${{ env.OS == 'windows' }}
+    id: escape_json
+    run: |
+      import json
+      matrix = json.loads("${{ inputs.matrix }}")
+      json_str = json.dumps(matrix).replace('"', '\\"').replace('\n', ' ').replace('\r', ' ')
+      print(f"::set-output name=escaped_json::{json_str}")
+    shell: python
   - name: Deserialize Matrix
     if: ${{ env.OS == 'windows' }}
     run: |
-      set json=%3${{ inputs.matrix }}
-      set json=%json:"=\"%
-      set json=%json:\r\n= %
-      set json=%json:\n= %
-      set json=%json:\r= %
-      "C:\Program Files\PowerShell\7\pwsh.exe" -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Deserialize_matrix' -GithubContextInput '%json%'"
+      "C:\Program Files\PowerShell\7\pwsh.exe" -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Deserialize_matrix' -GithubContextInput '${{ steps.escape_json.outputs.escaped_json }}'"
     shell: cmd
   - name: Deserialize Matrix
     if: ${{ env.OS != 'windows' }}
