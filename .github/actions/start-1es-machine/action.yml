@@ -38,7 +38,7 @@ runs:
   - name: Deserialize Matrix
     if: ${{ env.OS != 'windows' }}
     run: |
-      ./netperfrepo/1es-machine-manager.sh -Action 'Deserialize_matrix' -GithubContextInput '${{ inputs.matrix }}'
+      ./netperfrepo/1es-machine-manager.sh -Action 'Deserialize_matrix' -GithubContextInput1 '${{ inputs.matrix }}'
     shell: pwsh
   - name: Disable Windows Defender / Firewall
     if: ${{ env.OS == 'windows' }}
@@ -46,100 +46,24 @@ runs:
       "C:\Program Files\PowerShell\7\pwsh.exe" -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Disable_Windows_Defender'"
     shell: cmd
   - name: (Server) Upload IP address to shared cache
-    if: ${{ env.role == 'server' }}
+    if: ${{ env.role == 'server' && env.OS == 'windows' }}
     run: |
-      if ($isWindows) {
-        $ipAddress = (Get-NetIpAddress -AddressFamily IPv4).IpAddress
-      } else {
-        $ipAddress = ip addr | grep 'inet ' | grep '10' | awk '{print $2}' | cut -d'/' -f1
-      }
-      $headers = @{
-        "secret" = "${{ inputs.syncer_secret }}"
-      }
-      Invoke-WebRequest -Uri "https://netperfapi.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_${{ env.env_str }}_ipaddress&value=$ipAddress" -Headers $headers -Method Post
-    shell: pwsh
+      "C:\Program Files\PowerShell\7\pwsh.exe" -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Broadcast_IP' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}' -GithubContextInput3 '${{ env.env_str }}'"
+    shell: cmd
+  - name: (Server) Upload IP address to shared cache
+    if: ${{ env.role == 'server' && env.OS != 'windows' }}
+    run: |
+      ./netperfrepo/1es-machine-manager.sh -Action 'Broadcast_IP' -GithubContextInput1 '${{ inputs.syncer_secret }} -GithubContextInput2 '${{ github.run_id }}' -GithubContextInput3 '${{ env.env_str }}''
+    shell: pwsh 
   - name: (Client) Poll for an ip address uploaded by the server, set netperf-peer.
-    if: ${{ env.role == 'client' }}
+    if: ${{ env.role == 'client' && env.OS == 'windows' }}
     run: |
-      $found = $false
-      $headers = @{
-        "secret" = "${{ inputs.syncer_secret }}"
-      }
-      $uri = "https://netperfapi.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_${{ env.env_str }}_ipaddress"
-      do {
-        Write-Output "Checking for ip address..."
-        try {
-          $Response = Invoke-WebRequest -Uri $uri -Headers $headers
-          if (!($Response.StatusCode -eq 200)) {
-            throw "Failed to get ip address. Status code: $($Response.StatusCode)"
-          }
-          $ipAddress = $Response.Content
-          Write-Output "Ip Address found: $ipAddress"
-          if ($isWindows) {
-            $serverIp = $ipAddress.Split(" ") | Where-Object { $_.StartsWith("10") } | Select-Object -First 1
-          } else {
-            $serverIp = $ipAddress
-          }
-          Write-Output "Server IP: $serverIp"
-          $found = $true
-        }
-        catch {
-          Write-Output "Ip Address not found: $_"
-          Start-Sleep -Seconds 5
-        }
-      } while (-not $found)
-      Write-Host "Setting netperf-peer"
-      if ($isWindows) {
-        "$serverIp netperf-peer" | Out-File -Encoding ASCII -Append "$env:SystemRoot\System32\drivers\etc\hosts"
-        Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer' -Force
-      } else {
-        echo "$serverIp netperf-peer" | sudo tee -a /etc/hosts
-      }
-    shell: pwsh
-  - name: (Server | yes remote pwsh) Polls for a "done.txt" file from the client
-    if: ${{ env.role == 'server' && env.remote_powershell_supported == 'TRUE' }}
+      "C:\Program Files\PowerShell\7\pwsh.exe" -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Poll_IP' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}' -GithubContextInput3 '${{ env.env_str }}'"
+    shell: cmd
+  - name: (Client) Poll for an ip address uploaded by the server, set netperf-peer.
+    if: ${{ env.role == 'client' && env.OS != 'windows' }}
     run: |
-      $found = $false
-      do {
-          $donepath = "C:\done.txt"
-          Write-Output "Checking for done.txt..."
-          if (Test-Path $donepath) {
-            Write-Output "done.txt found"
-            $found = $true
-            break
-          } else {
-            Write-Output "done.txt not found"
-          }
-          $StatePath = "C:\_state"
-          if (Test-Path $StatePath) {
-            ls $StatePath
-            # Fetch all files in the _state directory
-            $files = Get-ChildItem -Path $StatePath -File
-            # Find the highest lexicographically sorted file name
-            $max = 0
-            foreach ($file in $files) {
-                $filename = $file.Name.split(".")[0]
-                $num = [int]($filename -replace "[^0-9]", "")
-                if ($num -gt $max) {
-                    $max = $num
-                }
-            }
-            # Check if there is a corresponding "completed" file
-            $ExecuteFileExist = Test-Path "$StatePath\execute_$($max).ps1"
-            $CompletedFileExist = Test-Path "$StatePath\completed_$($max).txt"
-            if ($ExecuteFileExist -and !($CompletedFileExist)) {
-                Write-Host "Executing $StatePath\execute_$($max).ps1"
-                Invoke-Expression "$StatePath\execute_$($max).ps1"
-                Write-Host "Creating $StatePath\completed_$($max).txt"
-                New-Item -ItemType File -Name "completed_$($max).txt" -Path $StatePath
-            } else {
-                Write-Host "No outstanding script to execute... Highest order script found so far: $max"
-            }
-          } else {
-            Write-Host "State directory not found"
-          }
-          Start-Sleep -Seconds 10
-      } while (-not $found)
+      ./netperfrepo/1es-machine-manager.sh -Action 'Poll_IP' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}' -GithubContextInput3 '${{ env.env_str }}'
     shell: pwsh
   - name: (Server | no remote pwsh) Polls for client instructions from remote cache
     if: ${{ env.role == 'server' && env.remote_powershell_supported == 'FALSE' }}
