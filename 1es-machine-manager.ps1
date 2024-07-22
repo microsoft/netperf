@@ -3,6 +3,7 @@ param (
     [string]$GithubContextInput1 = "",
     [string]$GithubContextInput2 = "",
     [string]$GithubContextInput3 = "",
+    [string]$GithubContextInput4 = ""
 )
 
 Write-Host "Executing action: $Action"
@@ -25,7 +26,7 @@ if ($Action -eq "Disable_Windows_Defender") {
     Set-MpPreference -DisableDatagramProcessing $True
 }
 
-if ($Action -eq "Broadcast_IP") { 
+if ($Action -eq "Broadcast_IP") {
     if ($isWindows) {
         $ipAddress = (Get-NetIpAddress -AddressFamily IPv4).IpAddress
     } else {
@@ -36,7 +37,7 @@ if ($Action -eq "Broadcast_IP") {
     }
     Invoke-WebRequest -Uri "https://netperfapi.azurewebsites.net/setkeyvalue?key=$GithubContextInput2-$GithubContextInput3-ipaddress&value=$ipAddress" -Headers $headers -Method Post
 }
-    
+
 if ($Action -eq "Poll_IP") {
     $found = $false
     $headers = @{
@@ -120,45 +121,37 @@ if ($Action -eq "Deprecated_remote_pwsh_poll_instructions") {
 
 if ($Action -eq "Poll_client_instructions") {
     $found = $false
-      $headers = @{
-        "secret" = $GithubContextInput1
+    $headers = @{
+      "secret" = $GithubContextInput1
+    }
+    $url = "https://netperfapi.azurewebsites.net"
+    do {
+      try {
+        $Response = Invoke-WebRequest -Uri "$url/getkeyvalue?key=$GithubContextInput2-$GithubContextInput3-state" -Headers $headers
+        $data = $Response.Content
+        if ($data -eq "done") {
+          $found = $true
+          break
+        }
+        $dataJson = ConvertFrom-Json $data
+        if ($dataJson.SeqNum -lt $dataJson.Commands.Count) {
+          $command = $dataJson.Commands[$dataJson.SeqNum]
+          $dataJson.SeqNum++
+          $dataJson = @{
+            value=$dataJson
+          }
+          $body = $dataJson | ConvertTo-Json
+          Invoke-WebRequest -Uri "$url/setkeyvalue?key=$GithubContextInput2-$GithubContextInput3-state" -Headers $headers -Method POST -Body $body -ContentType "application/json"
+          "$GithubContextInput4 -Command $command"
+          Write-Host "Data JSON: "
+          $dataJson
+        } else {
+          Start-Sleep -Seconds 10
+        }
       }
-      $url = "https://netperfapi.azurewebsites.net"
-      $ApprovedCommandsJson = Get-Content -Path "netperfrepo/approved-commands.json" -Raw
-      do {
-        try {
-          $Response = Invoke-WebRequest -Uri "$url/getkeyvalue?key=$GithubContextInput2-$GithubContextInput3-state" -Headers $headers
-          $data = $Response.Content
-          if ($data -eq "done") {
-            $found = $true
-            break
-          }
-          $dataJson = ConvertFrom-Json $data
-          if ($dataJson.SeqNum -lt $dataJson.Commands.Count) {
-            $command = $dataJson.Commands[$dataJson.SeqNum]
-            $dataJson.SeqNum++
-            $dataJson = @{
-              value=$dataJson
-            }
-            $body = $dataJson | ConvertTo-Json
-            Invoke-WebRequest -Uri "$url/setkeyvalue?key=${{ github.run_id }}-${{ env.env_str }}-state" -Headers $headers -Method POST -Body $body -ContentType "application/json"
-            
-            if ($isWindows) {
-                $fullPath = "${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl"
-                $SecNetPerfPath = "$fullPath/secnetperf"
-                $env:LD_LIBRARY_PATH = "${env:LD_LIBRARY_PATH}:$fullPath"
-                chmod +x "$SecNetPerfPath"
-            }
-            ${{ inputs.callback-script-path }} -Command $command
-            Write-Host "Data JSON: "
-            $dataJson
-          } else {
-            Start-Sleep -Seconds 10
-          }
-        }
-        catch {
-          Write-Output "Client not done yet. Exit reason: $_"
-          Start-Sleep -Seconds 30
-        }
-      } while (-not $found)
+      catch {
+        Write-Output "Client not done yet. Exit reason: $_"
+        Start-Sleep -Seconds 30
+      }
+    } while (-not $found)
 }

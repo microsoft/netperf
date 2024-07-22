@@ -54,7 +54,7 @@ runs:
     if: ${{ env.role == 'server' && env.OS != 'windows' }}
     run: |
       ./netperfrepo/1es-machine-manager.sh -Action 'Broadcast_IP' -GithubContextInput1 '${{ inputs.syncer_secret }} -GithubContextInput2 '${{ github.run_id }}' -GithubContextInput3 '${{ env.env_str }}''
-    shell: pwsh 
+    shell: pwsh
   - name: (Client) Poll for an ip address uploaded by the server, set netperf-peer.
     if: ${{ env.role == 'client' && env.OS == 'windows' }}
     run: |
@@ -66,45 +66,13 @@ runs:
       ./netperfrepo/1es-machine-manager.sh -Action 'Poll_IP' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}' -GithubContextInput3 '${{ env.env_str }}'
     shell: pwsh
   - name: (Server | no remote pwsh) Polls for client instructions from remote cache
-    if: ${{ env.role == 'server' && env.remote_powershell_supported == 'FALSE' }}
+    if: ${{ env.role == 'server' && env.OS == 'windows' }}
     run: |
-      $found = $false
-      $headers = @{
-        "secret" = "${{ inputs.syncer_secret }}"
-      }
-      $url = "https://netperfapi.azurewebsites.net"
-      $ApprovedCommandsJson = Get-Content -Path "netperfrepo/approved-commands.json" -Raw
-      do {
-        try {
-          $Response = Invoke-WebRequest -Uri "$url/getkeyvalue?key=${{ github.run_id }}-${{ env.env_str }}-state" -Headers $headers
-          $data = $Response.Content
-          if ($data -eq "done") {
-            $found = $true
-            break
-          }
-          $dataJson = ConvertFrom-Json $data
-          if ($dataJson.SeqNum -lt $dataJson.Commands.Count) {
-            $command = $dataJson.Commands[$dataJson.SeqNum]
-            $dataJson.SeqNum++
-            $dataJson = @{
-              value=$dataJson
-            }
-            $body = $dataJson | ConvertTo-Json
-            Invoke-WebRequest -Uri "$url/setkeyvalue?key=${{ github.run_id }}-${{ env.env_str }}-state" -Headers $headers -Method POST -Body $body -ContentType "application/json"
-            $fullPath = "${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl"
-            $SecNetPerfPath = "$fullPath/secnetperf"
-            $env:LD_LIBRARY_PATH = "${env:LD_LIBRARY_PATH}:$fullPath"
-            chmod +x "$SecNetPerfPath"
-            ${{ inputs.callback-script-path }} -Command $command
-            Write-Host "Data JSON: "
-            $dataJson
-          } else {
-            Start-Sleep -Seconds 10
-          }
-        }
-        catch {
-          Write-Output "Client not done yet. Exit reason: $_"
-          Start-Sleep -Seconds 30
-        }
-      } while (-not $found)
+      "C:\Program Files\PowerShell\7\pwsh.exe" -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Poll_client_instructions' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}' -GithubContextInput3 '${{ env.env_str }}' -GithubContextInput4 '${{ inputs.callback-script-path }}'"
+    shell: cmd
+  - name: (Server | no remote pwsh) Polls for client instructions from remote cache
+    if: ${{ env.role == 'server' && env.OS != 'windows' }}
+    run: |
+      ./netperfrepo/1es-machine-manager.sh -Action 'Poll_client_instructions' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}' -GithubContextInput3 '${{ env.env_str }}' -GithubContextInput4 '${{ inputs.callback-script-path }}'
     shell: pwsh
+
