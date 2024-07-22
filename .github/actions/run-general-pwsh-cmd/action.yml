@@ -8,10 +8,18 @@ inputs:
 runs:
   using: "composite"
   steps:
+  - name: Squeeze code to 1 line
+    if: ${{ env.OS == 'windows' }}
+    id: squeeze_code
+    shell: python
+    run: |
+      powershell_code = """${{ inputs.run-cmd }}"""
+      squeezed_code = powershell_code.replace('\n', ';').replace('\r', ';')
+      print(f"::set-output name=squeezed_code::{squeezed_code}")
   - name: Run Pwsh Command
     if: ${{ env.OS == 'windows' }}
     run: |
-      "C:\Program Files\PowerShell\7\pwsh.exe" -Command "${{ inputs.run-cmd }}"
+      "C:\Program Files\PowerShell\7\pwsh.exe" -Command "${{ steps.squeeze_code.outputs.squeezed_code }}"
     shell: cmd
   - name: Run Pwsh Command
     if: ${{ env.OS != 'windows' }}
