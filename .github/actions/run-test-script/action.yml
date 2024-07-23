@@ -19,6 +19,7 @@ runs:
   - name: Set context and import the netperf-lib.psm1 library
     id: netperf_context
     if: ${{ env.OS == 'windows' }}
+    shell: python
     run: |
       import json
       matrix = json.loads("""${{ inputs.matrix }}""")
