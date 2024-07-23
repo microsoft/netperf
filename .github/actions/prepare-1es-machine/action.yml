@@ -119,7 +119,8 @@ runs:
     shell: cmd
   - name: Verify powershell installation
     if: ${{ runner.os == 'Windows' }}
-    run: "C:\Program Files\PowerShell\7\pwsh.exe" -Command "$PSVersionTable.PSVersion"
+    run: |
+        "C:\Program Files\PowerShell\7\pwsh.exe" -Command "$PSVersionTable.PSVersion"
     shell: cmd
   - name: Add to PATH in GitHub Actions
     if: ${{ runner.os == 'Windows' }}
