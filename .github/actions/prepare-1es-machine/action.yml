@@ -108,6 +108,7 @@ runs:
           dir "C:\Program Files\PowerShell\"
           echo Add Powershell to PATH
           setx PATH "%PATH%;C:\Program Files\PowerShell"
+          refreshenv
       ) else (
           echo Failed to download the PowerShell 7 installer.
       )
@@ -119,9 +120,9 @@ runs:
     run: systeminfo
     shell: cmd
   - name: Verify powershell installation
-    run: |
-      "C:\Program Files\PowerShell\7\pwsh.exe" -Command "$PSVersionTable.PSVersion"
-    shell: cmd
+    if: ${{ runner.os == 'Windows' }}
+    run: $PSVersionTable.PSVersion
+    shell: pwsh
   - name: Add to PATH in GitHub Actions
     if: ${{ runner.os == 'Windows' }}
     run: echo "::add-path::C:\Program Files\PowerShell\7"
