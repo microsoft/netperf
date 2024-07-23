@@ -25,8 +25,8 @@ foreach ($entry in $MatrixJson) {
         if ($entry.os -match "windows-2022") {
             $client | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value $Windows2022Pool
             $server | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value $Windows2022Pool
-            $client | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'TRUE'
-            $server | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'TRUE'
+            $client | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
+            $server | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
         }
         elseif ($entry.os -match "ubuntu-20.04") {
             $client | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value $Ubuntu2004Pool
