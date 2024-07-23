@@ -104,11 +104,6 @@ runs:
           echo Installing PowerShell 7...
           msiexec /i %msi_path% /quiet /norestart
           echo PowerShell 7 installation completed.
-          echo Check Program Files
-          dir "C:\Program Files\PowerShell\"
-          echo Add Powershell to PATH
-          setx PATH "%PATH%;C:\Program Files\PowerShell"
-          refreshenv
       ) else (
           echo Failed to download the PowerShell 7 installer.
       )
@@ -118,6 +113,13 @@ runs:
   - name: Print information about the current windows system
     if: ${{ runner.os == 'Windows' }}
     run: systeminfo
+    shell: cmd
+  - name: Add pwsh to PATH + Refresh environment variables
+    if: ${{ runner.os == 'Windows' }}
+    run: |
+      echo "Adding PowerShell to PATH..."
+      setx PATH "%PATH%;C:\Program Files\PowerShell"
+      "C:\Program Files\PowerShell\7\pwsh.exe" -Command '$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")'
     shell: cmd
   - name: Verify powershell installation
     if: ${{ runner.os == 'Windows' }}
