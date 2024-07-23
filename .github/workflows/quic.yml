@@ -226,7 +226,7 @@ jobs:
       if: ${{ matrix.role == 'client' }}
       uses: ./netperfrepo/.github/actions/run-test-script
       with:
-        run-cmd: |
+        run-script-cmd: |
           ./scripts/secnetperf.ps1 `
           -LogProfile ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }} `
           -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} `
