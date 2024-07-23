@@ -119,8 +119,8 @@ runs:
     shell: cmd
   - name: Verify powershell installation
     if: ${{ runner.os == 'Windows' }}
-    run: $PSVersionTable.PSVersion
-    shell: pwsh
+    run: "C:\Program Files\PowerShell\7\pwsh.exe" -Command "$PSVersionTable.PSVersion"
+    shell: cmd
   - name: Add to PATH in GitHub Actions
     if: ${{ runner.os == 'Windows' }}
     run: echo "::add-path::C:\Program Files\PowerShell\7"
@@ -139,4 +139,3 @@ runs:
     uses: actions/setup-python@v2
     with:
       python-version: '3.x'
-      
