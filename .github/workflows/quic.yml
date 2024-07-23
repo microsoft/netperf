@@ -237,6 +237,7 @@ jobs:
           -tls ${{ matrix.tls }} `
           -io ${{ matrix.io }} `
           -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
+          
         matrix: '${{ toJson(matrix) }}'
         syncer-secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
     - name: Stop 1ES Machine

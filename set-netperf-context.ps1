@@ -28,8 +28,10 @@ if ($envstr.Length -lt 1 -or $GithubRunId.Length -lt 1) {
 
 Write-Host "Current environment string: $envstr"
 if ($DeserializedMatrix.remote_powershell_supported -eq 'TRUE') {
+    Write-Host "Remote powershell is supported."
     $env:netperf_remote_powershell_supported = $true
 } else {
+    Write-Host "Remote powershell is not supported."
     $env:netperf_remote_powershell_supported = $false
 }
 
