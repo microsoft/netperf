@@ -1,42 +1,46 @@
 name: "Run Test Script"
 description: "This action runs multiple steps as a composite action."
 inputs:
+  run-script-cmd:
+    description: "The serialized matrix of values to use for the composite action."
+    type: string
+    required: true
   matrix:
     description: "The serialized matrix of values to use for the composite action."
     type: string
     required: true
-  syncer_secret:
-    description: "The secret to use for the syncer."
+  syncer-secret:
+    description: "For use to sync with the remote cache."
     type: string
     required: true
 runs:
   using: "composite"
   steps:
-  - name: Deserializes the matrix input
-    id: deserialize
+  - name: Set context and import the netperf-lib.psm1 library
+    id: netperf_context
+    if: ${{ env.OS == 'windows' }}
     run: |
-      $matrix = ConvertFrom-Json '${{ inputs.matrix }}'
-      $remote_powershell_supported = $matrix.remote_powershell_supported
-      $role = $matrix.role
-      $env_str = $matrix.env_str
-      echo "remote_powershell_supported=$remote_powershell_supported" >> $env:GITHUB_ENV
-      echo "role=$role" >> $env:GITHUB_ENV
-      echo "env_str=$env_str" >> $env:GITHUB_ENV
-    shell: pwsh
-  - name: (Client | no remote pwsh) Uploads ACK to remote cache
-    if: ${{ env.role == 'client' && env.remote_powershell_supported == 'FALSE' }}
+      import json
+      matrix = json.loads("""${{ inputs.matrix }}""")
+      json_str = json.dumps(matrix).replace('"', '\\"').replace('\n', ' ').replace('\r', ' ')
+      prep_code = f"./netperfrepo/set-netperf-context-ps1 -Matrix {json_str} -SyncerSecret ${{ inputs.syncer-secret }} -GithubRunId ${{ github.run_id }};"
+      prep_code += "Import-Module ./netperfrepo/netperf-lib.psm1;"
+      print(f"::set-output name=netperf_context::{prep_code}")
+  - name: Squeeze code to 1 line
+    if: ${{ env.OS == 'windows' }}
+    id: squeeze_code
+    shell: python
     run: |
-      $headers = @{
-        "secret" = "${{ inputs.syncer_secret }}"
-      }
-      Invoke-WebRequest -Uri "https://netperfapi.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}-${{ env.env_str }}-state&value=done" -Headers $headers -Method Post
-    shell: pwsh
-  - name: (Client | yes remote pwsh) Creates a 'done.txt' file to signal the server
-    if: ${{ env.role == 'client' && env.remote_powershell_supported == 'TRUE' }}
+      run_script_powershell_code = """${{ inputs.run-script-cmd }}"""
+      squeezed_code = run_script_powershell_code.replace('\n', '').replace('\r', '').replace('`', ' ')
+      print(f"::set-output name=squeezed_code::{squeezed_code}")
+  - name: Run Pwsh Command
+    if: ${{ env.OS == 'windows' }}
     run: |
-      $Session = New-PSSession -ComputerName netperf-peer
-      Invoke-Command -Session $Session -ScriptBlock {
-        New-Item -ItemType File -Name "done.txt" -Path "C:\"
-      }
+      "C:\Program Files\PowerShell\7\pwsh.exe" -Command "${{ steps.netperf_context.outputs.netperf_context }} ${{ steps.squeeze_code.outputs.squeezed_code }}"
+    shell: cmd
+  - name: Run Pwsh Command
+    if: ${{ env.OS != 'windows' }}
+    run: |
+      ${{ inputs.run-cmd }}
     shell: pwsh
-
