@@ -224,11 +224,9 @@ jobs:
           Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/watermark_regression.json" -OutFile "watermark_regression.json"
     - name: Run Secnetperf Script
       if: ${{ matrix.role == 'client' }}
-      uses: ./netperfrepo/.github/actions/run-general-pwsh-cmd
+      uses: ./netperfrepo/.github/actions/run-test-script
       with:
         run-cmd: |
-          ./netperfrepo/set-netperf-context.ps1 -Matrix '${{ toJson(matrix) }}' -GithubRunId '${{ github.run_id }}' -SyncerSecret '${{ secrets.NETPERF_SYNCER_SECRET }}'
-          Import-Module ./netperfrepo/netperf-lib.psm1
           ./scripts/secnetperf.ps1 `
           -LogProfile ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }} `
           -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} `
@@ -239,6 +237,8 @@ jobs:
           -tls ${{ matrix.tls }} `
           -io ${{ matrix.io }} `
           -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
+        matrix: '${{ toJson(matrix) }}'
+        syncer-secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
     - name: Stop 1ES Machine
       uses: ./netperfrepo/.github/actions/stop-1es-machine
       with:
