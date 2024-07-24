@@ -142,7 +142,7 @@ if ($Action -eq "Poll_client_instructions") {
           }
           $body = $dataJson | ConvertTo-Json
           Invoke-WebRequest -Uri "$url/setkeyvalue?key=$GithubContextInput2-$GithubContextInput3-state" -Headers $headers -Method POST -Body $body -ContentType "application/json"
-          "$GithubContextInput4 -Command $command"
+          Invoke-Expression "$GithubContextInput4 -Command '$command'"
           Write-Host "Data JSON: "
           $dataJson
         } else {
