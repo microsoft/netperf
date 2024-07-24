@@ -23,6 +23,14 @@ if ($Command -eq "/home/secnetperf/_work/quic/artifacts/bin/linux/x64_Release_op
 } elseif ($Command -eq "/home/secnetperf/_work/quic/artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:lowlat -io:epoll") {
     SetLinuxLibPath
     ./artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:lowlat -io:epoll | Out-Null
+} elseif ($Command -eq "C:/_work/quic/artifacts/bin/windows/x64_Release_schannel/secnetperf -exec:maxtput -io:iocp -stats:1") {
+    ./artifacts/bin/windows/x64_Release_schannel/secnetperf -exec:maxtput -io:iocp -stats:1
+} elseif ($Command -eq "C:/_work/quic/artifacts/bin/windows/x64_Release_schannel/secnetperf -exec:maxtput -io:iocp") {
+    ./artifacts/bin/windows/x64_Release_schannel/secnetperf -exec:maxtput -io:iocp
+} elseif ($Command -eq "C:/_work/quic/artifacts/bin/windows/x64_Release_schannel/secnetperf -exec:lowlat -io:iocp -stats:1") {
+    ./artifacts/bin/windows/x64_Release_schannel/secnetperf -exec:lowlat -io:iocp -stats:1
+} elseif ($Command -eq "C:/_work/quic/artifacts/bin/windows/x64_Release_schannel/secnetperf -exec:lowlat -io:iocp") {
+    ./artifacts/bin/windows/x64_Release_schannel/secnetperf -exec:lowlat -io:iocp
 } else {
     throw "Invalid command: $Command"
 }
