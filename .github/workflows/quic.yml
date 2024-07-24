@@ -176,7 +176,7 @@ jobs:
 
   run-secnetperf-1es:
     name: azure-${{ matrix.role }}-${{ matrix.os }}-${{ matrix.io }}-${{ matrix.tls }}-${{ matrix.arch }}
-    needs: [prepare-matrix]
+    needs: [prepare-matrix, build-windows]
     strategy:
       fail-fast: false
       matrix:
