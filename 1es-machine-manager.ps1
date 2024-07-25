@@ -27,10 +27,10 @@ if ($Action -eq "Disable_Windows_Defender") {
 }
 
 if ($Action -eq "Broadcast_IP") {
-    if ($isWindows) {
-        $ipAddress = (Get-NetIpAddress -AddressFamily IPv4).IpAddress
-    } else {
+    if ($isWindows -eq $false) {
         $ipAddress = ip addr | grep 'inet ' | grep '10' | awk '{print $2}' | cut -d'/' -f1
+    } else {
+      $ipAddress = (Get-NetIpAddress -AddressFamily IPv4).IpAddress
     }
     $headers = @{
         "secret" = $GithubContextInput1
