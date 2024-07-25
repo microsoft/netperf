@@ -35,7 +35,7 @@ if ($Action -eq "Broadcast_IP") {
     $headers = @{
         "secret" = $GithubContextInput1
     }
-    Invoke-WebRequest -Uri "https://netperfapi.azurewebsites.net/setkeyvalue?key=$GithubContextInput2-$GithubContextInput3-ipaddress&value=$ipAddress" -Headers $headers -Method Post
+    Invoke-WebRequest -Uri "https://netperfapi.azurewebsites.net/setkeyvalue?key=$GithubContextInput2-$GithubContextInput3-ipaddress&value=$ipAddress" -Headers $headers -Method Post -UseBasicParsing
 }
 
 if ($Action -eq "Poll_IP") {
@@ -47,7 +47,7 @@ if ($Action -eq "Poll_IP") {
     do {
         Write-Output "Checking for ip address..."
         try {
-            $Response = Invoke-WebRequest -Uri $uri -Headers $headers
+            $Response = Invoke-WebRequest -Uri $uri -Headers $headers -UseBasicParsing
             if (!($Response.StatusCode -eq 200)) {
             throw "Failed to get ip address. Status code: $($Response.StatusCode)"
             }
@@ -127,7 +127,7 @@ if ($Action -eq "Poll_client_instructions") {
     $url = "https://netperfapi.azurewebsites.net"
     do {
       try {
-        $Response = Invoke-WebRequest -Uri "$url/getkeyvalue?key=$GithubContextInput2-$GithubContextInput3-state" -Headers $headers
+        $Response = Invoke-WebRequest -Uri "$url/getkeyvalue?key=$GithubContextInput2-$GithubContextInput3-state" -Headers $headers -UseBasicParsing
         $data = $Response.Content
         if ($data -eq "done") {
           $found = $true
@@ -141,7 +141,7 @@ if ($Action -eq "Poll_client_instructions") {
             value=$dataJson
           }
           $body = $dataJson | ConvertTo-Json
-          Invoke-WebRequest -Uri "$url/setkeyvalue?key=$GithubContextInput2-$GithubContextInput3-state" -Headers $headers -Method POST -Body $body -ContentType "application/json"
+          Invoke-WebRequest -Uri "$url/setkeyvalue?key=$GithubContextInput2-$GithubContextInput3-state" -Headers $headers -Method POST -Body $body -ContentType "application/json" -UseBasicParsing
           Invoke-Expression "$GithubContextInput4 -Command '$command'"
           Write-Host "Data JSON: "
           $dataJson
@@ -160,7 +160,7 @@ if ($Action -eq "Stop-1es-machine") {
   headers = @{
     "secret" = "$GithubContextInput1"
   }
-  Invoke-WebRequest -Uri "https://netperfapi.azurewebsites.net/setkeyvalue?key=$GithubContextInput2-$GithubContextInput3-state&value=done" -Headers $headers -Method Post
+  Invoke-WebRequest -Uri "https://netperfapi.azurewebsites.net/setkeyvalue?key=$GithubContextInput2-$GithubContextInput3-state&value=done" -Headers $headers -Method Post -UseBasicParsing
 }
 
 if ($Action -eq "deprecated_stop-1es-machine-remote-pwsh") {
