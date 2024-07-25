@@ -121,15 +121,10 @@ runs:
     if: ${{ runner.os == 'Windows' }}
     run: systeminfo
     shell: cmd
-  - name: Verify powershell installation 1
+  - name: Verify powershell installation
     if: ${{ runner.os == 'Windows' }}
     run: |
-        $PSVersionTable.PSVersion
-    shell: pwsh
-  - name: Verify powershell installation 2
-    if: ${{ runner.os == 'Windows' }}
-    run: |
-        "C:\Program Files\PowerShell\7\pwsh.exe" -Command "$PSVersionTable.PSVersion"
+        powershell -Command "$PSVersionTable.PSVersion"
     shell: cmd
   - name: Add to PATH in GitHub Actions
     if: ${{ runner.os == 'Windows' }}
@@ -142,7 +137,7 @@ runs:
   - name: Lowercase OS and Set Environment Variable
     if: ${{ runner.os == 'Windows' }}
     run: |
-      "C:\Program Files\PowerShell\7\pwsh.exe" -Command "echo 'OS=windows' >> $env:GITHUB_ENV"
+      powershell -Command "echo 'OS=windows' >> $env:GITHUB_ENV"
     shell: cmd
   - name: Set up Python
     if: ${{ env.OS == 'windows' }}

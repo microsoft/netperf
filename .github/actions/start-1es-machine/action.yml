@@ -28,7 +28,7 @@ runs:
   - name: Deserialize Matrix
     if: ${{ env.OS == 'windows' }}
     run: |
-      "C:\Program Files\PowerShell\7\pwsh.exe" -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Deserialize_matrix' -GithubContextInput1 '${{ steps.escape_json.outputs.escaped_json }}'"
+      powershell -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Deserialize_matrix' -GithubContextInput1 '${{ steps.escape_json.outputs.escaped_json }}'"
     shell: cmd
   - name: Deserialize Matrix
     if: ${{ env.OS != 'windows' }}
@@ -38,12 +38,12 @@ runs:
   - name: Disable Windows Defender / Firewall
     if: ${{ env.OS == 'windows' }}
     run: |
-      "C:\Program Files\PowerShell\7\pwsh.exe" -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Disable_Windows_Defender'"
+      powershell -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Disable_Windows_Defender'"
     shell: cmd
   - name: (Server) Upload IP address to shared cache
     if: ${{ env.role == 'server' && env.OS == 'windows' }}
     run: |
-      "C:\Program Files\PowerShell\7\pwsh.exe" -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Broadcast_IP' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}' -GithubContextInput3 '${{ env.env_str }}'"
+      powershell -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Broadcast_IP' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}' -GithubContextInput3 '${{ env.env_str }}'"
     shell: cmd
   - name: (Server) Upload IP address to shared cache
     if: ${{ env.role == 'server' && env.OS != 'windows' }}
@@ -53,7 +53,7 @@ runs:
   - name: (Client) Poll for an ip address uploaded by the server, set netperf-peer.
     if: ${{ env.role == 'client' && env.OS == 'windows' }}
     run: |
-      "C:\Program Files\PowerShell\7\pwsh.exe" -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Poll_IP' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}' -GithubContextInput3 '${{ env.env_str }}'"
+      powershell -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Poll_IP' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}' -GithubContextInput3 '${{ env.env_str }}'"
     shell: cmd
   - name: (Client) Poll for an ip address uploaded by the server, set netperf-peer.
     if: ${{ env.role == 'client' && env.OS != 'windows' }}
@@ -63,7 +63,7 @@ runs:
   - name: (Server | no remote pwsh) Polls for client instructions from remote cache
     if: ${{ env.role == 'server' && env.OS == 'windows' }}
     run: |
-      "C:\Program Files\PowerShell\7\pwsh.exe" -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Poll_client_instructions' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}' -GithubContextInput3 '${{ env.env_str }}' -GithubContextInput4 '${{ inputs.callback-script-path }}'"
+      powershell -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Poll_client_instructions' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}' -GithubContextInput3 '${{ env.env_str }}' -GithubContextInput4 '${{ inputs.callback-script-path }}'"
     shell: cmd
   - name: (Server | no remote pwsh) Polls for client instructions from remote cache
     if: ${{ env.role == 'server' && env.OS != 'windows' }}
