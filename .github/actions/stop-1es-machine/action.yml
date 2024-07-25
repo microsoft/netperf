@@ -30,6 +30,7 @@ runs:
     if: ${{ env.OS != 'windows' }}
     run: |
       ./netperfrepo/1es-machine-manager.sh -Action 'Deserialize_matrix' -GithubContextInput1 '${{ inputs.matrix }}'
+    shell: pwsh
   - name: Send ACK to cache
     if: ${{ env.OS == 'windows' }}
     run: |
