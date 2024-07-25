@@ -12,31 +12,31 @@ inputs:
 runs:
   using: "composite"
   steps:
-  - name: Deserializes the matrix input
-    id: deserialize
+  - name: Run Python Script to Escape JSON
+    if: ${{ env.OS == 'windows' }}
+    id: escape_json
     run: |
-      $matrix = ConvertFrom-Json '${{ inputs.matrix }}'
-      $remote_powershell_supported = $matrix.remote_powershell_supported
-      $role = $matrix.role
-      $env_str = $matrix.env_str
-      echo "remote_powershell_supported=$remote_powershell_supported" >> $env:GITHUB_ENV
-      echo "role=$role" >> $env:GITHUB_ENV
-      echo "env_str=$env_str" >> $env:GITHUB_ENV
-    shell: pwsh
-  - name: (Client | no remote pwsh) Uploads ACK to remote cache
-    if: ${{ env.role == 'client' && env.remote_powershell_supported == 'FALSE' }}
+      import json
+      matrix = json.loads("""${{ inputs.matrix }}""")
+      json_str = json.dumps(matrix).replace('"', '\\"').replace('\n', ' ').replace('\r', ' ')
+      print(f"::set-output name=escaped_json::{json_str}")
+    shell: python
+  - name: Deserialize Matrix
+    if: ${{ env.OS == 'windows' }}
     run: |
-      $headers = @{
-        "secret" = "${{ inputs.syncer_secret }}"
-      }
-      Invoke-WebRequest -Uri "https://netperfapi.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}-${{ env.env_str }}-state&value=done" -Headers $headers -Method Post
-    shell: pwsh
-  - name: (Client | yes remote pwsh) Creates a 'done.txt' file to signal the server
-    if: ${{ env.role == 'client' && env.remote_powershell_supported == 'TRUE' }}
+      "C:\Program Files\PowerShell\7\pwsh.exe" -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Deserialize_matrix' -GithubContextInput1 '${{ steps.escape_json.outputs.escaped_json }}'"
+    shell: cmd
+  - name: Deserialize Matrix
+    if: ${{ env.OS != 'windows' }}
     run: |
-      $Session = New-PSSession -ComputerName netperf-peer
-      Invoke-Command -Session $Session -ScriptBlock {
-        New-Item -ItemType File -Name "done.txt" -Path "C:\"
-      }
+      ./netperfrepo/1es-machine-manager.sh -Action 'Deserialize_matrix' -GithubContextInput1 '${{ inputs.matrix }}'
+  - name: Send ACK to cache
+    if: ${{ env.OS == 'windows' }}
+    run: |
+      "C:\Program Files\PowerShell\7\pwsh.exe" -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Stop-1es-machine' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}' -GithubContextInput3 '${{ env.env_str }}'"
+    shell: cmd
+  - name: Send ACK to cache
+    if: ${{ env.OS != 'windows' }}
+    run: |
+      ./netperfrepo/1es-machine-manager.sh -Action 'Stop-1es-machine' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}' -GithubContextInput3 '${{ env.env_str }}'
     shell: pwsh
-

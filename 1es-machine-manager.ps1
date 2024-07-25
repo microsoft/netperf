@@ -155,3 +155,17 @@ if ($Action -eq "Poll_client_instructions") {
       }
     } while (-not $found)
 }
+
+if ($Action -eq "Stop-1es-machine") {
+  headers = @{
+    "secret" = "$GithubContextInput1"
+  }
+  Invoke-WebRequest -Uri "https://netperfapi.azurewebsites.net/setkeyvalue?key=$GithubContextInput2-$GithubContextInput3-state&value=done" -Headers $headers -Method Post
+}
+
+if ($Action -eq "deprecated_stop-1es-machine-remote-pwsh") {
+  $Session = New-PSSession -ComputerName netperf-peer
+  Invoke-Command -Session $Session -ScriptBlock {
+    New-Item -ItemType File -Name "done.txt" -Path "C:\"
+  }
+}
