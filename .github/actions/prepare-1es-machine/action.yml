@@ -113,10 +113,6 @@ runs:
 
   #     endlocal
   #   shell: cmd
-  - name: Setup PowerShell
-    uses: actions/setup-powershell@v1
-    with:
-      powershell-version: '7.3.6'
   - name: Print information about the current windows system
     if: ${{ runner.os == 'Windows' }}
     run: systeminfo
