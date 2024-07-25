@@ -221,7 +221,7 @@ jobs:
       with:
         run-cmd: |
           Write-Host "Downloading Watermark_Regression.json file"
-          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/watermark_regression.json" -OutFile "watermark_regression.json"
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/watermark_regression.json" -OutFile "watermark_regression.json" -UseBasicParsing
     - name: Run Secnetperf Script
       if: ${{ matrix.role == 'client' }}
       uses: ./netperfrepo/.github/actions/run-test-script

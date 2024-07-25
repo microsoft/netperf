@@ -19,7 +19,7 @@ runs:
   - name: Run Pwsh Command
     if: ${{ env.OS == 'windows' }}
     run: |
-      "C:\Program Files\PowerShell\7\pwsh.exe" -Command "${{ steps.squeeze_code.outputs.squeezed_code }}"
+      powershell -Command "${{ steps.squeeze_code.outputs.squeezed_code }}"
     shell: cmd
   - name: Run Pwsh Command
     if: ${{ env.OS != 'windows' }}
