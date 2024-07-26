@@ -62,7 +62,7 @@ function NetperfWaitServerFinishExecution {
 
     for ($i = 0; $i -lt $maxattempts; $i++) {
         $UnblockRoutine.Invoke()
-        Start-Sleep -Seconds $waittime
+        Start-Sleep -Seconds $WaitPerAttempt
         $headers = @{
             "secret" = "$env:netperf_syncer_secret"
         }
