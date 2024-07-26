@@ -145,6 +145,7 @@ if ($Action -eq "Poll_client_instructions") {
           try {
             if ($command.Contains("Install_XDP")) {
               Write-Host "(SANITY CHECK) Downloading XDP installer"
+              whoami
               $installerUri = $command.Split(";")[1]
               $msiPath = "./artifacts/xdp.msi"
               Invoke-WebRequest -Uri $installerUri -OutFile $msiPath -UseBasicParsing

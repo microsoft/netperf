@@ -49,6 +49,7 @@ if ($Command -eq "/home/secnetperf/_work/quic/artifacts/bin/linux/x64_Release_op
     ./artifacts/bin/windows/x64_Release_schannel/secnetperf -exec:lowlat -io:iocp
 } elseif ($Command.Contains("Install_XDP")) {
     Write-Host "(SERVER) Downloading XDP installer"
+    whoami
     $installerUri = $Command.Split(";")[1]
     $msiPath = "./artifacts/xdp.msi"
     Invoke-WebRequest -Uri $installerUri -OutFile $msiPath -UseBasicParsing
