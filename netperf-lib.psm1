@@ -15,6 +15,7 @@ function NetperfSendCommand {
         [Parameter(Mandatory = $true)]
         [string]$Command
     )
+    Write-Host "Sending command: $Command"
     # Should send a command to the shared cache and wait for the server process to execute said command before exiting.
     $headers = @{
         "secret" = "$env:netperf_syncer_secret"
@@ -22,7 +23,7 @@ function NetperfSendCommand {
     $url = "$env:netperf_api_url"
     $RunId = "$env:netperf_run_id"
     try {
-        $Response = Invoke-WebRequest -Uri "$url/getkeyvalue?key=$RunId" -Headers $headers
+        $Response = Invoke-WebRequest -Uri "$url/getkeyvalue?key=$RunId" -Headers $headers -UseBasicParsing
     } catch {
         Write-Host "Unable to fetch state. Creating a new one now."
         $state = [pscustomobject]@{
@@ -31,7 +32,7 @@ function NetperfSendCommand {
             "Commands" = @($Command)
         }}
         $StateJson = $state | ConvertTo-Json
-        $Response = Invoke-WebRequest -Uri "$url/setkeyvalue?key=$RunId" -Headers $headers -Method Post -Body $StateJson -ContentType "application/json"
+        $Response = Invoke-WebRequest -Uri "$url/setkeyvalue?key=$RunId" -Headers $headers -Method Post -Body $StateJson -ContentType "application/json" -UseBasicParsing
         if ($Response.StatusCode -ne 200) {
             throw "Failed to set the key value!"
         }
@@ -43,7 +44,7 @@ function NetperfSendCommand {
         value=$CurrState
     }
     $StateJson = $CurrState | ConvertTo-Json
-    $Response = Invoke-WebRequest -Uri "$url/setkeyvalue?key=$RunId" -Headers $headers -Method Post -Body $StateJson -ContentType "application/json"
+    $Response = Invoke-WebRequest -Uri "$url/setkeyvalue?key=$RunId" -Headers $headers -Method Post -Body $StateJson -ContentType "application/json" -UseBasicParsing
     if ($Response.StatusCode -ne 200) {
         throw "Failed to set the key value!"
     }
@@ -67,7 +68,7 @@ function NetperfWaitServerFinishExecution {
         }
         $url = "$env:netperf_api_url"
         $RunId = "$env:netperf_run_id"
-        $Response = Invoke-WebRequest -Uri "$url/getkeyvalue?key=$RunId" -Headers $headers
+        $Response = Invoke-WebRequest -Uri "$url/getkeyvalue?key=$RunId" -Headers $headers -UseBasicParsing
         if (!($Response.StatusCode -eq 200)) {
             throw "Remote Cache State Not Set!"
         }
