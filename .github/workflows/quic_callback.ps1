@@ -53,6 +53,8 @@ if ($Command -eq "/home/secnetperf/_work/quic/artifacts/bin/linux/x64_Release_op
     $msiPath = "./artifacts/xdp.msi"
     Invoke-WebRequest -Uri $installerUri -OutFile $msiPath -UseBasicParsing
     Write-Host "(SERVER) Installing XDP driver locally"
+    $Size = (Get-Item $msiPath).Length
+    Write-Host "MSI file size: $Size"
     msiexec.exe /i $msiPath /quiet | Out-Host
     Wait-DriverStarted "xdp" 10000
 } elseif ($Command -eq "Install_WSK") {
