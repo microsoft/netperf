@@ -143,6 +143,17 @@ if ($Action -eq "Poll_client_instructions") {
           $body = $dataJson | ConvertTo-Json
           Invoke-WebRequest -Uri "$url/setkeyvalue?key=$GithubContextInput2-$GithubContextInput3-state" -Headers $headers -Method POST -Body $body -ContentType "application/json" -UseBasicParsing
           try {
+            if ($command.Contains("Install_XDP")) {
+              Write-Host "(SANITY CHECK) Downloading XDP installer"
+              $installerUri = $command.Split(";")[1]
+              $msiPath = "./artifacts/xdp.msi"
+              Invoke-WebRequest -Uri $installerUri -OutFile $msiPath -UseBasicParsing
+              Write-Host "(SANITY CHECK) Installing XDP driver locally"
+              $Size = (Get-Item $msiPath).Length
+              Write-Host "(SANITY CHECK) MSI file size: $Size"
+              msiexec.exe /i $msiPath /quiet | Out-Host
+              Start-Sleep -Seconds 5
+            }
             Invoke-Expression "$GithubContextInput4 -Command '$command'"
           } catch {
             throw "CALLBACK_ERROR: $_"
