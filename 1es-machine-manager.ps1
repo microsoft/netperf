@@ -142,7 +142,11 @@ if ($Action -eq "Poll_client_instructions") {
           }
           $body = $dataJson | ConvertTo-Json
           Invoke-WebRequest -Uri "$url/setkeyvalue?key=$GithubContextInput2-$GithubContextInput3-state" -Headers $headers -Method POST -Body $body -ContentType "application/json" -UseBasicParsing
-          Invoke-Expression "$GithubContextInput4 -Command '$command'"
+          try {
+            Invoke-Expression "$GithubContextInput4 -Command '$command'"
+          } catch {
+            throw "CALLBACK_ERROR: $_"
+          }
           Write-Host "Data JSON: "
           $dataJson
         } else {
@@ -150,7 +154,10 @@ if ($Action -eq "Poll_client_instructions") {
         }
       }
       catch {
-        Write-Output "Client not done yet. Exit reason: $_"
+        if ($_.ToString().Contains("CALLBACK_ERROR")) {
+          throw $_
+        }
+        Write-Output "Client not done yet. Silently ignoring non-callback error: $_"
         Start-Sleep -Seconds 30
       }
     } while (-not $found)

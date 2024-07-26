@@ -11,6 +11,22 @@ function SetLinuxLibPath {
     chmod +x "$SecNetPerfPath"
 }
 
+# Waits for a given driver to be started up to a given timeout.
+function Wait-DriverStarted {
+    param ($DriverName, $TimeoutMs)
+    $stopWatch = [system.diagnostics.stopwatch]::StartNew()
+    while ($stopWatch.ElapsedMilliseconds -lt $TimeoutMs) {
+        $Driver = Get-Service -Name $DriverName -ErrorAction Ignore
+        if ($null -ne $Driver -and $Driver.Status -eq "Running") {
+            Write-Host "$DriverName is running"
+            return
+        }
+        Start-Sleep -Seconds 0.1 | Out-Null
+    }
+    throw "$DriverName failed to start!"
+}
+
+
 if ($Command -eq "/home/secnetperf/_work/quic/artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:lowlat -io:epoll -stats:1") {
     SetLinuxLibPath
     ./artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:lowlat -io:epoll -stats:1 | Out-Null
