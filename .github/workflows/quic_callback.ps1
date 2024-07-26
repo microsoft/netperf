@@ -48,12 +48,12 @@ if ($Command -eq "/home/secnetperf/_work/quic/artifacts/bin/linux/x64_Release_op
 } elseif ($Command -eq "C:/_work/quic/artifacts/bin/windows/x64_Release_schannel/secnetperf -exec:lowlat -io:iocp") {
     ./artifacts/bin/windows/x64_Release_schannel/secnetperf -exec:lowlat -io:iocp
 } elseif ($Command.Contains("Install_XDP")) {
-    Write-Host "Downloading XDP installer"
+    Write-Host "(SERVER) Downloading XDP installer"
     $installerUri = $Command.Split(";")[1]
     $msiPath = "./artifacts/xdp.msi"
     Invoke-WebRequest -Uri $installerUri -OutFile $msiPath -UseBasicParsing
-    Write-Host "Installing XDP driver locally"
-    msiexec.exe /i $msiPath /quiet | Out-Null
+    Write-Host "(SERVER) Installing XDP driver locally"
+    msiexec.exe /i $msiPath /quiet | Out-Host
     Wait-DriverStarted "xdp" 10000
 } elseif ($Command -eq "Install_WSK") {
 
