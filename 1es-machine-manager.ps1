@@ -157,7 +157,7 @@ if ($Action -eq "Poll_client_instructions") {
 }
 
 if ($Action -eq "Stop-1es-machine") {
-  headers = @{
+  $headers = @{
     "secret" = "$GithubContextInput1"
   }
   Invoke-WebRequest -Uri "https://netperfapi.azurewebsites.net/setkeyvalue?key=$GithubContextInput2-$GithubContextInput3-state&value=done" -Headers $headers -Method Post -UseBasicParsing
