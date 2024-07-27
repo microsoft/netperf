@@ -64,7 +64,7 @@ if ($Action -eq "Poll_IP") {
             }
             $ipAddress = $Response.Content
             Write-Output "Ip Address found: $ipAddress"
-            if ($!$notWindows -eq $false) {
+            if (!$notWindows -eq $false) {
               $serverIp = $ipAddress
             } else {
               $serverIp = $ipAddress.Split(" ") | Where-Object { $_.StartsWith("10") } | Select-Object -First 1
@@ -78,7 +78,7 @@ if ($Action -eq "Poll_IP") {
         }
     } while (-not $found)
     Write-Host "Setting netperf-peer"
-    if ($!$notWindows -eq $false) {
+    if (!$notWindows -eq $false) {
         echo "$serverIp netperf-peer" | sudo tee -a /etc/hosts
     } else {
         "$serverIp netperf-peer" | Out-File -Encoding ASCII -Append "$env:SystemRoot\System32\drivers\etc\hosts"
