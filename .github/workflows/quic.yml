@@ -222,6 +222,35 @@ jobs:
         run-cmd: |
           Write-Host "Downloading Watermark_Regression.json file"
           Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/watermark_regression.json" -OutFile "watermark_regression.json" -UseBasicParsing
+
+    - name: Install XDP (if applicable)
+      if: ${{ matrix.io == 'xdp' }}
+      uses: ./netperfrepo/.github/actions/run-general-pwsh-cmd
+      with:
+        run-cmd: |
+          Write-Host "Installing XDP"
+          $installerUri = "https://github.com/microsoft/xdp-for-windows/releases/download/v1.0.1/xdp-for-windows.1.0.1.msi"
+          $msiPath = ./artifacts/xdp.msi
+          msiexec.exe /i $msiPath /quiet | Out-Host
+    - name: Wait XDP (if applicable)
+      if: ${{ matrix.io == 'xdp' }}
+      uses: ./netperfrepo/.github/actions/run-general-pwsh-cmd
+      with:
+        run-cmd: |
+          function Wait-DriverStarted {
+              param ($DriverName, $TimeoutMs)
+              $stopWatch = [system.diagnostics.stopwatch]::StartNew()
+              while ($stopWatch.ElapsedMilliseconds -lt $TimeoutMs) {
+                  $Driver = Get-Service -Name $DriverName -ErrorAction Ignore
+                  if ($null -ne $Driver -and $Driver.Status -eq "Running") {
+                      Write-Host "$DriverName is running"
+                      return
+                  }
+                  Start-Sleep -Seconds 0.1 | Out-Null
+              }
+              throw "$DriverName failed to start!"
+          }
+          Wait-DriverStarted "xdp" 10000
     - name: Run Secnetperf Script
       if: ${{ matrix.role == 'client' }}
       uses: ./netperfrepo/.github/actions/run-test-script
