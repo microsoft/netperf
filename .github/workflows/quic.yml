@@ -209,6 +209,16 @@ jobs:
       with:
         name: Release-winkernel-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}
         path: artifacts
+    - name: Install XDP (if applicable)
+      if: ${{ matrix.io == 'xdp' }}
+      uses: ./netperfrepo/.github/actions/run-general-pwsh-cmd
+      with:
+        run-cmd: |
+          Write-Host "Installing XDP"
+          $installerUri = "https://github.com/microsoft/xdp-for-windows/releases/download/v1.0.1/xdp-for-windows.1.0.1.msi"
+          $msiPath = ./artifacts/xdp.msi
+          msiexec.exe /i $msiPath /quiet | Out-Host
+          Start-Sleep -Seconds 10
     - name: Start 1ES Machine
       uses: ./netperfrepo/.github/actions/start-1es-machine
       with:
@@ -222,17 +232,6 @@ jobs:
         run-cmd: |
           Write-Host "Downloading Watermark_Regression.json file"
           Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/watermark_regression.json" -OutFile "watermark_regression.json" -UseBasicParsing
-
-    - name: Install XDP (if applicable)
-      if: ${{ matrix.io == 'xdp' }}
-      uses: ./netperfrepo/.github/actions/run-general-pwsh-cmd
-      with:
-        run-cmd: |
-          Write-Host "Installing XDP"
-          $installerUri = "https://github.com/microsoft/xdp-for-windows/releases/download/v1.0.1/xdp-for-windows.1.0.1.msi"
-          $msiPath = ./artifacts/xdp.msi
-          msiexec.exe /i $msiPath /quiet | Out-Host
-          Start-Sleep -Seconds 10
     - name: Run Secnetperf Script
       if: ${{ matrix.role == 'client' }}
       uses: ./netperfrepo/.github/actions/run-test-script
