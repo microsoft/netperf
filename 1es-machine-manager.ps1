@@ -6,6 +6,9 @@ param (
     [string]$GithubContextInput4 = ""
 )
 
+Set-StrictMode -Version "Latest"
+$PSDefaultParameterValues["*:ErrorAction"] = "Stop"
+
 Write-Host "Executing action: $Action"
 
 if ($Action -eq "Deserialize_matrix") {
@@ -150,8 +153,8 @@ if ($Action -eq "Poll_client_instructions") {
               $msiPath = "./artifacts/xdp.msi"
               Invoke-WebRequest -Uri $installerUri -OutFile $msiPath -UseBasicParsing
               Write-Host "(SANITY CHECK) Installing XDP driver locally"
-              $Size = (Get-Item $msiPath).Length
-              Write-Host "(SANITY CHECK) MSI file size: $Size"
+              $Size = Get-FileHash -Path $msiPath
+              Write-Host "(SANITY CHECK) MSI file hash: $Size"
               msiexec.exe /i $msiPath /quiet | Out-Host
               Start-Sleep -Seconds 5
             }
