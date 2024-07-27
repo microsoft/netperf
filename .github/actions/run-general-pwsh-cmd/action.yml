@@ -14,7 +14,7 @@ runs:
     shell: python
     run: |
       powershell_code = """${{ inputs.run-cmd }}"""
-      squeezed_code = powershell_code.replace('\n', ';').replace('\r', ';')
+      squeezed_code = powershell_code.replace('\n', ';').replace('\r', ';').replace('"', '\"')
       print(f"::set-output name=squeezed_code::{squeezed_code}")
   - name: Run Pwsh Command
     if: ${{ env.OS == 'windows' }}
