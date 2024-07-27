@@ -9,6 +9,14 @@ param (
 Set-StrictMode -Version "Latest"
 $PSDefaultParameterValues["*:ErrorAction"] = "Stop"
 
+$psVersion = $PSVersionTable.PSVersion
+if ($psVersion.Major -lt 7) {
+    $notWindows = $false
+} else {
+    $notWindows = !$isWindows
+}
+
+
 Write-Host "Executing action: $Action"
 
 if ($Action -eq "Deserialize_matrix") {
@@ -30,7 +38,7 @@ if ($Action -eq "Disable_Windows_Defender") {
 }
 
 if ($Action -eq "Broadcast_IP") {
-    if ($isWindows -eq $false) {
+    if (!$notWindows -eq $false) {
         $ipAddress = ip addr | grep 'inet ' | grep '10' | awk '{print $2}' | cut -d'/' -f1
     } else {
       $ipAddress = (Get-NetIpAddress -AddressFamily IPv4).IpAddress
@@ -56,7 +64,7 @@ if ($Action -eq "Poll_IP") {
             }
             $ipAddress = $Response.Content
             Write-Output "Ip Address found: $ipAddress"
-            if ($isWindows -eq $false) {
+            if ($!$notWindows -eq $false) {
               $serverIp = $ipAddress
             } else {
               $serverIp = $ipAddress.Split(" ") | Where-Object { $_.StartsWith("10") } | Select-Object -First 1
@@ -70,7 +78,7 @@ if ($Action -eq "Poll_IP") {
         }
     } while (-not $found)
     Write-Host "Setting netperf-peer"
-    if ($isWindows -eq $false) {
+    if ($!$notWindows -eq $false) {
         echo "$serverIp netperf-peer" | sudo tee -a /etc/hosts
     } else {
         "$serverIp netperf-peer" | Out-File -Encoding ASCII -Append "$env:SystemRoot\System32\drivers\etc\hosts"
