@@ -55,7 +55,10 @@ if ($Command.Contains("stats")) {
     $stats = "1"
 }
 
-
+function Repo-Path {
+    param ($Path)
+    return Join-Path (Split-Path $PSScriptRoot -Parent) $Path
+}
 
 if ($Command.Contains("/home/secnetperf/_work/quic/artifacts/bin/linux/x64_Release_openssl/secnetperf")) {
     ./artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:$mode -io:$io -stats:$stats
@@ -64,14 +67,9 @@ if ($Command.Contains("/home/secnetperf/_work/quic/artifacts/bin/linux/x64_Relea
 } elseif ($Command.Contains("Install_XDP")) {
     Write-Host "(SERVER) Downloading XDP installer"
     $installerUri = $Command.Split(";")[1]
-    if ($isWindows) {
-        $msiPath = "C:/xdp.msi"
-    } else {
-        $msiPath = "/var/tmp/xdp.msi"
-    }
+    $msiPath = Repo-Path "xdp.msi"
     Invoke-WebRequest -Uri $installerUri -OutFile $msiPath -UseBasicParsing
-    Write-Host "(SERVER) Installing XDP driver locally"
-    $Size = Get-FileHash -Path $msiPath
+    Write-Host "(SERVER) Installing XDP. Msi path: $msiPath"
     msiexec.exe /i $msiPath /quiet | Out-Host
     Wait-DriverStarted "xdp" 10000
 } elseif ($Command -eq "Install_WSK") {
