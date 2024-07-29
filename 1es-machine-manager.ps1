@@ -152,15 +152,15 @@ if ($Action -eq "Poll_client_instructions") {
             value=$dataJson
           }
           $body = $dataJson | ConvertTo-Json
-          Invoke-WebRequest -Uri "$url/setkeyvalue?key=$GithubContextInput2-$GithubContextInput3-state" -Headers $headers -Method POST -Body $body -ContentType "application/json" -UseBasicParsing
           try {
             Invoke-Expression "$GithubContextInput4 -Command '$command'"
           } catch {
             throw "CALLBACK_ERROR: $_"
           }
-          Write-Host "Data JSON: "
-          $dataJson
+          Invoke-WebRequest -Uri "$url/setkeyvalue?key=$GithubContextInput2-$GithubContextInput3-state" -Headers $headers -Method POST -Body $body -ContentType "application/json" -UseBasicParsing
+          Write-Host "Finished executing command: $command, SeqNum: $($dataJson.value.SeqNum), Commands count: $($dataJson.value.Commands.Count)"
         } else {
+          Write-Host "Nothing to execute. SeqNum: $($dataJson.SeqNum), Commands count: $($dataJson.Commands.Count)"
           Start-Sleep -Seconds 10
         }
       }

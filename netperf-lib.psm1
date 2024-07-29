@@ -74,8 +74,10 @@ function NetperfWaitServerFinishExecution {
             throw "Remote Cache State Not Set!"
         }
         $CurrState = $Response.Content | ConvertFrom-Json
-        if ($CurrState.value.SeqNum -eq $CurrState.value.Commands.Count) {
+        if ($CurrState.SeqNum -eq $CurrState.Commands.Count) {
             return
+        } else {
+            Write-Host "Server not done yet. Seq num: $($CurrState.SeqNum), Commands count: $($CurrState.Commands.Count)"
         }
     }
 
