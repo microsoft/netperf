@@ -20,6 +20,7 @@ foreach ($entry in $MatrixJson) {
         # $Windows2022Pool = "netperf-boosted-windows-pool"
         $Windows2022Pool = "netperf-aztestpool"
         $Ubuntu2004Pool = "netperf-boosted-linux-pool"
+        $Windows2025Pool = "netperf-boosted-windows-prerelease-pool"
         $client = $entry.PSObject.Copy()
         $server = $entry.PSObject.Copy()
         $env_str = [guid]::NewGuid().ToString()
@@ -28,10 +29,14 @@ foreach ($entry in $MatrixJson) {
             $server | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value $Windows2022Pool
             $client | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
             $server | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
-        }
-        elseif ($entry.os -match "ubuntu-20.04") {
+        } elseif ($entry.os -match "ubuntu-20.04") {
             $client | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value $Ubuntu2004Pool
             $server | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value $Ubuntu2004Pool
+            $client | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
+            $server | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
+        } elseif ($entry.os -match "windows-2025") {
+            $client | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value $Windows2025Pool
+            $server | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value $Windows2025Pool
             $client | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
             $server | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
         } else {
@@ -49,7 +54,7 @@ foreach ($entry in $MatrixJson) {
         $labclient = $entry.PSObject.Copy()
         $env_str = [guid]::NewGuid().ToString()
         $labclient | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value "NONE"
-        $labclient | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
+        $labclient | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'TRUE'
         $labclient | Add-Member -MemberType NoteProperty -Name "role" -Value "client"
         $labclient | Add-Member -MemberType NoteProperty -Name "env_str" -Value $env_str
         $LabJson += $entry
