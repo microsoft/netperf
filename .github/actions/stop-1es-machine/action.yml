@@ -29,7 +29,7 @@ runs:
   - name: Deserialize Matrix
     if: ${{ env.OS != 'windows' }}
     run: |
-      ./netperfrepo/1es-machine-manager.sh -Action 'Deserialize_matrix' -GithubContextInput1 '${{ inputs.matrix }}'
+      ./netperfrepo/1es-machine-manager.ps1 -Action 'Deserialize_matrix' -GithubContextInput1 '${{ inputs.matrix }}'
     shell: pwsh
   - name: Send ACK to cache
     if: ${{ env.OS == 'windows' }}
@@ -39,5 +39,5 @@ runs:
   - name: Send ACK to cache
     if: ${{ env.OS != 'windows' }}
     run: |
-      ./netperfrepo/1es-machine-manager.sh -Action 'Stop-1es-machine' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}' -GithubContextInput3 '${{ env.env_str }}'
+      ./netperfrepo/1es-machine-manager.ps1 -Action 'Stop-1es-machine' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}' -GithubContextInput3 '${{ env.env_str }}'
     shell: pwsh
