@@ -31,7 +31,7 @@ function Wait-DriverStarted {
 }
 
 
-$mode = "maxput"
+$mode = "maxtput"
 $io = "iocp"
 $stats = "0"
 
@@ -72,8 +72,15 @@ if ($Command.Contains("/home/secnetperf/_work/quic/artifacts/bin/linux/x64_Relea
     Write-Host "(SERVER) Installing XDP. Msi path: $msiPath"
     msiexec.exe /i $msiPath /quiet | Out-Host
     Wait-DriverStarted "xdp" 10000
-} elseif ($Command -eq "Install_WSK") {
-    # TODO
+} elseif ($Command -eq "Install_Kernel") {
+    $localSysPath = Repo-Path "../../artifacts/bin/winkernel/x64_Release_schannel/msquicpriv.sys"
+    if (Test-Path $localSysPath) {
+        Write-Host "(SERVER) Installing Kernel driver. Path: $localSysPath"
+    } else {
+        throw "Kernel driver not found at path: $localSysPath"
+    }
+    sc.exe create "msquicpriv" type= kernel binpath= $localSysPath start= demand | Out-Null
+    net.exe start msquicpriv
 } else {
     throw "Invalid command: $Command"
 }
