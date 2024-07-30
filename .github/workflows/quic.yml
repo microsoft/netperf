@@ -209,6 +209,11 @@ jobs:
       with:
         name: Release-winkernel-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}
         path: artifacts
+    - name: Enable test signing
+      if: ${{ matrix.io == 'wsk' && env.OS == 'windows' }}
+      run: |
+        bcdedit /set testsigning on
+      shell: cmd
     - name: Start 1ES Machine
       uses: ./netperfrepo/.github/actions/start-1es-machine
       with:
