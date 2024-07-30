@@ -213,7 +213,7 @@ jobs:
     #   if: ${{ matrix.io == 'wsk' && env.OS == 'windows' }}
     #   run: |
     #     bcdedit /set testsigning on
-      shell: cmd
+    # shell: cmd
     - name: Start 1ES Machine
       uses: ./netperfrepo/.github/actions/start-1es-machine
       with:
