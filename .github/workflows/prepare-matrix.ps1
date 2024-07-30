@@ -17,7 +17,8 @@ $FullJson = @()
 
 foreach ($entry in $MatrixJson) {
     if ($entry.env -match "azure") {
-        $Windows2022Pool = "netperf-boosted-windows-pool"
+        # $Windows2022Pool = "netperf-boosted-windows-pool"
+        $Windows2022Pool = "netperf-aztestpool"
         $Ubuntu2004Pool = "netperf-boosted-linux-pool"
         $client = $entry.PSObject.Copy()
         $server = $entry.PSObject.Copy()
