@@ -83,36 +83,6 @@ runs:
           rm -r "$tmpDir"
       fi
     shell: bash
-  # - name: Install powershell on windows
-  #   if: ${{ runner.os == 'Windows' }}
-  #   run: |
-  #     @echo off
-  #     setlocal
-
-  #     rem Define the URL for the PowerShell 7 MSI installer
-  #     set "url=https://github.com/PowerShell/PowerShell/releases/download/v7.3.6/PowerShell-7.3.6-win-x64.msi"
-
-  #     rem Define the download location
-  #     set "msi_path=%TEMP%\PowerShell-7.3.6-win-x64.msi"
-
-  #     rem Download the PowerShell 7 MSI installer
-  #     echo Downloading PowerShell 7 installer...
-  #     powershell -Command "Invoke-WebRequest -Uri %url% -OutFile %msi_path%"
-
-  #     rem Check if the MSI file was downloaded successfully
-  #     if exist %msi_path% (
-  #         echo Installing PowerShell 7...
-  #         msiexec /i %msi_path% /quiet /norestart
-  #         echo PowerShell 7 installation completed.
-  #         echo "Adding PowerShell to PATH..."
-  #         setx PATH "%PATH%;C:\Program Files\PowerShell"
-  #         "./netperfrepo/refreshenv.cmd"
-  #     ) else (
-  #         echo Failed to download the PowerShell 7 installer.
-  #     )
-
-  #     endlocal
-  #   shell: cmd
   - name: Print information about the current windows system
     if: ${{ runner.os == 'Windows' }}
     run: systeminfo
