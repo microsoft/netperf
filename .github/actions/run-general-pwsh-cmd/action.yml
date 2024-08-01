@@ -9,7 +9,7 @@ runs:
   using: "composite"
   steps:
   - name: Squeeze code to 1 line
-    if: ${{ env.OS == 'windows' }}
+    if: ${{ env.HAS_PWSH == 'false' }}
     id: squeeze_code
     shell: python
     run: |
@@ -19,12 +19,12 @@ runs:
       squeezed_code = powershell_code.replace('\n', ';').replace('\r', ';').replace("\"", "\'")
       print(f"::set-output name=squeezed_code::{squeezed_code}")
   - name: Run Pwsh Command
-    if: ${{ env.OS == 'windows' }}
+    if: ${{ env.HAS_PWSH == 'false' }}
     run: |
       powershell -Command "${{ steps.squeeze_code.outputs.squeezed_code }}"
     shell: cmd
   - name: Run Pwsh Command
-    if: ${{ env.OS != 'windows' }}
+    if: ${{ env.HAS_PWSH == 'true' }}
     run: |
       ${{ inputs.run-cmd }}
     shell: pwsh

@@ -3,8 +3,31 @@ description: "This action runs multiple steps as a composite action."
 runs:
   using: "composite"
   steps:
-  - name: Install powershell on Linux
+  - name: Check if powershell 7 (pwsh) is already installed
     if: ${{ runner.os != 'Windows' }}
+    run: |
+      if command -v pwsh &>/dev/null; then
+          echo "PowerShell is already installed. Exiting."
+          echo "HAS_PWSH=true" >> $env:GITHUB_ENV
+          exit 0
+      fi
+      echo "HAS_PWSH=false" >> $env:GITHUB_ENV
+    shell: bash
+  - name: Check if powershell 7 (pwsh) is already installed
+    if: ${{ runner.os == 'Windows' }}
+    run: |
+      @echo off
+      where pwsh >nul 2>nul
+      if %errorlevel% == 0 (
+          echo pwsh is installed
+          pwsh -Command "echo 'HAS_PWSH=true' >> $env:GITHUB_ENV"
+      ) else (
+          echo pwsh is not installed
+          powershell -Command "echo 'HAS_PWSH=false' >> $env:GITHUB_ENV"
+      )
+    shell: cmd
+  - name: Install powershell 7 on Linux
+    if: ${{ env.HAS_PWSH == 'false' && runner.os != 'Windows' }}
     run: |
       # Update the list of packages
       sudo apt-get update
@@ -87,26 +110,17 @@ runs:
     if: ${{ runner.os == 'Windows' }}
     run: systeminfo
     shell: cmd
-  - name: Verify powershell installation
-    if: ${{ runner.os == 'Windows' }}
-    run: |
-        powershell -Command "$PSVersionTable.PSVersion"
-    shell: cmd
-  - name: Add to PATH in GitHub Actions
-    if: ${{ runner.os == 'Windows' }}
-    run: echo "::add-path::C:\Program Files\PowerShell\7"
-    shell: cmd
   - name: Lowercase runner.os
-    if: ${{ runner.os != 'Windows' }}
+    if: ${{ env.HAS_PWSH == 'true' }}
     run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
     shell: pwsh
   - name: Lowercase OS and Set Environment Variable
-    if: ${{ runner.os == 'Windows' }}
+    if: ${{ env.HAS_PWSH == 'false' }}
     run: |
       powershell -Command "echo 'OS=windows' >> $env:GITHUB_ENV"
     shell: cmd
   - name: Set up Python
-    if: ${{ env.OS == 'windows' }}
+    if: ${{ env.HAS_PWSH == 'false' }}
     uses: actions/setup-python@v2
     with:
       python-version: '3.x'

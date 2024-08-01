@@ -18,7 +18,7 @@ runs:
   steps:
   - name: Set context and import the netperf-lib.psm1 library
     id: netperf_context
-    if: ${{ env.OS == 'windows' }}
+    if: ${{ env.HAS_PWSH == 'false' }}
     shell: python
     run: |
       import json
@@ -28,7 +28,7 @@ runs:
       prep_code += "Import-Module ./netperfrepo/netperf-lib.psm1;"
       print(f"::set-output name=netperf_context::{prep_code}")
   - name: Squeeze code to 1 line
-    if: ${{ env.OS == 'windows' }}
+    if: ${{ env.HAS_PWSH == 'false' }}
     id: squeeze_code
     shell: python
     run: |
@@ -36,12 +36,12 @@ runs:
       squeezed_code = run_script_powershell_code.replace('\n', '').replace('\r', '').replace('`', ' ')
       print(f"::set-output name=squeezed_code::{squeezed_code}")
   - name: Run Pwsh Command
-    if: ${{ env.OS == 'windows' }}
+    if: ${{ env.HAS_PWSH == 'false' }}
     run: |
       powershell -Command "${{ steps.netperf_context.outputs.netperf_context }} ${{ steps.squeeze_code.outputs.squeezed_code }}"
     shell: cmd
   - name: Run Pwsh Command
-    if: ${{ env.OS != 'windows' }}
+    if: ${{ env.HAS_PWSH == 'true' }}
     run: |
       ./netperfrepo/set-netperf-context.ps1 -Matrix '${{ inputs.matrix }}' -SyncerSecret '${{ inputs.syncer-secret }}' -GithubRunId '${{ github.run_id }}'
       Import-Module ./netperfrepo/netperf-lib.psm1

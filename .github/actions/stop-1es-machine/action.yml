@@ -13,7 +13,7 @@ runs:
   using: "composite"
   steps:
   - name: Run Python Script to Escape JSON
-    if: ${{ env.OS == 'windows' }}
+    if: ${{ env.HAS_PWSH == 'false' }}
     id: escape_json
     run: |
       import json
@@ -22,22 +22,22 @@ runs:
       print(f"::set-output name=escaped_json::{json_str}")
     shell: python
   - name: Deserialize Matrix
-    if: ${{ env.OS == 'windows' }}
+    if: ${{ env.HAS_PWSH == 'false' }}
     run: |
       powershell -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Deserialize_matrix' -GithubContextInput1 '${{ steps.escape_json.outputs.escaped_json }}'"
     shell: cmd
   - name: Deserialize Matrix
-    if: ${{ env.OS != 'windows' }}
+    if: ${{ env.HAS_PWSH == 'true' }}
     run: |
       ./netperfrepo/1es-machine-manager.ps1 -Action 'Deserialize_matrix' -GithubContextInput1 '${{ inputs.matrix }}'
     shell: pwsh
   - name: Send ACK to cache
-    if: ${{ env.OS == 'windows' }}
+    if: ${{ env.HAS_PWSH == 'false' }}
     run: |
       powershell -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Stop-1es-machine' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}' -GithubContextInput3 '${{ env.env_str }}'"
     shell: cmd
   - name: Send ACK to cache
-    if: ${{ env.OS != 'windows' }}
+    if: ${{ env.HAS_PWSH == 'true' }}
     run: |
       ./netperfrepo/1es-machine-manager.ps1 -Action 'Stop-1es-machine' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}' -GithubContextInput3 '${{ env.env_str }}'
     shell: pwsh
