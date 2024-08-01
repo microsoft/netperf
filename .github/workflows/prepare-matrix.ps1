@@ -17,11 +17,20 @@ $FullJson = @()
 
 foreach ($entry in $MatrixJson) {
     if ($entry.env -match "azure") {
-        $Windows2022Pool = "netperf-boosted-windows-pool"
-        $Ubuntu2004Pool = "netperf-boosted-linux-pool"
-        $Windows2025Pool = "netperf-boosted-windows-prerelease-pool"
+        $Windows2022Pool = "netperf-boosted-windows-pool" # NOTE: This pool is using experimental boost SKUs.
+        $Ubuntu2004Pool = "netperf-boosted-linux-pool" # NOTE: This pool is using experimental boost SKUs.
+        $Windows2025Pool = "netperf-boosted-windows-prerelease-pool" # NOTE: This pool is using f-series SKUs.
         $client = $entry.PSObject.Copy()
         $server = $entry.PSObject.Copy()
+
+        $hasPreferredPoolSku = $entry.PSObject.Properties.Name -contains "preferred_pool_sku"
+        if ($hasPreferredPoolSku) {
+            if ($entry.preferred_pool_sku -eq "Standard_F8s_v2") {
+                $Windows2022Pool = "netperf-f-series-windows-2022"
+                $Ubuntu2004Pool = "netperf-f-series-ubuntu-20.04"
+            }
+        }
+
         $env_str = [guid]::NewGuid().ToString()
         if ($entry.os -match "windows-2022") {
             $client | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value $Windows2022Pool
