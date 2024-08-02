@@ -8,10 +8,10 @@ runs:
     run: |
       if command -v pwsh &>/dev/null; then
         echo "PowerShell is already installed."
-        echo "HAS_PWSH=true" >> $env:GITHUB_ENV
+        echo "HAS_PWSH=true" >> GITHUB_ENV
       else
         echo "PowerShell is not installed."
-        echo "HAS_PWSH=false" >> $env:GITHUB_ENV
+        echo "HAS_PWSH=false" >> GITHUB_ENV
       fi
     shell: bash
   - name: Check if powershell 7 (pwsh) is already installed
