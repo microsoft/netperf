@@ -52,7 +52,7 @@ jobs:
     - name: Run Prepare Matrix
       run: ./.github/workflows/prepare-matrix.ps1
     - id: generate-lab-matrix
-      run: echo "matrix=$(jq -c '.' ./.github/workflows/processed-matrix.json)" >> $GITHUB_OUTPUT
+      run: echo "matrix=$(jq -c '.' ./.github/workflows/lab-matrix.json)" >> $GITHUB_OUTPUT
       shell: bash
     - id: generate-azure-matrix
       run: echo "matrix=$(jq -c '.' ./.github/workflows/azure-matrix.json)" >> $GITHUB_OUTPUT
