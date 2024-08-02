@@ -8,10 +8,10 @@ runs:
     run: |
       if command -v pwsh &>/dev/null; then
         echo "PowerShell is already installed."
-        echo "HAS_PWSH=true" >> GITHUB_ENV
+        echo "HAS_PWSH=true" >> $GITHUB_ENV
       else
         echo "PowerShell is not installed."
-        echo "HAS_PWSH=false" >> GITHUB_ENV
+        echo "HAS_PWSH=false" >> $GITHUB_ENV
       fi
     shell: bash
   - name: Check if powershell 7 (pwsh) is already installed
@@ -107,10 +107,6 @@ runs:
           rm -r "$tmpDir"
       fi
     shell: bash
-  - name: Print information about the current windows system
-    if: ${{ runner.os == 'Windows' }}
-    run: systeminfo
-    shell: cmd
   - name: Lowercase runner.os
     if: ${{ env.HAS_PWSH == 'true' }}
     run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
