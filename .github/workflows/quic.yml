@@ -176,7 +176,7 @@ jobs:
 
   run-secnetperf-1es:
     name: azure-${{ matrix.role }}-${{ matrix.os }}-${{ matrix.io }}-${{ matrix.tls }}-${{ matrix.arch }}
-    needs: [prepare-matrix, build-windows]
+    needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
     strategy:
       fail-fast: false
       matrix:
@@ -215,7 +215,6 @@ jobs:
         matrix: '${{ toJson(matrix) }}'
         callback-script-path: ${{ github.workspace }}/netperfrepo/.github/workflows/quic_callback.ps1
         syncer_secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
-      timeout-minutes: 30
     - name: (Client) Download Watermark_Regression.json file
       uses: ./netperfrepo/.github/actions/run-general-pwsh-cmd
       with:
@@ -237,7 +236,6 @@ jobs:
           -tls ${{ matrix.tls }} `
           -io ${{ matrix.io }} `
           -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
-
         matrix: '${{ toJson(matrix) }}'
         syncer-secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
     - name: Stop 1ES Machine
@@ -266,14 +264,13 @@ jobs:
         path: latency.txt
         if-no-files-found: ignore
 
-
   #
   # Test Jobs.
   # NOTE: tag == env
   #
-  run-secnetperf: # This would be 1 enumeration, after CTS has setup the environment with the correct OS type and version.
+  run-secnetperf:
     name: secnetperf
-    needs: [prepare-matrix]
+    needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
     strategy:
       fail-fast: false
       matrix:

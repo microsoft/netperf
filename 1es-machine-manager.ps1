@@ -55,8 +55,10 @@ if ($Action -eq "Poll_IP") {
         "secret" = $GithubContextInput1
     }
     $uri = "https://netperfapi.azurewebsites.net/getkeyvalue?key=$GithubContextInput2-$GithubContextInput3-ipaddress"
+    $iterations = 0
     do {
         Write-Output "Checking for ip address..."
+        $iterations++
         try {
             $Response = Invoke-WebRequest -Uri $uri -Headers $headers -UseBasicParsing
             if (!($Response.StatusCode -eq 200)) {
@@ -74,7 +76,10 @@ if ($Action -eq "Poll_IP") {
         }
         catch {
             Write-Output "Ip Address not found: $_"
-            Start-Sleep -Seconds 5
+            if ($iterations -gt 180) {
+                throw "Failed to get ip address after 30 minutes."
+            }
+            Start-Sleep -Seconds 10
         }
     } while (-not $found)
     Write-Host "Setting netperf-peer"
@@ -136,6 +141,7 @@ if ($Action -eq "Poll_client_instructions") {
       "secret" = $GithubContextInput1
     }
     $url = "https://netperfapi.azurewebsites.net"
+    $iterations = 0
     do {
       try {
         $Response = Invoke-WebRequest -Uri "$url/getkeyvalue?key=$GithubContextInput2-$GithubContextInput3-state" -Headers $headers -UseBasicParsing
@@ -146,6 +152,7 @@ if ($Action -eq "Poll_client_instructions") {
         }
         $dataJson = ConvertFrom-Json $data
         if ($dataJson.SeqNum -lt $dataJson.Commands.Count) {
+          $iterations = 0
           $command = $dataJson.Commands[$dataJson.SeqNum]
           $dataJson.SeqNum++
           $dataJson = @{
@@ -160,13 +167,18 @@ if ($Action -eq "Poll_client_instructions") {
           Invoke-WebRequest -Uri "$url/setkeyvalue?key=$GithubContextInput2-$GithubContextInput3-state" -Headers $headers -Method POST -Body $body -ContentType "application/json" -UseBasicParsing
           Write-Host "Finished executing command: $command, SeqNum: $($dataJson.value.SeqNum), Commands count: $($dataJson.value.Commands.Count)"
         } else {
+          $iterations = 0
           Write-Host "Nothing to execute. SeqNum: $($dataJson.SeqNum), Commands count: $($dataJson.Commands.Count)"
           Start-Sleep -Seconds 10
         }
       }
       catch {
+        $iterations++
         if ($_.ToString().Contains("CALLBACK_ERROR")) {
           throw $_
+        }
+        if ($iterations -gt 60) {
+          throw "Failed to get assigned to a client after 30 minutes."
         }
         Write-Output "Client not done yet. Silently ignoring non-callback error: $_"
         Start-Sleep -Seconds 30
