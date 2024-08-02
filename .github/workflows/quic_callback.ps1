@@ -2,8 +2,6 @@ param (
     [string]$Command
 )
 
-Write-Host "Executing command: $Command"
-
 if ($PSVersionTable.PSVersion.Major -lt 7) {
     $isWindows = $true
 }
@@ -61,11 +59,14 @@ function Repo-Path {
 }
 
 if ($Command.Contains("/home/secnetperf/_work/quic/artifacts/bin/linux/x64_Release_openssl/secnetperf")) {
+    Write-Host "Executing command: ./artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:$mode -io:$io -stats:$stats"
     SetLinuxLibPath
-    ./artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:$mode -io:$io -stats:$stats -watchdog:60000
+    ./artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:$mode -io:$io -stats:$stats
 } elseif ($Command.Contains("C:/_work/quic/artifacts/bin/windows/x64_Release_schannel/secnetperf")) {
-    ./artifacts/bin/windows/x64_Release_schannel/secnetperf -exec:$mode -io:$io -stats:$stats -watchdog:60000
+    Write-Host "Executing command: C:/_work/quic/artifacts/bin/windows/x64_Release_schannel/secnetperf -exec:$mode -io:$io -stats:$stats"
+    ./artifacts/bin/windows/x64_Release_schannel/secnetperf -exec:$mode -io:$io -stats:$stats
 } elseif ($Command.Contains("Install_XDP")) {
+    Write-Host "Executing command: Install_XDP"
     Write-Host "(SERVER) Downloading XDP installer"
     $installerUri = $Command.Split(";")[1]
     $msiPath = Repo-Path "xdp.msi"
@@ -74,6 +75,7 @@ if ($Command.Contains("/home/secnetperf/_work/quic/artifacts/bin/linux/x64_Relea
     msiexec.exe /i $msiPath /quiet | Out-Host
     Wait-DriverStarted "xdp" 10000
 } elseif ($Command -eq "Install_Kernel") {
+    Write-Host "Executing command: Install_Kernel"
     $localSysPath = Repo-Path "../../artifacts/bin/winkernel/x64_Release_schannel/msquicpriv.sys"
     if (Test-Path $localSysPath) {
         Write-Host "(SERVER) Installing Kernel driver. Path: $localSysPath"
