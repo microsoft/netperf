@@ -81,7 +81,5 @@ function NetperfWaitServerFinishExecution {
         }
     }
 
-    throw "Server did not finish execution in time! Tried $maxattempts times with $waittime seconds interval."
+    throw "Server did not finish execution in time! Tried $maxattempts times with $WaitPerAttempt seconds interval."
 }
-
-
