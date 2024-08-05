@@ -36,10 +36,15 @@ runs:
       ./netperfrepo/1es-machine-manager.ps1 -Action 'Deserialize_matrix' -GithubContextInput1 '${{ inputs.matrix }}'
     shell: pwsh
   - name: Disable Windows Defender / Firewall
-    if: ${{ env.HAS_PWSH == 'false' }}
-    run: |-
+    if: ${{ env.HAS_PWSH == 'false' && env.OS == 'windows' }}
+    run: |
       powershell -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Disable_Windows_Defender'"
     shell: cmd
+  - name: Disable Windows Defender / Firewall
+    if: ${{ env.HAS_PWSH == 'true' && env.OS == 'windows' }}
+    run: |
+      ./netperfrepo/1es-machine-manager.ps1 -Action 'Disable_Windows_Defender'
+    shell: pwsh
   - name: (Server) Broadcast IP address
     if: ${{ env.role == 'server' && env.HAS_PWSH == 'false' }}
     run: |
