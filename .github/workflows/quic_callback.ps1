@@ -59,11 +59,11 @@ function Repo-Path {
 }
 
 if ($Command.Contains("/home/secnetperf/_work/quic/artifacts/bin/linux/x64_Release_openssl/secnetperf")) {
-    Write-Host "Executing command: ./artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:$mode -io:$io -stats:$stats"
+    Write-Host "Executing command: $(pwd)/artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:$mode -io:$io -stats:$stats"
     SetLinuxLibPath
     ./artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:$mode -io:$io -stats:$stats
 } elseif ($Command.Contains("C:/_work/quic/artifacts/bin/windows/x64_Release_schannel/secnetperf")) {
-    Write-Host "Executing command: C:/_work/quic/artifacts/bin/windows/x64_Release_schannel/secnetperf -exec:$mode -io:$io -stats:$stats"
+    Write-Host "Executing command: $(pwd)/artifacts/bin/windows/x64_Release_schannel/secnetperf -exec:$mode -io:$io -stats:$stats"
     ./artifacts/bin/windows/x64_Release_schannel/secnetperf -exec:$mode -io:$io -stats:$stats
 } elseif ($Command.Contains("Install_XDP")) {
     Write-Host "Executing command: Install_XDP"
@@ -76,12 +76,26 @@ if ($Command.Contains("/home/secnetperf/_work/quic/artifacts/bin/linux/x64_Relea
     Wait-DriverStarted "xdp" 10000
 } elseif ($Command -eq "Install_Kernel") {
     Write-Host "Executing command: Install_Kernel"
-    $localSysPath = Repo-Path "../../artifacts/bin/winkernel/x64_Release_schannel/msquicpriv.sys"
-    if (Test-Path $localSysPath) {
-        Write-Host "(SERVER) Installing Kernel driver. Path: $localSysPath"
+    $KernelDir = Repo-Path "../../artifacts/bin/winkernel/x64_Release_schannel"
+    $SecNetPerfDir = Repo-Path "../../artifacts/bin/windows/x64_Release_schannel"
+    if (Test-Path $KernelDir) {
+        # WSK also needs the kernel mode binaries in the usermode path.
+        Write-Host "Moving kernel binaries to usermode path"
+        Write-Host "Kernel directory: $KernelDir, Usermode directory: $SecNetPerfDir"
+        Copy-Item "$KernelDir/secnetperfdrvpriv.sys" $SecNetPerfDir
+        Copy-Item "$KernelDir/secnetperfdrvpriv.pdb" $SecNetPerfDir
+        Copy-Item "$KernelDir/msquicpriv.sys" $SecNetPerfDir
+        Copy-Item "$KernelDir/msquicpriv.pdb" $SecNetPerfDir
+        # Remove all the other kernel binaries since we don't need them any more.
+        Remove-Item -Force -Recurse $KernelDir | Out-Null
     } else {
-        throw "Kernel driver not found at path: $localSysPath"
+        throw "Did not find kernel directory: $KernelDir"
     }
+    $localSysPath = "$SecNetPerfDir/msquicpriv.sys"
+    if (!(Test-Path $localSysPath)) {
+        throw "Did not find kernel driver: $localSysPath"
+    }
+    Write-Host "(SERVER) Installing Kernel driver. Path: $localSysPath"
     sc.exe create "msquicpriv" type= kernel binpath= $localSysPath start= demand | Out-Null
     net.exe start msquicpriv
 } else {

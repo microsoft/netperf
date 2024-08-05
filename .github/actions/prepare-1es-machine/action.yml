@@ -106,6 +106,8 @@ runs:
           echo "Cleaning up temporary files..."
           rm -r "$tmpDir"
       fi
+      echo "PowerShell installation complete on Linux complete. Setting HAS_PWSH=true"
+      echo "HAS_PWSH=true" >> $GITHUB_ENV
     shell: bash
   - name: Lowercase runner.os
     if: ${{ env.HAS_PWSH == 'true' }}
