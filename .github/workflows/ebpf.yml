@@ -83,7 +83,7 @@ jobs:
       fail-fast: false
     uses: microsoft/xdp-for-windows/.github/workflows/build.yml@main
     with:
-      ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+      ref: 'main'
       os: ${{ matrix.os }}
       arch: ${{ matrix.arch }}
       upload_artifacts: true
