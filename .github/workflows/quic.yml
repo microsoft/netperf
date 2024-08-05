@@ -514,7 +514,6 @@ jobs:
         path: artifacts
     - name: Download Artifacts
       uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
-      if: ${{ matrix.io != 'wsk' }}
       with:
         name: Release-${{env.OS}}-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-Perf
         path: artifacts
