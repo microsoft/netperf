@@ -11,7 +11,7 @@ param (
     [string]$Password,
 
     [Parameter(Mandatory = $false)]
-    [ValidateSet("windows-2025", "windows-2022", "windows-2019", "ubuntu-22.04", "ubuntu-20.04", "ubuntu-18.04", "mariner-2")]
+    [ValidateSet("windows-2025", "windows-2022", "windows-2019", "ubuntu-24.04", "ubuntu-22.04", "ubuntu-20.04", "ubuntu-18.04", "mariner-2")]
     [string]$Os = "windows-2022",
 
     [Parameter(Mandatory = $false)]
@@ -48,6 +48,8 @@ if ($Os -eq "windows-2025") {
     $image = "MicrosoftWindowsServer:WindowsServer:2022-datacenter-g2:latest"
 } elseif ($Os -eq "windows-2019") {
     $image = "MicrosoftWindowsServer:WindowsServer:2019-datacenter-gensecond:17763.5576.240304"
+} elseif ($Os -eq "ubuntu-24.04") {
+    # ??
 } elseif ($Os -eq "ubuntu-22.04") {
     $image = "Canonical:0001-com-ubuntu-server-jammy:22_04-lts-gen2:22.04.202403010"
 } elseif ($Os -eq "ubuntu-20.04") {
