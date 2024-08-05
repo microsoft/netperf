@@ -61,7 +61,7 @@ jobs:
         echo "ref: ${{ github.event.client_payload.ref }}"
         echo "pr: ${{ github.event.client_payload.pr }}"
 
-  build:
+  build_ebpf:
     name: Build ebpf-for-windows
     uses: microsoft/ebpf-for-windows/.github/workflows/reusable-build.yml@main
     with:
@@ -74,6 +74,20 @@ jobs:
       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
       perform_skip_check: false
 
+  build_xdp:
+    name: Build XDP
+    strategy:
+      matrix:
+        os: ['2022']
+        arch: [x64]
+      fail-fast: false
+    uses: microsoft/xdp-for-windows/.github/workflows/build.yml@main
+    with:
+      ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+      os: ${{ matrix.os }}
+      arch: ${{ matrix.arch }}
+      upload_artifacts: true
+
   build_cts_traffic:
     name: Build cts-traffic test tool
     uses: microsoft/ctsTraffic/.github/workflows/reusable-build.yml@master
@@ -85,7 +99,7 @@ jobs:
 
   test:
     name: Test Windows eBPF Performance
-    needs: [build, build_cts_traffic]
+    needs: [build_ebpf, build_xdp, build_cts_traffic]
     strategy:
       fail-fast: false
       matrix:
@@ -150,26 +164,22 @@ jobs:
         echo "C:\Program Files\ebpf-for-windows" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
     - name: Download xdp-for-windows
-      env:
-        GH_TOKEN: ${{ github.token }}
-      working-directory: ${{ github.workspace }}\xdp
-      run: |
-        $ProgressPreference = 'SilentlyContinue'
-        $releases = (gh release -R microsoft/xdp-for-windows list --json name,isPrerelease,createdAt | ConvertFrom-Json)
-        $release = ($releases | Where-Object -Property isPrerelease -eq true | Sort-Object -Property createdAt -Descending)[0]
-        gh release download -R microsoft/xdp-for-windows $release.name
-        dir *.msi
-        dir *.zip
-        Expand-Archive -Path "xdp-devkit-x64-${{env.XDP_VERSION}}.zip" -DestinationPath .
+      uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+      with:
+        name: "bin_Release_x64"
+        path: ${{ github.workspace }}\xdp
 
     - name: Install xdp-for-windows
       working-directory: ${{ github.workspace }}\xdp
       run: |
-          $installPath = "${{ github.workspace }}\xdp"
+          cd ${{ github.workspace }}\\xdp\amd64fre\xdpinstaller
+          $CertFileName = 'xdp.cer'
+          Get-AuthenticodeSignature 'xdp-for-windows.${{env.XDP_VERSION}}.msi' | Select-Object -ExpandProperty SignerCertificate | Export-Certificate -Type CERT -FilePath $CertFileName
+          Import-Certificate -FilePath $CertFileName -CertStoreLocation 'cert:\localmachine\root'
+          Import-Certificate -FilePath $CertFileName -CertStoreLocation 'cert:\localmachine\trustedpublisher'
+          $installPath = "${{ github.workspace }}\xdp\x64_release\xdpinstaller"
           Write-Output "xdp installPath: $installPath"
           Write-Output "Installing XDP for Windows"
-          CertUtil.exe -addstore Root bin\CoreNetSignRoot.cer
-          CertUtil.exe -addstore TrustedPublisher bin\CoreNetSignRoot.cer
           $process = Start-Process msiexec.exe -Wait -ArgumentList "/i xdp-for-windows.${{env.XDP_VERSION}}.msi INSTALLFOLDER=$installPath /qn" -PassThru
           if ($process.ExitCode -ne 0) { exit $process.ExitCode }
           Write-Output "XDP for Windows installed"
