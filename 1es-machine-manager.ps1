@@ -167,7 +167,10 @@ if ($Action -eq "Poll_client_instructions") {
           Invoke-WebRequest -Uri "$url/setkeyvalue?key=$GithubContextInput2-$GithubContextInput3-state" -Headers $headers -Method POST -Body $body -ContentType "application/json" -UseBasicParsing
           Write-Host "Finished executing command: $command, SeqNum: $($dataJson.value.SeqNum), Commands count: $($dataJson.value.Commands.Count)"
         } else {
-          $iterations = 0
+          $iterations++
+          if ($iterations -gt 60) {
+            throw "No new instructions after 10 minutes."
+          }
           Write-Host "Nothing to execute. SeqNum: $($dataJson.SeqNum), Commands count: $($dataJson.Commands.Count)"
           Start-Sleep -Seconds 10
         }

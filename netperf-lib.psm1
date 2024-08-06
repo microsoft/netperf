@@ -69,10 +69,16 @@ function NetperfWaitServerFinishExecution {
         }
         $url = "$env:netperf_api_url"
         $RunId = "$env:netperf_run_id"
-        $Response = Invoke-WebRequest -Uri "$url/getkeyvalue?key=$RunId" -Headers $headers -UseBasicParsing
-        if (!($Response.StatusCode -eq 200)) {
-            throw "Remote Cache State Not Set!"
+        try {
+            $Response = Invoke-WebRequest -Uri "$url/getkeyvalue?key=$RunId" -Headers $headers -UseBasicParsing
+            if (!($Response.StatusCode -eq 200)) {
+                throw "Remote Cache State Not Set!"
+            }
+        } catch {
+            Write-Host "Failed to fetch state. Retrying... Error: $_"
+            continue
         }
+
         $CurrState = $Response.Content | ConvertFrom-Json
         if ($CurrState.SeqNum -eq $CurrState.Commands.Count) {
             return
