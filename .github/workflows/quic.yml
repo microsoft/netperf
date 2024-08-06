@@ -175,7 +175,7 @@ jobs:
 
   run-secnetperf-1es:
     name: azure-${{ matrix.role }}-${{ matrix.os }}-${{ matrix.io }}-${{ matrix.tls }}-${{ matrix.arch }}
-    needs: [build-unix, build-windows, build-windows-kernel, prepare-matrix]
+    needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
     strategy:
       fail-fast: false
       matrix:
@@ -184,69 +184,19 @@ jobs:
     - self-hosted
     - 1ES.Pool=${{ matrix.assigned_pool }}
     steps:
-    - name: Lowercase runner.os
-      shell: pwsh
-      run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
-    - name: Get WinRM info
-      if: ${{ env.OS == 'windows' && matrix.remote_powershell_supported == 'TRUE' }}
-      run: Get-Service WinRM
-      shell: pwsh
-
-    - name: WinRM quickconfig
-      if: ${{ env.OS == 'windows' && matrix.remote_powershell_supported == 'TRUE' }}
-      run: echo Y | winrm quickconfig
-      shell: pwsh
-
-    - name: Enable remote powershell
-      if: ${{ env.OS == 'windows' && matrix.remote_powershell_supported == 'TRUE' }}
-      run: Enable-PSRemoting -Force
-      shell: pwsh
-
-    - name: Disable Windows Defender / Firewall
-      if: ${{ env.OS == 'windows' && matrix.remote_powershell_supported == 'TRUE' }}
-      run: |
-        # Disable Windows defender / firewall.
-        Write-Host "Disabling Windows Defender / Firewall."
-        netsh.exe advfirewall set allprofiles state off
-        Set-MpPreference -EnableNetworkProtection Disabled
-        Set-MpPreference -DisableDatagramProcessing $True
-      shell: pwsh
-
-    - name: Enabling ServiceLogonRight
-      if: ${{ env.OS == 'windows' && matrix.remote_powershell_supported == 'TRUE' }}
-      run: |
-        # Make sure the user has the rights to log on.
-        function Add-ServiceLogonRight ($Username) {
-            $tmp = New-TemporaryFile
-            secedit /export /cfg "$tmp.inf" | Out-Null
-            (Get-Content -Encoding ascii "$tmp.inf") -replace '^SeServiceLogonRight .+', "`$0,$Username" | Set-Content -Encoding ascii "$tmp.inf"
-            secedit /import /cfg "$tmp.inf" /db "$tmp.sdb" | Out-Null
-            secedit /configure /db "$tmp.sdb" /cfg "$tmp.inf" | Out-Null
-            Remove-Item $tmp* -ErrorAction SilentlyContinue
-        }
-        Write-Host "Enabling ServiceLogonRight."
-        Add-ServiceLogonRight -Username "secnetperf"
-      shell: pwsh
-
-    - name: Set local user
-      if: ${{ env.OS == 'windows' && matrix.remote_powershell_supported == 'TRUE' }}
-      run: |
-        Set-LocalUser -Name "secnetperf" -PasswordNeverExpires $true
-        whoami
-      shell: pwsh
-
     - name: Checkout microsoft/msquic
       if: ${{ matrix.role == 'client' }}
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       with:
         repository: microsoft/msquic
         ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
-    - name: Checkout netperf
-      if: ${{ matrix.role == 'server' && matrix.remote_powershell_supported == 'FALSE'}}
+    - name: Checkout code
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       with:
-        repository: microsoft/netperf
-        ref: main
+        path: netperfrepo
+    - name: Prepares 1ES Machine
+      if: ${{ matrix.env == 'azure' }}
+      uses: ./netperfrepo/.github/actions/prepare-1es-machine
     - name: Download Artifacts
       uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
       with:
@@ -258,165 +208,24 @@ jobs:
       with:
         name: Release-winkernel-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}
         path: artifacts
-    - name: (Server) Upload IP address to shared cache
-      if: ${{ matrix.role == 'server' }}
-      run: |
-        if ($isWindows) {
-          $ipAddress = (Get-NetIpAddress -AddressFamily IPv4).IpAddress
-        } else {
-          $ipAddress = ip addr | grep 'inet ' | grep '10' | awk '{print $2}' | cut -d'/' -f1
-        }
-        $headers = @{
-          "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
-        }
-        Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_ipaddress&value=$ipAddress" -Headers $headers -Method Post
-      shell: pwsh
-
-    - name: (Server | yes remote pwsh) Polls for a "done.txt" file from the client
-      if: ${{ matrix.role == 'server' && matrix.remote_powershell_supported == 'TRUE' }}
-      timeout-minutes: 20
-      run: |
-        $found = $false
-        do {
-            $donepath = "C:\done.txt"
-            Write-Output "Checking for done.txt..."
-            if (Test-Path $donepath) {
-              Write-Output "done.txt found"
-              $found = $true
-              break
-            } else {
-              Write-Output "done.txt not found"
-            }
-            $StatePath = "C:\_state"
-            if (Test-Path $StatePath) {
-              ls $StatePath
-              # Fetch all files in the _state directory
-              $files = Get-ChildItem -Path $StatePath -File
-              # Find the highest lexicographically sorted file name
-              $max = 0
-              foreach ($file in $files) {
-                  $filename = $file.Name.split(".")[0]
-                  $num = [int]($filename -replace "[^0-9]", "")
-                  if ($num -gt $max) {
-                      $max = $num
-                  }
-              }
-              # Check if there is a corresponding "completed" file
-              $ExecuteFileExist = Test-Path "$StatePath\execute_$($max).ps1"
-              $CompletedFileExist = Test-Path "$StatePath\completed_$($max).txt"
-              if ($ExecuteFileExist -and !($CompletedFileExist)) {
-                  Write-Host "Executing $StatePath\execute_$($max).ps1"
-                  Invoke-Expression "$StatePath\execute_$($max).ps1"
-                  Write-Host "Creating $StatePath\completed_$($max).txt"
-                  New-Item -ItemType File -Name "completed_$($max).txt" -Path $StatePath
-              } else {
-                  Write-Host "No outstanding script to execute... Highest order script found so far: $max"
-              }
-            } else {
-              Write-Host "State directory not found"
-            }
-            Start-Sleep -Seconds 10
-        } while (-not $found)
-      shell: pwsh
-    - name: (Client) Poll for an ip address uploaded by the server, set netperf-peer.
-      if: ${{ matrix.role == 'client' }}
-      run: |
-        $found = $false
-        $headers = @{
-          "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
-        }
-        $uri = "https://netperfapiwebapp.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_ipaddress"
-        do {
-          Write-Output "Checking for ip address..."
-          try {
-            $Response = Invoke-WebRequest -Uri $uri -Headers $headers
-            if (!($Response.StatusCode -eq 200)) {
-              throw "Failed to get ip address. Status code: $($Response.StatusCode)"
-            }
-            $ipAddress = $Response.Content
-            Write-Output "Ip Address found: $ipAddress"
-            if ($isWindows) {
-              $serverIp = $ipAddress.Split(" ") | Where-Object { $_.StartsWith("10") } | Select-Object -First 1
-            } else {
-              $serverIp = $ipAddress
-            }
-            Write-Output "Server IP: $serverIp"
-            $found = $true
-          }
-          catch {
-            Write-Output "Ip Address not found: $_"
-            Start-Sleep -Seconds 5
-          }
-        } while (-not $found)
-        Write-Host "Setting netperf-peer"
-        if ($isWindows) {
-          "$serverIp netperf-peer" | Out-File -Encoding ASCII -Append "$env:SystemRoot\System32\drivers\etc\hosts"
-          Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer' -Force
-        } else {
-          echo "$serverIp netperf-peer" | sudo tee -a /etc/hosts
-        }
-      shell: pwsh
-    - name: (Server | no remote pwsh) Polls for client instructions from remote cache
-      if: ${{ matrix.role == 'server' && matrix.remote_powershell_supported == 'FALSE' }}
-      timeout-minutes: 20
-      run: |
-        $found = $false
-        $headers = @{
-          "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
-        }
-        $url = "https://netperfapiwebapp.azurewebsites.net"
-        $ApprovedCommandsJson = Get-Content -Path "approved-commands.json" -Raw
-        do {
-          try {
-            $Response = Invoke-WebRequest -Uri "$url/getkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_state" -Headers $headers
-            $data = $Response.Content
-            if ($data -eq "done") {
-              $found = $true
-              break
-            }
-            $dataJson = ConvertFrom-Json $data
-            if ($dataJson.SeqNum -lt $dataJson.Commands.Count) {
-              $command = $dataJson.Commands[$dataJson.SeqNum]
-              $dataJson.SeqNum++
-              $dataJson = @{
-                value=$dataJson
-              }
-              $body = $dataJson | ConvertTo-Json
-              if ($ApprovedCommandsJson.contains($command)) {
-                Invoke-WebRequest -Uri "$url/setkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_state" -Headers $headers -Method POST -Body $body -ContentType "application/json"
-                $fullPath = "${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl"
-                $SecNetPerfPath = "$fullPath/secnetperf"
-                $env:LD_LIBRARY_PATH = "${env:LD_LIBRARY_PATH}:$fullPath"
-                chmod +x "$SecNetPerfPath"
-                if ($command.contains("lowlat")) {
-                  ${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:lowlat -io:epoll -stats:1 | Out-Null
-                } else {
-                  ${{ github.workspace }}/artifacts/bin/linux/x64_Release_openssl/secnetperf -exec:maxtput -io:epoll -stats:1 | Out-Null
-                }
-              } else {
-                Write-Output "Command not approved: $command"
-              }
-              Write-Host "Data JSON: "
-              $dataJson
-            } else {
-              Start-Sleep -Seconds 10
-            }
-          }
-          catch {
-            Write-Output "Client not done yet. Exit reason: $_"
-            Start-Sleep -Seconds 30
-          }
-        } while (-not $found)
-      shell: pwsh
+    - name: Start 1ES Machine
+      uses: ./netperfrepo/.github/actions/start-1es-machine
+      with:
+        matrix: '${{ toJson(matrix) }}'
+        callback-script-path: ${{ github.workspace }}/netperfrepo/.github/workflows/quic_callback.ps1
+        syncer_secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
     - name: (Client) Download Watermark_Regression.json file
+      uses: ./netperfrepo/.github/actions/run-general-pwsh-cmd
+      with:
+        run-cmd: |
+          Write-Host "Downloading Watermark_Regression.json file"
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/watermark_regression.json" -OutFile "watermark_regression.json" -UseBasicParsing
+    - name: Run Secnetperf Script
       if: ${{ matrix.role == 'client' }}
-      run: Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/watermark_regression.json" -OutFile "watermark_regression.json"
-      shell: pwsh
-    - name: (Client | yes remote pwsh) Run Secnetperf Script
-      if: ${{ matrix.role == 'client' && matrix.remote_powershell_supported == 'TRUE' }}
-      shell: pwsh
-      timeout-minutes: 20
-      run: ./scripts/secnetperf.ps1 `
+      uses: ./netperfrepo/.github/actions/run-test-script
+      with:
+        run-script-cmd: |
+          ./scripts/secnetperf.ps1 `
           -LogProfile ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }} `
           -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} `
           -environment ${{ matrix.env }} `
@@ -426,39 +235,13 @@ jobs:
           -tls ${{ matrix.tls }} `
           -io ${{ matrix.io }} `
           -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
-    - name: (Client | yes remote pwsh) Creates a 'done.txt' file to signal the server
-      if: ${{ matrix.role == 'client' && matrix.remote_powershell_supported == 'TRUE' }}
-      run: |
-        $Session = New-PSSession -ComputerName netperf-peer
-        Invoke-Command -Session $Session -ScriptBlock {
-          New-Item -ItemType File -Name "done.txt" -Path "C:\"
-        }
-      shell: pwsh
-    - name: (Client | no remote pwsh) Run Secnetperf Script
-      if: ${{ matrix.role == 'client' && matrix.remote_powershell_supported == 'FALSE' }}
-      shell: pwsh
-      timeout-minutes: 20
-      run: ./scripts/secnetperf.ps1 `
-          -LogProfile ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }} `
-          -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} `
-          -environment ${{ matrix.env }} `
-          -plat ${{env.OS}} `
-          -os ${{ matrix.os }} `
-          -arch ${{ matrix.arch }} `
-          -tls ${{ matrix.tls }} `
-          -io ${{ matrix.io }} `
-          -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
-          -RemotePowershellSupported 'FALSE'
-          -RunId ${{ github.run_id }}_${{ matrix.env_str }}_state
-          -SyncerSecret ${{ secrets.NETPERF_SYNCER_SECRET }}
-    - name: (Client | no remote pwsh) Uploads ACK to remote cache
-      if: ${{ matrix.role == 'client' }}
-      run: |
-        $headers = @{
-          "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
-        }
-        Invoke-WebRequest -Uri "https://netperfapiwebapp.azurewebsites.net/setkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_state&value=done" -Headers $headers -Method Post
-      shell: pwsh
+        matrix: '${{ toJson(matrix) }}'
+        syncer-secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
+    - name: Stop 1ES Machine
+      uses: ./netperfrepo/.github/actions/stop-1es-machine
+      with:
+        matrix: '${{ toJson(matrix) }}'
+        syncer_secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
     - name: Upload Test Results JSON
       if: ${{ always() }}
       uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
@@ -480,18 +263,17 @@ jobs:
         path: latency.txt
         if-no-files-found: ignore
 
-
   #
   # Test Jobs.
   # NOTE: tag == env
   #
-  run-secnetperf: # This would be 1 enumeration, after CTS has setup the environment with the correct OS type and version.
+  run-secnetperf:
     name: secnetperf
-    needs: [build-unix, build-windows, build-windows-kernel, prepare-matrix]
+    needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
     strategy:
       fail-fast: false
       matrix:
-        include: ${{fromJson(needs.prepare-matrix.outputs.full-matrix)}}
+        include: ${{fromJson(needs.prepare-matrix.outputs.lab-matrix)}}
     runs-on:
     - self-hosted
     - ${{ matrix.runner_id || matrix.env }} # Use auto-generated 'runner id' if present, otherwise assign to 'env'.
@@ -567,7 +349,7 @@ jobs:
         $headers = @{
           "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
         }
-        $url = "https://netperfapiwebapp.azurewebsites.net/cleanuprun?runid=${{ github.run_id }}"
+        $url = "https://netperfapi.azurewebsites.net/cleanuprun?runid=${{ github.run_id }}"
         Invoke-WebRequest -Uri $url -Headers $headers
 
   #
