@@ -308,7 +308,10 @@ jobs:
     - name: Run secnetperf
       shell: pwsh
       timeout-minutes: 20
-      run: ./scripts/secnetperf.ps1 `
+      run: |
+          $env:netperf_remote_powershell_supported = $true
+
+          ./scripts/secnetperf.ps1 `
           -LogProfile ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }} `
           -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} `
           -environment ${{ matrix.env }} `
