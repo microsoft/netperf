@@ -168,7 +168,7 @@ jobs:
 
   prepare-matrix:
     name: Prepare lab matrix, and Azure 1ES matrix.
-    uses: microsoft/netperf/.github/workflows/prepare-matrix.yml@jackhe/cleanup-az1es
+    uses: microsoft/netperf/.github/workflows/prepare-matrix.yml@main
     with:
       matrix_filename: 'quic_matrix.json'
       workflowId: ${{ github.run_id }}
@@ -189,7 +189,7 @@ jobs:
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       with:
         repository: microsoft/msquic
-        ref: jackhe/cleanup-az1es
+        ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
     - name: Checkout code
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       with:
