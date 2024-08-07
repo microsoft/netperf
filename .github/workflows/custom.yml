@@ -20,5 +20,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Print re-run attempt
-        run: echo "Rerun attempt - ${{ github.run_number }}"
-        
+        run: echo "Rerun attempt - ${{ github.run_attempt }}"
