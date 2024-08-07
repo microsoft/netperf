@@ -15,47 +15,52 @@ param (
     [string]$NewIpAddress,
 
     [Parameter(Mandatory = $false)]
-    [string]$RunnerLabels = ""
+    [string]$RunnerLabels = "",
+
+    [Parameter(Mandatory = $true)]
+    [boolean]$SetupRemotePowershell
 )
 
 Set-StrictMode -Version 'Latest'
 $PSDefaultParameterValues['*:ErrorAction'] = 'Stop'
 
-# Install the latest version of PowerShell.
-Write-Host "Installing latest PowerShell."
-iex "& { $(irm https://aka.ms/install-powershell.ps1) } -UseMSI -Quiet -EnablePSRemoting"
+if ($SetupRemotePowershell) {
+    # Install the latest version of PowerShell.
+    Write-Host "Installing latest PowerShell."
+    iex "& { $(irm https://aka.ms/install-powershell.ps1) } -UseMSI -Quiet -EnablePSRemoting"
 
-# Enable PowerShell remoting to peer.
-Write-Host "Enabling Remote PowerShell to peer."
-"$PeerIp netperf-peer" | Out-File -Encoding ASCII -Append "$env:SystemRoot\System32\drivers\etc\hosts"
-Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer' -Force
+    # Enable PowerShell remoting to peer.
+    Write-Host "Enabling Remote PowerShell to peer."
+    "$PeerIp netperf-peer" | Out-File -Encoding ASCII -Append "$env:SystemRoot\System32\drivers\etc\hosts"
+    Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer' -Force
 
-# Disable Windows defender / firewall.
-Write-Host "Disabling Windows Defender / Firewall."
-netsh.exe advfirewall set allprofiles state off
-Set-MpPreference -EnableNetworkProtection Disabled
-Set-MpPreference -DisableDatagramProcessing $True
+    # Disable Windows defender / firewall.
+    Write-Host "Disabling Windows Defender / Firewall."
+    netsh.exe advfirewall set allprofiles state off
+    Set-MpPreference -EnableNetworkProtection Disabled
+    Set-MpPreference -DisableDatagramProcessing $True
 
-# Make sure the user has the rights to log on.
-function Add-ServiceLogonRight ($Username) {
-    $tmp = New-TemporaryFile
-    secedit /export /cfg "$tmp.inf" | Out-Null
-    (Get-Content -Encoding ascii "$tmp.inf") -replace '^SeServiceLogonRight .+', "`$0,$Username" | Set-Content -Encoding ascii "$tmp.inf"
-    secedit /import /cfg "$tmp.inf" /db "$tmp.sdb" | Out-Null
-    secedit /configure /db "$tmp.sdb" /cfg "$tmp.inf" | Out-Null
-    Remove-Item $tmp* -ErrorAction SilentlyContinue
+    # Make sure the user has the rights to log on.
+    function Add-ServiceLogonRight ($Username) {
+        $tmp = New-TemporaryFile
+        secedit /export /cfg "$tmp.inf" | Out-Null
+        (Get-Content -Encoding ascii "$tmp.inf") -replace '^SeServiceLogonRight .+', "`$0,$Username" | Set-Content -Encoding ascii "$tmp.inf"
+        secedit /import /cfg "$tmp.inf" /db "$tmp.sdb" | Out-Null
+        secedit /configure /db "$tmp.sdb" /cfg "$tmp.inf" | Out-Null
+        Remove-Item $tmp* -ErrorAction SilentlyContinue
+    }
+    Write-Host "Enabling ServiceLogonRight."
+    Add-ServiceLogonRight -Username $Username
+
+    # Ensure password doesn't expire
+    Set-LocalUser -Name $Username -PasswordNeverExpires $true
+
+    # Configure automatic logon.
+    Write-Host "Enabling automatic logon."
+    REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v AutoAdminLogon /t REG_SZ /d 1 /f
+    REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v DefaultUserName /t REG_SZ /d $Username /f
+    REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v DefaultPassword /t REG_SZ /d $Password /f
 }
-Write-Host "Enabling ServiceLogonRight."
-Add-ServiceLogonRight -Username $Username
-
-# Ensure password doesn't expire
-Set-LocalUser -Name $Username -PasswordNeverExpires $true
-
-# Configure automatic logon.
-Write-Host "Enabling automatic logon."
-REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v AutoAdminLogon /t REG_SZ /d 1 /f
-REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v DefaultUserName /t REG_SZ /d $Username /f
-REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v DefaultPassword /t REG_SZ /d $Password /f
 
 if ($GitHubToken) {
     # Download and install the GitHub runner.
