@@ -50,12 +50,10 @@ app.post('/setkeyvalue', (req, res) => {
     }
     if (valueFromBody) {
         state[key] = valueFromBody;
-        // Set expiration time to be 30 minutes from now
         keyCreationTime[key] = new Date().getTime();
         res.send('Data has been synced from body');
     } else {
         state[key] = value;
-        // Set expiration time to be 1 minutes from now
         keyCreationTime[key] = new Date().getTime();
         res.send('Data has been synced from url params');
     }
