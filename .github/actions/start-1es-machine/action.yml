@@ -48,31 +48,31 @@ runs:
   - name: (Server) Broadcast IP address
     if: ${{ env.role == 'server' && env.HAS_PWSH == 'false' }}
     run: |
-      powershell -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Broadcast_IP' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}' -GithubContextInput3 '${{ env.env_str }}'"
+      powershell -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Broadcast_IP' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}-${{ github.run_attempt }}' -GithubContextInput3 '${{ env.env_str }}'"
     shell: cmd
   - name: (Server) Broadcast IP address
     if: ${{ env.role == 'server' && env.HAS_PWSH == 'true' }}
     run: |
-      ./netperfrepo/1es-machine-manager.ps1 -Action 'Broadcast_IP' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}' -GithubContextInput3 '${{ env.env_str }}'
+      ./netperfrepo/1es-machine-manager.ps1 -Action 'Broadcast_IP' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}-${{ github.run_attempt }}' -GithubContextInput3 '${{ env.env_str }}'
     shell: pwsh
   - name: (Client) Poll for an ip address uploaded by the server, set netperf-peer.
     if: ${{ env.role == 'client' && env.HAS_PWSH == 'false' }}
     run: |
-      powershell -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Poll_IP' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}' -GithubContextInput3 '${{ env.env_str }}'"
+      powershell -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Poll_IP' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}-${{ github.run_attempt }}' -GithubContextInput3 '${{ env.env_str }}'"
     shell: cmd
   - name: (Client) Poll for an ip address uploaded by the server, set netperf-peer.
     if: ${{ env.role == 'client' && env.HAS_PWSH == 'true' }}
     run: |
-      ./netperfrepo/1es-machine-manager.ps1 -Action 'Poll_IP' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}' -GithubContextInput3 '${{ env.env_str }}'
+      ./netperfrepo/1es-machine-manager.ps1 -Action 'Poll_IP' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}-${{ github.run_attempt }}' -GithubContextInput3 '${{ env.env_str }}'
     shell: pwsh
   - name: (Server) Polls for client instructions from remote cache
     if: ${{ env.role == 'server' && env.HAS_PWSH == 'false' }}
     run: |
-      powershell -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Poll_client_instructions' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}' -GithubContextInput3 '${{ env.env_str }}' -GithubContextInput4 '${{ inputs.callback-script-path }}'"
+      powershell -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Poll_client_instructions' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}-${{ github.run_attempt }}' -GithubContextInput3 '${{ env.env_str }}' -GithubContextInput4 '${{ inputs.callback-script-path }}'"
     shell: cmd
   - name: (Server) Polls for client instructions from remote cache
     if: ${{ env.role == 'server' && env.HAS_PWSH == 'true' }}
     run: |
-      ./netperfrepo/1es-machine-manager.ps1 -Action 'Poll_client_instructions' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}' -GithubContextInput3 '${{ env.env_str }}' -GithubContextInput4 '${{ inputs.callback-script-path }}'
+      ./netperfrepo/1es-machine-manager.ps1 -Action 'Poll_client_instructions' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}-${{ github.run_attempt }}' -GithubContextInput3 '${{ env.env_str }}' -GithubContextInput4 '${{ inputs.callback-script-path }}'
     shell: pwsh
 

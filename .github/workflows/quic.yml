@@ -171,7 +171,7 @@ jobs:
     uses: microsoft/netperf/.github/workflows/prepare-matrix.yml@main
     with:
       matrix_filename: 'quic_matrix.json'
-      workflowId: ${{ github.run_id }}
+      workflowId: ${{ github.run_id }}-${{ github.run_attempt }}
 
   run-secnetperf-1es:
     name: azure-${{ matrix.role }}-${{ matrix.os }}-${{ matrix.io }}-${{ matrix.tls }}-${{ matrix.arch }}

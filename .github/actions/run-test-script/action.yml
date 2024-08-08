@@ -24,7 +24,7 @@ runs:
       import json
       matrix = json.loads("""${{ inputs.matrix }}""")
       json_str = json.dumps(matrix).replace('"', '\\"').replace('\n', ' ').replace('\r', ' ')
-      prep_code = f"./netperfrepo/set-netperf-context.ps1 -Matrix '{json_str}' -SyncerSecret '${{ inputs.syncer-secret }}' -GithubRunId '${{ github.run_id }}';"
+      prep_code = f"./netperfrepo/set-netperf-context.ps1 -Matrix '{json_str}' -SyncerSecret '${{ inputs.syncer-secret }}' -GithubRunId '${{ github.run_id }}-${{ github.run_attempt }}';"
       prep_code += "Import-Module ./netperfrepo/netperf-lib.psm1;"
       print(f"::set-output name=netperf_context::{prep_code}")
   - name: Squeeze code to 1 line
@@ -43,7 +43,7 @@ runs:
   - name: Run Pwsh Command
     if: ${{ env.HAS_PWSH == 'true' }}
     run: |
-      ./netperfrepo/set-netperf-context.ps1 -Matrix '${{ inputs.matrix }}' -SyncerSecret '${{ inputs.syncer-secret }}' -GithubRunId '${{ github.run_id }}'
+      ./netperfrepo/set-netperf-context.ps1 -Matrix '${{ inputs.matrix }}' -SyncerSecret '${{ inputs.syncer-secret }}' -GithubRunId '${{ github.run_id }}-${{ github.run_attempt }}'
       Import-Module ./netperfrepo/netperf-lib.psm1
       ${{ inputs.run-script-cmd }}
     shell: pwsh

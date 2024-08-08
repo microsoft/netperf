@@ -14,7 +14,7 @@ jobs:
         uses: microsoft/netperf/.github/workflows/prepare-matrix.yml@main
         with:
             matrix_filename: '<YOUR_PROJECT>.json'
-            workflowId: ${{ github.run_id }}
+            workflowId: ${{ github.run_id }}-${{ github.run_attempt }}
 ```
 
 ```yaml
@@ -50,7 +50,7 @@ steps:
 ...
 -   name: Run tests on Azure infra
     run: |
-        ./netperfrepo/set-netperf-context.ps1 -Matrix '${{ toJson(matrix) }}' -GithubRunId '${{ github.run_id }}' -SyncerSecret '${{ secrets.NETPERF_SYNCER_SECRET }}'
+        ./netperfrepo/set-netperf-context.ps1 -Matrix '${{ toJson(matrix) }}' -GithubRunId '${{ github.run_id }}-${{ github.run_attempt }}' -SyncerSecret '${{ secrets.NETPERF_SYNCER_SECRET }}'
         Import-Module ./netperfrepo/netperf-lib.psm1
 
         # Run your Azure testing script now. Remember to use the helpers defined in 'netperf-lib.psm1' to facilitate P2P communication and download any binaries and artifacts beforehand.
@@ -86,7 +86,7 @@ jobs:
             ...
            -    name: Run tests on both infra
                 run: |
-                    ./netperfrepo/set-netperf-context.ps1 -Matrix '${{ toJson(matrix) }}' -GithubRunId '${{ github.run_id }}' -SyncerSecret '${{ secrets.NETPERF_SYNCER_SECRET }}'
+                    ./netperfrepo/set-netperf-context.ps1 -Matrix '${{ toJson(matrix) }}' -GithubRunId '${{ github.run_id }}-${{ github.run_attempt }}' -SyncerSecret '${{ secrets.NETPERF_SYNCER_SECRET }}'
                     Import-Module ./netperfrepo/netperf-lib.psm1
 
                     # Run your testing script here... Remember to adjust the test script to use the context variables (like $env:netperf_remote_powershell_supported) to handle the nuances of each environment. Using remote powershell when appropriate, and using the netperf-lib functions when remote powershell is not supported.

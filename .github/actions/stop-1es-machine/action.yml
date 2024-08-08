@@ -34,10 +34,10 @@ runs:
   - name: Send ACK to cache
     if: ${{ env.HAS_PWSH == 'false' }}
     run: |
-      powershell -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Stop-1es-machine' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}' -GithubContextInput3 '${{ env.env_str }}'"
+      powershell -Command "./netperfrepo/1es-machine-manager.ps1 -Action 'Stop-1es-machine' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}-${{ github.run_attempt }}' -GithubContextInput3 '${{ env.env_str }}'"
     shell: cmd
   - name: Send ACK to cache
     if: ${{ env.HAS_PWSH == 'true' }}
     run: |
-      ./netperfrepo/1es-machine-manager.ps1 -Action 'Stop-1es-machine' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}' -GithubContextInput3 '${{ env.env_str }}'
+      ./netperfrepo/1es-machine-manager.ps1 -Action 'Stop-1es-machine' -GithubContextInput1 '${{ inputs.syncer_secret }}' -GithubContextInput2 '${{ github.run_id }}-${{ github.run_attempt }}' -GithubContextInput3 '${{ env.env_str }}'
     shell: pwsh
