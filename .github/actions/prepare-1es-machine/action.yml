@@ -29,7 +29,9 @@ runs:
     shell: cmd
   - name: Install powershell 7 on Linux
     if: ${{ env.HAS_PWSH == 'false' && runner.os != 'Windows' }}
-    run: sudo ./netperfrepo/install-pwsh.sh
+    run: |
+      sudo bash ./netperfrepo/install-pwsh.sh
+      echo "HAS_PWSH=true" >> $GITHUB_ENV
     shell: bash
   - name: Lowercase runner.os
     if: ${{ env.HAS_PWSH == 'true' }}

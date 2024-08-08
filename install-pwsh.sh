@@ -79,4 +79,3 @@ else
     rm -r "$tmpDir"
 fi
 echo "PowerShell installation complete on Linux complete. Setting HAS_PWSH=true"
-echo "HAS_PWSH=true" >> $GITHUB_ENV
