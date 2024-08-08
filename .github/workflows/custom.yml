@@ -19,5 +19,10 @@ jobs:
   testjob:
     runs-on: ubuntu-latest
     steps:
-      - name: Print re-run attempt
-        run: echo "Rerun attempt - ${{ github.run_attempt }}"
+      - name: Checkout repo
+        uses: actions/checkout@v2
+        with:
+          path: netperfrepo
+      - name: Install powershell 7 on Linux
+        run: sudo ./netperfrepo/install-pwsh.sh
+        shell: bash
