@@ -1,7 +1,3 @@
-while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do
-    echo "Waiting for other software managers to finish..."
-    sleep 5
-done
 # Update the list of packages
 sudo apt-get update
 # Install pre-requisite packages.
@@ -10,6 +6,13 @@ sudo apt-get install -y wget apt-transport-https software-properties-common
 wget -q https://packages.microsoft.com/config/ubuntu/$(lsb_release --release --short)/packages-microsoft-prod.deb
 # Register the Microsoft repository GPG keys
 sudo dpkg -i packages-microsoft-prod.deb
+
+echo "================= Wait for dpkg to release lock ================="
+while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do
+    echo "Waiting for other software managers to finish..."
+    sleep 5
+done
+
 # Update the list of products
 sudo apt-get update
 # Enable the "universe" repositories
