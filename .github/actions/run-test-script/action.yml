@@ -1,4 +1,4 @@
-name: "Run Test Script"
+name: "Run Test Script [NEEDS NETPERF REPO CLONED FIRST]"
 description: "This action runs multiple steps as a composite action."
 inputs:
   run-script-cmd:

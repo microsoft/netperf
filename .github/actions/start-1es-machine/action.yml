@@ -1,4 +1,4 @@
-name: "Start 1ES Machine"
+name: "Start 1ES Machine [NEEDS NETPERF REPO CLONED FIRST]"
 description: "This action runs multiple steps as a composite action."
 inputs:
   matrix:
