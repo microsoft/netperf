@@ -112,6 +112,7 @@ $labels = "whatever_labels_you_want_tagged"
 ```PowerShell
 # Run on GitHub runner machine
 # Download the script from $url
+Invoke-WebRequest -Uri $url -OutFile setup-runner-windows.ps1
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\setup-runner-windows.ps1 -Username $username -Password $password -PeerIp $machine2 -GithubToken $token -NewIpAddress $machine1 -RunnerLabels $labels
 ```
