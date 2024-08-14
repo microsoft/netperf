@@ -18,7 +18,7 @@ param (
     [string]$RunnerLabels = "",
 
     [Parameter(Mandatory = $true)]
-    [boolean]$SetupRemotePowershell
+    [switch]$SetupRemotePowershell
 )
 
 Set-StrictMode -Version 'Latest'
