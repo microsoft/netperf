@@ -18,7 +18,10 @@ param (
     [string]$RunnerLabels = "",
 
     [Parameter(Mandatory = $false)]
-    [switch]$SetupRemotePowershell
+    [switch]$SetupRemotePowershell,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$SanityCheck
 )
 
 Set-StrictMode -Version 'Latest'
@@ -90,4 +93,15 @@ if ($NewIpAddress) {
     ipconfig
 } else {
     Write-Host "-NewIpAddress not provided. Skipping IP address setup."
+}
+
+if ($SanityCheck) {
+    $username = (Get-ItemProperty 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon').DefaultUserName
+    $password = (Get-ItemProperty 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon').DefaultPassword | ConvertTo-SecureString -AsPlainText -Force
+    $cred = New-Object System.Management.Automation.PSCredential ($username, $password)
+    $Session = New-PSSession -ComputerName 'netperf-peer' -Credential $cred -ConfigurationName PowerShell.7
+    # Make sure no errors in running any of these commands on the client machine
+    $Session
+} else {
+    Write-Host "-SanityCheck not set. Skipping sanity check."
 }

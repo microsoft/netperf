@@ -124,6 +124,16 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\setup-runner-windows.ps1 -Username $username -Password $password -PeerIp $machine1 -NewIpAddress $machine2 -RunnerLabels $labels
 ```
 
+### Final Sanity Check
+```PowerShell
+ping 'netperf-peer'
+$username = (Get-ItemProperty 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon').DefaultUserName
+$password = (Get-ItemProperty 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon').DefaultPassword | ConvertTo-SecureString -AsPlainText -Force
+$cred = New-Object System.Management.Automation.PSCredential ($username, $password)
+$Session = New-PSSession -ComputerName 'netperf-peer' -Credential $cred -ConfigurationName PowerShell.7
+# Make sure no errors in running any of these commands on the client machine
+```
+
 ## Linux Azure Configuration (Deprecated in favor of 1ES)
 
 ```Shell
