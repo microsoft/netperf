@@ -5,7 +5,7 @@ param (
     [Parameter(Mandatory = $true)]
     [string]$Password,
 
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $false)]
     [string]$PeerIP,
 
     [Parameter(Mandatory = $false)]
@@ -28,11 +28,6 @@ if ($SetupRemotePowershell) {
     # Install the latest version of PowerShell.
     Write-Host "Installing latest PowerShell."
     iex "& { $(irm https://aka.ms/install-powershell.ps1) } -UseMSI -Quiet -EnablePSRemoting"
-
-    # Enable PowerShell remoting to peer.
-    Write-Host "Enabling Remote PowerShell to peer."
-    "$PeerIp netperf-peer" | Out-File -Encoding ASCII -Append "$env:SystemRoot\System32\drivers\etc\hosts"
-    Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer' -Force
 
     # Disable Windows defender / firewall.
     Write-Host "Disabling Windows Defender / Firewall."
@@ -60,6 +55,13 @@ if ($SetupRemotePowershell) {
     REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v AutoAdminLogon /t REG_SZ /d 1 /f
     REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v DefaultUserName /t REG_SZ /d $Username /f
     REG ADD 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Winlogon' /v DefaultPassword /t REG_SZ /d $Password /f
+}
+
+if ($PeerIp) {
+    # Enable PowerShell remoting to peer.
+    Write-Host "Enabling Remote PowerShell to peer."
+    "$PeerIp netperf-peer" | Out-File -Encoding ASCII -Append "$env:SystemRoot\System32\drivers\etc\hosts"
+    Set-Item WSMan:\localhost\Client\TrustedHosts -Value 'netperf-peer' -Force
 }
 
 if ($GitHubToken) {
