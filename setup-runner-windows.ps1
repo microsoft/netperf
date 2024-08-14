@@ -17,7 +17,7 @@ param (
     [Parameter(Mandatory = $false)]
     [string]$RunnerLabels = "",
 
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $false)]
     [switch]$SetupRemotePowershell
 )
 
