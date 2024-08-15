@@ -22,6 +22,11 @@ sudo add-apt-repository --yes universe
 if apt-cache policy powershell | grep -q "Candidate:"; then
     echo "PowerShell is available in the repository. Installing..."
     # Install PowerShell from the repository
+    echo "================= Wait for dpkg to release lock ================="
+    while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do
+        echo "Waiting for other software managers to finish..."
+        sleep 5
+    done
     sudo apt-get install -y powershell
 else
     echo "PowerShell is not available in the repository. Falling back to manual installation..."
@@ -72,6 +77,13 @@ else
     # Install the PowerShell package
     echo "Installing PowerShell package..."
     sudo dpkg -i "$tmpDir/powershell.deb"
+
+    # Install PowerShell from the repository
+    echo "================= Wait for dpkg to release lock ================="
+    while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do
+        echo "Waiting for other software managers to finish..."
+        sleep 5
+    done
 
     # Resolve missing dependencies and finish the install (if necessary)
     echo "Resolving missing dependencies..."
