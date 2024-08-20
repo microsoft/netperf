@@ -16,13 +16,17 @@ on:
 permissions: write-all
 
 jobs:
-  testjob:
-    runs-on: ubuntu-latest
+  upload-core-dmp:
+    runs-on:
+    - self-hosted
+    - lab
+    - os-ubuntu-20.04
+    - x64
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v2
+      - name: Upload core dump
+        run: echo "Upload all files from /var/lib/apport/coredump"
+      - name: Upload core dump
+        uses: actions/upload-artifact@v2
         with:
-          path: netperfrepo
-      - name: Install powershell 7 on Linux
-        run: sudo bash ./netperfrepo/install-pwsh.sh
-        shell: bash
+          name: core-dump
+          path: /var/lib/apport/coredump/*
