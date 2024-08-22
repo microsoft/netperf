@@ -180,12 +180,12 @@ jobs:
     - name: Install xdp-for-windows
       working-directory: ${{ github.workspace }}\xdp
       run: |
-          cd ${{ github.workspace }}\\xdp\x64_Release\xdpinstaller
+          cd ${{ github.workspace }}\\xdp\x64_Release
           $CertFileName = 'xdp.cer'
           Get-AuthenticodeSignature 'xdp-for-windows.${{env.XDP_VERSION}}.msi' | Select-Object -ExpandProperty SignerCertificate | Export-Certificate -Type CERT -FilePath $CertFileName
           Import-Certificate -FilePath $CertFileName -CertStoreLocation 'cert:\localmachine\root'
           Import-Certificate -FilePath $CertFileName -CertStoreLocation 'cert:\localmachine\trustedpublisher'
-          $installPath = "${{ github.workspace }}\xdp\x64_release\xdpinstaller"
+          $installPath = "${{ github.workspace }}\xdp\x64_release"
           Write-Output "xdp installPath: $installPath"
           Write-Output "Installing XDP for Windows"
           $process = Start-Process msiexec.exe -Wait -ArgumentList "/i xdp-for-windows.${{env.XDP_VERSION}}.msi INSTALLFOLDER=$installPath /qn" -PassThru
