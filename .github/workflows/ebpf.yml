@@ -122,7 +122,6 @@ jobs:
         $process = Start-Process -FilePath "msiexec" -ArgumentList "/x {9363C0E3-4DE9-4067-9F5E-6A1A06034B59} /quiet /qn /norestart /log uninstall.log" -Wait -NoNewWindow
         $url = "https://raw.githubusercontent.com/microsoft/ebpf-for-windows/main/scripts/Cleanup-Installer.ps1"
         iex "& { $(irm $url) }"
-        Remove-Item -Recurse HKCU:\Software\eBPF
         if (Test-Path ${{ github.workspace }}\bpf_performance) { Remove-Item -Recurse -Force ${{ github.workspace }}\bpf_performance }
         if (Test-Path ${{ github.workspace }}\xdp) { Remove-Item -Recurse -Force ${{ github.workspace }}\xdp }
         if (Test-Path ${{ github.workspace }}\cts-traffic) { Remove-Item -Recurse -Force ${{ github.workspace }}\cts-traffic }
@@ -139,6 +138,11 @@ jobs:
         Update-MpSignature -Verbose
         Start-MpScan -ScanType QuickScan
         Add-MpPreference -ExclusionPath ${{ github.workspace }}
+
+    - name: Install latest MSVC redistirbutables
+      run: |
+        Invoke-WebRequest -Uri "https://aka.ms/vs/16/release/vc_redist.x64.exe" -OutFile "vc_redist.x64.exe"
+        Start-Process -FilePath "vc_redist.x64.exe" -ArgumentList "/install /quiet /norestart" -Wait -NoNewWindow
 
     - name: Download GH CLI if not installed
       env:
