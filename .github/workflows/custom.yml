@@ -20,6 +20,8 @@ jobs:
           name: core-dump
           path: /var/lib/apport/coredump/*
       - name: Delete all files in core dump directory
-        run: sudo rm -rf /var/lib/apport/coredump/*
+        run: |
+          whoami
+          sudo rm -rf /var/lib/apport/coredump/*
       - name: Verify deletion
         run: ls /var/lib/apport/coredump
