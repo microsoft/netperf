@@ -209,6 +209,7 @@ jobs:
         name: Release-winkernel-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}
         path: artifacts
     - name: Start 1ES Machine
+      timeout-minutes: 45
       uses: ./netperfrepo/.github/actions/start-1es-machine
       with:
         matrix: '${{ toJson(matrix) }}'
