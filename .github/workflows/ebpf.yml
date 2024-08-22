@@ -172,7 +172,7 @@ jobs:
     - name: Install xdp-for-windows
       working-directory: ${{ github.workspace }}\xdp
       run: |
-          cd ${{ github.workspace }}\\xdp\amd64fre\xdpinstaller
+          cd ${{ github.workspace }}\\xdp\x64_Release\xdpinstaller
           $CertFileName = 'xdp.cer'
           Get-AuthenticodeSignature 'xdp-for-windows.${{env.XDP_VERSION}}.msi' | Select-Object -ExpandProperty SignerCertificate | Export-Certificate -Type CERT -FilePath $CertFileName
           Import-Certificate -FilePath $CertFileName -CertStoreLocation 'cert:\localmachine\root'
