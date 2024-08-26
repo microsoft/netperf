@@ -106,6 +106,9 @@ $token = '************'    # Find at https://github.com/microsoft/netperf/settin
 $machine1 = '192.168.0.XXX' # This is the GitHub runner machine's IP address (XXX is host machine ID + 1)
 $machine2 = '192.168.0.YYY' # This is the peer machine's IP address (YYY is host machine ID + 1)
 $url = "https://raw.githubusercontent.com/microsoft/netperf/main/setup-runner-windows.ps1"
+
+Invoke-WebRequest -Uri $url -OutFile ./setup-runner-windows.ps1
+
 $labels = "whatever_labels_you_want_tagged"
 ```
 
