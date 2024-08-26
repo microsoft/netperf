@@ -139,6 +139,11 @@ jobs:
         Start-MpScan -ScanType QuickScan
         Add-MpPreference -ExclusionPath ${{ github.workspace }}
 
+    - name: Install latest MSVC redistirbutables
+      run: |
+        Invoke-WebRequest -Uri "https://aka.ms/vs/16/release/vc_redist.x64.exe" -OutFile "vc_redist.x64.exe"
+        Start-Process -FilePath "vc_redist.x64.exe" -ArgumentList "/install /quiet /norestart" -Wait -NoNewWindow
+
     - name: Download GH CLI if not installed
       env:
         GH_TOKEN: ${{ github.token }}
@@ -163,6 +168,13 @@ jobs:
         if ($process.ExitCode -ne 0) { exit $process.ExitCode }
         echo "C:\Program Files\ebpf-for-windows" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
+    - name: Upload ebpf-for-windows logs
+      if: always()
+      uses: actions/upload-artifact@v2
+      with:
+        name: ebpf-for-windows-logs
+        path: ${{ github.workspace }}\bpf_performance\install.log
+
     - name: Download xdp-for-windows
       uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
       with:
@@ -172,12 +184,12 @@ jobs:
     - name: Install xdp-for-windows
       working-directory: ${{ github.workspace }}\xdp
       run: |
-          cd ${{ github.workspace }}\\xdp\amd64fre\xdpinstaller
+          cd ${{ github.workspace }}\\xdp\x64_Release
           $CertFileName = 'xdp.cer'
           Get-AuthenticodeSignature 'xdp-for-windows.${{env.XDP_VERSION}}.msi' | Select-Object -ExpandProperty SignerCertificate | Export-Certificate -Type CERT -FilePath $CertFileName
           Import-Certificate -FilePath $CertFileName -CertStoreLocation 'cert:\localmachine\root'
           Import-Certificate -FilePath $CertFileName -CertStoreLocation 'cert:\localmachine\trustedpublisher'
-          $installPath = "${{ github.workspace }}\xdp\x64_release\xdpinstaller"
+          $installPath = "${{ github.workspace }}\xdp\x64_release"
           Write-Output "xdp installPath: $installPath"
           Write-Output "Installing XDP for Windows"
           $process = Start-Process msiexec.exe -Wait -ArgumentList "/i xdp-for-windows.${{env.XDP_VERSION}}.msi INSTALLFOLDER=$installPath /qn" -PassThru
