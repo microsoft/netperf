@@ -1,62 +1,38 @@
-name: Prepare Lab
+name: Observe Lab
 
 on:
-  workflow_dispatch:
-    inputs:
-      matrix_filename:
-        description: 'Matrix of jobs and their respective environments'
-        required: false
-        default: 'quic_matrix.json'
-        type: string
-      workflowId:
-        description: 'The ID of the caller workflow'
-        required: false
-        default: 'manual'
-        type: string
-
   workflow_call:
     inputs:
-      matrix_filename:
-        description: "Matrix of jobs and their respective environments"
-        required: false
-        default: 'quic_matrix.json'
-        type: string
-      workflowId:
-        description: "The ID of the caller workflow"
+      lab-matrix:
+        description: "Lab jobs to observe"
         required: true
         type: string
-    outputs:
-      lab-matrix:
-        description: "The full list of jobs to be run in secnetperf"
-        value: ${{ jobs.prepare-matrix.outputs.lab-matrix }}
-      azure-matrix:
-        description: "The list of jobs to be run on Azure VMs"
-        value: ${{ jobs.prepare-matrix.outputs.azure-matrix }}
-      full-matrix:
-        description: "The full list of jobs to be run in secnetperf"
-        value: ${{ jobs.prepare-matrix.outputs.full-matrix }}
-
-permissions: write-all
-
 jobs:
-  prepare-matrix:
-    name: Preparing the lab and 1es azure matrix.
-    outputs:
-      lab-matrix: ${{ steps.generate-lab-matrix.outputs.matrix }}
-      azure-matrix: ${{ steps.generate-azure-matrix.outputs.matrix }}
-      full-matrix: ${{ steps.generate-full-matrix.outputs.matrix }}
+  wait-for-checkpoint-reset:
+    strategy:
+      fail-fast: true
+      matrix: ${{ fromJson(inputs.lab-matrix) }}
+    name: Waiting for the checkpoint reset
     runs-on: windows-latest
     steps:
-    - name: Checkout
-      uses: actions/checkout@v2
-    - name: Run Prepare Matrix
-      run: ./.github/workflows/prepare-matrix.ps1
-    - id: generate-lab-matrix
-      run: echo "matrix=$(jq -c '.' ./.github/workflows/lab-matrix.json)" >> $GITHUB_OUTPUT
-      shell: bash
-    - id: generate-azure-matrix
-      run: echo "matrix=$(jq -c '.' ./.github/workflows/azure-matrix.json)" >> $GITHUB_OUTPUT
-      shell: bash
-    - id: generate-full-matrix
-      run: echo "matrix=$(jq -c '.' ./.github/workflows/full-matrix.json)" >> $GITHUB_OUTPUT
-      shell: bash
+    - name: Wait for both client and server to be ready
+      run: |
+        $headers = @{
+          "secret" = ${{ secrets.NETPERF_SYNCER_SECRET }}
+        }
+        $clientApi = "https://netperfapi.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_labclient_reset"
+        $serverApi = "https://netperfapi.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_labserver_reset"
+        while ($true) {
+          try {
+            $clientResponse = Invoke-RestMethod -Uri $clientApi -Headers $headers
+            $serverResponse = Invoke-RestMethod -Uri $serverApi -Headers $headers
+            if ($clientResponse.StatusCode -neq 200 -or $serverResponse.StatusCode -neq 200) {
+              throw "Not ready"
+            }
+            break
+          } catch {
+            Write-Host "Waiting for the checkpoint reset..."
+            Start-Sleep -Seconds 30
+          }
+        }
+      shell: pwsh
