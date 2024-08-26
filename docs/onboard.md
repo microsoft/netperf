@@ -1,3 +1,10 @@
+## Onboarding your project
+
+Before you can hook up your project to netperf via the REST api, you must first create a `XXX.yml` e.g. quic.yml, ebpf.yml... etc.
+
+Instructions on how to create this file: [Detailed instructions](./detailed-onboarding-instructions.md)
+
+
 ## Triggering a netperf Run
 
 The [run-workflow.ps1](../run-workflow.ps1) script is used to trigger the appropriate test and wait for it to complete. The script leverages the [GitHub REST API](https://docs.github.com/en/rest) to trigger the workflow, wait for it to complete and then use the result to pass or fail the original caller.  For example:
