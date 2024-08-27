@@ -58,7 +58,7 @@ foreach ($entry in $MatrixJson) {
         $AzureJson += $server
         $FullJson += $client
         $FullJson += $server
-    } elseif ($entry.env -match "lab") {
+    } elseif ($entry.env -match "lab" -or $entry.env -match "lab-stateless") {
         $labclient = $entry.PSObject.Copy()
         $env_str = [guid]::NewGuid().ToString()
         $labclient | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value "NONE"
