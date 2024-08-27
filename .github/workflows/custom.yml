@@ -16,8 +16,16 @@ jobs:
   testjobB:
     needs: testjobA
     runs-on: windows-latest
-    if: ${{ github.run_attempt == 1 }}
     steps:
       - name: Should Fail
         run: exit 1
+        shell: pwsh
+
+  aftermath:
+    needs: testjobB
+    runs-on: windows-latest
+    if: failure()
+    steps:
+      - name: Should run after testjobB
+        run: echo "This is the aftermath"
         shell: pwsh
