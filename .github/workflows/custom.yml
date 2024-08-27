@@ -20,12 +20,6 @@ jobs:
       - name: Should Fail
         run: exit 1
         shell: pwsh
-
-  aftermath:
-    needs: testjobB
-    runs-on: windows-latest
-    if: failure()
-    steps:
-      - name: Should run after testjobB
+      - name: Aftermath of failures
+        if: failure()
         run: echo "This is the aftermath"
-        shell: pwsh
