@@ -17,8 +17,8 @@ jobs:
     needs: testjobA
     runs-on: windows-latest
     steps:
-      - name: Should Fail
-        run: exit 1
+      - name: Wait...
+        run: Start-Sleep -Seconds 100
         shell: pwsh
       - name: Aftermath of failures
         if: failure()
