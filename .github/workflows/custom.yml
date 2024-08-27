@@ -8,14 +8,16 @@ permissions: write-all
 jobs:
   testjobA:
     runs-on: windows-latest
+    if: always()
     steps:
       - name: Should succeed
-        run: echo "Hello, world!"
+        run: echo "This is attempt; ${{ github.run_attempt }}"
         shell: pwsh
 
   testjobB:
     needs: [testjobA]
     runs-on: windows-latest
+    if: always()
     steps:
       - name: Should Fail
         run: exit 1
