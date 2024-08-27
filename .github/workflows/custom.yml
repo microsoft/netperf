@@ -8,24 +8,15 @@ permissions: write-all
 jobs:
   testjobA:
     runs-on: windows-latest
-    if: always()
-    steps:
-      - name: Should succeed
-        run: echo "This is attempt; ${{ github.run_attempt }}"
-        shell: pwsh
-
-  re-runtestjobA:
-    if: ${{ github.run_attempt > 1 }}
-    runs-on: windows-latest
     steps:
       - name: Should succeed
         run: echo "This is attempt; ${{ github.run_attempt }}"
         shell: pwsh
 
   testjobB:
-    needs: [testjobA, re-runtestjobA]
+    needs: testjobA
     runs-on: windows-latest
-    if: always()
+    if: ${{ github.run_attempt == 1 }}
     steps:
       - name: Should Fail
         run: exit 1
