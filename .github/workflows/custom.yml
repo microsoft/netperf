@@ -15,7 +15,7 @@ jobs:
         shell: pwsh
 
   re-runtestjobA:
-    if: ${{ failure() }}
+    if: ${{ github.run_attempt > 1 }}
     runs-on: windows-latest
     steps:
       - name: Should succeed
