@@ -2,27 +2,21 @@ name: Custom Tasks
 
 on:
   workflow_dispatch:
-    inputs:
-      os:
-        description: 'Windows OS Version'
-        required: false
-        default: "2022"
-        type: choice
-        options:
-          - "2025"
-          - "2022"
-          - "2019"
 
 permissions: write-all
 
 jobs:
-  testjob:
-    runs-on: ubuntu-latest
+  testjobA:
+    runs-on: windows-latest
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v2
-        with:
-          path: netperfrepo
-      - name: Install powershell 7 on Linux
-        run: sudo bash ./netperfrepo/install-pwsh.sh
-        shell: bash
+      - name: Should succeed
+        run: echo "Hello, world!"
+        shell: pwsh
+
+  testjobB:
+    needs: [testjobA]
+    runs-on: windows-latest
+    steps:
+      - name: Should Fail
+        run: exit 1
+        shell: pwsh
