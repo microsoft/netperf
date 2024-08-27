@@ -13,19 +13,20 @@ permissions: write-all
 jobs:
   operate-lab-server:
     name: Reverting Server Machine
-    strategy:
-      matrix:
-        include:
     runs-on:
       - self-hosted
-      - windows
+      - Windows
       - x64
-      - {{}}
+    steps:
+      - name: Hello
+        run: echo "Hello, world!"
 
   observer:
     name: Observer
     runs-on: windows-latest
     steps:
+      - name: Hello
+        run: echo "Hello, world!"
 
   operate-lab-client:
     needs: [observer]
@@ -34,4 +35,6 @@ jobs:
       - self-hosted
       - parent=${{ env.PARENT_LABEL }}
     steps:
+      - name: Hello
+        run: echo "Hello, world!"
 
