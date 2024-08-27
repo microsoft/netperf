@@ -1,0 +1,23 @@
+name: Unblock Lab Machine
+
+on:
+  workflow_dispatch:
+    inputs:
+      master-id:
+        description: 'The ID of the master lab machine (RR1-Netperf-43...etc.)'
+        required: true
+        type: string
+
+permissions: write-all
+
+jobs:
+  unblock-job:
+    runs-on: windows-latest
+    steps:
+      - name: Set master id to 'DONE' on remote cache
+        run: |
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+          $masterApi = "https://netperfapi.azurewebsites.net/setkeyvalue?key=${{ inputs.master-id }}&value=FORCEUNBLOCK"
+        shell: pwsh
