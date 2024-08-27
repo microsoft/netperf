@@ -20,8 +20,8 @@ jobs:
         $headers = @{
           "secret" = ${{ secrets.NETPERF_SYNCER_SECRET }}
         }
-        $clientApi = "https://netperfapi.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_labclient_reset"
-        $serverApi = "https://netperfapi.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_labserver_reset"
+        $clientApi = "https://netperfapi.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_labclient_reset"
+        $serverApi = "https://netperfapi.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_labserver_reset"
         while ($true) {
           try {
             $clientResponse = Invoke-RestMethod -Uri $clientApi -Headers $headers
