@@ -57,7 +57,7 @@ function Start-Workflow {
 }
 
 function Get-Runs {
-    $url = "https://api.github.com/repos/microsoft/netperf/actions/runs?event=repository_dispatch"
+    $url = "https://api.github.com/repos/microsoft/netperf/actions/runs?event=repository_dispatch&status=in_progress"
     Write-Debug "GET $url"
     return ((Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json).workflow_runs
 }
