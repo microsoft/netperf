@@ -21,7 +21,10 @@ param (
     [string]$logs = "",
 
     [Parameter(Mandatory = $false)]
-    [string]$filter = ""
+    [string]$filter = "",
+
+    [Parameter(Mandatory = $false)]
+    [switch]$skipWaiting
 )
 
 Set-StrictMode -Version 'Latest'
@@ -122,6 +125,10 @@ Start-Workflow
 Write-Host "Looking for workflow run..."
 $id = Get-RunId
 Write-Host "Found: https://github.com/microsoft/netperf/actions/runs/$id"
+
+if ($skipWaiting) {
+    return $id
+}
 
 # Wait for the run to complete.
 Write-Host "Waiting for run to complete..."
