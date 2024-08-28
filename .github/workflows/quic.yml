@@ -264,17 +264,23 @@ jobs:
         path: latency.txt
         if-no-files-found: ignore
 
+  operate-lab:
+    name: Operate Lab
+    needs: [prepare-matrix]
+    uses: microsoft/netperf/.github/workflows/operate-lab.yml@jackhe/statless-lab-runners
+    with:
+      lab-matrix: ${{ needs.prepare-matrix.outputs.lab-matrix }}
   #
   # Test Jobs.
   # NOTE: tag == env
   #
   run-secnetperf:
     name: secnetperf
-    needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
+    needs: [operate-lab, build-windows, build-windows-kernel, build-unix]
     strategy:
       fail-fast: false
       matrix:
-        include: ${{fromJson(needs.prepare-matrix.outputs.lab-matrix)}}
+        include: ${{fromJson(needs.operate-lab.outputs.vm-matrix)}}
     runs-on:
     - self-hosted
     - ${{ matrix.runner_id || matrix.env }} # Use auto-generated 'runner id' if present, otherwise assign to 'env'.

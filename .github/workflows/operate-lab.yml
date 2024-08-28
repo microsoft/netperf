@@ -11,30 +11,41 @@ on:
 permissions: write-all
 
 jobs:
-  operate-lab-server:
-    name: Reverting Server Machine
+  operate-lab-master: # Consume lab matrix, advertise to the compatible masters, run master jobs.
+    name: Finding a Master
+    strategy:
+      matrix: ${{fromJson(inputs.lab-matrix)}}
     runs-on:
       - self-hosted
       - Windows
       - x64
+      - lab-stateless
+      - os-${{ matrix.os }}
     steps:
-      - name: Hello
-        run: echo "Hello, world!"
-
-  observer:
-    name: Observer
-    runs-on: windows-latest
-    steps:
-      - name: Hello
-        run: echo "Hello, world!"
-
-  operate-lab-client:
-    needs: [observer]
-    name: Reverting Client Machine
-    runs-on:
-      - self-hosted
-      - parent=${{ env.PARENT_LABEL }}
-    steps:
-      - name: Hello
-        run: echo "Hello, world!"
+      - name: Dispatch the slave workflow
+        run: |
+          # Use the Github API to trigger slave workflow
+          $headers = @{
+            "Authorization" = "Bearer ${{ secrets.GITHUB_TOKEN }}"
+            "Accept" = "application/vnd.github.v3+json"
+          }
+          $body
+      - name: Revert Checkpoint
+        run: |
+          $vmName = "netperf-${{ matrix.os }}-server"
+          $checkPointName = "LATEST"
+          Restore-VMSnapshot -VMName $vmName -Name $checkPointName -Confirm:$false
+      - name: Start VM and wait for online status
+        run: |
+          $vmName = "netperf-${{ matrix.os }}-server"
+          Start-VM -Name $vmName
+          Wait-VMOnline -VMName $vmName
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+      - name: Wait for a status update from the test jobf
+        run: |
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
 

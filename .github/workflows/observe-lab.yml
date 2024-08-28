@@ -8,14 +8,14 @@ on:
         required: true
         type: string
 jobs:
-  wait-for-checkpoint-reset:
+  wait-for-lab-operator:
     strategy:
       fail-fast: true
       matrix: ${{ fromJson(inputs.lab-matrix) }}
     name: Waiting for the checkpoint reset
     runs-on: windows-latest
     steps:
-    - name: Wait for both client and server to be ready
+    - name: Did every entry in lab-matrix get an assigned master?
       run: |
         $headers = @{
           "secret" = ${{ secrets.NETPERF_SYNCER_SECRET }}

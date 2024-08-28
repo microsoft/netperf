@@ -13,13 +13,13 @@ runs:
   using: "composite"
   steps:
     - name: Report aftermath of Job [Failure]
-      if: failure() || cancelled()
+      if: failure()
       run: |
         $headers = @{
           "secret" = "${{ inputs.syncer_secret }}"
         }
         $master_lab_machine_id = "${{ inputs.master }}"
-        $api = "https://netperfapi.azurewebsites.net/setkeyvalue?key=$master_lab_machine_id&value=FAIL"
+        $api = "https://netperfapi.azurewebsites.net/setkeyvalue?key=$master_lab_machine_id&value=FAILED"
         Invoke-WebRequest -Uri $api -Headers $headers -Method Post
     - name: Report aftermath of Job [Success]
       if: success()
@@ -29,5 +29,14 @@ runs:
         }
         $master_lab_machine_id = "${{ inputs.master }}"
         $api = "https://netperfapi.azurewebsites.net/setkeyvalue?key=$master_lab_machine_id&value=SUCCESS"
+        Invoke-WebRequest -Uri $api -Headers $headers -Method Post
+    - name: Report aftermath of Job [Cancelled]
+      if: cancelled()
+      run: |
+        $headers = @{
+          "secret" = "${{ inputs.syncer_secret }}"
+        }
+        $master_lab_machine_id = "${{ inputs.master }}"
+        $api = "https://netperfapi.azurewebsites.net/setkeyvalue?key=$master_lab_machine_id&value=CANCELLED"
 
 
