@@ -38,5 +38,3 @@ runs:
         }
         $master_lab_machine_id = "${{ inputs.master }}"
         $api = "https://netperfapi.azurewebsites.net/setkeyvalue?key=$master_lab_machine_id&value=CANCELLED"
-
-

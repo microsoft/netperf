@@ -7,32 +7,19 @@ on:
         description: "Lab jobs to observe"
         required: true
         type: string
+      project:
+        description: "The project dispatch workflows to"
+        required: true
+        type: string
 jobs:
-  wait-for-lab-operator:
-    strategy:
-      fail-fast: true
-      matrix: ${{ fromJson(inputs.lab-matrix) }}
-    name: Waiting for the checkpoint reset
+  lab-observer:
+    name: Current Lab State
     runs-on: windows-latest
     steps:
-    - name: Did every entry in lab-matrix get an assigned master?
+    - name: Observe Job Status
       run: |
-        $headers = @{
-          "secret" = ${{ secrets.NETPERF_SYNCER_SECRET }}
-        }
-        $clientApi = "https://netperfapi.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_labclient_reset"
-        $serverApi = "https://netperfapi.azurewebsites.net/getkeyvalue?key=${{ github.run_id }}_${{ matrix.env_str }}_labserver_reset"
-        while ($true) {
-          try {
-            $clientResponse = Invoke-RestMethod -Uri $clientApi -Headers $headers
-            $serverResponse = Invoke-RestMethod -Uri $serverApi -Headers $headers
-            if ($clientResponse.StatusCode -neq 200 -or $serverResponse.StatusCode -neq 200) {
-              throw "Not ready"
-            }
-            break
-          } catch {
-            Write-Host "Waiting for the checkpoint reset..."
-            Start-Sleep -Seconds 30
-          }
-        }
+        $lab_matrix = ConvertFrom-Json ${{ inputs.lab-matrix }}
+        # Dispatch Test Job Workflow
+
+
       shell: pwsh

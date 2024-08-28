@@ -17,9 +17,16 @@ jobs:
     needs: testjobA
     runs-on: windows-latest
     steps:
+      - name: Checkout netperf
+        uses: actions/checkout@v2
+        with:
+          ref: 'jackhe/statless-lab-runners'
+          path: 'netperfrepo'
       - name: Wait...
         run: Start-Sleep -Seconds 100
         shell: pwsh
-      - name: Aftermath of failures
-        if: failure() || cancelled()
-        run: echo "This is the aftermath"
+      - name: Run composite action
+        uses: ./netperfrepo/.github/actions/stop-lab-machine
+        with:
+          master: '69'
+          syncer_secret: ${{ secrets.SYNCER_SECRET }}
