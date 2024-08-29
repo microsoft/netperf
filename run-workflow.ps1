@@ -57,9 +57,14 @@ function Start-Workflow {
 }
 
 function Get-Runs {
-    $url = "https://api.github.com/repos/microsoft/netperf/actions/runs?event=repository_dispatch&status=in_progress"
-    Write-Debug "GET $url"
-    return ((Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json).workflow_runs
+    $url_in_progress = "https://api.github.com/repos/microsoft/netperf/actions/runs?event=repository_dispatch&status=in_progress"
+    $url_queued = "https://api.github.com/repos/microsoft/netperf/actions/runs?event=repository_dispatch&status=queued"
+    Write-Debug "GET $url_in_progress"
+    Write-Debug "GET $url_queued"
+    $in_progress = ((Invoke-WebRequest -Uri $url_in_progress -Method GET -Headers $headers).Content | ConvertFrom-Json).workflow_runs
+    $queued = ((Invoke-WebRequest -Uri $url_queued -Method GET -Headers $headers).Content | ConvertFrom-Json).workflow_runs
+    # Return both merged
+    return $in_progress + $queued
 }
 
 function Get-Run {
