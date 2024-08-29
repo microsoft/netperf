@@ -27,7 +27,6 @@ jobs:
               os = "windows"
               io = "xdp"
             }
-            ref = "jackhe/statless-lab-runners"
           } | ConvertTo-Json
           Write-Debug "POST $url"
           Write-Debug "BODY $body"
