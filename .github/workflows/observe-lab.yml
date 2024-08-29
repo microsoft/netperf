@@ -13,10 +13,10 @@ on:
         type: string
 jobs:
   lab-observer:
-    name: Current Lab State
+    name: Oracle
     runs-on: windows-latest
     steps:
-    - name: Observe Job Status
+    - name: Observing Lab State...
       run: |
         $lab_matrix = ConvertFrom-Json ${{ inputs.lab-matrix }}
 
@@ -29,7 +29,7 @@ jobs:
         }
 
         function DisplayTruthTable {
-
+                       
         }
 
         function Get-Jobs {
