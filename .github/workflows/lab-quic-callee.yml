@@ -1,0 +1,19 @@
+name: Lab Quic Callee
+
+on:
+  repository_dispatch:
+    types: [quic-callee-lab-dispatch]
+
+jobs:
+  name:
+    # Automated identification of the workflow
+    name: For ${{ github.event.client_payload.env_str }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print input params
+        run: |
+          echo "master_id: ${{ github.event.client_payload.master_id }}"
+          echo "slave_id: ${{ github.event.client_payload.slave_id }}"
+          echo "env_str: ${{ github.event.client_payload.env_str }}"
+          echo "os: ${{ github.event.client_payload.os }}"
+          echo "io: ${{ github.event.client_payload.io }}"
