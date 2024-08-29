@@ -239,6 +239,7 @@ jobs:
         matrix: '${{ toJson(matrix) }}'
         syncer-secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
     - name: Stop 1ES Machine
+      if: ${{ always() }}
       uses: ./netperfrepo/.github/actions/stop-1es-machine
       with:
         matrix: '${{ toJson(matrix) }}'
