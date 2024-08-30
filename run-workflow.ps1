@@ -24,7 +24,10 @@ param (
     [string]$filter = "",
 
     [Parameter(Mandatory = $false)]
-    [switch]$skipWaiting
+    [switch]$skipWaiting,
+
+    [Parameter(Mandatory = $false)]
+    [string]$project = "",
 )
 
 Set-StrictMode -Version 'Latest'
@@ -80,6 +83,11 @@ function Get-RunId {
     for ($i = 0; $i -lt 10; $i++) { # Try up to 10 times
         $workflows = Get-Runs
         foreach ($workflow in $workflows) {
+            if ($project) {
+                if ($project.name -ne $workflow.name) {
+                    continue
+                }
+            }
             $jobs = Get-Jobs $workflow.id
             foreach ($job in $jobs) {
                 if ($job.name.Contains($guid)) {
