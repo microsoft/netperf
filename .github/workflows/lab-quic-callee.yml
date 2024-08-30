@@ -1,8 +1,8 @@
-name: Lab Quic Callee
+name: lab-quic-callee
 
 on:
   repository_dispatch:
-    types: [quic-callee-lab-dispatch]
+    types: [lab-quic-callee]
 
 jobs:
   name:
