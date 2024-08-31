@@ -19,7 +19,7 @@ jobs:
           }
           $url = "https://api.github.com/repos/microsoft/netperf/dispatches"
           $body = @{
-            event_type = "quic-callee-lab-dispatch"
+            event_type = "lab-quic-callee"
             client_payload = @{
               master_id = "69"
               slave_id = "420"
@@ -49,6 +49,11 @@ jobs:
               for ($i = 0; $i -lt 10; $i++) { # Try up to 10 times
                   $workflows = Get-Runs
                   foreach ($workflow in $workflows) {
+                      if ($workflow.name -ne "lab-quic-callee") {
+                          $name = $workflow.name
+                          Write-Host "Skipping run $name"
+                          continue
+                      }
                       $jobs = Get-Jobs $workflow.id
                       foreach ($job in $jobs) {
                           if ($job.name.Contains("hello-world")) {

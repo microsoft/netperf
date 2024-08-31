@@ -19,17 +19,75 @@ jobs:
     - name: Observing Lab State...
       run: |
         $lab_matrix = ConvertFrom-Json ${{ inputs.lab-matrix }}
-
         $truth_table = @()
-
         $headers = @{
             "Accept" = "application/vnd.github+json"
             "Authorization" = "Bearer ${{ secrets.GITHUB_TOKEN }}"
             "X-GitHub-Api-Version" = "2022-11-28"
         }
 
+        # Initializing truth table
+        while ($truth_table.Count -lt $lab_matrix.Count) {
+          $jobs = Get-Jobs -runId ${{ github.run_id }}
+          foreach ($job in $jobs) {
+            foreach ($todo in $lab_matrix) {
+              if ($job.name.Contains($todo.env_str)) {
+                if ($job.status -eq "completed") {
+                  $truth_table += [PSCustomObject]@{
+                    "job" = $job
+                    "current_state" = "3_COMPLETED"
+                    "conclusion" = $job.conclusion
+                    "dispatched_workflow_url" = Get-DispatchedWorkflowUrl -job $job
+                  }
+                } else {
+
+                }
+              }
+            }
+          }
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        foreach ($job in $lab_matrix) {
+          $truth_table += [PSCustomObject]@{
+            "job" = $job
+            "current_state" = "0_AWAIT_MASTER_SLAVE_RESET" # 0_AWAIT_MASTER_SLAVE_RESET, 1_AWAIT_DISPATCHED_VM_COME_ONLINE, 2_AWAIT_VM_PERF_JOB_COMPLETE, 3_COMPLETED,
+            "conclusion" = "" # success, failure, cancelled
+            "dispatched_workflow_url" = ""
+          }
+        }
+
+        function DispatchWorkflow {
+
+        }
+
         function DisplayTruthTable {
-                       
+
         }
 
         function Get-Jobs {
@@ -40,12 +98,7 @@ jobs:
         }
 
         if (${{ github.run_attempt }} -eq 1) {
-          foreach ($todo in $lab_matrix) {
-            $truth_table += [PSCustomObject]@{
-              "todo" = $todo
-              "current_state" = "AWAITING_MASTER_SLAVE_RESET"
-            }
-          }
+
         } else {
           $jobs = Get-Jobs -runId ${{ github.run_id }}
           $missed_jobs = @()

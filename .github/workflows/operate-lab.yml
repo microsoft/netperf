@@ -1,3 +1,6 @@
+# TODO: Always, as a final step before shutting down, run a step that prints out the workflow URL of the child VM perf test workflow for later consumption.
+
+
 name: Operate Lab
 
 on:
