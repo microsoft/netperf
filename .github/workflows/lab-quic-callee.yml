@@ -5,15 +5,19 @@ on:
     types: [lab-quic-callee]
 
 jobs:
-  name:
-    # Automated identification of the workflow
-    name: For ${{ github.event.client_payload.env_str }}
+  netperf-register:
+    name: Register this VM test run
     runs-on: ubuntu-latest
     steps:
       - name: Print input params
         run: |
-          echo "master_id: ${{ github.event.client_payload.master_id }}"
-          echo "slave_id: ${{ github.event.client_payload.slave_id }}"
-          echo "env_str: ${{ github.event.client_payload.env_str }}"
+          echo "assigned_runner_id: ${{ github.event.client_payload.assigned_runner_id }}"
+          echo "unique_env_str: ${{ github.event.client_payload.unique_env_str }}"
           echo "os: ${{ github.event.client_payload.os }}"
           echo "io: ${{ github.event.client_payload.io }}"
+      - name: Upload current workflow ID (unique_env_str = this_workflow_id)
+        run: |
+          $header = @{
+            "secret" = ${{ secrets.NETPERF_SYNCER_SECRET }}
+          } 
+          # TODO

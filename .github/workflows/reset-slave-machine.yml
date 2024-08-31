@@ -1,0 +1,15 @@
+name: reset-slave-machine
+
+on:
+  repository_dispatch:
+    types: [reset-slave-machine]
+
+jobs:
+  print-params:
+    name: Print Parameters
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print input params
+        run: |
+          echo "master_id: ${{ github.event.client_payload.master_id }}" # slave id is master id - 1.
+          echo "unique_env_str: ${{ github.event.client_payload.unique_env_str }}"
