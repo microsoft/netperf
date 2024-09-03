@@ -168,7 +168,13 @@ jobs:
         }
 
         function DisplayTruthTable {
-          // TODO
+          foreach ($row in $truth_table) {
+            Write-Host "Job: $($row.job.name)"
+            Write-Host "Current State: $($row.current_state)"
+            Write-Host "Conclusion: $($row.conclusion)"
+            Write-Host "Dispatched Workflow URL: $($row.dispatched_workflow_url)"
+            Write-Host "---------------------------------"
+          }
         }
 
         function Get-Assigned-Runner {
@@ -181,11 +187,15 @@ jobs:
           try {
             $master_response = Invoke-WebRequest -Uri $master_url -Headers $headers -Method Get
             $slave_response = Invoke-WebRequest -Uri $slave_url -Headers $headers -Method Get
-
-            // TODO
-
+            if ($master_response.status -neq "success" -or $slave_response.status -neq "success") {
+              throw "Master or slave not ready"
+            }
+            $master_id = $master_response.Content
+            $slave_id = $slave_response.Content
+            return "$master_id,$slave_id"
           } catch {
             Write-Host "Failed to get assigned runner: $_"
+            return $null
           }
         }
 
