@@ -297,7 +297,7 @@ jobs:
   #
   generate-summary:
     name: Results
-    needs: [run-secnetperf, run-secnetperf-1es]
+    needs: [observe-lab, run-secnetperf-1es]
     runs-on: 'ubuntu-20.04'
     steps:
     - name: Checkout repository
@@ -314,7 +314,7 @@ jobs:
   save-test-results:
     permissions: write-all
     name: Persist Results in DB
-    needs: [run-secnetperf, run-secnetperf-1es]
+    needs: [observe-lab, run-secnetperf-1es]
     if: ${{ (github.event_name == 'repository_dispatch' && github.event.client_payload.pr == '') || inputs.commit }}
     strategy:
       fail-fast: false
