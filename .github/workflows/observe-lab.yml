@@ -44,12 +44,12 @@ jobs:
           foreach ($job in $jobs) {
             foreach ($todo in $lab_matrix) {
               if ($job.name.Contains($todo.env_str)) {
-                if ($job.status -eq "completed") {
+                if ($job.status -eq "completed" -and $job.conclusion -eq "success") {
                   $truth_table += [PSCustomObject]@{
                     "job" = $job
                     "current_state" = "3_COMPLETED"
-                    "conclusion" = $job.conclusion
-                    "dispatched_workflow_url" = Get-DispatchedWorkflowUrl -job $job
+                    "conclusion" = "success"
+                    "dispatched_workflow_url" = Get-Historical-WorkflowId -job $job
                   }
                 } else {
                   $truth_table += [PSCustomObject]@{
@@ -62,6 +62,8 @@ jobs:
               }
             }
           }
+          Write-Host "Initializing truth table... Status: $($truth_table.Count)/$($lab_matrix.Count)"
+          Start-Sleep -Seconds 10
         }
 
         ############################################################################################################
@@ -114,6 +116,18 @@ jobs:
         ############################################################################################################
         # FUNCTION DEFINITIONS
         ############################################################################################################
+
+        function Get-Historical-WorkflowId {
+          param([PSCustomObject]$job)
+          foreach ($step in $job.steps) {
+            if ($step.name.Contains("Wait-Callee")) {
+              $id = $step.name.Split("_")[1]
+              return "https://api.github.com/repos/microsoft/netperf/actions/runs/$id"
+            }
+          }
+          Write-Host "Failed to get historical workflow ID for a job that should have succeeded."
+          exit 1
+        }
 
         function NotDoneYet {
           $fail_observer = $false

@@ -15,9 +15,9 @@ permissions: write-all
 
 jobs:
   operate-lab-master: # Consume lab matrix, advertise to the compatible masters, run master jobs.
-    name: Operate Lab Master Node
     strategy:
       matrix: ${{fromJson(inputs.lab-matrix)}}
+    name: Operate-Lab For ${{ matrix.os }}-${{ matrix.io }}-${{ matrix.env_str }}
     runs-on:
       - self-hosted
       - Windows
@@ -84,7 +84,6 @@ jobs:
             exit 1
           }
       - name: Grab workflow ID of callee from the truth table
-        id: grab-callee-workflow-id
         run: |
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
@@ -102,7 +101,7 @@ jobs:
                 if ($row.job.env_str.Contains("${{ matrix.env_str }}")) {
                   if ($row.dispatched_workflow_url) {
                     $callee_workflow_id = $row.dispatched_workflow_url
-                    set-output -name callee_workflow_id -value $callee_workflow_id # TODO: is this syntax correct?
+                    echo "CalleeWorkflowId=$callee_workflow_id" >> $env:GITHUB_ENV
                     $done = $true
                   }
                 }
@@ -117,7 +116,7 @@ jobs:
             Start-Sleep -Seconds 20
           }
 
-      - name: Wait callee ${{ grab-callee-workflow-id.outputs.callee_workflow_id }} to complete
+      - name: Wait-Callee_${{ env.CalleeWorkflowId }}
         run: |
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
