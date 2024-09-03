@@ -35,9 +35,27 @@ jobs:
 
           $master_id = whoami
           $os = ${{ matrix.os }}
-          $unique_env_str = ${{ github.run_id }}_${{ github.run_attempt }}_${{ matrix.env_str }}
+          $unique_env_str = "${{ github.run_id }}_${{ github.run_attempt }}_${{ matrix.env_str }}"
 
-          // TODO
+          $url = "https://api.github.com/repos/microsoft/netperf/dispatches"
+          $body = @{
+            event_type = "reset-slave-machine"
+            client_payload = @{
+              master_id = "$master_id",
+              os = "$os",
+              unique_env_str = "$unique_env_str"
+            }
+          } | ConvertTo-Json
+
+          try {
+            $Response = Invoke-WebRequest -Uri $url -Method POST -Headers $headers -Body $body
+            if ($Response.StatusCode -ne 204) {
+              throw "Failed to dispatch slave workflow: $Response"
+            }
+          } catch {
+            Write-Host "Failed to dispatch slave workflow: $_"
+            exit 1
+          }
 
       - name: RESET STATE (MASTER)
         run: |
@@ -72,21 +90,31 @@ jobs:
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
           $key = "${{ github.run_id }}_${{ github.run_attempt }}_truth_table"
-          while ($true) {
-            $api = "https://netperfapi.azurewebsites.net/getkeyvalue?key=$key"
-            $response = Invoke-WebRequest -Uri $api -Headers $headers -Method Get
-            $truth_table = ConvertFrom-Json $response.Content
-            foreach ($row in $truth_table) {
-              if ($row.job.env_str.Contains("${{ matrix.env_str }}")) {
-                if ($row.dispatched_workflow_url) {
-                  $callee_workflow_id = $row.dispatched_workflow_url
-                  # set output here
-                  set-output -name callee_workflow_id -value $callee_workflow_id
-                  break
+          $done = $false
+          $attempts = 0
+          while (!$done) {
+            $attempts++
+            try {
+              $api = "https://netperfapi.azurewebsites.net/getkeyvalue?key=$key"
+              $response = Invoke-WebRequest -Uri $api -Headers $headers -Method Get
+              $truth_table = ConvertFrom-Json $response.Content
+              foreach ($row in $truth_table) {
+                if ($row.job.env_str.Contains("${{ matrix.env_str }}")) {
+                  if ($row.dispatched_workflow_url) {
+                    $callee_workflow_id = $row.dispatched_workflow_url
+                    set-output -name callee_workflow_id -value $callee_workflow_id # TODO: is this syntax correct?
+                    $done = $true
+                  }
                 }
               }
+            } catch {
+              Write-Host "Failed to grab callee workflow ID from truth table: $_"
             }
-            Start-Sleep -Seconds 10
+            if (!done -and $attempts -gt 36) {
+              Write-Host "Failed to grab callee workflow ID from truth table after 12 minutes."
+              exit 1
+            }
+            Start-Sleep -Seconds 20
           }
 
       - name: Wait callee ${{ grab-callee-workflow-id.outputs.callee_workflow_id }} to complete
@@ -94,7 +122,7 @@ jobs:
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
-          $url = "https://api.github.com/repos/netperf/actions/runs/${{ grab-callee-workflow-id.outputs.callee_workflow_id}}" 
+          $url = "https://api.github.com/repos/netperf/actions/runs/${{ grab-callee-workflow-id.outputs.callee_workflow_id}}"
           while ($true) {
             $response = Invoke-WebRequest -Uri $url -Headers $headers -Method Get
             $run_status = ConvertFrom-Json $response.Content

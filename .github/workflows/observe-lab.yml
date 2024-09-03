@@ -7,8 +7,8 @@ on:
         description: "Lab jobs to observe"
         required: true
         type: string
-      project:
-        description: "The project dispatch workflows to"
+      project-callee:
+        description: "The callee to dispatch workflows to"
         required: true
         type: string
 jobs:
@@ -74,7 +74,7 @@ jobs:
             foreach ($row in $truth_table) {
               switch ($row.current_state) {
                 "0_AWAIT_MASTER_SLAVE_RESET" {
-                  $assigned_runner = Get-Assigned-Runner -env_str $row.job.env_str
+                  $assigned_runner = Get-Assigned-Runner -job $row.job
                   if ($assigned_runner) {
                     DispatchCallee -job $row.job -assigned_runner $assigned_runner
                     $row.current_state = "1_AWAIT_CALLEE_INITIALIZATION"
@@ -108,7 +108,7 @@ jobs:
             Start-Sleep -Seconds 20
           } catch {
             Write-Host "Observer loop error: $_"
-          } 
+          }
         }
 
         ############################################################################################################
@@ -139,11 +139,32 @@ jobs:
             [PSCustomObject]$job,
             [string]$assigned_runner
           )
-          $api = "https:// ... TODO ..."
+          $url = "https://api.github.com/repos/microsoft/netperf/dispatches"
+          $unique_env_str = "${{ github.run_id }}_${{ github.run_attempt }}_" + $job.env_str
+          $body = @{
+            event_type = "${{ inputs.project_callee }}"
+            client_payload = @{
+              assigned_runner = "$assigned_runner",
+              unique_env_str = "$unique_env_str",
+              os = $job.os,
+              io = $job.io,
+              tls = $job.tls,
+              arch = $job.arch
+            } | ConvertTo-Json
+          }
         }
 
         function Get-DispatchedTestRunWorkflowUrl {
-          // TODO
+          param([PSCustomObject]$job)
+          $key = "${{ github.run_id }}_${{ github.run_attempt }}_" + $job.env_str + "_vm_online"
+          $url = "https://netperfapi.azurewebsites.net/getkeyvalue?key=$key"
+          try {
+            $response = Invoke-WebRequest -Uri $url -Headers $headers -Method Get
+            return $response.Content
+          } catch {
+            Write-Host "Failed to get dispatched test run workflow URL: $_"
+            return $null
+          }
         }
 
         function DisplayTruthTable {
@@ -151,7 +172,21 @@ jobs:
         }
 
         function Get-Assigned-Runner {
-          // TODO
+          param([PSCustomObject]$job)
+
+          $master_key = "${{ github.run_id }}_${{ github.run_attempt }}_" + $job.env_str + "_master_reset_done"
+          $slave_key = "${{ github.run_id }}_${{ github.run_attempt }}_" + $job.env_str + "_slave_reset_done"
+          $master_url = "https://netperfapi.azurewebsites.net/getkeyvalue?key=$master_key"
+          $slave_url = "https://netperfapi.azurewebsites.net/getkeyvalue?key=$slave_key"
+          try {
+            $master_response = Invoke-WebRequest -Uri $master_url -Headers $headers -Method Get
+            $slave_response = Invoke-WebRequest -Uri $slave_url -Headers $headers -Method Get
+
+            // TODO
+
+          } catch {
+            Write-Host "Failed to get assigned runner: $_"
+          }
         }
 
         function Get-Jobs {
