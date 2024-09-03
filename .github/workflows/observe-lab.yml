@@ -116,11 +116,30 @@ jobs:
         ############################################################################################################
 
         function NotDoneYet {
-          // TODO
+          $fail_observer = $false
+          foreach ($row in $truth_table) {
+            if ($row.current_state -ne "3_COMPLETED") {
+              return $true
+            }
+            if ($row.conclusion -neq "success") {
+              $fail_observer = $true
+            }
+          }
+
+          if ($fail_observer) {
+            Write-Host "Some jobs failed. Exiting observer loop."
+            exit 1
+          }
+
+          return $false
         }
 
         function DispatchCallee {
-          // TODO
+          param (
+            [PSCustomObject]$job,
+            [string]$assigned_runner
+          )
+          $api = "https:// ... TODO ..."
         }
 
         function Get-DispatchedTestRunWorkflowUrl {
