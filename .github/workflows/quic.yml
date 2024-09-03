@@ -120,51 +120,51 @@ jobs:
   # Build Jobs
   #
 
-  build-windows:
-    name: Build WinUser
-    needs: []
-    strategy:
-      fail-fast: false
-      matrix:
-        os: ['windows-2022']
-        tls: [schannel] # , openssl, openssl3]
-    uses: microsoft/msquic/.github/workflows/build-reuse-win.yml@main
-    with:
-      os: ${{ matrix.os }}
-      tls: ${{ matrix.tls }}
-      build: -Perf
-      ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+  # build-windows:
+  #   name: Build WinUser
+  #   needs: []
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       os: ['windows-2022']
+  #       tls: [schannel] # , openssl, openssl3]
+  #   uses: microsoft/msquic/.github/workflows/build-reuse-win.yml@main
+  #   with:
+  #     os: ${{ matrix.os }}
+  #     tls: ${{ matrix.tls }}
+  #     build: -Perf
+  #     ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
-  build-windows-kernel:
-    name: Build WinKernel
-    needs: []
-    strategy:
-      fail-fast: false
-      matrix:
-        os: ['windows-2022']
-    uses: microsoft/msquic/.github/workflows/build-reuse-winkernel.yml@main
-    with:
-      os: ${{ matrix.os }}
-      ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+  # build-windows-kernel:
+  #   name: Build WinKernel
+  #   needs: []
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       os: ['windows-2022']
+  #   uses: microsoft/msquic/.github/workflows/build-reuse-winkernel.yml@main
+  #   with:
+  #     os: ${{ matrix.os }}
+  #     ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
-  build-unix:
-    name: Build Unix
-    needs: []
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: 'ubuntu-20.04'
-            tls: 'openssl'
-          - os: 'ubuntu-22.04'
-            tls: 'openssl3'
-    uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml@main
-    with:
-      os: ${{ matrix.os }}
-      tls: ${{ matrix.tls }}
-      xdp: ${{ matrix.xdp }}
-      build: -Perf
-      ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+  # build-unix:
+  #   name: Build Unix
+  #   needs: []
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       include:
+  #         - os: 'ubuntu-20.04'
+  #           tls: 'openssl'
+  #         - os: 'ubuntu-22.04'
+  #           tls: 'openssl3'
+  #   uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml@main
+  #   with:
+  #     os: ${{ matrix.os }}
+  #     tls: ${{ matrix.tls }}
+  #     xdp: ${{ matrix.xdp }}
+  #     build: -Perf
+  #     ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
   prepare-matrix:
     name: Prepare lab matrix, and Azure 1ES matrix.
@@ -173,96 +173,96 @@ jobs:
       matrix_filename: 'quic_matrix.json'
       workflowId: ${{ github.run_id }}-${{ github.run_attempt }}
 
-  run-secnetperf-1es:
-    name: azure-${{ matrix.role }}-${{ matrix.os }}-${{ matrix.io }}-${{ matrix.tls }}-${{ matrix.arch }}
-    needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{fromJson(needs.prepare-matrix.outputs.azure-matrix)}}
-    runs-on:
-    - self-hosted
-    - 1ES.Pool=${{ matrix.assigned_pool }}
-    steps:
-    - name: Checkout microsoft/msquic
-      if: ${{ matrix.role == 'client' }}
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
-      with:
-        repository: microsoft/msquic
-        ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
-    - name: Checkout code
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
-      with:
-        path: netperfrepo
-    - name: Prepares 1ES Machine
-      if: ${{ matrix.env == 'azure' }}
-      uses: ./netperfrepo/.github/actions/prepare-1es-machine
-    - name: Download Artifacts
-      uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
-      with:
-        name: Release-${{env.OS}}-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-Perf
-        path: artifacts
-    - name: Download Kernel Artifacts
-      uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
-      if: ${{ matrix.io == 'wsk' }}
-      with:
-        name: Release-winkernel-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}
-        path: artifacts
-    - name: Start 1ES Machine
-      timeout-minutes: 45
-      uses: ./netperfrepo/.github/actions/start-1es-machine
-      with:
-        matrix: '${{ toJson(matrix) }}'
-        callback-script-path: ${{ github.workspace }}/netperfrepo/.github/workflows/quic_callback.ps1
-        syncer_secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
-    - name: (Client) Download Watermark_Regression.json file
-      uses: ./netperfrepo/.github/actions/run-general-pwsh-cmd
-      with:
-        run-cmd: |
-          Write-Host "Downloading Watermark_Regression.json file"
-          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/watermark_regression.json" -OutFile "watermark_regression.json" -UseBasicParsing
-    - name: Run Secnetperf Script
-      if: ${{ matrix.role == 'client' }}
-      uses: ./netperfrepo/.github/actions/run-test-script
-      with:
-        run-script-cmd: |
-          ./scripts/secnetperf.ps1 `
-          -LogProfile ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }} `
-          -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} `
-          -environment ${{ matrix.env }} `
-          -plat ${{env.OS}} `
-          -os ${{ matrix.os }} `
-          -arch ${{ matrix.arch }} `
-          -tls ${{ matrix.tls }} `
-          -io ${{ matrix.io }} `
-          -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
-        matrix: '${{ toJson(matrix) }}'
-        syncer-secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
-    - name: Stop 1ES Machine
-      uses: ./netperfrepo/.github/actions/stop-1es-machine
-      with:
-        matrix: '${{ toJson(matrix) }}'
-        syncer_secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
-    - name: Upload Test Results JSON
-      if: ${{ always() }}
-      uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
-      with:
-        name: json-test-results-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}.json
-        path: json-test-results-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}.json
-    - name: Upload Logs
-      if: ${{ always() }}
-      uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
-      with:
-        name: logs-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
-        path: artifacts/logs
-        if-no-files-found: ignore
-    - name: Upload Full Latency Curves
-      if: ${{ always() }}
-      uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
-      with:
-        name: latency-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
-        path: latency.txt
-        if-no-files-found: ignore
+  # run-secnetperf-1es:
+  #   name: azure-${{ matrix.role }}-${{ matrix.os }}-${{ matrix.io }}-${{ matrix.tls }}-${{ matrix.arch }}
+  #   needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       include: ${{fromJson(needs.prepare-matrix.outputs.azure-matrix)}}
+  #   runs-on:
+  #   - self-hosted
+  #   - 1ES.Pool=${{ matrix.assigned_pool }}
+  #   steps:
+  #   - name: Checkout microsoft/msquic
+  #     if: ${{ matrix.role == 'client' }}
+  #     uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+  #     with:
+  #       repository: microsoft/msquic
+  #       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+  #   - name: Checkout code
+  #     uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+  #     with:
+  #       path: netperfrepo
+  #   - name: Prepares 1ES Machine
+  #     if: ${{ matrix.env == 'azure' }}
+  #     uses: ./netperfrepo/.github/actions/prepare-1es-machine
+  #   - name: Download Artifacts
+  #     uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+  #     with:
+  #       name: Release-${{env.OS}}-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-Perf
+  #       path: artifacts
+  #   - name: Download Kernel Artifacts
+  #     uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+  #     if: ${{ matrix.io == 'wsk' }}
+  #     with:
+  #       name: Release-winkernel-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}
+  #       path: artifacts
+  #   - name: Start 1ES Machine
+  #     timeout-minutes: 45
+  #     uses: ./netperfrepo/.github/actions/start-1es-machine
+  #     with:
+  #       matrix: '${{ toJson(matrix) }}'
+  #       callback-script-path: ${{ github.workspace }}/netperfrepo/.github/workflows/quic_callback.ps1
+  #       syncer_secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
+  #   - name: (Client) Download Watermark_Regression.json file
+  #     uses: ./netperfrepo/.github/actions/run-general-pwsh-cmd
+  #     with:
+  #       run-cmd: |
+  #         Write-Host "Downloading Watermark_Regression.json file"
+  #         Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/watermark_regression.json" -OutFile "watermark_regression.json" -UseBasicParsing
+  #   - name: Run Secnetperf Script
+  #     if: ${{ matrix.role == 'client' }}
+  #     uses: ./netperfrepo/.github/actions/run-test-script
+  #     with:
+  #       run-script-cmd: |
+  #         ./scripts/secnetperf.ps1 `
+  #         -LogProfile ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }} `
+  #         -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} `
+  #         -environment ${{ matrix.env }} `
+  #         -plat ${{env.OS}} `
+  #         -os ${{ matrix.os }} `
+  #         -arch ${{ matrix.arch }} `
+  #         -tls ${{ matrix.tls }} `
+  #         -io ${{ matrix.io }} `
+  #         -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
+  #       matrix: '${{ toJson(matrix) }}'
+  #       syncer-secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
+  #   - name: Stop 1ES Machine
+  #     uses: ./netperfrepo/.github/actions/stop-1es-machine
+  #     with:
+  #       matrix: '${{ toJson(matrix) }}'
+  #       syncer_secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
+  #   - name: Upload Test Results JSON
+  #     if: ${{ always() }}
+  #     uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
+  #     with:
+  #       name: json-test-results-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}.json
+  #       path: json-test-results-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}.json
+  #   - name: Upload Logs
+  #     if: ${{ always() }}
+  #     uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
+  #     with:
+  #       name: logs-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
+  #       path: artifacts/logs
+  #       if-no-files-found: ignore
+  #   - name: Upload Full Latency Curves
+  #     if: ${{ always() }}
+  #     uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
+  #     with:
+  #       name: latency-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
+  #       path: latency.txt
+  #       if-no-files-found: ignore
 
   operate-lab:
     name: Operate Lab
