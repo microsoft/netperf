@@ -99,12 +99,13 @@ jobs:
                 }
               }
             }
-
             # Update truth table in shared cache
             $key = "${{ github.run_id }}_${{ github.run_attempt }}_truth_table"
             $value = $truth_table | ConvertTo-Json
             $api = "https://netperfapi.azurewebsites.net/setkeyvalue?key=$key&value=$value"
             Invoke-WebRequest -Uri $api -Headers $headers -Method Post
+            DisplayTruthTable
+            Start-Sleep -Seconds 20
           } catch {
             Write-Host "Observer loop error: $_"
           } 
@@ -127,6 +128,10 @@ jobs:
         }
 
         function DisplayTruthTable {
+          // TODO
+        }
+
+        function Get-Assigned-Runner {
           // TODO
         }
 
