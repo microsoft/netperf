@@ -270,88 +270,18 @@ jobs:
     uses: microsoft/netperf/.github/workflows/operate-lab.yml@jackhe/statless-lab-runners
     with:
       lab-matrix: ${{ needs.prepare-matrix.outputs.lab-matrix }}
-  #
-  # Test Jobs.
-  # NOTE: tag == env
-  #
-  run-secnetperf:
-    name: secnetperf
-    needs: [operate-lab, build-windows, build-windows-kernel, build-unix]
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{fromJson(needs.operate-lab.outputs.vm-matrix)}}
-    runs-on:
-    - self-hosted
-    - ${{ matrix.runner_id || matrix.env }} # Use auto-generated 'runner id' if present, otherwise assign to 'env'.
-    - os-${{ matrix.os }}
-    - ${{ matrix.arch }}
-    steps:
-    - name: Checkout microsoft/msquic
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
-      with:
-        repository: microsoft/msquic
-        ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
-    - name: Lowercase runner.os
-      shell: pwsh
-      run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
-    - name: Download Kernel Drivers
-      uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
-      if: ${{ matrix.io == 'wsk' }}
-      with:
-        name: Release-winkernel-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}
-        path: artifacts
-    - name: Download Artifacts
-      uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
-      with:
-        name: Release-${{env.OS}}-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-Perf
-        path: artifacts
-    - name: Download Regression.json file
-      run: Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/regression.json" -OutFile "regression.json"
-      shell: pwsh
-    - name: Download Watermark_Regression.json file
-      run: Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/watermark_regression.json" -OutFile "watermark_regression.json"
-      shell: pwsh
-    - name: Run secnetperf
-      shell: pwsh
-      timeout-minutes: 20
-      run: |
-          $env:netperf_remote_powershell_supported = $true
 
-          ./scripts/secnetperf.ps1 `
-          -LogProfile ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }} `
-          -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} `
-          -environment ${{ matrix.env }} `
-          -plat ${{env.OS}} `
-          -os ${{ matrix.os }} `
-          -arch ${{ matrix.arch }} `
-          -tls ${{ matrix.tls }} `
-          -io ${{ matrix.io }} `
-          -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
-    - name: Upload Test Results JSON
-      if: ${{ always() }}
-      uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
-      with:
-        name: json-test-results-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}.json
-        path: json-test-results-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}.json
-    - name: Upload Logs
-      if: ${{ always() }}
-      uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
-      with:
-        name: logs-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
-        path: artifacts/logs
-        if-no-files-found: ignore
-    - name: Upload Full Latency Curves
-      if: ${{ always() }}
-      uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
-      with:
-        name: latency-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
-        path: latency.txt
-        if-no-files-found: ignore
+  observe-lab:
+    name: Observe Lab
+    needs: [operate-lab]
+    uses: microsoft/netperf/.github/workflows/observe-lab.yml@jackhe/statless-lab-runners
+    with:
+      lab-matrix: ${{ needs.prepare-matrix.outputs.lab-matrix }}
+      project-callee: 'lab-quic-callee'
 
   cleanup-1es:
     name: Cleanup 1ES Pools Metadata
-    needs: [run-secnetperf-1es]
+    needs: [run-secnetperf-1es, observe-lab]
     runs-on: 'windows-latest'
     steps:
     - name: Send cleanup request to endpoint
