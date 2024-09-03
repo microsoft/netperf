@@ -281,7 +281,7 @@ jobs:
 
   cleanup-1es:
     name: Cleanup 1ES Pools Metadata
-    needs: [run-secnetperf-1es, observe-lab]
+    needs: [observe-lab]
     runs-on: 'windows-latest'
     steps:
     - name: Send cleanup request to endpoint
