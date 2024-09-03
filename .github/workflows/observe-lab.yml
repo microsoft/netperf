@@ -18,8 +18,20 @@ jobs:
     steps:
     - name: Observing Lab State...
       run: |
+        ############################################################################################################
+        # INITIALIZATION LOGIC
+
+        # State transition table:
+        # 0_AWAIT_MASTER_SLAVE_RESET
+        # 1_AWAIT_CALLEE_INITIALIZATION
+        # 2_AWAIT_CALLEE_COMPLETION
+        # 3_COMPLETED
+
+        ############################################################################################################
+
         $lab_matrix = ConvertFrom-Json ${{ inputs.lab-matrix }}
         $truth_table = @()
+        $num_iterations = 0
         $headers = @{
             "Accept" = "application/vnd.github+json"
             "Authorization" = "Bearer ${{ secrets.GITHUB_TOKEN }}"
@@ -40,54 +52,106 @@ jobs:
                     "dispatched_workflow_url" = Get-DispatchedWorkflowUrl -job $job
                   }
                 } else {
-
+                  $truth_table += [PSCustomObject]@{
+                    "job" = $job
+                    "current_state" = "0_AWAIT_MASTER_SLAVE_RESET"
+                    "conclusion" = ""
+                    "dispatched_workflow_url" = ""
+                  }
                 }
               }
             }
           }
         }
 
+        ############################################################################################################
+        # MAIN OBSERVER LOOP
+        ############################################################################################################
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        foreach ($job in $lab_matrix) {
-          $truth_table += [PSCustomObject]@{
-            "job" = $job
-            "current_state" = "0_AWAIT_MASTER_SLAVE_RESET" # 0_AWAIT_MASTER_SLAVE_RESET, 1_AWAIT_DISPATCHED_VM_COME_ONLINE, 2_AWAIT_VM_PERF_JOB_COMPLETE, 3_COMPLETED,
-            "conclusion" = "" # success, failure, cancelled
-            "dispatched_workflow_url" = ""
-          }
+        while (NotDoneYet) {
+          $num_iterations++
+          try {
+            foreach ($row in $truth_table) {
+              switch ($row.current_state) {
+                "0_AWAIT_MASTER_SLAVE_RESET" {
+                  $assigned_runner = Get-Assigned-Runner -env_str $row.job.env_str
+                  if ($assigned_runner) {
+                    DispatchCallee -job $row.job -assigned_runner $assigned_runner
+                    $row.current_state = "1_AWAIT_CALLEE_INITIALIZATION"
+                  }
+                }
+                "1_AWAIT_CALLEE_INITIALIZATION" {
+                  $callee_workflow_url = Get-DispatchedTestRunWorkflowUrl -job $row.job
+                  if ($callee_workflow_url) {
+                    $row.dispatched_workflow_url = $callee_workflow_url
+                    $row.current_state = "2_AWAIT_CALLEE_COMPLETION"
+                  }
+                }
+                "2_AWAIT_CALLEE_COMPLETION" {
+                  $callee_status = Get-Run -runId $row.dispatched_workflow_url
+                  if ($callee_status.status -eq "completed") {
+                    $row.current_state = "3_COMPLETED"
+                    $row.conclusion = $callee_status.conclusion
+                  }
+                }
+                "3_COMPLETED" {
+                  # Do nothing
+                }
+              }
+            }
+            # Update truth table in shared cache
+            $key = "${{ github.run_id }}_${{ github.run_attempt }}_truth_table"
+            $value = $truth_table | ConvertTo-Json
+            $api = "https://netperfapi.azurewebsites.net/setkeyvalue?key=$key&value=$value"
+            Invoke-WebRequest -Uri $api -Headers $headers -Method Post
+            DisplayTruthTable
+            Start-Sleep -Seconds 20
+          } catch {
+            Write-Host "Observer loop error: $_"
+          } 
         }
 
-        function DispatchWorkflow {
+        ############################################################################################################
+        # FUNCTION DEFINITIONS
+        ############################################################################################################
 
+        function NotDoneYet {
+          $fail_observer = $false
+          foreach ($row in $truth_table) {
+            if ($row.current_state -ne "3_COMPLETED") {
+              return $true
+            }
+            if ($row.conclusion -neq "success") {
+              $fail_observer = $true
+            }
+          }
+
+          if ($fail_observer) {
+            Write-Host "Some jobs failed. Exiting observer loop."
+            exit 1
+          }
+
+          return $false
+        }
+
+        function DispatchCallee {
+          param (
+            [PSCustomObject]$job,
+            [string]$assigned_runner
+          )
+          $api = "https:// ... TODO ..."
+        }
+
+        function Get-DispatchedTestRunWorkflowUrl {
+          // TODO
         }
 
         function DisplayTruthTable {
+          // TODO
+        }
 
+        function Get-Assigned-Runner {
+          // TODO
         }
 
         function Get-Jobs {
@@ -95,23 +159,6 @@ jobs:
             $url = "https://api.github.com/repos/microsoft/netperf/actions/runs/$runId/jobs"
             Write-Debug "GET $url"
             return ((Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json).jobs
-        }
-
-        if (${{ github.run_attempt }} -eq 1) {
-
-        } else {
-          $jobs = Get-Jobs -runId ${{ github.run_id }}
-          $missed_jobs = @()
-          foreach ($todo in $lab_matrix) {
-            // TODO
-          }
-          while ($missed_jobs.Count -gt 0) {
-            $tmp_missed_jobs = @()
-            $jobs = Get-Jobs -runId ${{ github.run_id }}
-            foreach ($todo in $missed_jobs) {
-              // TODO
-            }
-          }
         }
 
       shell: pwsh
