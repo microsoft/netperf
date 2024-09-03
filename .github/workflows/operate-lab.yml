@@ -16,7 +16,8 @@ permissions: write-all
 jobs:
   operate-lab-master: # Consume lab matrix, advertise to the compatible masters, run master jobs.
     strategy:
-      matrix: ${{fromJson(inputs.lab-matrix)}}
+      matrix:
+        include: ${{fromJson(inputs.lab-matrix)}}
     name: Operate-Lab For ${{ matrix.os }}-${{ matrix.io }}-${{ matrix.env_str }}
     runs-on:
       - self-hosted
