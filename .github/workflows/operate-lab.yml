@@ -15,7 +15,7 @@ permissions: write-all
 
 jobs:
   operate-lab-master: # Consume lab matrix, advertise to the compatible masters, run master jobs.
-    name: Finding a Master
+    name: Operate Lab Master Node
     strategy:
       matrix: ${{fromJson(inputs.lab-matrix)}}
     runs-on:
@@ -32,23 +32,80 @@ jobs:
             "Authorization" = "Bearer ${{ secrets.GITHUB_TOKEN }}"
             "Accept" = "application/vnd.github.v3+json"
           }
-          $body
-      - name: Revert Checkpoint
+
+          $master_id = whoami
+          $os = ${{ matrix.os }}
+          $unique_env_str = ${{ github.run_id }}_${{ github.run_attempt }}_${{ matrix.env_str }}
+
+          // TODO
+
+      - name: RESET STATE (MASTER)
         run: |
+          # TODO: Eventually, for WS 2025, we want to instead CRUD the VMs, instead of simply reseting their checkpoints here.
           $vmName = "netperf-${{ matrix.os }}-server"
           $checkPointName = "LATEST"
           Restore-VMSnapshot -VMName $vmName -Name $checkPointName -Confirm:$false
-      - name: Start VM and wait for online status
+      - name: Start VM, wait for online status, alert observer.
         run: |
           $vmName = "netperf-${{ matrix.os }}-server"
           Start-VM -Name $vmName
-          Wait-VMOnline -VMName $vmName
+          while ((Get-VM -Name $vmName).State -ne "Running") {
+            Write-Host "Waiting for VM to be online..."
+            Start-Sleep -Seconds 10
+          }
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
-      - name: Wait for a status update from the test jobf
+          $key = "${{ github.run_id }}_${{ github.run_attempt }}_${{ matrix.env_str }}_master_reset_done"
+          $value = whoami
+          $api = "https://netperfapi.azurewebsites.net/setkeyvalue?key=$key&value=$value"
+          try {
+            Invoke-WebRequest -Uri $api -Headers $headers -Method Post
+          } catch {
+            Write-Host "Failed to alert observer of master reset completion: $_"
+            exit 1
+          }
+      - name: Grab workflow ID of callee from the truth table
+        id: grab-callee-workflow-id
         run: |
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
+          $key = "${{ github.run_id }}_${{ github.run_attempt }}_truth_table"
+          while ($true) {
+            $api = "https://netperfapi.azurewebsites.net/getkeyvalue?key=$key"
+            $response = Invoke-WebRequest -Uri $api -Headers $headers -Method Get
+            $truth_table = ConvertFrom-Json $response.Content
+            foreach ($row in $truth_table) {
+              if ($row.job.env_str.Contains("${{ matrix.env_str }}")) {
+                if ($row.dispatched_workflow_url) {
+                  $callee_workflow_id = $row.dispatched_workflow_url
+                  # set output here
+                  set-output -name callee_workflow_id -value $callee_workflow_id
+                  break
+                }
+              }
+            }
+            Start-Sleep -Seconds 10
+          }
 
+      - name: Wait callee ${{ grab-callee-workflow-id.outputs.callee_workflow_id }} to complete
+        run: |
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+          $url = "https://api.github.com/repos/netperf/actions/runs/${{ grab-callee-workflow-id.outputs.callee_workflow_id}}" 
+          while ($true) {
+            $response = Invoke-WebRequest -Uri $url -Headers $headers -Method Get
+            $run_status = ConvertFrom-Json $response.Content
+            if ($run_status.status -eq "completed") {
+              if ($run_status.conclusion -eq "success") {
+                Write-Host "Callee workflow completed successfully."
+                break
+              } else {
+                Write-Host "Callee workflow failed."
+                exit 1
+              }
+            }
+            Start-Sleep -Seconds 30
+          }
