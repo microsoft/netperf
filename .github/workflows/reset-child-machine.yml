@@ -11,7 +11,7 @@ jobs:
     steps:
       - name: Print input params
         run: |
-          echo "master_id: ${{ github.event.client_payload.master_id }}" # child id is master id - 1.
+          echo "parent_id: ${{ github.event.client_payload.parent_id }}" # child id is parent id - 1.
           echo "os: ${{ github.event.client_payload.os }}"
           echo "unique_env_str: ${{ github.event.client_payload.unique_env_str }}"
 
@@ -19,7 +19,7 @@ jobs:
     name: Reset child Machine
     runs-on:
       - self-hosted
-      - parent=${{ github.event.client_payload.master_id }}
+      - parent=${{ github.event.client_payload.parent_id }}
     steps:
       - name: RESET STATE (child)
         run: |
