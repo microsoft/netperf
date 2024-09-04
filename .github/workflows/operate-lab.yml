@@ -40,7 +40,7 @@ jobs:
 
           $url = "https://api.github.com/repos/microsoft/netperf/dispatches"
           $body = @{
-            event_type = "reset-slave-machine"
+            event_type = "reset-slave-machine",
             client_payload = @{
               master_id = "$master_id",
               os = "$os",
