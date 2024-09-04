@@ -14,7 +14,7 @@ on:
 permissions: write-all
 
 jobs:
-  operate-lab-master: # Consume lab matrix, advertise to the compatible masters, run master jobs.
+  operate-lab-parent: # Consume lab matrix, advertise to the compatible parents, run parent jobs.
     strategy:
       matrix:
         include: ${{fromJson(inputs.lab-matrix)}}
@@ -26,23 +26,23 @@ jobs:
       - lab-stateless
       - os-${{ matrix.os }}
     steps:
-      - name: Dispatch the slave workflow
+      - name: Dispatch the child workflow
         run: |
-          # Use the Github API to trigger slave workflow
+          # Use the Github API to trigger child workflow
           $headers = @{
             "Authorization" = "Bearer ${{ secrets.GITHUB_TOKEN }}"
             "Accept" = "application/vnd.github.v3+json"
           }
 
-          $master_id = whoami
+          $parent_id = whoami
           $os = "${{ matrix.os }}"
           $unique_env_str = "${{ github.run_id }}_${{ github.run_attempt }}_${{ matrix.env_str }}"
 
           $url = "https://api.github.com/repos/microsoft/netperf/dispatches"
           $body = @{
-            event_type = "reset-slave-machine"
+            event_type = "reset-child-machine"
             client_payload = @{
-              master_id = "$master_id"
+              parent_id = "$parent_id"
               os = "$os"
               unique_env_str = "$unique_env_str"
             }
@@ -51,14 +51,14 @@ jobs:
           try {
             $Response = Invoke-WebRequest -Uri $url -Method POST -Headers $headers -Body $body
             if ($Response.StatusCode -ne 204) {
-              throw "Failed to dispatch slave workflow: $Response"
+              throw "Failed to dispatch child workflow: $Response"
             }
           } catch {
-            Write-Host "Failed to dispatch slave workflow: $_"
+            Write-Host "Failed to dispatch child workflow: $_"
             exit 1
           }
 
-      - name: RESET STATE (MASTER)
+      - name: RESET STATE (parent)
         run: |
           # TODO: Eventually, for WS 2025, we want to instead CRUD the VMs, instead of simply reseting their checkpoints here.
           $vmName = "netperf-${{ matrix.os }}-server"
@@ -75,13 +75,13 @@ jobs:
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
-          $key = "${{ github.run_id }}_${{ github.run_attempt }}_${{ matrix.env_str }}_master_reset_done"
+          $key = "${{ github.run_id }}_${{ github.run_attempt }}_${{ matrix.env_str }}_parent_reset_done"
           $value = whoami
           $api = "https://netperfapi.azurewebsites.net/setkeyvalue?key=$key&value=$value"
           try {
             Invoke-WebRequest -Uri $api -Headers $headers -Method Post
           } catch {
-            Write-Host "Failed to alert observer of master reset completion: $_"
+            Write-Host "Failed to alert observer of parent reset completion: $_"
             exit 1
           }
       - name: Grab workflow ID of callee from the truth table

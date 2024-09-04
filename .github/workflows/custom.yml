@@ -21,8 +21,8 @@ jobs:
           $body = @{
             event_type = "lab-quic-callee"
             client_payload = @{
-              master_id = "69"
-              slave_id = "420"
+              parent_id = "69"
+              child_id = "420"
               env_str = "hello-world"
               os = "windows"
               io = "xdp"

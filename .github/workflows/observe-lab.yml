@@ -22,7 +22,7 @@ jobs:
         # INITIALIZATION LOGIC
 
         # State transition table:
-        # 0_AWAIT_MASTER_SLAVE_RESET
+        # 0_AWAIT_PARENT_CHILD_RESET
         # 1_AWAIT_CALLEE_INITIALIZATION
         # 2_AWAIT_CALLEE_COMPLETION
         # 3_COMPLETED
@@ -54,7 +54,7 @@ jobs:
                 } else {
                   $truth_table += [PSCustomObject]@{
                     "job" = $job
-                    "current_state" = "0_AWAIT_MASTER_SLAVE_RESET"
+                    "current_state" = "0_AWAIT_parent_child_RESET"
                     "conclusion" = ""
                     "dispatched_workflow_url" = ""
                   }
@@ -75,7 +75,7 @@ jobs:
           try {
             foreach ($row in $truth_table) {
               switch ($row.current_state) {
-                "0_AWAIT_MASTER_SLAVE_RESET" {
+                "0_AWAIT_PARENT_CHILD_RESET" {
                   $assigned_runner = Get-Assigned-Runner -job $row.job
                   if ($assigned_runner) {
                     DispatchCallee -job $row.job -assigned_runner $assigned_runner
@@ -201,19 +201,19 @@ jobs:
         function Get-Assigned-Runner {
           param([PSCustomObject]$job)
 
-          $master_key = "${{ github.run_id }}_${{ github.run_attempt }}_" + $job.env_str + "_master_reset_done"
-          $slave_key = "${{ github.run_id }}_${{ github.run_attempt }}_" + $job.env_str + "_slave_reset_done"
-          $master_url = "https://netperfapi.azurewebsites.net/getkeyvalue?key=$master_key"
-          $slave_url = "https://netperfapi.azurewebsites.net/getkeyvalue?key=$slave_key"
+          $parent_key = "${{ github.run_id }}_${{ github.run_attempt }}_" + $job.env_str + "_parent_reset_done"
+          $child_key = "${{ github.run_id }}_${{ github.run_attempt }}_" + $job.env_str + "_child_reset_done"
+          $parent_url = "https://netperfapi.azurewebsites.net/getkeyvalue?key=$parent_key"
+          $child_url = "https://netperfapi.azurewebsites.net/getkeyvalue?key=$child_key"
           try {
-            $master_response = Invoke-WebRequest -Uri $master_url -Headers $headers -Method Get
-            $slave_response = Invoke-WebRequest -Uri $slave_url -Headers $headers -Method Get
-            if ($master_response.status -neq "success" -or $slave_response.status -neq "success") {
-              throw "Master or slave not ready"
+            $parent_response = Invoke-WebRequest -Uri $parent_url -Headers $headers -Method Get
+            $child_response = Invoke-WebRequest -Uri $child_url -Headers $headers -Method Get
+            if ($parent_response.status -neq "success" -or $child_response.status -neq "success") {
+              throw "parent or child not ready"
             }
-            $master_id = $master_response.Content
-            $slave_id = $slave_response.Content
-            return "$master_id,$slave_id"
+            $parent_id = $parent_response.Content
+            $child_id = $child_response.Content
+            return "$parent_id,$child_id"
           } catch {
             Write-Host "Failed to get assigned runner: $_"
             return $null

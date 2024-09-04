@@ -1,8 +1,8 @@
 name: "Stop lab machine"
 description: "This action runs multiple steps as a composite action."
 inputs:
-  master:
-    description: "The ID of the master lab machine assigned to this machine."
+  parent:
+    description: "The ID of the parent lab machine assigned to this machine."
     type: string
     required: true
   syncer_secret:
@@ -18,8 +18,8 @@ runs:
         $headers = @{
           "secret" = "${{ inputs.syncer_secret }}"
         }
-        $master_lab_machine_id = "${{ inputs.master }}"
-        $api = "https://netperfapi.azurewebsites.net/setkeyvalue?key=$master_lab_machine_id&value=FAILED"
+        $parent_lab_machine_id = "${{ inputs.parent }}"
+        $api = "https://netperfapi.azurewebsites.net/setkeyvalue?key=$parent_lab_machine_id&value=FAILED"
         Invoke-WebRequest -Uri $api -Headers $headers -Method Post
     - name: Report aftermath of Job [Success]
       if: success()
@@ -27,8 +27,8 @@ runs:
         $headers = @{
           "secret" = "${{ inputs.syncer_secret }}"
         }
-        $master_lab_machine_id = "${{ inputs.master }}"
-        $api = "https://netperfapi.azurewebsites.net/setkeyvalue?key=$master_lab_machine_id&value=SUCCESS"
+        $parent_lab_machine_id = "${{ inputs.parent }}"
+        $api = "https://netperfapi.azurewebsites.net/setkeyvalue?key=$parent_lab_machine_id&value=SUCCESS"
         Invoke-WebRequest -Uri $api -Headers $headers -Method Post
     - name: Report aftermath of Job [Cancelled]
       if: cancelled()
@@ -36,5 +36,5 @@ runs:
         $headers = @{
           "secret" = "${{ inputs.syncer_secret }}"
         }
-        $master_lab_machine_id = "${{ inputs.master }}"
-        $api = "https://netperfapi.azurewebsites.net/setkeyvalue?key=$master_lab_machine_id&value=CANCELLED"
+        $parent_lab_machine_id = "${{ inputs.parent }}"
+        $api = "https://netperfapi.azurewebsites.net/setkeyvalue?key=$parent_lab_machine_id&value=CANCELLED"
