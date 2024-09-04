@@ -344,8 +344,9 @@ jobs:
         path: latency.txt
         if-no-files-found: ignore
 
-  cleanup-1es:
-    name: Cleanup 1ES Pools Metadata
+  cleanup-cache:
+    name: Cleanup Remote Cache Metadata
+    if: ${{ always() }}
     needs: [run-secnetperf-1es]
     runs-on: 'windows-latest'
     steps:
