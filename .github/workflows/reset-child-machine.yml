@@ -29,7 +29,7 @@ jobs:
           Restore-VMSnapshot -VMName $vmName -Name $checkPointName -Confirm:$false
       - name: Start VM, wait for online status, alert observer.
         run: |
-          $vmName = "netperf-${{ matrix.os }}-server"
+          $vmName = "netperf-${{ github.event.client_payload.os }}-client"
           Start-VM -Name $vmName
           while ((Get-VM -Name $vmName).State -ne "Running") {
             Write-Host "Waiting for VM to be online..."
