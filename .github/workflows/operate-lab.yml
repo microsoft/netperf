@@ -78,7 +78,7 @@ jobs:
             Start-Sleep -Seconds 10
           }
           $headers = @{
-            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+            "secret" = "${{ inputs.syncer_secret }}"
           }
           $key = "${{ github.run_id }}_${{ github.run_attempt }}_${{ matrix.env_str }}_parent_reset_done"
           $value = whoami
@@ -92,7 +92,7 @@ jobs:
       - name: Grab workflow ID of callee from the truth table
         run: |
           $headers = @{
-            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+            "secret" = "${{ inputs.syncer_secret }}"
           }
           $key = "${{ github.run_id }}_${{ github.run_attempt }}_truth_table"
           $done = $false
@@ -125,7 +125,7 @@ jobs:
       - name: Wait-Callee_${{ env.CalleeWorkflowId }}
         run: |
           $headers = @{
-            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+            "secret" = "${{ inputs.syncer_secret }}"
           }
           $url = "https://api.github.com/repos/netperf/actions/runs/${{ env.CalleeWorkflowId }}"
           while ($true) {
