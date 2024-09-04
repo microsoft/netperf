@@ -29,7 +29,7 @@ jobs:
 
         ############################################################################################################
 
-        $lab_matrix = ConvertFrom-Json ${{ inputs.lab-matrix }}
+        $lab_matrix = ConvertFrom-Json '${{ inputs.lab-matrix }}'
         $truth_table = @()
         $num_iterations = 0
         $headers = @{
