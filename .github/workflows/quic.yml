@@ -273,7 +273,7 @@ jobs:
 
   observe-lab:
     name: Observe Lab
-    needs: [operate-lab]
+    needs: [prepare-matrix]
     uses: microsoft/netperf/.github/workflows/observe-lab.yml@jackhe/statless-lab-runners
     with:
       lab-matrix: ${{ needs.prepare-matrix.outputs.lab-matrix }}
