@@ -159,11 +159,11 @@ jobs:
           $body = @{
             event_type = "${{ inputs.project_callee }}"
             client_payload = @{
-              assigned_runner = $assigned_runner,
-              unique_env_str = $unique_env_str,
-              os = $job.os,
-              io = $job.io,
-              tls = $job.tls,
+              assigned_runner = $assigned_runner
+              unique_env_str = $unique_env_str
+              os = $job.os
+              io = $job.io
+              tls = $job.tls
               arch = $job.arch
             }
           } | ConvertTo-Json
