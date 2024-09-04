@@ -58,17 +58,17 @@ foreach ($entry in $MatrixJson) {
         $AzureJson += $server
         $FullJson += $client
         $FullJson += $server
-    } elseif ($entry.env -match "lab" -or $entry.env -match "lab-stateless") {
+    } elseif ($entry.env -match "lab") {
         $labclient = $entry.PSObject.Copy()
         $env_str = [guid]::NewGuid().ToString()
         $labclient | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value "NONE"
         $labclient | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'TRUE'
         $labclient | Add-Member -MemberType NoteProperty -Name "role" -Value "client"
         $labclient | Add-Member -MemberType NoteProperty -Name "env_str" -Value $env_str
-        $LabJson += $entry
-        $FullJson += $entry
+        $LabJson += $labclient
+        $FullJson += $labclient
     } else {
-        throw "Invalid environment entry (Must be either Azure or Lab). Got: $($entry.env)"
+        throw "Invalid environment entry (Must be either Azure or Lab or Lab-stateless). Got: $($entry.env)"
     }
 }
 
