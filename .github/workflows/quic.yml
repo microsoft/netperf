@@ -279,8 +279,9 @@ jobs:
       lab-matrix: ${{ needs.prepare-matrix.outputs.lab-matrix }}
       project-callee: 'lab-quic-callee'
 
-  cleanup-1es:
-    name: Cleanup 1ES Pools Metadata
+  cleanup-cache:
+    name: Cleanup Remote Cache Metadata
+    if: ${{ always() }}
     needs: [observe-lab]
     runs-on: 'windows-latest'
     steps:
