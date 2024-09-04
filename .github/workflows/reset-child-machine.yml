@@ -1,8 +1,8 @@
-name: reset-slave-machine
+name: reset-child-machine
 
 on:
   repository_dispatch:
-    types: [reset-slave-machine]
+    types: [reset-child-machine]
 
 jobs:
   print-params:
@@ -11,17 +11,17 @@ jobs:
     steps:
       - name: Print input params
         run: |
-          echo "master_id: ${{ github.event.client_payload.master_id }}" # slave id is master id - 1.
+          echo "master_id: ${{ github.event.client_payload.master_id }}" # child id is master id - 1.
           echo "os: ${{ github.event.client_payload.os }}"
           echo "unique_env_str: ${{ github.event.client_payload.unique_env_str }}"
 
   do-reset:
-    name: Reset Slave Machine
-    runs-on: 
+    name: Reset child Machine
+    runs-on:
       - self-hosted
       - parent=${{ github.event.client_payload.master_id }}
     steps:
-      - name: RESET STATE (SLAVE)
+      - name: RESET STATE (child)
         run: |
           # TODO: Eventually, for WS 2025, we want to instead CRUD the VMs, instead of simply reseting their checkpoints here.
           $vmName = "netperf-${{ github.event.client_payload.os }}-client"
@@ -38,14 +38,13 @@ jobs:
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
-          $key = "${{ github.event.client_payload.unique_env_str }}_slave_reset_done"
+          $key = "${{ github.event.client_payload.unique_env_str }}_child_reset_done"
           $value = whoami
           $api = "https://netperfapi.azurewebsites.net/setkeyvalue?key=$key&value=$value"
 
           try {
             Invoke-WebRequest -Uri $api -Headers $headers -Method Post
           } catch {
-            Write-Host "Failed to alert observer slave reset done: $_"
+            Write-Host "Failed to alert observer child reset done: $_"
             exit 1
           }
-          
