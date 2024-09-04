@@ -155,16 +155,23 @@ jobs:
           )
           $url = "https://api.github.com/repos/microsoft/netperf/dispatches"
           $unique_env_str = "${{ github.run_id }}_${{ github.run_attempt }}_" + $job.env_str
+          Write-Host "Dispatching with assigned runner: $assigned_runner"
           $body = @{
             event_type = "${{ inputs.project_callee }}"
             client_payload = @{
-              assigned_runner = "$assigned_runner",
-              unique_env_str = "$unique_env_str",
+              assigned_runner = $assigned_runner,
+              unique_env_str = $unique_env_str,
               os = $job.os,
               io = $job.io,
               tls = $job.tls,
               arch = $job.arch
-            } | ConvertTo-Json
+            }
+          } | ConvertTo-Json
+          try {
+            Invoke-WebRequest -Uri $url -Headers $headers -Method Post -Body $body
+          } catch {
+            Write-Host "Failed to dispatch callee: $_"
+            exit 1
           }
         }
 
