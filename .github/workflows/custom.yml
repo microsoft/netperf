@@ -15,7 +15,7 @@ jobs:
     steps:
       - name: odd fail, even pass
         run: |
-          if ($env:matrix_test -eq 1) {
+          if (${{ matrix.test }} -eq 1) {
             exit 1
           }
           else {
