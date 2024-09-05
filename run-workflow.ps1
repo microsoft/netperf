@@ -27,7 +27,7 @@ param (
     [switch]$skipWaiting,
 
     [Parameter(Mandatory = $false)]
-    [string]$project = "",
+    [string]$project = ""
 )
 
 Set-StrictMode -Version 'Latest'
