@@ -10,17 +10,18 @@ jobs:
     strategy:
       matrix:
         test: [1, 2]
-    continue-on-error: ${{ matrix.test == 1 }} 
-    runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.test == 1 }}
+    runs-on: windows-latest
     steps:
       - name: odd fail, even pass
         run: |
-          if [ ${{ matrix.test }} % 2 -eq 0 ]; then
-            echo "even, passing"
-          else
-            echo "odd, fail."
+          if ($env:matrix_test -eq 1) {
             exit 1
-          fi
+          }
+          else {
+            Write-Output "Test passed"
+          }
+        shell: pwsh
 
   upload-data:
     needs: testjob
