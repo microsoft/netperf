@@ -1,5 +1,6 @@
 import express from 'express';
 import dotenv from 'dotenv';
+import validator from 'validator';
 dotenv.config();
 
 const app = express();
@@ -38,10 +39,18 @@ app.get('/hello', (req, res) => {
 });
 
 app.post('/setkeyvalue', (req, res) => {
-    const key = req.query.key;
-    const value = req.query.value;
+    const rawkey = req.query.key;
+    const rawvalue = req.query.value;
     const valueFromBody = req.body.value;
     const secret = req.headers.secret;
+    // Sanitize inputs
+    let key, value;
+    try {
+        key = validator.escape(rawkey);
+        value = validator.escape(rawvalue);
+    } catch (e) {
+        return res.status(400).send('Bad Request.');
+    }
     if (!key || !secret || secret !== process.env.SECRET) {
         return res.status(400).send('Bad Request.');
     }
@@ -60,8 +69,15 @@ app.post('/setkeyvalue', (req, res) => {
 });
 
 app.get('/getkeyvalue', (req, res) => {
-    const key = req.query.key;
+    const rawkey = req.query.key;
     const secret = req.headers.secret;
+    // Sanitize inputs
+    let key;
+    try {
+        key = validator.escape(rawkey);
+    } catch (e) {
+        return res.status(400).send('Bad Request.');
+    }
     if (!key || !secret || secret !== process.env.SECRET) {
         return res.status(400).send('Bad Request.');
     }
