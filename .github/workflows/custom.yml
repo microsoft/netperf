@@ -16,27 +16,13 @@ on:
 permissions: write-all
 
 jobs:
-#
-# Cleanup temporary VMs
-#
-  job1:
+  testjob:
     runs-on: ubuntu-latest
-    outputs:
-      my_output: ${{ steps.set_output.outputs.value }}
-      matrix: ${{ steps.filter.outputs.matrix }}
     steps:
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v2
-      - id: filter
-        run: echo "::set-output name=matrix::$(jq -c '.' ./.github/workflows/matrix.json)"
-
-  job2:
-    needs: job1
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include: ${{fromJson(needs.job1.outputs.matrix)}}
-    steps:
-      - name: Use output from job1
-        run: echo "The output from job1 is ${{ matrix.io }}"
-
+        with:
+          path: netperfrepo
+      - name: Install powershell 7 on Linux
+        run: sudo bash ./netperfrepo/install-pwsh.sh
+        shell: bash

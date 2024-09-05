@@ -1,0 +1,20 @@
+{
+  "name": "netperf",
+  "version": "1.0.0",
+  "description": "1es synchronizer",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"No tests. Ignoring.\"",
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.16.4"
+  },
+  "author": "Jack He",
+  "license": "ISC",
+  "engines": {
+    "node": ">=8.0.0"
+  },
+  "type": "module"
+}

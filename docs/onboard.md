@@ -1,8 +1,9 @@
-# Onboarding a New Project
+## Onboarding your project
 
-## Adding a New Test
+Before you can hook up your project to netperf via the REST api, you must first create a `XXX.yml` e.g. quic.yml, ebpf.yml... etc.
 
-TODO
+Instructions on how to create this file: [Detailed instructions](./detailed-onboarding-instructions.md)
+
 
 ## Triggering a netperf Run
 
