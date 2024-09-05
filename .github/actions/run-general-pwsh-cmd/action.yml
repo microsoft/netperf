@@ -1,0 +1,30 @@
+name: "Run Pwsh Commands"
+description: "This action runs multiple steps as a composite action."
+inputs:
+  run-cmd:
+    description: "The serialized matrix of values to use for the composite action."
+    type: string
+    required: true
+runs:
+  using: "composite"
+  steps:
+  - name: Squeeze code to 1 line
+    if: ${{ env.HAS_PWSH == 'false' }}
+    id: squeeze_code
+    shell: python
+    run: |
+      powershell_code = """
+      ${{ inputs.run-cmd }}
+      """
+      squeezed_code = powershell_code.replace('\n', ';').replace('\r', ';').replace("\"", "\'")
+      print(f"::set-output name=squeezed_code::{squeezed_code}")
+  - name: Run Pwsh Command
+    if: ${{ env.HAS_PWSH == 'false' }}
+    run: |
+      powershell -Command "${{ steps.squeeze_code.outputs.squeezed_code }}"
+    shell: cmd
+  - name: Run Pwsh Command
+    if: ${{ env.HAS_PWSH == 'true' }}
+    run: |
+      ${{ inputs.run-cmd }}
+    shell: pwsh

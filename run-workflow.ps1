@@ -21,7 +21,13 @@ param (
     [string]$logs = "",
 
     [Parameter(Mandatory = $false)]
-    [string]$filter = ""
+    [string]$filter = "",
+
+    [Parameter(Mandatory = $false)]
+    [switch]$skipWaiting,
+
+    [Parameter(Mandatory = $false)]
+    [string]$project = "",
 )
 
 Set-StrictMode -Version 'Latest'
@@ -77,6 +83,11 @@ function Get-RunId {
     for ($i = 0; $i -lt 10; $i++) { # Try up to 10 times
         $workflows = Get-Runs
         foreach ($workflow in $workflows) {
+            if ($project) {
+                if ($project.name -ne $workflow.name) {
+                    continue
+                }
+            }
             $jobs = Get-Jobs $workflow.id
             foreach ($job in $jobs) {
                 if ($job.name.Contains($guid)) {
@@ -122,6 +133,10 @@ Start-Workflow
 Write-Host "Looking for workflow run..."
 $id = Get-RunId
 Write-Host "Found: https://github.com/microsoft/netperf/actions/runs/$id"
+
+if ($skipWaiting) {
+    return $id
+}
 
 # Wait for the run to complete.
 Write-Host "Waiting for run to complete..."

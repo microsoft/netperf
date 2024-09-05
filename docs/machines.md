@@ -106,12 +106,16 @@ $token = '************'    # Find at https://github.com/microsoft/netperf/settin
 $machine1 = '192.168.0.XXX' # This is the GitHub runner machine's IP address (XXX is host machine ID + 1)
 $machine2 = '192.168.0.YYY' # This is the peer machine's IP address (YYY is host machine ID + 1)
 $url = "https://raw.githubusercontent.com/microsoft/netperf/main/setup-runner-windows.ps1"
+
+Invoke-WebRequest -Uri $url -OutFile ./setup-runner-windows.ps1
+
 $labels = "whatever_labels_you_want_tagged"
 ```
 
 ```PowerShell
 # Run on GitHub runner machine
 # Download the script from $url
+Invoke-WebRequest -Uri $url -OutFile setup-runner-windows.ps1
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\setup-runner-windows.ps1 -Username $username -Password $password -PeerIp $machine2 -GithubToken $token -NewIpAddress $machine1 -RunnerLabels $labels
 ```
@@ -121,6 +125,16 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 # Download the script from $url
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\setup-runner-windows.ps1 -Username $username -Password $password -PeerIp $machine1 -NewIpAddress $machine2 -RunnerLabels $labels
+```
+
+### Final Sanity Check
+```PowerShell
+ping 'netperf-peer'
+$username = (Get-ItemProperty 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon').DefaultUserName
+$password = (Get-ItemProperty 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon').DefaultPassword | ConvertTo-SecureString -AsPlainText -Force
+$cred = New-Object System.Management.Automation.PSCredential ($username, $password)
+$Session = New-PSSession -ComputerName 'netperf-peer' -Credential $cred -ConfigurationName PowerShell.7
+# Make sure no errors in running any of these commands on the client machine
 ```
 
 ## Linux Azure Configuration (Deprecated in favor of 1ES)

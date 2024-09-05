@@ -51,7 +51,7 @@
     Secnetperf_latency_stats <|-- Secnetperf_test_runs
 ```
 
-# V2 (Still in progress)
+# V2 
 
 The second iteration of the database design includes a Watermark table, that stores the 'best ever' result for each test / environment / io / tls configuration.
 
