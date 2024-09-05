@@ -426,6 +426,7 @@ jobs:
     permissions: write-all
     name: Update Regression Metrics
     needs: [update-intermediary-dashboard-json]
+    continue-on-error: true
     strategy:
       fail-fast: false
     runs-on: 'ubuntu-20.04'
