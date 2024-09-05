@@ -77,8 +77,8 @@ if ($Action -eq "Poll_IP") {
         }
         catch {
             Write-Output "Ip Address not found: $_"
-            if ($iterations -gt 180) {
-                throw "Failed to get ip address after 30 minutes."
+            if ($iterations -gt 90) {
+                throw "Failed to get ip address after 15 minutes."
             }
             Start-Sleep -Seconds 10
         }
@@ -181,8 +181,8 @@ if ($Action -eq "Poll_client_instructions") {
         if ($_.ToString().Contains("CALLBACK_ERROR")) {
           throw $_
         }
-        if ($iterations -gt 60) {
-          throw "Failed to get assigned to a client after 30 minutes."
+        if ($iterations -gt 30) {
+          throw "Failed to get assigned to a client after 15 minutes."
         }
         Write-Output "Client not done yet. Silently ignoring non-callback error: $_"
         Start-Sleep -Seconds 30
