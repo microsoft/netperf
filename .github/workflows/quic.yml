@@ -180,6 +180,7 @@ jobs:
       fail-fast: false
       matrix:
         include: ${{fromJson(needs.prepare-matrix.outputs.azure-matrix)}}
+    continue-on-error: ${{ matrix.optional == 'TRUE' }}
     runs-on:
     - self-hosted
     - 1ES.Pool=${{ matrix.assigned_pool }}
@@ -276,6 +277,7 @@ jobs:
       fail-fast: false
       matrix:
         include: ${{fromJson(needs.prepare-matrix.outputs.lab-matrix)}}
+    continue-on-error: ${{ matrix.optional == 'TRUE' }}
     runs-on:
     - self-hosted
     - ${{ matrix.runner_id || matrix.env }} # Use auto-generated 'runner id' if present, otherwise assign to 'env'.
