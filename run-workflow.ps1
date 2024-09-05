@@ -129,6 +129,9 @@ function Wait-ForRun {
 Write-Host "Triggering new workflow ($guid)..."
 Start-Workflow
 
+# Wait a bit for the github backend to update.
+Start-Sleep 10
+
 # Find the workflow run.
 Write-Host "Looking for workflow run..."
 $id = Get-RunId
