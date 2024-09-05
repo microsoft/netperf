@@ -9,8 +9,8 @@ jobs:
   testjob:
     strategy:
       matrix:
-        test: [1, 2, 3]
-    continue-on-error: ${{ matrix.test % 2 == 1 }} # all even jobs should pass
+        test: [1, 2]
+    continue-on-error: ${{ matrix.test == 1 }} 
     runs-on: ubuntu-latest
     steps:
       - name: odd fail, even pass
