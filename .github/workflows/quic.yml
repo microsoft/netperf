@@ -174,7 +174,7 @@ jobs:
       workflowId: ${{ github.run_id }}-${{ github.run_attempt }}
 
   run-secnetperf-1es:
-    name: ${{ matrix.optional == 'TRUE' && '[UNRELIABLE]-' || '' }}azure-${{ matrix.role }}-${{ matrix.os }}-${{ matrix.io }}-${{ matrix.tls }}-${{ matrix.arch }}
+    name: ${{ matrix.optional == 'TRUE' && '[UNRELIABLE]-' || '' }}azure-${{ matrix.os }}-${{ matrix.io }}-${{ matrix.role }}-${{ matrix.tls }}-${{ matrix.arch }}
     needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
     strategy:
       fail-fast: false
@@ -271,7 +271,7 @@ jobs:
   # NOTE: tag == env
   #
   run-secnetperf:
-    name:  ${{ matrix.optional == 'TRUE' && '[UNRELIABLE]-' || '' }}secnetperf
+    name:  ${{ matrix.optional == 'TRUE' && '[UNRELIABLE]-' || '' }}lab-${{ matrix.os }}-${{ matrix.io }}-${{ matrix.tls }}-${{ matrix.arch }}
     needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
     strategy:
       fail-fast: false
