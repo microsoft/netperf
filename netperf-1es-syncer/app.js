@@ -40,19 +40,18 @@ app.get('/hello', (req, res) => {
 
 app.post('/setkeyvalue', (req, res) => {
     const rawkey = req.query.key;
-    const rawvalue = req.query.value;
+    const value = req.query.value;
     const valueFromBody = req.body.value;
     const secret = req.headers.secret;
     // Sanitize inputs
-    let key, value;
+    let key;
     try {
         key = validator.escape(rawkey);
-        value = validator.escape(rawvalue);
     } catch (e) {
-        return res.status(400).send('Bad Request.');
+        return res.status(400).send('Bad Request. Key not sanitary.');
     }
     if (!key || !secret || secret !== process.env.SECRET) {
-        return res.status(400).send('Bad Request.');
+        return res.status(400).send('Bad Request. Invalid input.');
     }
     if (!value && !valueFromBody) {
         return res.status(400).send('Bad Request. Missing value.');
@@ -76,10 +75,10 @@ app.get('/getkeyvalue', (req, res) => {
     try {
         key = validator.escape(rawkey);
     } catch (e) {
-        return res.status(400).send('Bad Request.');
+        return res.status(400).send('Bad Request. Key not sanitary.');
     }
     if (!key || !secret || secret !== process.env.SECRET) {
-        return res.status(400).send('Bad Request.');
+        return res.status(400).send('Bad Request. Invalid input.');
     }
     if (!state.hasOwnProperty(key)) {
         return res.status(404).send('Data not found');
