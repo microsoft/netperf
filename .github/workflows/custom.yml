@@ -2,27 +2,30 @@ name: Custom Tasks
 
 on:
   workflow_dispatch:
-    inputs:
-      os:
-        description: 'Windows OS Version'
-        required: false
-        default: "2022"
-        type: choice
-        options:
-          - "2025"
-          - "2022"
-          - "2019"
 
 permissions: write-all
 
 jobs:
   testjob:
+    strategy:
+      matrix:
+        test: [1, 2]
+    continue-on-error: ${{ matrix.test == 1 }}
+    runs-on: windows-latest
+    steps:
+      - name: odd fail, even pass
+        run: |
+          if (${{ matrix.test }} -eq 1) {
+            exit 1
+          }
+          else {
+            Write-Output "Test passed"
+          }
+        shell: pwsh
+
+  upload-data:
+    needs: testjob
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v2
-        with:
-          path: netperfrepo
-      - name: Install powershell 7 on Linux
-        run: sudo bash ./netperfrepo/install-pwsh.sh
-        shell: bash
+      - name: Upload data
+        run: echo "Uploading data"
