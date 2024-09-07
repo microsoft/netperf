@@ -10,6 +10,10 @@ on:
         description: 'The serialized matrix of values to use for the composite action.'
         required: true
         type: string
+      syncer_secret:
+        description: 'The secret to use for the syncer API.'
+        required: true
+        type: string
 
 permissions: write-all
 
