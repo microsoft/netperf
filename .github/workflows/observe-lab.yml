@@ -11,6 +11,9 @@ on:
         description: "The callee to dispatch workflows to"
         required: true
         type: string
+    secrets:
+      NETPERF_SYNCER_SECRET:
+        required: true
 jobs:
   lab-observer:
     name: Oracle
