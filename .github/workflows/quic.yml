@@ -271,6 +271,8 @@ jobs:
     with:
       lab-matrix: ${{ needs.prepare-matrix.outputs.lab-matrix }}
       project-callee: 'lab-quic-callee'
+    env:
+      NETPERF_SYNCER_SECRET: ${{ secrets.NETPERF_SYNCER_SECRET }}
 
   operate-lab:
     name: Operate Lab
@@ -278,7 +280,6 @@ jobs:
     uses: microsoft/netperf/.github/workflows/operate-lab.yml@jackhe/statless-lab-runners
     with:
       lab-matrix: ${{ needs.prepare-matrix.outputs.lab-matrix }}
-      syncer_secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
 
   cleanup-cache:
     name: Cleanup Remote Cache Metadata
