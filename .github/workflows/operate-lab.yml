@@ -10,11 +10,6 @@ on:
         description: 'The serialized matrix of values to use for the composite action.'
         required: true
         type: string
-      syncer_secret:
-        description: 'The token used to sync with the remote cache.'
-        required: true
-        type: string
-
 
 permissions: write-all
 
@@ -78,7 +73,7 @@ jobs:
             Start-Sleep -Seconds 10
           }
           $headers = @{
-            "secret" = "${{ inputs.syncer_secret }}"
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
           $key = "${{ github.run_id }}_${{ github.run_attempt }}_${{ matrix.env_str }}_parent_reset_done"
           $value = whoami
@@ -92,7 +87,7 @@ jobs:
       - name: Grab workflow ID of callee from the truth table
         run: |
           $headers = @{
-            "secret" = "${{ inputs.syncer_secret }}"
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
           $key = "${{ github.run_id }}_${{ github.run_attempt }}_truth_table"
           $done = $false
@@ -125,7 +120,7 @@ jobs:
       - name: Wait-Callee_${{ env.CalleeWorkflowId }}
         run: |
           $headers = @{
-            "secret" = "${{ inputs.syncer_secret }}"
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
           $url = "https://api.github.com/repos/netperf/actions/runs/${{ env.CalleeWorkflowId }}"
           while ($true) {

@@ -11,10 +11,6 @@ on:
         description: "The callee to dispatch workflows to"
         required: true
         type: string
-      syncer_secret:
-        description: "The token used to sync with the remote cache."
-        required: true
-        type: string
 jobs:
   lab-observer:
     name: Oracle
@@ -42,7 +38,7 @@ jobs:
             "X-GitHub-Api-Version" = "2022-11-28"
         }
         @netperf_headers = @{
-          "secret" = "${{ inputs.syncer_secret }}"
+          "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
         }
 
         # Initializing truth table
