@@ -113,7 +113,7 @@ jobs:
             } catch {
               Write-Host "Failed to grab callee workflow ID from truth table: $_"
             }
-            if (!done -and $attempts -gt 36) {
+            if (!$done -and $attempts -gt 36) {
               Write-Host "Failed to grab callee workflow ID from truth table after 12 minutes."
               exit 1
             }
