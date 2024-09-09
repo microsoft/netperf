@@ -108,8 +108,7 @@ jobs:
 
         function Get-Assigned-Runner {
           param([PSCustomObject]$job)
-          Write-Host "[Get-Assigned-Runner] Input params"
-          $job
+          Write-Host "[Get-Assigned-Runner] Input params: $job"
           $parent_key = "${{ github.run_id }}_${{ github.run_attempt }}_" + $job.env_str + "_parent_reset_done"
           $child_key = "${{ github.run_id }}_${{ github.run_attempt }}_" + $job.env_str + "_child_reset_done"
           $parent_url = "https://netperfapi.azurewebsites.net/getkeyvalue?key=$parent_key"
@@ -200,6 +199,7 @@ jobs:
           $num_iterations++
           try {
             foreach ($row in $truth_table) {
+              Write-Host "Inspecting row: $($row.job)"
               switch ($row.current_state) {
                 "0_AWAIT_PARENT_CHILD_RESET" {
                   $assigned_runner = Get-Assigned-Runner -job $row.job
