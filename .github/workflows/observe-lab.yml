@@ -49,7 +49,7 @@ jobs:
           }
 
           if ($fail_observer) {
-            Write-Host "Some jobs failed. Exiting observer loop."
+            Write-Host "[NotDoneYet] Some jobs failed. Exiting observer loop."
             exit 1
           }
 
@@ -78,7 +78,7 @@ jobs:
           try {
             Invoke-WebRequest -Uri $url -Headers $github_headers -Method Post -Body $body
           } catch {
-            Write-Host "Failed to dispatch callee: $_"
+            Write-Host "[DispatchCallee] Failed to dispatch callee: $_"
             exit 1
           }
         }
@@ -91,7 +91,7 @@ jobs:
             $response = Invoke-WebRequest -Uri $url -Headers $netperf_headers -Method Get
             return $response.Content
           } catch {
-            Write-Host "Failed to get dispatched test run workflow URL: $_"
+            Write-Host "[Get-DispatchedTestRunWorkflowUrl] Failed to get dispatched test run workflow URL: $_"
             return $null
           }
         }
@@ -114,16 +114,20 @@ jobs:
           $parent_url = "https://netperfapi.azurewebsites.net/getkeyvalue?key=$parent_key"
           $child_url = "https://netperfapi.azurewebsites.net/getkeyvalue?key=$child_key"
           try {
+            Write-Host "[Get-Assigned-Runner] Looking for parent..."
             $parent_response = Invoke-WebRequest -Uri $parent_url -Headers $netperf_headers -Method Get
+            Write-Host "[Get-Assigned-Runner] Found!"
+            Write-Host "[Get-Assigned-Runner] Looking for child..."
             $child_response = Invoke-WebRequest -Uri $child_url -Headers $netperf_headers -Method Get
-            if ($parent_response.status -ne "success" -or $child_response.status -ne "success") {
+            Write-Host "[Get-Assigned-Runner] Found!"
+            if ($parent_response.StatusCode -ne 200 -or $child_response.StatusCode -ne 200) {
               throw "parent or child not ready"
             }
             $parent_id = $parent_response.Content
             $child_id = $child_response.Content
             return "$parent_id,$child_id"
           } catch {
-            Write-Host "Failed to get assigned runner: $_"
+            Write-Host "[Get-Assigned-Runner] Failed to get assigned runner: $_"
             return $null
           }
         }
@@ -222,10 +226,14 @@ jobs:
               }
             }
             # Update truth table in shared cache
+            Write-Host "Updating truth table..."
             $key = "${{ github.run_id }}_${{ github.run_attempt }}_truth_table"
-            $value = $truth_table | ConvertTo-Json
-            $api = "https://netperfapi.azurewebsites.net/setkeyvalue?key=$key&value=$value"
-            Invoke-WebRequest -Uri $api -Headers $netperf_headers -Method Post
+            $bodyJson = @{
+              value=$truth_table
+            }
+            $body = $bodyJson | ConvertTo-Json
+            $api = "https://netperfapi.azurewebsites.net/setkeyvalue?key=$key"
+            Invoke-WebRequest -Uri $api -Headers $netperf_headers -Method Post -Body $body -ContentType "application/json" -UseBasicParsing
             DisplayTruthTable
             Start-Sleep -Seconds 20
           } catch {
