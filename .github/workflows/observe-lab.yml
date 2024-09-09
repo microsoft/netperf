@@ -108,11 +108,13 @@ jobs:
 
         function Get-Assigned-Runner {
           param([PSCustomObject]$job)
-
+          Write-Host "[Get-Assigned-Runner] Input params"
+          $job
           $parent_key = "${{ github.run_id }}_${{ github.run_attempt }}_" + $job.env_str + "_parent_reset_done"
           $child_key = "${{ github.run_id }}_${{ github.run_attempt }}_" + $job.env_str + "_child_reset_done"
           $parent_url = "https://netperfapi.azurewebsites.net/getkeyvalue?key=$parent_key"
           $child_url = "https://netperfapi.azurewebsites.net/getkeyvalue?key=$child_key"
+          Write-Host "[Get-Assigned-Runner] URLs: $parent_url, $child_url"
           try {
             Write-Host "[Get-Assigned-Runner] Looking for parent..."
             $parent_response = Invoke-WebRequest -Uri $parent_url -Headers $netperf_headers -Method Get
