@@ -75,6 +75,7 @@ jobs:
               arch = "$job.arch"
             }
           } | ConvertTo-Json
+          Write-Host "Dispatching with body: $body"
           try {
             Invoke-WebRequest -Uri $url -Headers $github_headers -Method Post -Body $body
           } catch {
