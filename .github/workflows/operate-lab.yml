@@ -100,6 +100,9 @@ jobs:
             try {
               $api = "https://netperfapi.azurewebsites.net/getkeyvalue?key=$key"
               $response = Invoke-WebRequest -Uri $api -Headers $headers -Method Get
+              if ($response.StatusCode -ne 200) {
+                throw "Failed to grab truth table: $response"
+              }
               $truth_table = ConvertFrom-Json $response.Content
               foreach ($row in $truth_table) {
                 if ($row.job.env_str.Contains("${{ matrix.env_str }}")) {

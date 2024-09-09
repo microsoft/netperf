@@ -231,7 +231,7 @@ jobs:
             $bodyJson = @{
               value=$truth_table
             }
-            $body = $bodyJson | ConvertTo-Json
+            $body = $bodyJson | ConvertTo-Json -Depth 10
             $api = "https://netperfapi.azurewebsites.net/setkeyvalue?key=$key"
             Invoke-WebRequest -Uri $api -Headers $netperf_headers -Method Post -Body $body -ContentType "application/json" -UseBasicParsing
             DisplayTruthTable
