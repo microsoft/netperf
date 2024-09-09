@@ -171,14 +171,14 @@ jobs:
               if ($job.name.Contains($todo.env_str)) {
                 if ($job.status -eq "completed") {
                   $truth_table += [PSCustomObject]@{
-                    "job" = $job
+                    "job" = $todo
                     "current_state" = "3_COMPLETED"
                     "conclusion" = $job.conclusion
                     "dispatched_workflow_url" = Get-Historical-WorkflowId -job $job
                   }
                 } else {
                   $truth_table += [PSCustomObject]@{
-                    "job" = $job
+                    "job" = $todo
                     "current_state" = "0_AWAIT_PARENT_CHILD_RESET"
                     "conclusion" = ""
                     "dispatched_workflow_url" = ""

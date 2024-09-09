@@ -105,8 +105,7 @@ jobs:
               }
               $truth_table = ConvertFrom-Json $response.Content
               foreach ($row in $truth_table) {
-                Write-Host "Inspecting row: "
-                $row
+                Write-Host "Inspecting row: $row"
                 if ($row.job.env_str.Contains("${{ matrix.env_str }}")) {
                   if ($row.dispatched_workflow_url) {
                     $callee_workflow_id = $row.dispatched_workflow_url
