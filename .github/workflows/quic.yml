@@ -286,7 +286,7 @@ jobs:
   cleanup-cache:
     name: Cleanup Remote Cache Metadata
     if: ${{ always() }}
-    needs: [observe-lab]
+    needs: [observe-lab, operate-lab]
     runs-on: 'windows-latest'
     steps:
     - name: Send cleanup request to endpoint

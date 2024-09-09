@@ -65,7 +65,7 @@ jobs:
           $unique_env_str = "${{ github.run_id }}_${{ github.run_attempt }}_" + $job.env_str
           Write-Host "Dispatching with assigned runner: $assigned_runner"
           $body = @{
-            event_type = "${{ inputs.project_callee }}"
+            event_type = "${{ inputs.project-callee }}"
             client_payload = @{
               assigned_runner = "$assigned_runner"
               unique_env_str = "$unique_env_str"
