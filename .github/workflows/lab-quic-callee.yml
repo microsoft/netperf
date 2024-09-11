@@ -9,6 +9,11 @@ jobs:
     name: Register this VM test run
     runs-on: windows-latest
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1
+        with:
+          egress-policy: audit
+
       - name: Print input params
         run: |
           echo "assigned_runner: ${{ github.event.client_payload.assigned_runner }}"
@@ -41,6 +46,11 @@ jobs:
     - self-hosted
     - ${{ github.event.client_payload.assigned_runner }}
     steps:
+    - name: Harden Runner
+      uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1
+      with:
+        egress-policy: audit
+
     - name: Checkout code
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       with:

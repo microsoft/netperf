@@ -4,11 +4,19 @@ on:
   repository_dispatch:
     types: [reset-child-machine]
 
+permissions:
+  contents: read
+
 jobs:
   print-params:
     name: Print Parameters
     runs-on: ubuntu-latest
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1
+        with:
+          egress-policy: audit
+
       - name: Print input params
         run: |
           echo "parent_id: ${{ github.event.client_payload.parent_id }}" # child id is parent id - 1.
@@ -21,6 +29,11 @@ jobs:
       - self-hosted
       - parent=${{ github.event.client_payload.parent_id }}
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1
+        with:
+          egress-policy: audit
+
       - name: RESET STATE (child)
         run: |
           # TODO: Eventually, for WS 2025, we want to instead CRUD the VMs, instead of simply reseting their checkpoints here.

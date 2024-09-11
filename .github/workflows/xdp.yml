@@ -31,6 +31,11 @@ jobs:
     needs: []
     runs-on: ubuntu-20.04
     steps:
+    - name: Harden Runner
+      uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1
+      with:
+        egress-policy: audit
+
     - run: |
         echo "guid: ${{ github.event.client_payload.guid }}"
         echo "sha: ${{ github.event.client_payload.sha }}"
@@ -67,6 +72,11 @@ jobs:
     - os-windows-${{ matrix.vec.os }}
     - ${{ matrix.vec.arch }}
     steps:
+    - name: Harden Runner
+      uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1
+      with:
+        egress-policy: audit
+
     - name: Checkout repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       with:

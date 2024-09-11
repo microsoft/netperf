@@ -9,3 +9,13 @@ updates:
     directory: /dashboard
     schedule:
       interval: daily
+
+  - package-ecosystem: npm
+    directory: /dashboard/.vite/deps
+    schedule:
+      interval: daily
+
+  - package-ecosystem: npm
+    directory: /netperf-1es-syncer
+    schedule:
+      interval: daily

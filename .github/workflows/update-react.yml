@@ -17,6 +17,9 @@ concurrency:
   group: update-react-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   npm-build:
     name: Npm build
@@ -25,6 +28,11 @@ jobs:
       fail-fast: false
     runs-on: ubuntu-20.04
     steps:
+    - name: Harden Runner
+      uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1
+      with:
+        egress-policy: audit
+
     - name: Checkout repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       with:
@@ -51,6 +59,11 @@ jobs:
       fail-fast: false
     runs-on: ubuntu-20.04
     steps:
+    - name: Harden Runner
+      uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1
+      with:
+        egress-policy: audit
+
     - name: Checkout repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       with:

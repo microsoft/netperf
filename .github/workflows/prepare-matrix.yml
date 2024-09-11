@@ -47,8 +47,13 @@ jobs:
       full-matrix: ${{ steps.generate-full-matrix.outputs.matrix }}
     runs-on: windows-latest
     steps:
+    - name: Harden Runner
+      uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1
+      with:
+        egress-policy: audit
+
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5 # v2.7.0
     - name: Run Prepare Matrix
       run: ./.github/workflows/prepare-matrix.ps1
     - id: generate-lab-matrix

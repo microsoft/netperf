@@ -49,6 +49,11 @@ jobs:
     runs-on: windows-latest
     if: ${{ always() }}
     steps:
+    - name: Harden Runner
+      uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1
+      with:
+        egress-policy: audit
+
     - name: Delete temporary self hosted runners.
       shell: bash
       env:
@@ -76,8 +81,13 @@ jobs:
     runs-on: windows-latest
     if: ${{ always() }}
     steps:
+    - name: Harden Runner
+      uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1
+      with:
+        egress-policy: audit
+
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5 # v2.7.0
     - name: Install Latest Az PowerShell Module
       shell: pwsh
       run: |
@@ -86,7 +96,7 @@ jobs:
         Get-Module 'Az' | where {([string]($_.Version)).StartsWith('9.3.0')} | Remove-Module
         Get-Module -Name Az -ListAvailable
     - name: Login to Azure
-      uses: azure/login@v2
+      uses: azure/login@6c251865b4e6290e7b78be643ea2d005bc51f69a # v2.1.1
       with:
         client-id: ${{ secrets.AZURE_CLIENT_ID }}
         tenant-id: ${{ secrets.AZURE_TENANT_ID }}

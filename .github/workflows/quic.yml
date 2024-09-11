@@ -83,6 +83,11 @@ jobs:
     needs: []
     runs-on: ubuntu-20.04
     steps:
+    - name: Harden Runner
+      uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1
+      with:
+        egress-policy: audit
+
     - name: Print Parameters
       if: ${{ github.event_name == 'repository_dispatch' }}
       run: |
@@ -185,6 +190,11 @@ jobs:
     - self-hosted
     - 1ES.Pool=${{ matrix.assigned_pool }}
     steps:
+    - name: Harden Runner
+      uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1
+      with:
+        egress-policy: audit
+
     - name: Checkout microsoft/msquic
       if: ${{ matrix.role == 'client' }}
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -284,6 +294,11 @@ jobs:
     - os-${{ matrix.os }}
     - ${{ matrix.arch }}
     steps:
+    - name: Harden Runner
+      uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1
+      with:
+        egress-policy: audit
+
     - name: Checkout microsoft/msquic
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       with:
@@ -352,6 +367,11 @@ jobs:
     needs: [run-secnetperf-1es]
     runs-on: 'windows-latest'
     steps:
+    - name: Harden Runner
+      uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1
+      with:
+        egress-policy: audit
+
     - name: Send cleanup request to endpoint
       run: |
         $headers = @{
@@ -369,6 +389,11 @@ jobs:
     runs-on: 'ubuntu-20.04'
     continue-on-error: true
     steps:
+    - name: Harden Runner
+      uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1
+      with:
+        egress-policy: audit
+
     - name: Checkout repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
     - uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
@@ -389,6 +414,11 @@ jobs:
       fail-fast: false
     runs-on: 'ubuntu-20.04'
     steps:
+    - name: Harden Runner
+      uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1
+      with:
+        egress-policy: audit
+
     - name: Checkout repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       with:
@@ -410,6 +440,11 @@ jobs:
       fail-fast: false
     runs-on: 'ubuntu-20.04'
     steps:
+    - name: Harden Runner
+      uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1
+      with:
+        egress-policy: audit
+
     - name: Checkout repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       with:
@@ -432,6 +467,11 @@ jobs:
       fail-fast: false
     runs-on: 'ubuntu-20.04'
     steps:
+    - name: Harden Runner
+      uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1
+      with:
+        egress-policy: audit
+
     - name: Checkout repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       with:
