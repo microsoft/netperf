@@ -5,8 +5,8 @@ on:
     types: [lab-quic-callee]
 
 jobs:
-  netperf-register: # TODO: pull this out into its own composite action
-    name: Register this VM test run
+  netperf-register:
+    name: For ${{ github.event.client_payload.unique_env_str }}
     runs-on: windows-latest
     steps:
       - name: Print input params
@@ -18,21 +18,6 @@ jobs:
           echo "tls: ${{ github.event.client_payload.tls }}"
           echo "arch: ${{ github.event.client_payload.arch }}"
           echo "caller id: ${{ github.event.client_payload.caller_id }}"
-      - name: Upload current workflow ID (unique_env_str = this_workflow_id)
-        run: |
-          $header = @{
-            "secret" = ${{ secrets.NETPERF_SYNCER_SECRET }}
-          }
-          $key = "${{ github.event.client_payload.unique_env_str }}_vm_online"
-          $value = ${{ github.run_id }}
-          try {
-            $api = "https://netperfapi.azurewebsites.net/setkeyvalue?key=$key&value=$value"
-            Invoke-WebRequest -Uri $api -Headers $header -Method Post
-          } catch {
-            Write-Host "Failed to alert observer VM online: $_"
-            exit 1
-          }
-        shell: pwsh
 
   run-secnetperf:
     name: secnetperf
