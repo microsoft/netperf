@@ -79,7 +79,7 @@ jobs:
         Add-MpPreference -ExclusionPath ${{ github.workspace }}
 
     - name: Download cts-traffic
-      uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+      uses: actions/download-artifact@v4
       with:
         name: "cts-traffic Release"
         path: ${{ github.workspace }}\cts-traffic
@@ -115,14 +115,14 @@ jobs:
 
     - name: Upload CTS cts-traffic results
       if: always()
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: cts_traffic_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv 
 
     - name: Upload ETL
       if: ${{ github.event.inputs.profile }} || ${{ github.event.inputs.tcp_ip_tracing }}
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: cts_traffic_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}_ETL
         path: ${{ github.workspace }}\ETL\*.etl

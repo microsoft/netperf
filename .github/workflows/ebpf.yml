@@ -156,7 +156,7 @@ jobs:
         echo "C:\Program Files\GitHub CLI" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
     - name: Download ebpf-for-windows
-      uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+      uses: actions/download-artifact@v4
       with:
         name: "ebpf-for-windows - MSI installer (none_NativeOnlyRelease)"
         path: ${{ github.workspace }}\bpf_performance
@@ -170,13 +170,13 @@ jobs:
 
     - name: Upload ebpf-for-windows logs
       if: always()
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: ebpf-for-windows-logs
         path: ${{ github.workspace }}\bpf_performance\install.log
 
     - name: Download xdp-for-windows
-      uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+      uses: actions/download-artifact@v4
       with:
         name: "bin_Release_x64"
         path: ${{ github.workspace }}\xdp
@@ -215,7 +215,7 @@ jobs:
         Expand-Archive -Path build-Release-windows-2022.zip -DestinationPath .
 
     - name: Download cts-traffic
-      uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+      uses: actions/download-artifact@v4
       with:
         name: "cts-traffic Release"
         path: ${{ github.workspace }}\cts-traffic
@@ -259,7 +259,7 @@ jobs:
 
     - name: Upload CTS cts-traffic results baseline
       if: always()
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: cts_traffic_baseline_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv 
@@ -331,7 +331,7 @@ jobs:
 
     - name: Upload CTS cts-traffic results xdp
       if: always()
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: cts_traffic_xdp_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv 
@@ -351,7 +351,7 @@ jobs:
 
     - name: Upload BPF performance test results
       if: always()
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: bpf_performance_native_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: ${{ github.workspace }}\bpf_performance\bpf_performance_native.csv
@@ -369,21 +369,21 @@ jobs:
 
     - name: Upload merged results
       if: always()
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: ebpf_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: ${{ github.workspace }}\bpf_performance\ebpf.csv
 
     - name: Upload CPU profile
       if: ${{ inputs.profile == true }}
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: CPU_Profile_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: ETL
 
     - name: Upload TCPIP ETL
       if: ${{ inputs.tcp_ip_tracing == true }}
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: TCPIP_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: ${{ github.workspace }}\ETL
