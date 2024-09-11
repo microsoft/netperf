@@ -69,10 +69,11 @@ jobs:
             client_payload = @{
               assigned_runner = "$assigned_runner"
               unique_env_str = "$unique_env_str"
-              os = "$job.os"
-              io = "$job.io"
-              tls = "$job.tls"
-              arch = "$job.arch"
+              os = $job.os
+              io = $job.io
+              tls = $job.tls
+              arch = $job.arch
+              caller_id = "${{ github.run_id }}"
             }
           } | ConvertTo-Json
           Write-Host "Dispatching with body: $body"
