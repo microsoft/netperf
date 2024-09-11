@@ -7,11 +7,11 @@ on:
 jobs:
   netperf-register: # TODO: pull this out into its own composite action
     name: Register this VM test run
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - name: Print input params
         run: |
-          echo "assigned_runner: ${{ github.event.client_payload.assigned_runner }}" 
+          echo "assigned_runner: ${{ github.event.client_payload.assigned_runner }}"
           echo "unique_env_str: ${{ github.event.client_payload.unique_env_str }}"
           echo "os: ${{ github.event.client_payload.os }}"
           echo "io: ${{ github.event.client_payload.io }}"
@@ -22,7 +22,7 @@ jobs:
         run: |
           $header = @{
             "secret" = ${{ secrets.NETPERF_SYNCER_SECRET }}
-          } 
+          }
           $key = "${{ github.event.client_payload.unique_env_str }}_vm_online"
           $value = ${{ github.run_id }}
           try {
@@ -32,6 +32,7 @@ jobs:
             Write-Host "Failed to alert observer VM online: $_"
             exit 1
           }
+        shell: pwsh
 
   run-secnetperf:
     name: secnetperf
