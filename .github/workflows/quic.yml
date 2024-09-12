@@ -267,7 +267,7 @@ jobs:
   observe-lab:
     name: Observe Lab
     needs: [prepare-matrix]
-    uses: microsoft/netperf/.github/workflows/observe-lab.yml@jackhe/statless-lab-runners
+    uses: microsoft/netperf/.github/workflows/observe-lab.yml@jackhe/stateless-github-lab-runners
     with:
       lab-matrix: ${{ needs.prepare-matrix.outputs.lab-matrix }}
       project-callee: 'lab-quic-callee'
@@ -277,7 +277,7 @@ jobs:
   operate-lab:
     name: Operate Lab
     needs: [prepare-matrix]
-    uses: microsoft/netperf/.github/workflows/operate-lab.yml@jackhe/statless-lab-runners
+    uses: microsoft/netperf/.github/workflows/operate-lab.yml@jackhe/stateless-github-lab-runners
     with:
       lab-matrix: ${{ needs.prepare-matrix.outputs.lab-matrix }}
     secrets:
