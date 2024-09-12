@@ -174,8 +174,7 @@ jobs:
         }
 
         function Get-Run {
-            param([string]$runId)
-            $url = "https://api.github.com/repos/microsoft/netperf/actions/runs/$runId"
+            param([string]$url)
             Write-Debug "GET $url"
             return (Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json
         }
