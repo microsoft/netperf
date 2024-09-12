@@ -129,7 +129,7 @@ jobs:
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
-          $url = "https://api.github.com/repos/netperf/actions/runs/${{ env.CalleeWorkflowId }}"
+          $url = "${{ env.CalleeWorkflowId }}"
           while ($true) {
             $response = Invoke-WebRequest -Uri $url -Headers $headers -Method Get
             $run_status = ConvertFrom-Json $response.Content

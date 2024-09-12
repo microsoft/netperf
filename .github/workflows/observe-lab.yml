@@ -35,7 +35,7 @@ jobs:
                 exit 1
               }
               $id = $arr[1]
-              return "https://api.github.com/repos/microsoft/netperf/actions/runs/$id"
+              return $id
             }
           }
           Write-Host "Failed to get historical workflow ID for a job that should have succeeded."
