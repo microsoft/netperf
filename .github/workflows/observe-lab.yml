@@ -262,7 +262,7 @@ jobs:
                   }
                 }
                 "2_AWAIT_CALLEE_COMPLETION" {
-                  $callee_status = Get-Run -runId $row.dispatched_workflow_url
+                  $callee_status = Get-Run -url $row.dispatched_workflow_url
                   if ($callee_status.status -eq "completed") {
                     $row.current_state = "3_COMPLETED"
                     $row.conclusion = $callee_status.conclusion
@@ -283,10 +283,10 @@ jobs:
             $api = "https://netperfapi.azurewebsites.net/setkeyvalue?key=$key"
             Invoke-WebRequest -Uri $api -Headers $netperf_headers -Method Post -Body $body -ContentType "application/json" -UseBasicParsing | Out-Null
             DisplayTruthTable
-            Start-Sleep -Seconds 20
           } catch {
             Write-Host "Observer loop error: $_"
           }
+          Start-Sleep -Seconds 20
         }
 
       shell: pwsh
