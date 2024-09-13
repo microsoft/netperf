@@ -6,26 +6,15 @@ on:
 permissions: write-all
 
 jobs:
-  testjob:
-    strategy:
-      matrix:
-        test: [1, 2]
-    continue-on-error: ${{ matrix.test == 1 }}
-    runs-on: windows-latest
+  test-job:
+    runs-on:
+      - self-hosted
+      - 1ES.Pool=netperf-actual-boosted-winprerelease
     steps:
-      - name: odd fail, even pass
+      - name: Hello
+        run: echo "Hello, world!"
+      - name: Is test signing enabled?
         run: |
-          if (${{ matrix.test }} -eq 1) {
-            exit 1
-          }
-          else {
-            Write-Output "Test passed"
-          }
-        shell: pwsh
-
-  upload-data:
-    needs: testjob
-    runs-on: ubuntu-latest
-    steps:
-      - name: Upload data
-        run: echo "Uploading data"
+          # Check if test signing is enabled
+          bcdedit /enum | findstr "testsinging"
+      
