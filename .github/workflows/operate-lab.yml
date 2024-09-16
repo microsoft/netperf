@@ -21,6 +21,7 @@ jobs:
     strategy:
       matrix:
         include: ${{fromJson(inputs.lab-matrix)}}
+      fail-fast: false
     name: Operate-Lab For ${{ matrix.os }}-${{ matrix.io }}-${{ matrix.env_str }}
     runs-on:
       - self-hosted
