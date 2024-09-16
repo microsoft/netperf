@@ -30,6 +30,10 @@ runs:
         Write-Error "Artifact not found."
         exit 1
       }
-      $artifact_download_url = $artifact.url 
+      $artifact_download_url = $artifact.url
       $response = Invoke-WebRequest -Uri $artifact_download_url -Headers $github_headers -Method Get -OutFile "${{ inputs.name }}.zip"
       Write-Output "Artifact downloaded successfully!"
+      if (!(Test-Path "./artifacts")) {
+        New-Item -ItemType Directory -Path "./artifacts"
+      }
+      Expand-Archive -Path "${{ inputs.name }}.zip" -DestinationPath "./artifacts"
