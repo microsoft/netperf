@@ -13,9 +13,8 @@ inputs:
     description: "The path to download the artifact to."
     type: string
     required: true
-secrets:
-  GITHUB_TOKEN:
-    description: "The GitHub token to use for the download."
+  gh_token:
+    description: "The GitHub Actions token."
 runs:
   using: "composite"
   steps:
@@ -23,7 +22,7 @@ runs:
     run: |
       $github_headers = @{
         "Accept" = "application/vnd.github+json"
-        "Authorization" = "Bearer ${{ secrets.GITHUB_TOKEN }}"
+        "Authorization" = "Bearer ${{ inputs.gh_token }}"
         "X-GitHub-Api-Version" = "2022-11-28"
       }
       $github_url = "https://api.github.com/repos/microsoft/netperf/actions/runs/${{ inputs.caller_id }}/artifacts"
