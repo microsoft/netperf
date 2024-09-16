@@ -27,7 +27,7 @@ runs:
       }
       $github_url = "https://api.github.com/repos/microsoft/netperf/actions/runs/${{ inputs.caller_id }}/artifacts"
       $response = Invoke-WebRequest -Uri $github_url -Headers $github_headers -Method Get
-      $artifact = $response.Content | ConvertFrom-Json | Where-Object { $_.name -eq ${{ inputs.name }} }
+      $artifact = $response.Content | ConvertFrom-Json | Where-Object { $_.name -eq "${{ inputs.name }}" }
       if ($artifact -eq $null) {
         Write-Error "Artifact not found."
         exit 1
