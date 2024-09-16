@@ -13,6 +13,9 @@ inputs:
     description: "The path to download the artifact to."
     type: string
     required: true
+secrets:
+  GITHUB_TOKEN:
+    description: "The GitHub token to use for the download."
 runs:
   using: "composite"
   steps:
@@ -37,3 +40,4 @@ runs:
         New-Item -ItemType Directory -Path "./artifacts"
       }
       Expand-Archive -Path "${{ inputs.name }}.zip" -DestinationPath "./artifacts"
+    shell: pwsh
