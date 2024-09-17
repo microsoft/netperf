@@ -104,7 +104,7 @@ jobs:
                 foreach ($job in $jobs) {
                   if ($job.name.Contains($unique_env_str)) {
                     $id = $run.id
-                    return "https://api.github.com/repos/microsoft/netperf/actions/runs/$id"
+                    return "https://github.com/microsoft/netperf/actions/runs/$id"
                   }
                 }
               }
@@ -118,8 +118,12 @@ jobs:
         }
 
         function DisplayTruthTable {
+          $first = $true
           foreach ($row in $truth_table) {
-            Write-Host "---------------------------------"
+            if ($first) {
+              Write-Host "---------------------------------"
+              $first = $false
+            }
             Write-Host "Job: $($row.job.name)"
             Write-Host "Current State: $($row.current_state)"
             Write-Host "Conclusion: $($row.conclusion)"
