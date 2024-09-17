@@ -108,8 +108,8 @@ jobs:
               foreach ($row in $truth_table) {
                 if ($row.job.env_str.Contains("${{ matrix.env_str }}")) {
                   Write-Host "Found matching row in truth table."
-                  if ($row.dispatched_workflow_url) {
-                    $callee_workflow_id = $row.dispatched_workflow_url
+                  if ($row.dispatched_workflow_id) {
+                    $callee_workflow_id = $row.dispatched_workflow_id
                     echo "CalleeWorkflowId=$callee_workflow_id" >> $env:GITHUB_ENV
                     $done = $true
                   }

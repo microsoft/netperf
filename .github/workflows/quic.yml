@@ -271,6 +271,9 @@ jobs:
     with:
       lab-matrix: ${{ needs.prepare-matrix.outputs.lab-matrix }}
       project-callee: 'lab-quic-callee'
+      sha: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+      ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
+      pr: ${{ github.event.client_payload.pr }}
     secrets:
       NETPERF_SYNCER_SECRET: ${{ secrets.NETPERF_SYNCER_SECRET }}
 

@@ -11,6 +11,18 @@ on:
         description: "The callee to dispatch workflows to"
         required: true
         type: string
+      sha:
+        description: "commit sha of the project being tested"
+        required: true
+        type: string
+      ref:
+        description: "branch of the project being tested"
+        required: true
+        type: string
+      pr:
+        description: "pull request number of the project being tested"
+        required: true
+        type: string
     secrets:
       NETPERF_SYNCER_SECRET:
         required: true
@@ -74,11 +86,14 @@ jobs:
             client_payload = @{
               assigned_runner = "$assigned_runner"
               unique_env_str = "$unique_env_str"
+              caller_id = "${{ github.run_id }}"
               os = $job.os
               io = $job.io
               tls = $job.tls
               arch = $job.arch
-              caller_id = "${{ github.run_id }}"
+              sha = "${{ inputs.sha }}"
+              ref = "${{ inputs.ref }}"
+              pr = "${{ inputs.pr }}"
             }
           } | ConvertTo-Json
           Write-Host "Dispatching with body: $body"
@@ -126,7 +141,7 @@ jobs:
             Write-Host "Job: $($row.job.name)"
             Write-Host "Current State: $($row.current_state)"
             Write-Host "Conclusion: $($row.conclusion)"
-            Write-Host "Dispatched Workflow URL: https://github.com/microsoft/netperf/actions/runs/$($row.dispatched_workflow_url)"
+            Write-Host "Dispatched Workflow URL: https://github.com/microsoft/netperf/actions/runs/$($row.dispatched_workflow_id)"
             Write-Host "---------------------------------"
           }
         }
@@ -177,7 +192,8 @@ jobs:
         }
 
         function Get-Run {
-            param([string]$url)
+            param([string]$id)
+            $url = "https://api.github.com/repos/microsoft/netperf/actions/runs/$id"
             Write-Debug "GET $url"
             return (Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json
         }
@@ -217,14 +233,14 @@ jobs:
                     "job" = $todo
                     "current_state" = "3_COMPLETED"
                     "conclusion" = $job.conclusion
-                    "dispatched_workflow_url" = Get-Historical-WorkflowId -job $job
+                    "dispatched_workflow_id" = Get-Historical-WorkflowId -job $job
                   }
                 } else {
                   $truth_table += [PSCustomObject]@{
                     "job" = $todo
                     "current_state" = "0_AWAIT_PARENT_CHILD_RESET"
                     "conclusion" = ""
-                    "dispatched_workflow_url" = ""
+                    "dispatched_workflow_id" = ""
                   }
                 }
               }
@@ -258,14 +274,14 @@ jobs:
                   }
                 }
                 "1_AWAIT_CALLEE_INITIALIZATION" {
-                  $callee_workflow_url = Get-DispatchedTestRunWorkflowUrl -job $row.job
-                  if ($callee_workflow_url) {
-                    $row.dispatched_workflow_url = $callee_workflow_url
+                  $callee_workflow_id = Get-DispatchedTestRunWorkflowUrl -job $row.job
+                  if ($callee_workflow_id) {
+                    $row.dispatched_workflow_id = $callee_workflow_id
                     $row.current_state = "2_AWAIT_CALLEE_COMPLETION"
                   }
                 }
                 "2_AWAIT_CALLEE_COMPLETION" {
-                  $callee_status = Get-Run -url $row.dispatched_workflow_url
+                  $callee_status = Get-Run -id $row.dispatched_workflow_id
                   if ($callee_status.status -eq "completed") {
                     $row.current_state = "3_COMPLETED"
                     $row.conclusion = $callee_status.conclusion
