@@ -18,6 +18,9 @@ jobs:
           echo "tls: ${{ github.event.client_payload.tls }}"
           echo "arch: ${{ github.event.client_payload.arch }}"
           echo "caller id: ${{ github.event.client_payload.caller_id }}"
+          echo "sha: ${{ github.event.client_payload.sha }}"
+          echo "ref: ${{ github.event.client_payload.ref }}"
+          echo "pr: ${{ github.event.client_payload.pr }}"
 
   run-secnetperf:
     name: secnetperf
@@ -63,12 +66,12 @@ jobs:
       run: |
           $env:netperf_remote_powershell_supported = $true
           ./scripts/secnetperf.ps1 `
-          -LogProfile ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }} `
+          -LogProfile ${{ github.event.client_payload.logs || 'NULL' }} `
           -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} `
-          -environment ${{ github.event.client_payload.env }} `
+          -environment lab `
           -plat ${{env.OS}} `
           -os ${{ github.event.client_payload.os }} `
           -arch ${{ github.event.client_payload.arch }} `
           -tls ${{ github.event.client_payload.tls }} `
           -io ${{ github.event.client_payload.io }} `
-          -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
+          -filter '${{ github.event.client_payload.filter || '' }}'
