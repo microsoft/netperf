@@ -9,10 +9,6 @@ inputs:
     description: "The name of the artifact to download."
     type: string
     required: true
-  path:
-    description: "The path to download the artifact to."
-    type: string
-    required: true
   gh_token:
     description: "The GitHub Actions token."
 runs:
@@ -27,12 +23,14 @@ runs:
       }
       $github_url = "https://api.github.com/repos/microsoft/netperf/actions/runs/${{ inputs.caller_id }}/artifacts"
       $response = Invoke-WebRequest -Uri $github_url -Headers $github_headers -Method Get
-      $artifact = $response.Content | ConvertFrom-Json | Where-Object { $_.name -eq "${{ inputs.name }}" }
+      $json_response = $response.Content | ConvertFrom-Json
+      $json_response = $json_response.artifacts
+      $artifact = json_response | Where-Object { $_.name -eq "${{ inputs.name }}" }
       if ($artifact -eq $null) {
         Write-Error "Artifact not found."
         exit 1
       }
-      $artifact_download_url = $artifact.url
+      $artifact_download_url = $artifact.archive_download_url
       $response = Invoke-WebRequest -Uri $artifact_download_url -Headers $github_headers -Method Get -OutFile "${{ inputs.name }}.zip"
       Write-Output "Artifact downloaded successfully!"
       if (!(Test-Path "./artifacts")) {
