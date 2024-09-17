@@ -25,7 +25,7 @@ runs:
       $response = Invoke-WebRequest -Uri $github_url -Headers $github_headers -Method Get
       $json_response = $response.Content | ConvertFrom-Json
       $json_response = $json_response.artifacts
-      $artifact = json_response | Where-Object { $_.name -eq "${{ inputs.name }}" }
+      $artifact = $json_response | Where-Object { $_.name -eq "${{ inputs.name }}" }
       if ($artifact -eq $null) {
         Write-Error "Artifact not found."
         exit 1
