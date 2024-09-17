@@ -135,13 +135,17 @@ jobs:
           $first = $true
           foreach ($row in $truth_table) {
             if ($first) {
-              Write-Host "---------------------------------"
+              Write-Host "`n`n`n"
               $first = $false
             }
             Write-Host "Job: $($row.job.name)"
             Write-Host "Current State: $($row.current_state)"
             Write-Host "Conclusion: $($row.conclusion)"
-            Write-Host "Dispatched Workflow URL: https://github.com/microsoft/netperf/actions/runs/$($row.dispatched_workflow_id)"
+            if ($row.dispatched_workflow_id) {
+              Write-Host "Dispatched Workflow URL: https://github.com/microsoft/netperf/actions/runs/$($row.dispatched_workflow_id)"
+            } else {
+              Write-Host "Dispatched Workflow URL:"
+            }
             Write-Host "---------------------------------"
           }
         }
@@ -259,7 +263,6 @@ jobs:
           $operator_jobs = Get-Jobs -runId ${{ github.run_id }}
           try {
             foreach ($row in $truth_table) {
-              Write-Host "Inspecting row: $($row.job)"
               switch ($row.current_state) {
                 "0_AWAIT_PARENT_CHILD_RESET" {
                   $operator_job = Filter-For-Operator-Job -jobs $operator_jobs -env_str $row.job.env_str
