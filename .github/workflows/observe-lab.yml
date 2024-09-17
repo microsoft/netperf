@@ -103,8 +103,7 @@ jobs:
                 $jobs = Get-Jobs -runId $run.id
                 foreach ($job in $jobs) {
                   if ($job.name.Contains($unique_env_str)) {
-                    $id = $run.id
-                    return "https://github.com/microsoft/netperf/actions/runs/$id"
+                    return $run.id
                   }
                 }
               }
@@ -127,7 +126,7 @@ jobs:
             Write-Host "Job: $($row.job.name)"
             Write-Host "Current State: $($row.current_state)"
             Write-Host "Conclusion: $($row.conclusion)"
-            Write-Host "Dispatched Workflow URL: $($row.dispatched_workflow_url)"
+            Write-Host "Dispatched Workflow URL: https://github.com/microsoft/netperf/actions/runs/$($row.dispatched_workflow_url)"
             Write-Host "---------------------------------"
           }
         }

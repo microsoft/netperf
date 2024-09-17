@@ -266,7 +266,7 @@ jobs:
 
   observe-lab:
     name: Observe Lab
-    needs: [prepare-matrix]
+    needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
     uses: microsoft/netperf/.github/workflows/observe-lab.yml@jackhe/stateless-github-lab-runners
     with:
       lab-matrix: ${{ needs.prepare-matrix.outputs.lab-matrix }}
@@ -276,7 +276,7 @@ jobs:
 
   operate-lab:
     name: Operate Lab
-    needs: [prepare-matrix]
+    needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
     uses: microsoft/netperf/.github/workflows/operate-lab.yml@jackhe/stateless-github-lab-runners
     with:
       lab-matrix: ${{ needs.prepare-matrix.outputs.lab-matrix }}
