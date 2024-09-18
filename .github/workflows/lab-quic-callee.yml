@@ -75,3 +75,23 @@ jobs:
           -tls ${{ github.event.client_payload.tls }} `
           -io ${{ github.event.client_payload.io }} `
           -filter '${{ github.event.client_payload.filter || '' }}'
+    - name: Upload Test Results JSON
+      if: ${{ always() }}
+      uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
+      with:
+        name: json-test-results-lab-${{ github.event.client_payload.os }}-${{ github.event.client_payload.arch }}-${{ github.event.client_payload.tls }}-${{ github.event.client_payload.io }}.json
+        path: json-test-results-lab-${{ github.event.client_payload.os }}-${{ github.event.client_payload.arch }}-${{ github.event.client_payload.tls }}-${{ github.event.client_payload.io }}.json
+    - name: Upload Logs
+      if: ${{ always() }}
+      uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
+      with:
+        name: logs-lab-${{ github.event.client_payload.os }}-${{ github.event.client_payload.arch }}-${{ github.event.client_payload.tls }}-${{ github.event.client_payload.io }}
+        path: artifacts/logs
+        if-no-files-found: ignore
+    - name: Upload Full Latency Curves
+      if: ${{ always() }}
+      uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
+      with:
+        name: latency-lab-${{ github.event.client_payload.os }}-${{ github.event.client_payload.arch }}-${{ github.event.client_payload.tls }}-${{ github.event.client_payload.io }}
+        path: latency.txt
+        if-no-files-found: ignore
