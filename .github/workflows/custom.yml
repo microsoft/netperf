@@ -27,8 +27,10 @@ jobs:
           mkdir -Force "artifacts"
           foreach ($row in $truth_table) {
             $callee_workflow_id = $row.dispatched_workflow_id
+            Write-Host "Downloading artifacts for workflow ID: $callee_workflow_id"
             if ($callee_workflow_id) {
               $artifacts_metadata_url = "https://api.github.com/repos/microsoft/netperf/actions/runs/$callee_workflow_id/artifacts"
+              Write-Host "Artifacts metadata URL: $artifacts_metadata_url"
               $response = Invoke-WebRequest -Uri $artifacts_metadata_url -Headers $github_headers -Method Get
               $json_response = $response.Content | ConvertFrom-Json
               $json_response = $json_response.artifacts
