@@ -22,13 +22,13 @@
   "dependencies": {
     "@emotion/react": "^11.11.3",
     "@emotion/styled": "^11.11.0",
-    "@faker-js/faker": "^9.0.0",
+    "@faker-js/faker": "^9.0.1",
     "@iconify/react": "^4.1.1",
     "@mui/lab": "^5.0.0-alpha.165",
     "@mui/material": "^5.15.13",
     "apexcharts": "3.44.2",
     "chart.js": "^4.4.2",
-    "date-fns": "^4.0.0",
+    "date-fns": "^4.1.0",
     "history": "^5.3.0",
     "lodash": "^4.17.21",
     "numeral": "^2.0.6",
@@ -45,7 +45,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react-swc": "^3.6.0",
-    "eslint": "^8.56.0",
+    "eslint": "^8.57.1",
     "eslint-config-airbnb": "^19.0.4",
     "eslint-config-prettier": "^9.0.0",
     "eslint-import-resolver-alias": "^1.1.2",
@@ -57,7 +57,7 @@
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-unused-imports": "^4.1.4",
     "prettier": "^3.2.4",
-    "vite": "^5.4.5",
+    "vite": "^5.4.6",
     "vite-plugin-checker": "^0.8.0"
   },
   "homepage": "https://microsoft.github.io/netperf/dist"
