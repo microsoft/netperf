@@ -311,4 +311,25 @@ jobs:
           Start-Sleep -Seconds 20
         }
 
+        # Downloads all artifacts uploaded by the callee
+        mkdir -Force "artifacts"
+        foreach ($row in $truth_table) {
+          $callee_workflow_id = $row.dispatched_workflow_id
+          if ($callee_workflow_id) {
+            $jobs = Get-Jobs -runId $callee_workflow_id
+            foreach ($job in $jobs) {
+              if ($job.conclusion -eq "success") {
+                $artifacts = Invoke-WebRequest -Uri $job.artifacts_url -Headers $github_headers -Method Get
+                $artifacts = ($artifacts.Content | ConvertFrom-Json).artifacts
+                foreach ($artifact in $artifacts) {
+                  $url = $artifact.archive_download_url
+                  $name = $artifact.name
+                  $path = "artifacts\$name.zip"
+                  Invoke-WebRequest -Uri $url -Headers $github_headers -OutFile $path
+                }
+              }
+            }
+          }
+        }
+
       shell: pwsh
