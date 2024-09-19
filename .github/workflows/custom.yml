@@ -37,7 +37,7 @@ jobs:
                 $name = $artifact.name
                 $archive_download_url = $artifact.archive_download_url
                 $response = Invoke-WebRequest -Uri $archive_download_url -Headers $github_headers -Method Get -OutFile "$name.zip"
-                Expand-Archive -Path "$name.zip" -DestinationPath "artifacts"
+                Expand-Archive -Path "$name.zip" -DestinationPath "artifacts" -Force
               }
             }
           }
