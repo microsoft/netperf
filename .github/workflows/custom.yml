@@ -14,7 +14,7 @@ jobs:
         run: |
           $truth_table = @(
             @{ dispatched_workflow_id = 10912645568 },
-            @{ dispatched_workflow_id = 10912540924 },
+            @{ dispatched_workflow_id = 10912540924 }
           )
           $github_headers = @{
             "Accept" = "application/vnd.github+json"
