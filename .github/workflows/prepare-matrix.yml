@@ -27,14 +27,18 @@ on:
         type: string
     outputs:
       lab-matrix:
-        description: "The full list of jobs to be run in secnetperf"
+        description: "The STATIC lab jobs to be run"
         value: ${{ jobs.prepare-matrix.outputs.lab-matrix }}
+      lab-stateless-matrix:
+        description: "The ephemeral lab jobs to be run"
+        value: ${{ jobs.prepare-matrix.outputs.lab-stateless-matrix }}
       azure-matrix:
         description: "The list of jobs to be run on Azure VMs"
         value: ${{ jobs.prepare-matrix.outputs.azure-matrix }}
       full-matrix:
         description: "The full list of jobs to be run in secnetperf"
         value: ${{ jobs.prepare-matrix.outputs.full-matrix }}
+
 
 permissions: write-all
 
@@ -45,6 +49,7 @@ jobs:
       lab-matrix: ${{ steps.generate-lab-matrix.outputs.matrix }}
       azure-matrix: ${{ steps.generate-azure-matrix.outputs.matrix }}
       full-matrix: ${{ steps.generate-full-matrix.outputs.matrix }}
+      lab-stateless-matrix: ${{ steps.generate-lab-stateless-matrix.outputs.matrix }}
     runs-on: windows-latest
     steps:
     - name: Checkout
@@ -53,6 +58,9 @@ jobs:
       run: ./.github/workflows/prepare-matrix.ps1
     - id: generate-lab-matrix
       run: echo "matrix=$(jq -c '.' ./.github/workflows/lab-matrix.json)" >> $GITHUB_OUTPUT
+      shell: bash
+    - id: generate-lab-stateless-matrix
+      run: echo "matrix=$(jq -c '.' ./.github/workflows/lab-stateless-matrix.json)" >> $GITHUB_OUTPUT
       shell: bash
     - id: generate-azure-matrix
       run: echo "matrix=$(jq -c '.' ./.github/workflows/azure-matrix.json)" >> $GITHUB_OUTPUT
