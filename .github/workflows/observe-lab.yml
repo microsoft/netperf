@@ -329,7 +329,7 @@ jobs:
               $response = Invoke-WebRequest -Uri $archive_download_url -Headers $github_headers -Method Get -OutFile "$name.zip"
               if ($name.Contains("test-results")) {
                 Expand-Archive -Path "$name.zip" -DestinationPath "artifacts_test_results" -Force
-              } else if ($name.Contains("logs")) {
+              } elseif ($name.Contains("logs")) {
                 Expand-Archive -Path "$name.zip" -DestinationPath "artifacts_logs" -Force
               } else {
                 Expand-Archive -Path "$name.zip" -DestinationPath "artifacts_misc" -Force
