@@ -13,9 +13,8 @@ jobs:
       - name: Test download artifacts
         run: |
           $truth_table = @(
-            @{ dispatched_workflow_id = 10912864520 },
-            @{ dispatched_workflow_id = 10912760773 },
-            @{ dispatched_workflow_id = 10912684132 }
+            @{ dispatched_workflow_id = 10912645568 },
+            @{ dispatched_workflow_id = 10912540924 },
           )
           $github_headers = @{
             "Accept" = "application/vnd.github+json"
