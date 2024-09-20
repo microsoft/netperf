@@ -266,42 +266,6 @@ jobs:
         path: latency.txt
         if-no-files-found: ignore
 
-  observe-lab:
-    name: Observe Lab
-    needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
-    uses: microsoft/netperf/.github/workflows/observe-lab.yml@jackhe/stateless-github-lab-runners
-    with:
-      lab-matrix: ${{ needs.prepare-matrix.outputs.lab-stateless-matrix }}
-      project-callee: 'lab-quic-callee'
-      sha: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
-      ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
-      pr: ${{ github.event.client_payload.pr }}
-    secrets:
-      NETPERF_SYNCER_SECRET: ${{ secrets.NETPERF_SYNCER_SECRET }}
-
-  operate-lab:
-    name: Operate Lab
-    needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
-    uses: microsoft/netperf/.github/workflows/operate-lab.yml@jackhe/stateless-github-lab-runners
-    with:
-      lab-matrix: ${{ needs.prepare-matrix.outputs.lab-stateless-matrix }}
-    secrets:
-      NETPERF_SYNCER_SECRET: ${{ secrets.NETPERF_SYNCER_SECRET }}
-
-  cleanup-cache:
-    name: Cleanup Remote Cache Metadata
-    if: ${{ always() }}
-    needs: [observe-lab, operate-lab]
-    runs-on: 'windows-latest'
-    steps:
-    - name: Send cleanup request to endpoint
-      run: |
-        $headers = @{
-          "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
-        }
-        $url = "https://netperfapi.azurewebsites.net/cleanuprun?runid=${{ github.run_id }}"
-        Invoke-WebRequest -Uri $url -Headers $headers
-
   #
   # Test Jobs.
   # NOTE: tag == env
@@ -382,10 +346,32 @@ jobs:
         path: latency.txt
         if-no-files-found: ignore
 
+  observe-lab:
+    name: Observe Lab
+    needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
+    uses: microsoft/netperf/.github/workflows/observe-lab.yml@jackhe/stateless-github-lab-runners
+    with:
+      lab-matrix: ${{ needs.prepare-matrix.outputs.lab-stateless-matrix }}
+      project-callee: 'lab-quic-callee'
+      sha: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+      ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
+      pr: ${{ github.event.client_payload.pr }}
+    secrets:
+      NETPERF_SYNCER_SECRET: ${{ secrets.NETPERF_SYNCER_SECRET }}
+
+  operate-lab:
+    name: Operate Lab
+    needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
+    uses: microsoft/netperf/.github/workflows/operate-lab.yml@jackhe/stateless-github-lab-runners
+    with:
+      lab-matrix: ${{ needs.prepare-matrix.outputs.lab-stateless-matrix }}
+    secrets:
+      NETPERF_SYNCER_SECRET: ${{ secrets.NETPERF_SYNCER_SECRET }}
+
   cleanup-cache:
     name: Cleanup Remote Cache Metadata
     if: ${{ always() }}
-    needs: [run-secnetperf-1es, run-secnetperf, observe-lab]
+    needs: [run-secnetperf-1es, observe-lab]
     runs-on: 'windows-latest'
     steps:
     - name: Send cleanup request to endpoint
@@ -401,7 +387,7 @@ jobs:
   #
   generate-summary:
     name: Results
-    needs: [cleanup-cache]
+    needs: [run-secnetperf, run-secnetperf-1es]
     runs-on: 'ubuntu-20.04'
     continue-on-error: true
     steps:
@@ -424,7 +410,7 @@ jobs:
   save-test-results:
     permissions: write-all
     name: Persist Results in DB
-    needs: [generate-summary]
+    needs: [run-secnetperf, run-secnetperf-1es]
     if: ${{ (github.event_name == 'repository_dispatch' && github.event.client_payload.pr == '') || inputs.commit }}
     strategy:
       fail-fast: false
