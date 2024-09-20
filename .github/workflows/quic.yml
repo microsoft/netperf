@@ -174,12 +174,13 @@ jobs:
       workflowId: ${{ github.run_id }}-${{ github.run_attempt }}
 
   run-secnetperf-1es:
-    name: azure-${{ matrix.role }}-${{ matrix.os }}-${{ matrix.io }}-${{ matrix.tls }}-${{ matrix.arch }}
+    name: ${{ matrix.optional == 'TRUE' && '[UNRELIABLE]-' || '' }}azure-${{ matrix.os }}-${{ matrix.io }}-${{ matrix.role }}-${{ matrix.tls }}-${{ matrix.arch }}
     needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
     strategy:
       fail-fast: false
       matrix:
         include: ${{fromJson(needs.prepare-matrix.outputs.azure-matrix)}}
+    continue-on-error: ${{ matrix.optional == 'TRUE' }}
     runs-on:
     - self-hosted
     - 1ES.Pool=${{ matrix.assigned_pool }}
@@ -239,26 +240,27 @@ jobs:
         matrix: '${{ toJson(matrix) }}'
         syncer-secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
     - name: Stop 1ES Machine
+      if: ${{ always() }}
       uses: ./netperfrepo/.github/actions/stop-1es-machine
       with:
         matrix: '${{ toJson(matrix) }}'
         syncer_secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
     - name: Upload Test Results JSON
       if: ${{ always() }}
-      uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
+      uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
       with:
         name: json-test-results-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}.json
         path: json-test-results-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}.json
     - name: Upload Logs
       if: ${{ always() }}
-      uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
+      uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
       with:
         name: logs-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
         path: artifacts/logs
         if-no-files-found: ignore
     - name: Upload Full Latency Curves
       if: ${{ always() }}
-      uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
+      uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
       with:
         name: latency-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
         path: latency.txt
@@ -380,6 +382,20 @@ jobs:
         path: latency.txt
         if-no-files-found: ignore
 
+  cleanup-cache:
+    name: Cleanup Remote Cache Metadata
+    if: ${{ always() }}
+    needs: [run-secnetperf-1es]
+    runs-on: 'windows-latest'
+    steps:
+    - name: Send cleanup request to endpoint
+      run: |
+        $headers = @{
+          "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+        }
+        $url = "https://netperfapi.azurewebsites.net/cleanuprun?runid=${{ github.run_id }}"
+        Invoke-WebRequest -Uri $url -Headers $headers
+        
   #
   # Post Processing Jobs
   #
@@ -387,6 +403,7 @@ jobs:
     name: Results
     needs: [observe-lab]
     runs-on: 'ubuntu-20.04'
+    continue-on-error: true
     steps:
     - name: Checkout repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -451,6 +468,7 @@ jobs:
     permissions: write-all
     name: Update Regression Metrics
     needs: [update-intermediary-dashboard-json]
+    continue-on-error: true
     strategy:
       fail-fast: false
     runs-on: 'ubuntu-20.04'

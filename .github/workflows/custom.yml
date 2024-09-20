@@ -45,3 +45,4 @@ jobs:
         run: |
           Get-ChildItem -Path "artifacts" -Recurse
         shell: pwsh
+

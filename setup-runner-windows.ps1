@@ -21,22 +21,44 @@ param (
     [switch]$SetupRemotePowershell,
 
     [Parameter(Mandatory = $false)]
-    [switch]$SanityCheck
+    [switch]$SanityCheck,
+
+    [Parameter(Mandatory = $false)]
+    [string]$GithubRunnerName = "GenericRunner",
+
+    [Parameter(Mandatory = $false)]
+    [switch]$SkipDisableDefender,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$IsHost
 )
 
 Set-StrictMode -Version 'Latest'
 $PSDefaultParameterValues['*:ErrorAction'] = 'Stop'
 
+if ($IsHost) {
+    $Username = "localadminuser"
+}
+
 if ($SetupRemotePowershell -and $Password) {
     # Install the latest version of PowerShell.
-    Write-Host "Installing latest PowerShell."
-    iex "& { $(irm https://aka.ms/install-powershell.ps1) } -UseMSI -Quiet -EnablePSRemoting"
+    if ($SkipDisableDefender -or $IsHost) {
+        Write-Host "Installing latest PowerShell, WITHOUT enabling PsRemoting."
+        iex "& { $(irm https://aka.ms/install-powershell.ps1) } -UseMSI -Quiet"
+    } else {
+        Write-Host "Installing latest PowerShell, while enabling PsRemoting."
+        iex "& { $(irm https://aka.ms/install-powershell.ps1) } -UseMSI -Quiet -EnablePSRemoting"
+    }
 
-    # Disable Windows defender / firewall.
-    Write-Host "Disabling Windows Defender / Firewall."
-    netsh.exe advfirewall set allprofiles state off
-    Set-MpPreference -EnableNetworkProtection Disabled
-    Set-MpPreference -DisableDatagramProcessing $True
+    if ($SkipDisableDefender -or $IsHost) {
+        Write-Host "-SkipDisableDefender set. Skipping Windows Defender / Firewall disabling."
+    } else {
+        # Disable Windows defender / firewall.
+        Write-Host "Disabling Windows Defender / Firewall."
+        netsh.exe advfirewall set allprofiles state off
+        Set-MpPreference -EnableNetworkProtection Disabled
+        Set-MpPreference -DisableDatagramProcessing $True
+    }
 
     # Make sure the user has the rights to log on.
     function Add-ServiceLogonRight ($Username) {
@@ -80,7 +102,7 @@ if ($GitHubToken -and $Password) {
     $RunnerName = "actions-runner-win-x64-$RunnerVersion.zip"
     Invoke-WebRequest -Uri "https://github.com/actions/runner/releases/download/v$RunnerVersion/$RunnerName" -OutFile $RunnerName
     Add-Type -AssemblyName System.IO.Compression.FileSystem ; [System.IO.Compression.ZipFile]::ExtractToDirectory("$PWD/$RunnerName", "$PWD")
-    ./config.cmd --url https://github.com/microsoft/netperf --token $GitHubToken --runasservice --windowslogonaccount $Username --windowslogonpassword $Password --unattended --labels $RunnerLabels
+    ./config.cmd --url https://github.com/microsoft/netperf --token $GitHubToken --runasservice --windowslogonaccount $Username --windowslogonpassword $Password --unattended --labels $RunnerLabels --name $GithubRunnerName
 } else {
     Write-Host "-GithubToken and/or -Password not provided. Skipping GitHub runner setup."
 }

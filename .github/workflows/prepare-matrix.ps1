@@ -55,6 +55,14 @@ foreach ($entry in $MatrixJson) {
         $server | Add-Member -MemberType NoteProperty -Name "role" -Value "server"
         $client | Add-Member -MemberType NoteProperty -Name "env_str" -Value $env_str
         $server | Add-Member -MemberType NoteProperty -Name "env_str" -Value $env_str
+
+        if ("in_staging_mode" -in $entry.PSObject.Properties.Name) {
+            $client | Add-Member -MemberType NoteProperty -Name "optional" -Value 'TRUE'
+            $server | Add-Member -MemberType NoteProperty -Name "optional" -Value 'TRUE'
+        } else {
+            $client | Add-Member -MemberType NoteProperty -Name "optional" -Value 'FALSE'
+            $server | Add-Member -MemberType NoteProperty -Name "optional" -Value 'FALSE'
+        }
         $AzureJson += $client
         $AzureJson += $server
         $FullJson += $client
@@ -67,6 +75,13 @@ foreach ($entry in $MatrixJson) {
         $labclient | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'TRUE'
         $labclient | Add-Member -MemberType NoteProperty -Name "role" -Value "client"
         $labclient | Add-Member -MemberType NoteProperty -Name "env_str" -Value $env_str
+        
+        if ("in_staging_mode" -in $entry.PSObject.Properties.Name) {
+            $labclient | Add-Member -MemberType NoteProperty -Name "optional" -Value 'TRUE'
+        } else {
+            $labclient | Add-Member -MemberType NoteProperty -Name "optional" -Value 'FALSE'
+        }
+        
         $LabJsonStateless += $labclient
         $FullJson += $labclient
     } elseif ($entry.env -match "lab") {
@@ -76,6 +91,13 @@ foreach ($entry in $MatrixJson) {
         $labclient | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'TRUE'
         $labclient | Add-Member -MemberType NoteProperty -Name "role" -Value "client"
         $labclient | Add-Member -MemberType NoteProperty -Name "env_str" -Value $env_str
+
+        if ("in_staging_mode" -in $entry.PSObject.Properties.Name) {
+            $labclient | Add-Member -MemberType NoteProperty -Name "optional" -Value 'TRUE'
+        } else {
+            $labclient | Add-Member -MemberType NoteProperty -Name "optional" -Value 'FALSE'
+        }
+
         $LabJson += $labclient
         $FullJson += $labclient
     } else {
