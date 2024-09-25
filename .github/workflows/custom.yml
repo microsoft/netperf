@@ -17,4 +17,8 @@ jobs:
         run: |
           # Check if test signing is enabled
           bcdedit /enum | findstr "testsinging"
-      
+      - name: Print OS version data
+        run: |
+          # Print OS version data
+          Get-ComputerInfo
+        shell: pwsh
