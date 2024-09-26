@@ -41,10 +41,10 @@ export default function Router() {
           path: 'hps',
           element: <HpsPage />,
         },
-        {
-          path: 'Detailed',
-          element: <DetailedPage />,
-        }
+        // {
+        //   path: 'Detailed',
+        //   element: <DetailedPage />,
+        // }
       ],
     },
     {
