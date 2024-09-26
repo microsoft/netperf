@@ -85,7 +85,7 @@ jobs:
     with:
       ref: 'main'
       os: ${{ matrix.os }}
-      arch: ${{ matrix.arch }}
+      platform: ${{ matrix.arch }}
       upload_artifacts: true
 
   build_cts_traffic:
