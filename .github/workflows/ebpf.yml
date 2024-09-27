@@ -85,7 +85,7 @@ jobs:
     with:
       ref: 'main'
       os: ${{ matrix.os }}
-      arch: ${{ matrix.arch }}
+      platform: ${{ matrix.arch }}
       upload_artifacts: true
 
   build_cts_traffic:
@@ -192,13 +192,20 @@ jobs:
           $installPath = "${{ github.workspace }}\xdp\x64_release"
           Write-Output "xdp installPath: $installPath"
           Write-Output "Installing XDP for Windows"
-          $process = Start-Process msiexec.exe -Wait -ArgumentList "/i xdp-for-windows.${{env.XDP_VERSION}}.msi INSTALLFOLDER=$installPath /qn" -PassThru
-          if ($process.ExitCode -ne 0) { exit $process.ExitCode }
+          $process = Start-Process msiexec.exe -Wait -ArgumentList "/i xdp-for-windows.x64.${{env.XDP_VERSION}}.msi INSTALLFOLDER=$installPath /qn /log ${{ github.workspace }}\xdp\xdp_install.log ADDLOCAL=ALL" -PassThru
+          if ($process.ExitCode -ne 0) { Get-Content ${{ github.workspace }}\xdp\xdp_install.log; exit $process.ExitCode }
           Write-Output "XDP for Windows installed"
           sc.exe query xdp
           reg.exe add HKLM\SYSTEM\CurrentControlSet\Services\xdp\Parameters /v XdpEbpfEnabled /d 1 /t REG_DWORD /f
           sc.exe stop xdp
           sc.exe start xdp
+
+    - name: Upload xdp-for-windows logs
+      if: always()
+      uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874 # v4.4.0
+      with:
+        name: xdp-for-windows-logs
+        path: ${{ github.workspace }}\xdp\xdp_install.log
 
     - name: Download bpf_performance repository artifacts
       working-directory: ${{ github.workspace }}\bpf_performance
