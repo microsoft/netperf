@@ -193,7 +193,7 @@ jobs:
           Write-Output "xdp installPath: $installPath"
           Write-Output "Installing XDP for Windows"
           $process = Start-Process msiexec.exe -Wait -ArgumentList "/i xdp-for-windows.${{env.XDP_VERSION}}.msi INSTALLFOLDER=$installPath /qn /log ${{ github.workspace }}\xdp\xdp_install.log ADDLOCAL=ALL" -PassThru
-          if ($process.ExitCode -ne 0) { exit $process.ExitCode }
+          if ($process.ExitCode -ne 0) { Get-Content ${{ github.workspace }}\xdp\xdp_install.log; exit $process.ExitCode }
           Write-Output "XDP for Windows installed"
           sc.exe query xdp
           reg.exe add HKLM\SYSTEM\CurrentControlSet\Services\xdp\Parameters /v XdpEbpfEnabled /d 1 /t REG_DWORD /f
