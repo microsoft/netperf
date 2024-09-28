@@ -27,9 +27,6 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
-      with:
-        repository: microsoft/netperf
-        ref: main
     - name: NPM install
       working-directory: dashboard
       run: npm install
@@ -44,6 +41,8 @@ jobs:
         path: dashboard/dist
 
   update-react:
+    # Only update when this run is from a merge to main
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions: write-all
     name: Update React
     needs: [npm-build]
