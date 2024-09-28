@@ -19,7 +19,7 @@ import useFetchData from 'src/hooks/use-fetch-data';
 import AppWebsiteVisits from '../app-website-visits';
 import AppWidgetSummary from '../app-widget-summary';
 
-
+import getLatestSkuInformation from '../../../utils/sku';
 
 
 function throughputPerformance(download, upload, dweight, uweight) {
@@ -34,6 +34,8 @@ function latencyPerformance(latencies) {
   }
   return (1 / sum) * 100000;
 }
+
+// getLatestSkuInformation("", "", {})
 
 // ----------------------------------------------------------------------
 
@@ -195,6 +197,21 @@ export default function AppView() {
     setLinuxOs(event.target.value);
   }
 
+  const azureWS2025 = (
+    windowsOs.includes("2025") ? `WinPrerelease-Datacenter, build: ${windowsType.split(" ")[1]}` : windowsType
+  )
+
+  const envStr = `${env === "lab" && windowsOs.includes("2025") ? `ge_current_directiof_stack, build: ${windowsType.split(" ")[1]}` : azureWS2025} | ${linuxType}`
+
+  let margin = '0px'
+  let dir = 'row'
+
+  // Check displayport size
+  if (window.innerWidth < 600) {
+    margin = '10px'
+    dir = 'column'
+  }
+
   return (
     <Container maxWidth="xl">
       <div style={{display: 'flex'}}>
@@ -202,63 +219,63 @@ export default function AppView() {
         Network Performance Overview
       </Typography>
       </div>
-      <div style={{display: 'flex'}}>
-      <Box sx={{ }}>
-        <FormControl>
-          <InputLabel id="demo-simple-select-label">Context</InputLabel>
-          <Select
-            labelId="demo-simple-select-label"
-            id="demo-simple-select"
-            value={env}
-            label="Context"
-            onChange={handleChange}
-            defaultValue={0}
-          >
-            <MenuItem value='azure'>azure</MenuItem>
-            { windowsOs !== 'windows-2025-x64' && <MenuItem value='lab'>lab</MenuItem> }
-          </Select>
-        </FormControl>
-      </Box>
-      {/* <br /> */}
-      <Box sx={{ minWidth: 120, marginLeft: '10px' }}>
-        <FormControl>
-          <InputLabel id="demo-simple-select-label">Windows Environment</InputLabel>
-          <Select
-            labelId="demo-simple-select-label"
-            id="demo-simple-select"
-            value={windowsOs}
-            label="Windows Environment"
-            onChange={handleChangeWindowsOs}
-            defaultValue={0}
-          >
-            <MenuItem value='windows-2022-x64'>windows-2022-x64</MenuItem>
-            { env === 'azure' && <MenuItem value='windows-2025-x64'>windows-2025-x64</MenuItem> }
-          </Select>
-        </FormControl>
-      </Box>
-      {/* <br /> */}
-      <Box sx={{ minWidth: 120, marginLeft: '10px' }}>
-        <FormControl>
-          <InputLabel id="demo-simple-select-label">Linux Environment</InputLabel>
-          <Select
-            labelId="demo-simple-select-label"
-            id="demo-simple-select"
-            value={linuxOs}
-            label="Linux Environment"
-            onChange={handleChangeLinuxOs}
-            defaultValue={0}
-          >
-            <MenuItem value='ubuntu-20.04-x64'>ubuntu-20.04-x64</MenuItem>
-          </Select>
-        </FormControl>
-      </Box>
-      {/* <Typography variant="h5" sx={{ mb: 5 }}>
-        Data based on commit: <a href={`https://github.com/microsoft/msquic/commit/${commitHash}`}>{commitHash}</a>
-      </Typography> */}
-      <p style={{marginLeft: '10px'}}>Data based on <a href={`https://github.com/microsoft/msquic/commit/${commitHash}`}>commit</a></p>
+      <div style={{ display: 'flex', flexDirection: dir, alignItems: 'center' }}>
+        <Box sx={{ marginBottom: margin}}>
+          <FormControl>
+            <InputLabel id="demo-simple-select-label">Context</InputLabel>
+            <Select
+              labelId="demo-simple-select-label"
+              id="demo-simple-select"
+              value={env}
+              label="Context"
+              onChange={handleChange}
+              defaultValue={0}
+            >
+              <MenuItem value='azure'>azure</MenuItem>
+              <MenuItem value='lab'>lab</MenuItem>
+            </Select>
+          </FormControl>
+        </Box>
+        {/* <br /> */}
+        <Box sx={{ minWidth: 120, marginLeft: '10px' }}>
+          <FormControl>
+            <InputLabel id="demo-simple-select-label">Windows Environment</InputLabel>
+            <Select
+              labelId="demo-simple-select-label"
+              id="demo-simple-select"
+              value={windowsOs}
+              label="Windows Environment"
+              onChange={handleChangeWindowsOs}
+              defaultValue={0}
+            >
+              <MenuItem value='windows-2022-x64'>windows-2022-x64</MenuItem>
+              <MenuItem value='windows-2025-x64'>windows-2025-x64</MenuItem>
+            </Select>
+          </FormControl>
+        </Box>
+        {/* <br /> */}
+        <Box sx={{ minWidth: 120, marginLeft: '10px', marginTop: margin }}>
+          <FormControl>
+            <InputLabel id="demo-simple-select-label">Linux Environment</InputLabel>
+            <Select
+              labelId="demo-simple-select-label"
+              id="demo-simple-select"
+              value={linuxOs}
+              label="Linux Environment"
+              onChange={handleChangeLinuxOs}
+              defaultValue={0}
+            >
+              <MenuItem value='ubuntu-20.04-x64'>ubuntu-20.04-x64</MenuItem>
+            </Select>
+          </FormControl>
+        </Box>
+        {/* <Typography variant="h5" sx={{ mb: 5 }}>
+          Data based on commit: <a href={`https://github.com/microsoft/msquic/commit/${commitHash}`}>{commitHash}</a>
+        </Typography> */}
+        <p style={{marginLeft: '10px'}}>Data based on <a href={`https://github.com/microsoft/msquic/commit/${commitHash}`}>commit</a></p>
       </div>
-      <br />
-
+      {/* <br /> */}
+      <p><b>Windows hardware SKU:</b> {getLatestSkuInformation(env, windowsOs, windows)} | <b>Linux hardware SKU:</b> {getLatestSkuInformation(env, linuxOs, linux)}</p>
       <Grid container spacing={3}>
         <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
@@ -394,7 +411,7 @@ export default function AppView() {
         <Grid xs={12} md={6} lg={6}>
           <AppWebsiteVisits
             title="Throughput Comparison (kbps), higher the better."
-            subheader={`Tested using ${windowsType}, ${linuxType}`}
+            subheader={` ${envStr}`}
             chart={{
               labels: ['', 'Download', 'Upload', ''],
               series: [
@@ -485,7 +502,7 @@ export default function AppView() {
         <Grid xs={12} md={6} lg={6}>
           <AppWebsiteVisits
             title="Latency Comparison (µs), lower the better."
-            subheader={`Tested using ${windowsType}, ${linuxType}`}
+            subheader={` ${envStr}`}
             chart={{
               // New labels based on percentiles
               labels: [
@@ -678,7 +695,7 @@ export default function AppView() {
         <Grid xs={12} md={6} lg={6}>
           <AppWebsiteVisits
             title="RPS Comparison (requests per second), higher the better."
-            subheader={`Tested using ${windowsType}, ${linuxType}`}
+            subheader={` ${envStr}`}
             chart={{
               labels: ['RPS'],
               series: [
@@ -751,7 +768,7 @@ export default function AppView() {
         <Grid xs={12} md={6} lg={6}>
           <AppWebsiteVisits
             title="HPS Comparison (handshakes per second), higher the better."
-            subheader={`Tested using ${windowsType}, ${linuxType}`}
+            subheader={`${envStr}`}
             chart={{
               labels: ['HPS'],
               series: [
