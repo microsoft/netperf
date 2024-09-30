@@ -131,6 +131,12 @@ jobs:
         New-item -ItemType Directory -Path ${{ github.workspace }}\cts-traffic
         New-item -ItemType Directory -Path ${{ github.workspace }}\ETL
 
+    - name: Log System information
+      run: |
+        Get-WmiObject -Class Win32_Processor | Select-Object -Property Name,NumberOfCores,NumberOfLogicalProcessors
+        Get-WmiObject -Class Win32_ComputerSystem | Select-Object -Property Manufacturer,Model,TotalPhysicalMemory
+        Get-WmiObject -Class Win32_OperatingSystem | Select-Object -Property Caption,Version,OSArchitecture
+
     # Install the latest anti-malware signatures for Windows Defender to prevent false positives.
     # Windows Defender incorrectly flags some of the test binaries as malware.
     - name: Download latest anti-malware signatures for Windows Defender
