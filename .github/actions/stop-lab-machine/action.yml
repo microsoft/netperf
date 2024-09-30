@@ -1,0 +1,40 @@
+name: "Stop lab machine"
+description: "This action runs multiple steps as a composite action."
+inputs:
+  parent:
+    description: "The ID of the parent lab machine assigned to this machine."
+    type: string
+    required: true
+  syncer_secret:
+    description: "The secret to use for the syncer."
+    type: string
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Report aftermath of Job [Failure]
+      if: failure()
+      run: |
+        $headers = @{
+          "secret" = "${{ inputs.syncer_secret }}"
+        }
+        $parent_lab_machine_id = "${{ inputs.parent }}"
+        $api = "https://netperfapi.azurewebsites.net/setkeyvalue?key=$parent_lab_machine_id&value=FAILED"
+        Invoke-WebRequest -Uri $api -Headers $headers -Method Post
+    - name: Report aftermath of Job [Success]
+      if: success()
+      run: |
+        $headers = @{
+          "secret" = "${{ inputs.syncer_secret }}"
+        }
+        $parent_lab_machine_id = "${{ inputs.parent }}"
+        $api = "https://netperfapi.azurewebsites.net/setkeyvalue?key=$parent_lab_machine_id&value=SUCCESS"
+        Invoke-WebRequest -Uri $api -Headers $headers -Method Post
+    - name: Report aftermath of Job [Cancelled]
+      if: cancelled()
+      run: |
+        $headers = @{
+          "secret" = "${{ inputs.syncer_secret }}"
+        }
+        $parent_lab_machine_id = "${{ inputs.parent }}"
+        $api = "https://netperfapi.azurewebsites.net/setkeyvalue?key=$parent_lab_machine_id&value=CANCELLED"

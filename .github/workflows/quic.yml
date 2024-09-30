@@ -346,10 +346,33 @@ jobs:
         path: latency.txt
         if-no-files-found: ignore
 
+  # TODO: Uncomment once we fully transition to a stateless lab.
+  # observe-lab:
+  #   name: Observe Lab
+  #   needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
+  #   uses: microsoft/netperf/.github/workflows/observe-lab.yml@main
+  #   with:
+  #     lab-matrix: ${{ needs.prepare-matrix.outputs.lab-stateless-matrix }}
+  #     project-callee: 'lab-quic-callee'
+  #     sha: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+  #     ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
+  #     pr: ${{ github.event.client_payload.pr }}
+  #   secrets:
+  #     NETPERF_SYNCER_SECRET: ${{ secrets.NETPERF_SYNCER_SECRET }}
+
+  # operate-lab:
+  #   name: Operate Lab
+  #   needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
+  #   uses: microsoft/netperf/.github/workflows/operate-lab.yml@main
+  #   with:
+  #     lab-matrix: ${{ needs.prepare-matrix.outputs.lab-stateless-matrix }}
+  #   secrets:
+  #     NETPERF_SYNCER_SECRET: ${{ secrets.NETPERF_SYNCER_SECRET }}
+
   cleanup-cache:
     name: Cleanup Remote Cache Metadata
     if: ${{ always() }}
-    needs: [run-secnetperf-1es]
+    needs: [run-secnetperf-1es] # TODO: Add 'observe-lab' once we fully transition to a stateless lab.
     runs-on: 'windows-latest'
     steps:
     - name: Send cleanup request to endpoint
@@ -365,7 +388,7 @@ jobs:
   #
   generate-summary:
     name: Results
-    needs: [run-secnetperf, run-secnetperf-1es]
+    needs: [run-secnetperf, run-secnetperf-1es] # TODO: Add 'observe-lab' once we fully transition to a stateless lab.
     runs-on: 'ubuntu-20.04'
     continue-on-error: true
     steps:
@@ -376,6 +399,11 @@ jobs:
         path: artifacts/logs
         pattern: json-test-results-*
         merge-multiple: true
+    - uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+      with:
+        path: artifacts/logs
+        name: lab-test-results
+        merge-multiple: true
     - name: Generate Summary
       shell: pwsh # We never block the workflow if its a git merge or someone manually triggered a run with publish_results = true.
       run: ./.github/workflows/generate-summary.ps1 -BlockOnFailure ${{ github.event.client_payload.pr != '' && !inputs.commit }}
@@ -383,7 +411,7 @@ jobs:
   save-test-results:
     permissions: write-all
     name: Persist Results in DB
-    needs: [run-secnetperf, run-secnetperf-1es]
+    needs: [run-secnetperf, run-secnetperf-1es] # TODO: Add 'observe-lab' once we fully transition to a stateless lab.
     if: ${{ (github.event_name == 'repository_dispatch' && github.event.client_payload.pr == '') || inputs.commit }}
     strategy:
       fail-fast: false

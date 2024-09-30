@@ -13,6 +13,7 @@ $MatrixJson = Get-Content -Path .\.github\workflows\$MatrixFileName | ConvertFro
 
 $AzureJson = @()
 $LabJson = @()
+$LabJsonStateless = @()
 $FullJson = @()
 
 foreach ($entry in $MatrixJson) {
@@ -66,6 +67,23 @@ foreach ($entry in $MatrixJson) {
         $AzureJson += $server
         $FullJson += $client
         $FullJson += $server
+    } elseif ($entry.env -match "lab-stateless") {
+        $labclient = $entry.PSObject.Copy()
+        $env_str = [guid]::NewGuid().ToString()
+        $labclient.env = "lab"
+        $labclient | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value "NONE"
+        $labclient | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'TRUE'
+        $labclient | Add-Member -MemberType NoteProperty -Name "role" -Value "client"
+        $labclient | Add-Member -MemberType NoteProperty -Name "env_str" -Value $env_str
+        
+        if ("in_staging_mode" -in $entry.PSObject.Properties.Name) {
+            $labclient | Add-Member -MemberType NoteProperty -Name "optional" -Value 'TRUE'
+        } else {
+            $labclient | Add-Member -MemberType NoteProperty -Name "optional" -Value 'FALSE'
+        }
+        
+        $LabJsonStateless += $labclient
+        $FullJson += $labclient
     } elseif ($entry.env -match "lab") {
         $labclient = $entry.PSObject.Copy()
         $env_str = [guid]::NewGuid().ToString()
@@ -73,11 +91,13 @@ foreach ($entry in $MatrixJson) {
         $labclient | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'TRUE'
         $labclient | Add-Member -MemberType NoteProperty -Name "role" -Value "client"
         $labclient | Add-Member -MemberType NoteProperty -Name "env_str" -Value $env_str
+
         if ("in_staging_mode" -in $entry.PSObject.Properties.Name) {
             $labclient | Add-Member -MemberType NoteProperty -Name "optional" -Value 'TRUE'
         } else {
             $labclient | Add-Member -MemberType NoteProperty -Name "optional" -Value 'FALSE'
         }
+
         $LabJson += $labclient
         $FullJson += $labclient
     } else {
@@ -89,3 +109,4 @@ foreach ($entry in $MatrixJson) {
 $LabJson | ConvertTo-Json | Set-Content -Path .\.github\workflows\lab-matrix.json
 $AzureJson | ConvertTo-Json | Set-Content -Path .\.github\workflows\azure-matrix.json
 $FullJson | ConvertTo-Json | Set-Content -Path .\.github\workflows\full-matrix.json
+$LabJsonStateless | ConvertTo-Json | Set-Content -Path .\.github\workflows\lab-stateless-matrix.json
