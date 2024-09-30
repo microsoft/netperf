@@ -55,6 +55,13 @@ export default function ThroughputPage() {
     const quicxdp = data[`${windowsOs}-${env}-xdp-schannel`][`tput-${testType}-quic`]['data'].slice().reverse();
     const quicwsk = data[`${windowsOs}-${env}-wsk-schannel`][`tput-${testType}-quic`]['data'].slice().reverse();
 
+    const TCPIOCP = tcpiocp.map(x => x[0]);
+    const QUICIOCP = quiciocp.map(x => x[0]);
+    const TCPEPOLL = tcpepoll.map(x => x[0]);
+    const QUICEPOLL = quicepoll.map(x => x[0]);
+    const QUICXDP = quicxdp.map(x => x[0]);
+    const QUICWSK = quicwsk.map(x => x[0]);
+
     uploadThroughput =
       <GraphView title={`${testType === 'up' ? 'Upload' : 'Download'} Throughput`}
     subheader={`Tested using ${windowsOs}, ${linuxOs}, taking the max of 3 runs. `}
@@ -83,37 +90,37 @@ export default function ThroughputPage() {
         name: 'TCP + iocp',
         type: 'line',
         fill: 'solid',
-        data: tcpiocp.map((x) => x[0]),
+        data: TCPIOCP,
       },
       {
         name: 'QUIC + iocp',
         type: 'line',
         fill: 'solid',
-        data: quiciocp,
+        data: QUICIOCP,
       },
       {
         name: 'TCP + epoll',
         type: 'line',
         fill: 'solid',
-        data: tcpepoll,
+        data: TCPEPOLL,
       },
       {
         name: 'QUIC + epoll',
         type: 'line',
         fill: 'solid',
-        data: quicepoll,
+        data: QUICEPOLL,
       },
       {
         name: 'QUIC + winXDP',
         type: 'line',
         fill: 'solid',
-        data: quicxdp,
+        data: QUICXDP,
       },
       {
         name: 'QUIC + wsk',
         type: 'line',
         fill: 'solid',
-        data: quicwsk,
+        data: QUICWSK,
       },
     ]}
 
