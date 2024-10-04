@@ -186,7 +186,6 @@ jobs:
     - 1ES.Pool=${{ matrix.assigned_pool }}
     steps:
     - name: Checkout microsoft/msquic
-      if: ${{ matrix.role == 'client' }}
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       with:
         repository: microsoft/msquic
