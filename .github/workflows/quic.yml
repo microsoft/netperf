@@ -186,7 +186,6 @@ jobs:
     - 1ES.Pool=${{ matrix.assigned_pool }}
     steps:
     - name: Checkout microsoft/msquic
-      if: ${{ matrix.role == 'client' }}
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
       with:
         repository: microsoft/msquic
@@ -214,7 +213,7 @@ jobs:
       uses: ./netperfrepo/.github/actions/start-1es-machine
       with:
         matrix: '${{ toJson(matrix) }}'
-        callback-script-path: ${{ github.workspace }}/netperfrepo/.github/workflows/quic_callback.ps1
+        callback-script-path: ${{ github.workspace }}/scripts/quic_callback.ps1
         syncer_secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
     - name: (Client) Download Watermark_Regression.json file
       uses: ./netperfrepo/.github/actions/run-general-pwsh-cmd
