@@ -246,20 +246,20 @@ jobs:
         syncer_secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
     - name: Upload Test Results JSON
       if: ${{ always() }}
-      uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+      uses: actions/upload-artifact@604373da6381bf24206979c74d06a550515601b9
       with:
         name: json-test-results-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}.json
         path: json-test-results-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}.json
     - name: Upload Logs
       if: ${{ always() }}
-      uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+      uses: actions/upload-artifact@604373da6381bf24206979c74d06a550515601b9
       with:
         name: logs-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
         path: artifacts/logs
         if-no-files-found: ignore
     - name: Upload Full Latency Curves
       if: ${{ always() }}
-      uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+      uses: actions/upload-artifact@604373da6381bf24206979c74d06a550515601b9
       with:
         name: latency-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
         path: latency.txt
@@ -326,20 +326,20 @@ jobs:
           -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
     - name: Upload Test Results JSON
       if: ${{ always() }}
-      uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+      uses: actions/upload-artifact@604373da6381bf24206979c74d06a550515601b9
       with:
         name: json-test-results-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}.json
         path: json-test-results-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}.json
     - name: Upload Logs
       if: ${{ always() }}
-      uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+      uses: actions/upload-artifact@604373da6381bf24206979c74d06a550515601b9
       with:
         name: logs-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
         path: artifacts/logs
         if-no-files-found: ignore
     - name: Upload Full Latency Curves
       if: ${{ always() }}
-      uses: actions/upload-artifact@50769540e7f4bd5e21e526ee35c689e35e0d6874
+      uses: actions/upload-artifact@604373da6381bf24206979c74d06a550515601b9
       with:
         name: latency-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
         path: latency.txt
