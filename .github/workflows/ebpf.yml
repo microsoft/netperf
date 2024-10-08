@@ -86,7 +86,7 @@ jobs:
       ref: 'main'
       os: ${{ matrix.os }}
       platform: ${{ matrix.arch }}
-      upload_artifacts: true
+      artifact_path: "bin_Release_x64"
 
   build_cts_traffic:
     name: Build cts-traffic test tool
