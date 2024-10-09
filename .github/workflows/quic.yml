@@ -179,7 +179,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{fromJson(needs.prepare-matrix.outputs.azure-matrix)}}
+        include: ${{needs.prepare-matrix.outputs.azure-matrix && fromJson(needs.prepare-matrix.outputs.azure-matrix) || '[]'}}
     continue-on-error: ${{ matrix.optional == 'TRUE' }}
     runs-on:
     - self-hosted
@@ -270,6 +270,7 @@ jobs:
     name: Observe Lab
     needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
     uses: microsoft/netperf/.github/workflows/observe-lab.yml@main
+    timeout-minutes: 60
     with:
       lab-matrix: ${{ needs.prepare-matrix.outputs.lab-stateless-matrix }}
       project-callee: 'lab-quic-callee'
@@ -282,7 +283,8 @@ jobs:
   operate-lab:
     name: Operate Lab
     needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
-    uses: microsoft/netperf/.github/workflows/operate-lab.yml@main
+    uses: microsoft/netperf/.github/workflows/operate-lab.yml@jackhe/
+    timeout-minutes: 60
     with:
       lab-matrix: ${{ needs.prepare-matrix.outputs.lab-stateless-matrix }}
     secrets:
@@ -330,7 +332,7 @@ jobs:
   save-test-results:
     permissions: write-all
     name: Persist Results in DB
-    needs: [generate-summary] 
+    needs: [generate-summary]
     if: ${{ (github.event_name == 'repository_dispatch' && github.event.client_payload.pr == '') || inputs.commit }}
     strategy:
       fail-fast: false
