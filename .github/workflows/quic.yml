@@ -283,7 +283,7 @@ jobs:
   operate-lab:
     name: Operate Lab
     needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
-    uses: microsoft/netperf/.github/workflows/operate-lab.yml@jackhe/
+    uses: microsoft/netperf/.github/workflows/operate-lab.yml@main
     timeout-minutes: 60
     with:
       lab-matrix: ${{ needs.prepare-matrix.outputs.lab-stateless-matrix }}
