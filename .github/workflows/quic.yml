@@ -270,7 +270,6 @@ jobs:
     name: Observe Lab
     needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
     uses: microsoft/netperf/.github/workflows/observe-lab.yml@main
-    timeout-minutes: 60
     with:
       lab-matrix: ${{ needs.prepare-matrix.outputs.lab-stateless-matrix }}
       project-callee: 'lab-quic-callee'
@@ -284,7 +283,6 @@ jobs:
     name: Operate Lab
     needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
     uses: microsoft/netperf/.github/workflows/operate-lab.yml@main
-    timeout-minutes: 60
     with:
       lab-matrix: ${{ needs.prepare-matrix.outputs.lab-stateless-matrix }}
     secrets:
