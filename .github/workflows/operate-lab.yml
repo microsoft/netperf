@@ -72,10 +72,11 @@ jobs:
         run: |
           $vmName = "netperf-${{ matrix.os }}-server"
           Start-VM -Name $vmName
-          while ((Get-VM -Name $vmName).State -ne "Running") {
+          while (-not (Get-VMNetworkAdapter -VMName $vmName).IPAddresses) {
             Write-Host "Waiting for VM to be online..."
-            Start-Sleep -Seconds 10
+            Start-Sleep -Seconds 5
           }
+          Start-Sleep 10
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
