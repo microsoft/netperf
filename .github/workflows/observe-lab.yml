@@ -80,7 +80,7 @@ jobs:
           )
           $url = "https://api.github.com/repos/microsoft/netperf/dispatches"
           $unique_env_str = "${{ github.run_id }}_${{ github.run_attempt }}_" + $job.env_str
-          Write-Host "Dispatching with assigned runner: $assigned_runner"
+          # Write-Host "Dispatching with assigned runner: $assigned_runner"
           $body = @{
             event_type = "${{ inputs.project-callee }}"
             client_payload = @{
@@ -96,7 +96,7 @@ jobs:
               pr = "${{ inputs.pr }}"
             }
           } | ConvertTo-Json
-          Write-Host "Dispatching with body: $body"
+          # Write-Host "Dispatching with body: $body"
           try {
             Invoke-WebRequest -Uri $url -Headers $github_headers -Method Post -Body $body
           } catch {
@@ -152,19 +152,19 @@ jobs:
 
         function Get-Assigned-Runner {
           param([PSCustomObject]$job)
-          Write-Host "[Get-Assigned-Runner] Input params: $job"
+          # Write-Host "[Get-Assigned-Runner] Input params: $job"
           $parent_key = "${{ github.run_id }}_${{ github.run_attempt }}_" + $job.env_str + "_parent_reset_done"
           $child_key = "${{ github.run_id }}_${{ github.run_attempt }}_" + $job.env_str + "_child_reset_done"
           $parent_url = "https://netperfapi.azurewebsites.net/getkeyvalue?key=$parent_key"
           $child_url = "https://netperfapi.azurewebsites.net/getkeyvalue?key=$child_key"
-          Write-Host "[Get-Assigned-Runner] URLs: $parent_url, $child_url"
+          # Write-Host "[Get-Assigned-Runner] URLs: $parent_url, $child_url"
           try {
-            Write-Host "[Get-Assigned-Runner] Looking for parent..."
+            # Write-Host "[Get-Assigned-Runner] Looking for parent..."
             $parent_response = Invoke-WebRequest -Uri $parent_url -Headers $netperf_headers -Method Get
-            Write-Host "[Get-Assigned-Runner] Found!"
-            Write-Host "[Get-Assigned-Runner] Looking for child..."
+            # Write-Host "[Get-Assigned-Runner] Found!"
+            # Write-Host "[Get-Assigned-Runner] Looking for child..."
             $child_response = Invoke-WebRequest -Uri $child_url -Headers $netperf_headers -Method Get
-            Write-Host "[Get-Assigned-Runner] Found!"
+            # Write-Host "[Get-Assigned-Runner] Found!"
             if ($parent_response.StatusCode -ne 200 -or $child_response.StatusCode -ne 200) {
               throw "parent or child not ready"
             }
@@ -308,7 +308,7 @@ jobs:
           } catch {
             Write-Host "Observer loop error: $_"
           }
-          Start-Sleep -Seconds 20
+          Start-Sleep -Seconds 30
         }
 
         # Downloads all artifacts uploaded by the callees
