@@ -271,7 +271,7 @@ foreach ($file in $files) {
 # Write the RPS table.
 $markdown += @"
 `n
-# Request Per Second (HPS) and Latency (µs)
+# Request Per Second (RPS) and Latency (µs)
 | Pass/Fail | Env | OS | Version | Arch | TLS | IO | Transport | Min | P50 | P90 | P99 | P99.9 | P99.99 | P99.999 | P99.9999 | RPS | Average | Noise | BestRPS |
 | --------- | --- | -- | ------- | ---- | --- | -- | --------- | --- | --- | --- | --- | ----- | ------ | ------- | -------- | --- | ------- | ----- | ------- |
 "@
