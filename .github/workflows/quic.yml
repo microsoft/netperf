@@ -179,7 +179,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{needs.prepare-matrix.outputs.azure-matrix && fromJson(needs.prepare-matrix.outputs.azure-matrix) || '[]'}}
+        include: ${{needs.prepare-matrix.outputs.azure-matrix && fromJson(needs.prepare-matrix.outputs.azure-matrix) || []}}
     continue-on-error: ${{ matrix.optional == 'TRUE' }}
     runs-on:
     - self-hosted
