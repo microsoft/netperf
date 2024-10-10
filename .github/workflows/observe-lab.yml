@@ -136,6 +136,8 @@ jobs:
           foreach ($row in $truth_table) {
             if ($first) {
               Write-Host "`n`n`n"
+              $current_time = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+              Write-Host "Current time: $current_time"
               $first = $false
             }
             Write-Host "Job: $($row.job.name)"
@@ -199,7 +201,7 @@ jobs:
             param([string]$id)
             $url = "https://api.github.com/repos/microsoft/netperf/actions/runs/$id"
             Write-Debug "GET $url"
-            return (Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json
+            return (Invoke-WebRequest -Uri $url -Method GET -Headers $github_headers).Content | ConvertFrom-Json
         }
 
 

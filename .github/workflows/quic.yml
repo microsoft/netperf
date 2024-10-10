@@ -176,6 +176,7 @@ jobs:
   run-secnetperf-1es:
     name: ${{ matrix.optional == 'TRUE' && '[UNRELIABLE]-' || '' }}azure-${{ matrix.os }}-${{ matrix.io }}-${{ matrix.role }}-${{ matrix.tls }}-${{ matrix.arch }}
     needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
+    if: ${{fromJson(needs.prepare-matrix.outputs.azure-matrix)}}
     strategy:
       fail-fast: false
       matrix:
@@ -269,7 +270,7 @@ jobs:
   observe-lab:
     name: Observe Lab
     needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
-    uses: microsoft/netperf/.github/workflows/observe-lab.yml@main
+    uses: microsoft/netperf/.github/workflows/observe-lab.yml@jackhe/enable-quic-stateless-lab
     with:
       lab-matrix: ${{ needs.prepare-matrix.outputs.lab-stateless-matrix }}
       project-callee: 'lab-quic-callee'
