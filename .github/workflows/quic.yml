@@ -403,6 +403,7 @@ jobs:
         path: artifacts/logs
         name: lab-test-results
         merge-multiple: true
+        if-no-files-found: ignore
     - name: Generate Summary
       shell: pwsh # We never block the workflow if its a git merge or someone manually triggered a run with publish_results = true.
       run: ./.github/workflows/generate-summary.ps1 -BlockOnFailure ${{ github.event.client_payload.pr != '' && !inputs.commit }}
