@@ -35,24 +35,3 @@ jobs:
               Start-Sleep -Seconds 5
             }
             Start-Sleep 10
-            $username = "${{ secrets.VM_DUMMY_USERNAME }}"
-            $password = "${{ secrets.VM_DUMMY_PASSWORD }}"
-            $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
-            $credential = New-Object System.Management.Automation.PSCredential ($username, $securePassword)
-            Invoke-Command -VMName $vmName -Credential $credential -ScriptBlock {
-              Start-Service -Name "actions.runner.*"
-              Get-Service -Name "actions.runner.*"
-            }
-            $headers = @{
-              "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
-            }
-            $key = "${{ github.event.client_payload.unique_env_str }}_child_reset_done"
-            $value = whoami
-            $api = "https://netperfapi.azurewebsites.net/setkeyvalue?key=$key&value=$value"
-
-            try {
-              Invoke-WebRequest -Uri $api -Headers $headers -Method Post
-            } catch {
-              Write-Host "Failed to alert observer child reset done: $_"
-              exit 1
-            }
