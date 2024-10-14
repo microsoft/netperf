@@ -62,7 +62,7 @@ jobs:
       shell: pwsh
     - name: Run secnetperf
       shell: pwsh
-      timeout-minutes: 35
+      timeout-minutes: 40
       run: |
           $env:netperf_remote_powershell_supported = $true
           ./scripts/secnetperf.ps1 `
