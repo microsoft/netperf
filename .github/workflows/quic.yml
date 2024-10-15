@@ -223,6 +223,7 @@ jobs:
           Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/watermark_regression.json" -OutFile "watermark_regression.json" -UseBasicParsing
     - name: Run Secnetperf Script
       if: ${{ matrix.role == 'client' }}
+      timeout-minutes: 40
       uses: ./netperfrepo/.github/actions/run-test-script
       with:
         run-script-cmd: |
