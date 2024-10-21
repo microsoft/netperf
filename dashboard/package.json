@@ -38,7 +38,7 @@
     "react-chartjs-2": "^5.2.0",
     "react-dom": "^18.2.0",
     "react-helmet-async": "^2.0.4",
-    "react-hook-form": "^7.50.1",
+    "react-hook-form": "^7.53.1",
     "react-router-dom": "^6.26.2",
     "simplebar-react": "^3.2.4",
     "sql.js": "^1.10.2"
