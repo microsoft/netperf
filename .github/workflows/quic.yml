@@ -399,12 +399,12 @@ jobs:
         path: artifacts/logs
         pattern: json-test-results-*
         merge-multiple: true
-    - uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
-      with:
-        path: artifacts/logs
-        name: lab-test-results
-        merge-multiple: true
-        if-no-files-found: ignore
+    # - uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+    #   with:
+    #     path: artifacts/logs
+    #     name: lab-test-results
+    #     merge-multiple: true
+    #     if-no-files-found: ignore
     - name: Generate Summary
       shell: pwsh # We never block the workflow if its a git merge or someone manually triggered a run with publish_results = true.
       run: ./.github/workflows/generate-summary.ps1 -BlockOnFailure ${{ github.event.client_payload.pr != '' && !inputs.commit }}
