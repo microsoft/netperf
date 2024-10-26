@@ -165,8 +165,8 @@ VALUES ({json_obj[testid][offset]}, {json_obj[testid][offset+1]}, {json_obj[test
 INSERT INTO Secnetperf_test_runs (Secnetperf_test_ID, Secnetperf_commit, Client_environment_ID, Server_environment_ID, Result, Secnetperf_latency_stats_ID, io, tls, Run_date)
 VALUES ("{testid}", "{commit}", {environment_id}, {environment_id}, {json_obj[testid][offset+8]}, {last_row_inserted_id}, "{io}", "{tls}", "{datetime.datetime.now()}");
 """)
-
-                    full_latency_curve_ids_to_save[last_row_inserted_id] = (p0, json_obj[testid + "-lat"][offset // 9])
+                    if testid + "-lat" in json_obj:
+                        full_latency_curve_ids_to_save[last_row_inserted_id] = (p0, json_obj[testid + "-lat"][offset // 9])
 
                 for stats_id in full_latency_curve_ids_to_save:
                     p0_val, lat_curve = full_latency_curve_ids_to_save[stats_id]
