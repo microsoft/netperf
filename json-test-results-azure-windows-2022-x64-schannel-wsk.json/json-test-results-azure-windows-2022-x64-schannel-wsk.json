@@ -7,5 +7,5 @@
                      "max-rps-up-512-down-4000":  "-exec:lowlat -conns:16cpu -streams:10 -rstream:1 -up:512 -down:4000 -run:20s -plat:1"
                  },
     "os_version":  "10.0.20348",
-    "commit":  "ae542fafa474981d1a8b3319f7eb60190deb45d6"
+    "commit":  "9e503bcb9383d6c3796180735642ee338efa643f"
 }
