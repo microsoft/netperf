@@ -30,6 +30,9 @@ foreach ($entry in $MatrixJson) {
                 $Windows2022Pool = "netperf-f-series-windows-2022"
                 $Ubuntu2004Pool = "netperf-f-series-ubuntu-20.04"
             }
+            if ($entry.preferred_pool_sku -eq "Experimental_Boost4_With_Testsigning") {
+                $Windows2022Pool = "netperf-actual-boosted-winprerelease"
+            }
         }
 
         $env_str = [guid]::NewGuid().ToString()
