@@ -106,13 +106,14 @@ jobs:
         vec: [
           #{ env: "azure", os: "2022", arch: "x64" }, # Azure VMs are being deprecated by netperf team.
           #{ env: "azure", os: "2025", arch: "x64" }, # F4 based VMS are being deprecated by netperf team.
-          { env: "lab",   os: "2022", arch: "x64" }, 
+          { env: "lab",   os: "2022", arch: "x64" },
         ]
     runs-on:
     - self-hosted
     - ${{ matrix.vec.env }}
     - os-windows-${{ matrix.vec.os }}
     - ${{ matrix.vec.arch }}
+    - ebpf
 
     steps:
     - name: Setup workspace
@@ -275,7 +276,7 @@ jobs:
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
       with:
         name: cts_traffic_baseline_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
-        path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv 
+        path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv
 
     - name: Attach xdp baseline program to interface (first program in xdp.sys)
       working-directory: ${{ github.workspace }}\bpf_performance
@@ -347,7 +348,7 @@ jobs:
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
       with:
         name: cts_traffic_xdp_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
-        path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv 
+        path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv
 
     - name: Run BPF performance tests
       working-directory: ${{ github.workspace }}\bpf_performance
@@ -412,7 +413,7 @@ jobs:
         if (Test-Path ${{ github.workspace }}\xdp) { Remove-Item -Recurse -Force ${{ github.workspace }}\xdp }
         if (Test-Path ${{ github.workspace }}\cts-traffic) { Remove-Item -Recurse -Force ${{ github.workspace }}\cts-traffic }
         if (Test-Path ${{ github.workspace }}\ETL) { Remove-Item -Recurse -Force ${{ github.workspace }}\ETL }
-        
+
     - name: Restore Windows Defender exclusions
       if: always()
       run: |
