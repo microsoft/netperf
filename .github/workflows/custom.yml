@@ -26,4 +26,30 @@ jobs:
       xdp: ${{ matrix.xdp }}
       build: -Perf
       ref: ${{ inputs.ref }}
-      
+
+  build-windows:
+    name: Build WinUser
+    needs: []
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ['windows-2022']
+        tls: [schannel] # , openssl, openssl3]
+    uses: microsoft/msquic/.github/workflows/build-reuse-win.yml@main
+    with:
+      os: ${{ matrix.os }}
+      tls: ${{ matrix.tls }}
+      build: -Perf
+      ref: ${{ inputs.ref }}
+
+  build-windows-kernel:
+    name: Build WinKernel
+    needs: []
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ['windows-2022']
+    uses: microsoft/msquic/.github/workflows/build-reuse-winkernel.yml@main
+    with:
+      os: ${{ matrix.os }}
+      ref: ${{ inputs.ref }}
