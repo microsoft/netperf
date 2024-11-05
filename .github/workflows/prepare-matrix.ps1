@@ -16,6 +16,28 @@ $LabJson = @()
 $LabJsonStateless = @()
 $FullJson = @()
 
+$AzureCapacity = @{
+    "netperf-boosted-windows-pool" = 20
+    "netperf-boosted-linux-pool" = 10
+    "netperf-boosted-windows-prerelease-pool" = 12
+    "netperf-actual-boosted-winprerelease" = 10 # Experimental_Boost4_With_Testsigning for WS2022 Kernel mode
+    "netperf-f-series-windows-2022" = 10
+    "netperf-f-series-ubuntu-20.04" = 10
+}
+
+function Get-Current-Pool-Usage {
+    # TODO: 
+}
+
+$RequestedUsage = @{
+    "netperf-boosted-windows-pool" = 0
+    "netperf-boosted-linux-pool" = 0
+    "netperf-boosted-windows-prerelease-pool" = 0
+    "netperf-actual-boosted-winprerelease" = 0 # Experimental_Boost4_With_Testsigning for WS2022 Kernel mode
+    "netperf-f-series-windows-2022" = 0
+    "netperf-f-series-ubuntu-20.04" = 0
+}
+
 foreach ($entry in $MatrixJson) {
     if ($entry.env -match "azure") {
         $Windows2022Pool = "netperf-boosted-windows-pool" # NOTE: This pool is using experimental boost SKUs.
@@ -41,16 +63,19 @@ foreach ($entry in $MatrixJson) {
             $server | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value $Windows2022Pool
             $client | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
             $server | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
+            $RequestedUsage[$Windows2022Pool] += 2
         } elseif ($entry.os -match "ubuntu-20.04") {
             $client | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value $Ubuntu2004Pool
             $server | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value $Ubuntu2004Pool
             $client | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
             $server | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
+            $RequestedUsage[$Ubuntu2004Pool] += 2
         } elseif ($entry.os -match "windows-2025") {
             $client | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value $Windows2025Pool
             $server | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value $Windows2025Pool
             $client | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
             $server | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
+            $RequestedUsage[$Windows2025Pool] += 2
         } else {
             throw "Invalid OS entry (Must be either windows-2022 or ubuntu-20.04). Got: $($entry.os)"
         }
@@ -78,13 +103,13 @@ foreach ($entry in $MatrixJson) {
         $labclient | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'TRUE'
         $labclient | Add-Member -MemberType NoteProperty -Name "role" -Value "client"
         $labclient | Add-Member -MemberType NoteProperty -Name "env_str" -Value $env_str
-        
+
         if ("in_staging_mode" -in $entry.PSObject.Properties.Name) {
             $labclient | Add-Member -MemberType NoteProperty -Name "optional" -Value 'TRUE'
         } else {
             $labclient | Add-Member -MemberType NoteProperty -Name "optional" -Value 'FALSE'
         }
-        
+
         $LabJsonStateless += $labclient
         $FullJson += $labclient
     } elseif ($entry.env -match "lab") {
