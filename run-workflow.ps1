@@ -116,7 +116,7 @@ function Get-RunStatus {
 
 function Wait-ForRun {
     param([string]$id)
-    for ($i = 0; $i -lt 120; $i++) { # 120 * 30 sec = 1 hour
+    for ($i = 0; $i -lt 300; $i++) { # 300 * 30 sec = 2.5 hours
         if (Get-RunStatus $id) {
             return
         }
