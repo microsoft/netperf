@@ -149,7 +149,7 @@ def generate_tput_rps_hps_pages(cursor, all_secnetperf_tests, environment_groups
                             continue
                         if len(data) < HISTORY_LENGTH:
                             print("We need more hps data! Resorting to archive.")
-                            requires_archived_throughput_data = True
+                            requires_archived_hps_data = True
                         if not env_id_str in detailed_hps_page_json:
                             detailed_hps_page_json[env_id_str] = {
                                 f"{test_id}" : {
@@ -179,6 +179,9 @@ def generate_latency_page(cursor, all_secnetperf_tests, environment_groups, use_
         if not requires_archived_latency_data and use_archive:
             continue
 
+        if "latency" not in test_id and "rps" not in test_id:
+            continue
+
         for os_name, arch, context in environment_groups:
             for io in ["iocp", "epoll", "wsk", "xdp"]:
                 for tls in ["schannel", "openssl"]:
@@ -186,6 +189,7 @@ def generate_latency_page(cursor, all_secnetperf_tests, environment_groups, use_
                     if not data:
                         continue
                     if len(data) < HISTORY_LENGTH:
+                        print("We need more latency data! Resorting to archive.")
                         requires_archived_latency_data = True
                     env_id_str = f"{os_name}-{arch}-{context}-{io}-{tls}"
                     if not env_id_str in detailed_latency_page:
