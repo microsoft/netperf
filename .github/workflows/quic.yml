@@ -413,7 +413,6 @@ jobs:
     permissions: write-all
     name: Persist Results in DB
     needs: [run-secnetperf, run-secnetperf-1es] # TODO: Add 'observe-lab' once we fully transition to a stateless lab.
-    if: ${{ (github.event_name == 'repository_dispatch' && github.event.client_payload.pr == '') || inputs.commit }}
     strategy:
       fail-fast: false
     runs-on: 'ubuntu-20.04'
@@ -426,9 +425,27 @@ jobs:
     - uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
       with:
         pattern: json-test-results-*
-    - run: python sql.py --featureint 2
+    - name: Remove deprecated python scripts
+      run: rm -rf *.py
+    - name: Fetch sql.py and generate_historical_data.py
+      run: |
+        wget https://raw.githubusercontent.com/microsoft/netperf/main/pipeline/sql.py
+        wget https://raw.githubusercontent.com/microsoft/netperf/main/pipeline/generate_historical_data.py
+    - run: python sql.py
+    - run: python generate_historical_data.py
+    - name: Move all generated historical data json files to a new folder
+      run: |
+        mkdir history_pages
+        mv historical*.json history_pages
+    - run: ls
+    - name: Upload history pages
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      with:
+        name: history_pages
+        path: history_pages
     - run: ls
     - name: Git commit
+      if: ${{ (github.event_name == 'repository_dispatch' && github.event.client_payload.pr == '') || inputs.commit }}
       run: 'git config user.name "QUIC Dev[bot]" && git config user.email "quicdev@microsoft.com" && git add netperf.sqlite && git add full_latencies && git commit -m "Update DB" && git push'
 
   update-intermediary-dashboard-json:
@@ -445,11 +462,19 @@ jobs:
         repository: microsoft/netperf
         ref: deploy
     - run: 'rm -rf *.json'
+    - uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd
+      with:
+        path: history_pages
+    - name: Flatten directory structure
+      run: |
+        mv history_pages/*.json .
+        rm -rf history_pages
     - uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
       with:
         pattern: "json-test-results-*"
-    - run: python generate_historical_data.py
+    - run: ls
     - name: Git commit
+      if: ${{ (github.event_name == 'repository_dispatch' && github.event.client_payload.pr == '') || inputs.commit }}
       run: 'git config user.name "QUIC Dev[bot]" && git config user.email "quicdev@microsoft.com" && git pull && git add *.json && git commit -m "Update intermediary dashboard files" && git push'
 
   regression-detection:
@@ -468,5 +493,6 @@ jobs:
         ref: sqlite
     - run: ls
     - run: python regression.py
-    - name: Git commit # TODO: Squash history for this branch to keep size small
+    - name: Git commit
+      if: ${{ (github.event_name == 'repository_dispatch' && github.event.client_payload.pr == '') || inputs.commit }}
       run: 'git config user.name "QUIC Dev[bot]" && git config user.email "quicdev@microsoft.com" && git add *.json && git commit -m "Update regression metrics" && git push'
