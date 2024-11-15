@@ -464,7 +464,9 @@ jobs:
     - run: 'rm -rf *.json'
     - uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
       with:
+        name: history_pages
         path: history_pages
+    - run: ls
     - name: Flatten directory structure
       run: |
         mv history_pages/*.json .
