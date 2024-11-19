@@ -20,7 +20,6 @@ import AppWebsiteVisits from '../app-website-visits';
 import AppWidgetSummary from '../app-widget-summary';
 
 import getLatestSkuInformation from '../../../utils/sku';
-import test from './json-test-results-azure-windows-2022-x64-schannel-iocp.json';
 
 
 function throughputPerformance(download, upload, dweight, uweight) {
@@ -50,9 +49,7 @@ export default function AppView() {
   const windows = useFetchData(
     `https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-${env}-${windowsOs}-schannel-iocp.json/json-test-results-${env}-${windowsOs}-schannel-iocp.json`
   );
-  // const windows = {
-  //   "data": test
-  // };
+
   console.log(windows);
   const linux = useFetchData(
     `https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-${env}-${linuxOs}-openssl-epoll.json/json-test-results-${env}-${linuxOs}-openssl-epoll.json`
@@ -126,8 +123,26 @@ export default function AppView() {
         return object[key];
       }
     }
-
     return defaultValue;
+  }
+
+  function fetchRPS(data, stub) {
+    // data shape: [ ...8 dummy latency points... RPS for run 1 ... RPS for run 2 ... RPS for run 3]
+    if (!data) {
+      return stub;
+    }
+    const offset = 9;
+    let tot = 0;
+    let n = 0;
+    for (let i = offset; i <= data.length; i += offset) {
+      tot += Number(data[i - 1]);
+      n += 1;
+    }
+    if (n === 0) {
+      return stub;
+    }
+    console.log("RPS", tot, n)
+    return Math.floor(tot / n)
   }
 
   if (windows.data && linux.data && windowsXdp.data && windowsKernel.data) {
@@ -182,19 +197,13 @@ export default function AppView() {
     linuxHpsTcp = Math.max(...index(linux.data, ["hps-tcp", "hps-conns-100-tcp"], [-1]));
     windowsXdpHpsQuic = Math.max(...index(windowsXdp.data, ["hps-quic", "hps-conns-100-quic"], [-1]));
 
-    // TODO:
-    // function fetchRPS(data, stub) {
-
-    //   return stub
-    // }
-
     // RPS
-    windowsRpsQuic = windowsLatencyQuic[windowsLatencyQuic.length - 1];
-    windowsRpsTcp = windowsLatencyTcp[windowsLatencyTcp.length - 1];
-    linuxRpsQuic = linuxLatencyQuic[linuxLatencyQuic.length - 1];
-    linuxRpsTcp = linuxLatencyTcp[linuxLatencyTcp.length - 1];
-    windowsXdpRpsQuic = windowsXdpLatencyQuic[windowsXdpLatencyQuic.length - 1];
-    windowsKernelRpsQuic = windowsKernelLatencyQuic[windowsKernelLatencyQuic.length - 1];
+    windowsRpsQuic = fetchRPS(index(windows.data, ["rps-quic"], null), windowsLatencyQuic[windowsLatencyQuic.length - 1]);
+    windowsRpsTcp = fetchRPS(index(windows.data, ["rps-tcp"], null), windowsLatencyTcp[windowsLatencyTcp.length - 1]);
+    linuxRpsQuic = fetchRPS(index(linux.data, ["rps-quic"], null), linuxLatencyQuic[linuxLatencyQuic.length - 1]);
+    linuxRpsTcp = fetchRPS(index(linux.data, ["rps-tcp"], null), linuxLatencyTcp[linuxLatencyTcp.length - 1]);
+    windowsXdpRpsQuic = fetchRPS(index(windowsXdp.data, ["rps-quic"], null), windowsXdpLatencyQuic[windowsXdpLatencyQuic.length - 1]);
+    windowsKernelRpsQuic = fetchRPS(index(windowsKernel.data, ["rps-quic"], null), windowsKernelLatencyQuic[windowsKernelLatencyQuic.length - 1]);
 
     // Compute scores
     windowsPerfScoreRps = (windowsRpsQuic + windowsRpsTcp) / 1000000;

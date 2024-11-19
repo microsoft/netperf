@@ -25,7 +25,30 @@ document.addEventListener('mouseup', function() {
     isMouseDown = false;
 });
 
-// ----------------------------------------------------------------------
+function accessData(envStr, data, newKey, oldKey) {
+  const HISTORY_SIZE = 20;
+  if (!(envStr in data)) {
+    alert(`Could not find ${envStr} in data`);
+    console.error(`Could not find ${envStr} in data`);
+    return [];
+  }
+  const envData = data[envStr];
+  let outputData = [];
+  if (oldKey in envData) {
+    outputData = envData[oldKey]['data'].slice().reverse();
+  } else {
+    console.log("OLD KEY DOES NOT EXIST", oldKey);
+  }
+  if (newKey in envData) {
+    outputData = outputData.concat(envData[newKey]['data'].slice().reverse());
+  } else {
+    console.log("NEW KEY DOES NOT EXIST", newKey);
+  }
+  while (outputData.length > HISTORY_SIZE) {
+    outputData.shift();
+  }
+  return outputData;
+}
 
 export default function RpsPage() {
 
@@ -43,17 +66,17 @@ export default function RpsPage() {
 
   if (data) {
     // TODO: Should we find the max of windows / linux run and use that as our baseline?
-    let rep = data[`${windowsOs}-${env}-iocp-schannel`][`${testType}-tcp`]['data'].slice().reverse();
-    let linuxRep = data[`${linuxOs}-${env}-epoll-openssl`][`${testType}-tcp`]['data'].slice().reverse();
+    let rep = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `rps-tcp`, `${testType}-tcp`);
+    let linuxRep = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `rps-tcp`, `${testType}-tcp`);
     let indices = Array.from({length: Math.max(rep.length, linuxRep.length)}, (_, i) => i);
     indices.reverse();
 
-    const tcpiocp = data[`${windowsOs}-${env}-iocp-schannel`][`${testType}-tcp`]['data'].slice().reverse();
-    const quiciocp = data[`${windowsOs}-${env}-iocp-schannel`][`${testType}-quic`]['data'].slice().reverse();
-    const tcpepoll = data[`${linuxOs}-${env}-epoll-openssl`][`${testType}-tcp`]['data'].slice().reverse();
-    const quicepoll = data[`${linuxOs}-${env}-epoll-openssl`][`${testType}-quic`]['data'].slice().reverse();
-    const quicxdp = data[`${windowsOs}-${env}-xdp-schannel`][`${testType}-quic`]['data'].slice().reverse();
-    const quicwsk = data[`${windowsOs}-${env}-wsk-schannel`][`${testType}-quic`]['data'].slice().reverse();
+    const tcpiocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `rps-tcp`, `${testType}-tcp`);
+    const quiciocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `rps-quic`, `${testType}-quic`);
+    const tcpepoll = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `rps-tcp`, `${testType}-tcp`);
+    const quicepoll = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `rps-quic`, `${testType}-quic`);
+    const quicxdp = accessData(`${windowsOs}-${env}-xdp-schannel`, data, `rps-quic`, `${testType}-quic`);
+    const quicwsk = accessData(`${windowsOs}-${env}-wsk-schannel`, data, `rps-quic`, `${testType}-quic`);
 
     const TCPIOCP = tcpiocp.map(x => x[0]);
     const QUICIOCP = quiciocp.map(x => x[0]);
