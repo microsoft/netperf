@@ -16,6 +16,11 @@ inputs:
 runs:
   using: "composite"
   steps:
+  - name: Print OS information
+    if: ${{ env.HAS_PWSH == 'false' }}
+    run: |
+      powershell -Command "Get-ComputerInfo"
+    shell: cmd
   - name: Run Python Script to Escape JSON
     if: ${{ env.HAS_PWSH == 'false' }}
     id: escape_json
