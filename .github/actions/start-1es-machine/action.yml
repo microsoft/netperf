@@ -19,7 +19,7 @@ runs:
   - name: Print OS information
     if: ${{ env.HAS_PWSH == 'false' }}
     run: |
-      powershell -Command "Get-ComputerInfo"
+      powershell -Command "Get-ComputerInfo | Select-Object -Property WindowsBuildLabEx"
     shell: cmd
   - name: Run Python Script to Escape JSON
     if: ${{ env.HAS_PWSH == 'false' }}
