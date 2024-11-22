@@ -18,9 +18,9 @@ $FullJson = @()
 
 foreach ($entry in $MatrixJson) {
     if ($entry.env -match "azure") {
-        $Windows2022Pool = "netperf-actual-boosted-winprerelease" # TODO: "boost-prerelease" name is misleading. Change it to be "boosted-windows-2022"
+        $Windows2022Pool = "netperf-actual-boosted-winprerelease" # TODO: "boost-prerelease" name is misleading. Change it to be "boosted-windows-2022".
         $Ubuntu2004Pool = "netperf-boosted-linux-pool" # NOTE: This pool is using experimental boost SKUs.
-        $Windows2025Pool = "netperf-boosted-windows-prerelease-pool" # NOTE: This pool is using f-series SKUs.
+        $Windows2025Pool = "netperf-boosted-windows-pool" # NOTE: This runs the latest ge_current_directiof_stack build.
         $client = $entry.PSObject.Copy()
         $server = $entry.PSObject.Copy()
 
