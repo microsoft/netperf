@@ -18,13 +18,13 @@ jobs:
           # Print OS version data
           powershell -command "Get-ComputerInfo"
 
-    test-job-linux:
-      runs-on: ubuntu-latest
-      steps:
-        - name: Hello
-          run: echo "Hello, world!"
-        - name: Print OS version data
-          run: |
-            # Print OS version data
-            Get-ComputerInfo
-          shell: pwsh
+  test-job-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hello
+        run: echo "Hello, world!"
+      - name: Print OS version data
+        run: |
+          # Print OS version data
+          Get-ComputerInfo
+        shell: pwsh
