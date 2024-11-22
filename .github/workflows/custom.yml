@@ -9,14 +9,10 @@ jobs:
   test-job:
     runs-on:
       - self-hosted
-      - 1ES.Pool=netperf-actual-boosted-winprerelease
+      - 1ES.Pool=netperf-boosted-windows-pool
     steps:
       - name: Hello
         run: echo "Hello, world!"
-      - name: Is test signing enabled?
-        run: |
-          # Check if test signing is enabled
-          bcdedit /enum | findstr "testsinging"
       - name: Print OS version data
         run: |
           # Print OS version data
