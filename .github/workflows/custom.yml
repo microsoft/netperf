@@ -16,5 +16,4 @@ jobs:
       - name: Print OS version data
         run: |
           # Print OS version data
-          Get-ComputerInfo
-        shell: pwsh
+          powershell -command "Get-ComputerInfo"
