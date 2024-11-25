@@ -18,9 +18,9 @@ $FullJson = @()
 
 foreach ($entry in $MatrixJson) {
     if ($entry.env -match "azure") {
-        $Windows2022Pool = "netperf-boosted-windows-pool" # NOTE: This pool is using experimental boost SKUs.
+        $Windows2022Pool = "netperf-actual-boosted-winprerelease" # TODO: "boost-prerelease" name is misleading. Change it to be "boosted-windows-2022".
         $Ubuntu2004Pool = "netperf-boosted-linux-pool" # NOTE: This pool is using experimental boost SKUs.
-        $Windows2025Pool = "netperf-boosted-windows-prerelease-pool" # NOTE: This pool is using f-series SKUs.
+        $Windows2025Pool = "netperf-boosted-windows-pool" # NOTE: This runs the latest ge_current_directiof_stack build.
         $client = $entry.PSObject.Copy()
         $server = $entry.PSObject.Copy()
 
@@ -29,9 +29,6 @@ foreach ($entry in $MatrixJson) {
             if ($entry.preferred_pool_sku -eq "Standard_F8s_v2") {
                 $Windows2022Pool = "netperf-f-series-windows-2022"
                 $Ubuntu2004Pool = "netperf-f-series-ubuntu-20.04"
-            }
-            if ($entry.preferred_pool_sku -eq "Experimental_Boost4_With_Testsigning") {
-                $Windows2022Pool = "netperf-actual-boosted-winprerelease"
             }
         }
 
@@ -78,13 +75,13 @@ foreach ($entry in $MatrixJson) {
         $labclient | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'TRUE'
         $labclient | Add-Member -MemberType NoteProperty -Name "role" -Value "client"
         $labclient | Add-Member -MemberType NoteProperty -Name "env_str" -Value $env_str
-        
+
         if ("in_staging_mode" -in $entry.PSObject.Properties.Name) {
             $labclient | Add-Member -MemberType NoteProperty -Name "optional" -Value 'TRUE'
         } else {
             $labclient | Add-Member -MemberType NoteProperty -Name "optional" -Value 'FALSE'
         }
-        
+
         $LabJsonStateless += $labclient
         $FullJson += $labclient
     } elseif ($entry.env -match "lab") {
