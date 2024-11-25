@@ -1,0 +1,359 @@
+# Copyright (c) Microsoft Corporation
+name: NetworkLayer-Performance
+
+on:
+  # Permit manual runs of the workflow.
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch or Commit'
+        required: false
+        default: 'ge_current_directiof_stack'
+        type: string
+      profile:
+        description: 'Capture CPU profile'
+        required: false
+        default: false
+        type: boolean
+      tcp_ip_tracing:
+        description: 'Capture TCP/IP tracing'
+        required: false
+        default: false
+        type: boolean
+
+  pull_request:
+    branches:
+    - ge_current_directiof_stack
+    paths:
+    - .github/workflows/NetworkLayer_Perf.yml
+
+  repository_dispatch:
+    types: [run-nlperf]
+      # Args: { guid, sha, ref, pr }
+
+
+concurrency:
+  group: ebpf-${{ github.event.client_payload.pr || github.event.client_payload.sha || inputs.ref || github.event.pull_request.number || 'main' }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write # Required by codeql task
+
+jobs:
+  # For automated identification of the workflow.
+  name:
+    name: For ${{ github.event.client_payload.guid }}
+    if: ${{ github.event_name == 'repository_dispatch' }}
+    needs: []
+    runs-on: ubuntu-20.04
+    steps:
+    - run: |
+        echo "guid: ${{ github.event.client_payload.guid }}"
+        echo "sha: ${{ github.event.client_payload.sha }}"
+        echo "ref: ${{ github.event.client_payload.ref }}"
+        echo "pr: ${{ github.event.client_payload.pr }}"
+
+  build_cts_traffic:
+    name: Build cts-traffic test tool
+    uses: microsoft/ctsTraffic/.github/workflows/reusable-build.yml@master
+    with:
+      build_artifact: cts-traffic
+      repository: 'microsoft/ctsTraffic'
+      configurations: '["Release"]'
+      ref: 'master'
+
+  test:
+    name: Test Windows Network Layer Performance
+    needs: [build_cts_traffic]
+    strategy:
+      fail-fast: false
+      matrix:
+        vec: [
+          { env: "lab",   os: "2025", arch: "x64" },
+        ]
+    runs-on:
+    - self-hosted
+    - ${{ matrix.vec.env }}
+    - os-windows-${{ matrix.vec.os }}
+    - ${{ matrix.vec.arch }}
+ 
+    steps:
+    - name: Setup workspace
+      run: |
+        Get-ChildItem  | % { Remove-Item -Recurse $_ }
+        if (Test-Path ${{ github.workspace }}\cts-traffic) { Remove-Item -Recurse -Force ${{ github.workspace }}\cts-traffic }
+        New-item -ItemType Directory -Path ${{ github.workspace }}\nl_perf
+        New-item -ItemType Directory -Path ${{ github.workspace }}\cts-traffic
+        
+    - name: Log System information
+      run: |
+        Get-WmiObject -Class Win32_Processor | Select-Object -Property Name,NumberOfCores,NumberOfLogicalProcessors
+        Get-WmiObject -Class Win32_ComputerSystem | Select-Object -Property Manufacturer,Model,TotalPhysicalMemory
+        Get-WmiObject -Class Win32_OperatingSystem | Select-Object -Property Caption,Version,OSArchitecture
+
+    # Install the latest anti-malware signatures for Windows Defender to prevent false positives.
+    # Windows Defender incorrectly flags some of the test binaries as malware.
+    - name: Download latest anti-malware signatures for Windows Defender
+      run: |
+        Update-MpSignature -Verbose
+        Start-MpScan -ScanType QuickScan
+        Add-MpPreference -ExclusionPath ${{ github.workspace }}
+
+    - name: Download GH CLI if not installed
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        if (-not (Test-Path -Path "C:\Program Files\GitHub CLI\gh.exe")) {
+        $url = "https://github.com/cli/cli/releases/download/v2.48.0/gh_2.48.0_windows_amd64.msi"
+        Invoke-WebRequest -Uri $url -OutFile "gh.msi"
+        Start-Process -FilePath "msiexec" -ArgumentList "/i gh.msi /quiet /qn /norestart /log install.log" -Wait -NoNewWindow
+        }
+        echo "C:\Program Files\GitHub CLI" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+    - name: Download cts-traffic
+      uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+      with:
+        name: "cts-traffic Release"
+        path: ${{ github.workspace }}\cts-traffic
+
+    - name: Start TCPIP tracing - Baseline
+      if: ${{ github.event.inputs.tcp_ip_tracing }}
+      run: |
+        wpr -cancel 2>$null; $global:LASTEXITCODE = 0
+        if (Test-Path "tcpip.wprp") { Remove-Item -Force "tcpip.wprp" }
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/main/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
+        wpr -start tcpip.wprp -filemode
+
+    # Run CTS traffic to establish a baseline.
+    - name: Run CTS cts-traffic baseline
+      working-directory: ${{ github.workspace }}\cts-traffic
+      # Note: The script is not in the repository, but is downloaded from the web.
+      run: |
+        dir .
+        $profile = 0
+        if ("${{inputs.profile}}" -eq "true") { $profile = 1 }
+        $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
+        iex "& { $(irm $url) } -CpuProfile $profile"
+        if ($Profile) { Move-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl -NewName "${{ github.workspace }}\etl\cts_traffic_send_baseline.etl"}
+        if ($Profile) { Rename-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl -NewName "${{ github.workspace }}\etl\cts_traffic_recv_baseline.etl" }
+        dir ${{ github.workspace }}\etl
+
+    - name: Stop TCPIP tracing - Baseline
+      if: ${{ github.event.inputs.tcp_ip_tracing }}
+      run: |
+        wpr -stop ${{ github.workspace }}\ETL\tcpip_baseline.etl
+
+    # The resulting CSV file's header is updated to match the format produced by the BPF performance tests.
+    # The "Average Duration (ns)" column is the metric of interest.
+    - name: Fixup cts traffic results baseline
+      working-directory: ${{ github.workspace }}\cts-traffic
+      run: |
+        $content = Get-Content ctsTrafficResults.csv
+        $content[0] = "Timestamp,Test,Average Duration (ns)"
+        $content | Set-Content ctsTrafficResults.csv
+        Copy-Item ctsTrafficResults.csv ctsTrafficResults_baseline.csv
+
+    - name: Upload CTS cts-traffic results baseline
+      if: always()
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+      with:
+        name: cts_traffic_baseline_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv
+
+    - name: Attach xdp baseline program to interface (first program in xdp.sys)
+      working-directory: ${{ github.workspace }}\bpf_performance
+      run: |
+        Test-Connection -ComputerName netperf-peer -Count 1 -Ping
+        $remote_address = [System.Net.Dns]::GetHostAddresses("netperf-peer")[0]
+        Write-Output "Remote address: $remote_address"
+        $route = Find-NetRoute -RemoteIPAddress $remote_address
+        Write-Output "Route: $route"
+        $if_index = $route[0].InterfaceIndex
+        Write-Output "Interface index: $if_index"
+        Get-NetAdapter -ifIndex $if_index
+        netsh ebpf add prog filenam=xdp.sys interface=$if_index
+        bpftool prog show
+        Test-Connection -ComputerName netperf-peer -Count 1 -Ping
+
+    - name: Start TCPIP tracing - XDP
+      if: ${{ github.event.inputs.tcp_ip_tracing }}
+      run: |
+        Get-PSDrive -PSProvider FileSystem
+        wpr -cancel; $global:LASTEXITCODE = 0
+        if (Test-Path "tcpip.wprp") { Remove-Item -Force "tcpip.wprp" }
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/main/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
+        wpr -start tcpip.wprp -filemode
+
+    # Run CTS traffic with XDP installed to measure the impact of XDP on performance.
+    - name: Run CTS cts-traffic xdp
+      working-directory: ${{ github.workspace }}\cts-traffic
+      # Note: The script is not in the repository, but is downloaded from the web.
+      run: |
+        dir .
+        $profile = 0
+        if ("${{inputs.profile}}" -eq "true") { $profile = 1 }
+        $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
+        if (Test-Path "tcpip.wprp") { Remove-Item -Force "tcpip.wprp" }
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/main/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
+        if ("${{inputs.tcp_ip_tracing}}" -eq "true") { wpr -start ${{ github.workspace }}\.github\workflows\tcpip.wprp }
+        iex "& { $(irm $url) } -CpuProfile $profile"
+        if ("${{inputs.tcp_ip_tracing}}" -eq "true") { wpr -stop ${{ github.workspace }}\ETL\tcpip_xdp.etl }
+
+    - name: Stop TCPIP tracing - Baseline
+      if: ${{ github.event.inputs.tcp_ip_tracing }}
+      run: |
+        wpr -stop ${{ github.workspace }}\ETL\tcpip_baseline.etl
+
+    - name: Copy ETL files to ETL folder
+      run: |
+        if (Test-Path -Path ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl) { Move-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl -Destination ${{ github.workspace }}\ETL }
+        if (Test-Path -Path ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl) { Move-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl -Destination ${{ github.workspace }}\ETL }
+
+    - name: Detach xdp baseline program from interface
+      run: |
+        $programs = (bpftool prog show)
+        Write-Output "Programs: $programs"
+        if ($programs.length -gt 0) { netsh ebpf del prog ($programs.split(':')[0]) }
+
+      # The resulting CSV file's header is updated to match the format produced by the BPF performance tests.
+      # The "Average Duration (ns)" column is the metric of interest.
+    - name: Fixup cts traffic results xdp
+      working-directory: ${{ github.workspace }}\cts-traffic
+      run: |
+        $content = Get-Content ctsTrafficResults.csv
+        $content[0] = "Timestamp,Test,Average Duration (ns)"
+        $content | Set-Content ctsTrafficResults.csv
+        Copy-Item ctsTrafficResults.csv ctsTrafficResults_xdp.csv
+
+    - name: Upload CTS cts-traffic results xdp
+      if: always()
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+      with:
+        name: cts_traffic_xdp_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv
+
+    - name: Run BPF performance tests
+      working-directory: ${{ github.workspace }}\bpf_performance
+      run: |
+        if ("${{inputs.profile}}" -eq "true") {
+          $pre_command = 'wpr.exe -start CPU'
+          $post_command = 'wpr.exe -stop ""${{ github.workspace }}\ETL\%NAME%.etl""'
+          Release\bpf_performance_runner.exe -i tests.yml -e .sys -r -p 4 --pre "$pre_command" --post "$post_command" | Tee-Object -FilePath result.csv
+        }
+        else {
+          Release\bpf_performance_runner.exe -i tests.yml -e .sys -r  -p 4 | Tee-Object -FilePath result.csv
+        }
+        Get-Content result.csv | Where-Object { $_ -notmatch "^Program returned non-zero" } | Set-Content bpf_performance_native.csv
+
+    - name: Upload BPF performance test results
+      if: always()
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+      with:
+        name: bpf_performance_native_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        path: ${{ github.workspace }}\bpf_performance\bpf_performance_native.csv
+
+    - name: Merge results
+      working-directory: ${{ github.workspace }}\bpf_performance
+      run: |
+        $baseline = Get-Content -Path ${{ github.workspace }}\cts-traffic\ctsTrafficResults_baseline.csv | ConvertFrom-Csv
+        $baseline | foreach-object { $_.Test += " Baseline"}
+        $xdp = Get-Content -Path ${{ github.workspace }}\cts-traffic\ctsTrafficResults_xdp.csv | ConvertFrom-Csv
+        $xdp | foreach-object { $_.Test += " XDP"}
+        $native = Get-Content -Path ${{ github.workspace }}\bpf_performance\bpf_performance_native.csv | ConvertFrom-Csv
+        $result = $native + $baseline + $xdp
+        $result | Where-Object -Property "Test" -ne "" | ConvertTo-Csv -NoTypeInformation | % { $_ -replace '"', '' } | Out-File -FilePath "ebpf.csv" -Encoding utf8
+
+    - name: Upload merged results
+      if: always()
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+      with:
+        name: ebpf_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        path: ${{ github.workspace }}\bpf_performance\ebpf.csv
+
+    - name: Upload CPU profile
+      if: ${{ inputs.profile == true }}
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+      with:
+        name: CPU_Profile_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        path: ETL
+
+    - name: Upload TCPIP ETL
+      if: ${{ inputs.tcp_ip_tracing == true }}
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+      with:
+        name: TCPIP_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        path: ${{ github.workspace }}\ETL
+
+    - name: Cleanup workspace
+      if: always()
+      run: |
+        $process = Start-Process -FilePath "msiexec" -ArgumentList "/x {022C44B5-8969-4B75-8DB0-73F98B1BD7DC} /quiet /qn /norestart /log uninstall.log" -Wait -NoNewWindow
+        $process = Start-Process -FilePath "msiexec" -ArgumentList "/x {9363C0E3-4DE9-4067-9F5E-6A1A06034B59} /quiet /qn /norestart /log uninstall.log" -Wait -NoNewWindow
+        $url = "https://raw.githubusercontent.com/microsoft/ebpf-for-windows/main/scripts/Cleanup-Installer.ps1"
+        iex "& { $(irm $url) }"
+        if (Test-Path ${{ github.workspace }}\bpf_performance) { Remove-Item -Recurse -Force ${{ github.workspace }}\bpf_performance }
+        if (Test-Path ${{ github.workspace }}\xdp) { Remove-Item -Recurse -Force ${{ github.workspace }}\xdp }
+        if (Test-Path ${{ github.workspace }}\cts-traffic) { Remove-Item -Recurse -Force ${{ github.workspace }}\cts-traffic }
+        if (Test-Path ${{ github.workspace }}\ETL) { Remove-Item -Recurse -Force ${{ github.workspace }}\ETL }
+
+    - name: Restore Windows Defender exclusions
+      if: always()
+      run: |
+        Remove-MpPreference -ExclusionPath ${{ github.workspace }}
+        Update-MpSignature -Verbose
+        Start-MpScan -ScanType QuickScan
+
+  # File a bug if the test fails.
+  create_or_update_issue:
+      needs: test
+      if: ${{ failure() }}
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
+          if: ${{ github.event_name == 'repository_dispatch' }}
+          env:
+            TITLE: 'eBPF for Windows Performance Test Failed'
+            BODY: |
+              [Failed Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+              Test name - `eBPF for Windows Performance Test`
+            LABELS: bug
+
+          with:
+            script: |
+              const owner = process.env.GITHUB_REPOSITORY.split('/')[0]
+              const repo = process.env.GITHUB_REPOSITORY.split('/')[1]
+              const body = process.env.BODY;
+              const title = process.env.TITLE;
+              const labels = process.env.LABELS;
+              const label_array = labels ? labels.split(',') : [];
+              console.log(label_array);
+              // Get all issues that have these labels.
+              const opts = github.rest.issues.listForRepo.endpoint.merge({
+                ...context.issue,
+                state: 'open',
+                labels: label_array,
+              });
+              const issues = await github.paginate(opts);
+              // Look for an existing issue with the same title.
+              for (const issue of issues) {
+                if (issue.title === title) {
+                  console.log(`Updating issue ${title}`);
+                  await github.rest.issues.createComment({
+                    issue_number: issue.number,
+                    owner,
+                    repo,
+                    body,
+                  });
+                  return;
+                }
+              }
+              // Existing issue not found, create a new one.
+              console.log(`Creating issue ${title}`);
+              await github.rest.issues.create({
+                owner: owner,
+                repo: repo,
+                title: title,
+                body: body,
+                labels: label_array,
+              });
