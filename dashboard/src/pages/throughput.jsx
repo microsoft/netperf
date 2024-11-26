@@ -25,12 +25,36 @@ document.addEventListener('mouseup', function() {
     isMouseDown = false;
 });
 
-// ----------------------------------------------------------------------
+function accessData(envStr, data, newKey, oldKey) {
+  const HISTORY_SIZE = 20;
+  if (!(envStr in data)) {
+    alert(`Could not find ${envStr} in data`);
+    console.error(`Could not find ${envStr} in data`);
+    return [];
+  }
+  const envData = data[envStr];
+  let outputData = [];
+  if (oldKey in envData) {
+    outputData = envData[oldKey]['data'].slice().reverse();
+  } else {
+    console.log("OLD KEY DOES NOT EXIST", oldKey);
+  }
+  if (newKey in envData) {
+    outputData = outputData.concat(envData[newKey]['data'].slice().reverse());
+  } else {
+    console.log("NEW KEY DOES NOT EXIST", newKey);
+  }
+  while (outputData.length > HISTORY_SIZE) {
+    outputData.shift();
+  }
+  return outputData;
+}
 
 export default function ThroughputPage() {
 
   const URL = "https://raw.githubusercontent.com/microsoft/netperf/deploy/historical_throughput_page.json";
   const { data } = useFetchData(URL);
+
   let uploadThroughput = <div />
 
   const [env, setEnv] = useState('azure');
@@ -42,18 +66,17 @@ export default function ThroughputPage() {
   const [testType, setTestType] = useState('up')
 
   if (data) {
-    // TODO: Should we find the max of windows / linux run and use that as our baseline?
-    let rep = data[`${windowsOs}-${env}-iocp-schannel`][`tput-${testType}-tcp`]['data'].slice().reverse();
-    let linuxRep = data[`${linuxOs}-${env}-epoll-openssl`][`tput-${testType}-tcp`]['data'].slice().reverse();
-    let indices = Array.from({length: Math.max(rep.length, linuxRep.length)}, (_, i) => i);
+    let windowsRepresentative = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-${testType}load-tcp`, `tput-${testType}-tcp`);
+    let linuxRepresentative = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `scenario-${testType}load-tcp`, `tput-${testType}-tcp`);
+    let indices = Array.from({length: Math.max(linuxRepresentative.length, linuxRepresentative.length)}, (_, i) => i);
     indices.reverse();
 
-    const tcpiocp = data[`${windowsOs}-${env}-iocp-schannel`][`tput-${testType}-tcp`]['data'].slice().reverse();
-    const quiciocp = data[`${windowsOs}-${env}-iocp-schannel`][`tput-${testType}-quic`]['data'].slice().reverse();
-    const tcpepoll = data[`${linuxOs}-${env}-epoll-openssl`][`tput-${testType}-tcp`]['data'].slice().reverse();
-    const quicepoll = data[`${linuxOs}-${env}-epoll-openssl`][`tput-${testType}-quic`]['data'].slice().reverse();
-    const quicxdp = data[`${windowsOs}-${env}-xdp-schannel`][`tput-${testType}-quic`]['data'].slice().reverse();
-    const quicwsk = data[`${windowsOs}-${env}-wsk-schannel`][`tput-${testType}-quic`]['data'].slice().reverse();
+    const tcpiocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-${testType}load-tcp`, `tput-${testType}-tcp`);
+    const quiciocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-${testType}load-quic`, `tput-${testType}-quic`);
+    const tcpepoll = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `scenario-${testType}load-tcp`, `tput-${testType}-tcp`);
+    const quicepoll = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `scenario-${testType}load-quic`, `tput-${testType}-quic`);
+    const quicxdp = accessData(`${windowsOs}-${env}-xdp-schannel`, data, `scenario-${testType}load-quic`, `tput-${testType}-quic`);
+    const quicwsk = accessData(`${windowsOs}-${env}-wsk-schannel`, data, `scenario-${testType}load-quic`, `tput-${testType}-quic`);
 
     const TCPIOCP = tcpiocp.map(x => x[0]);
     const QUICIOCP = quiciocp.map(x => x[0]);
@@ -64,71 +87,69 @@ export default function ThroughputPage() {
 
     uploadThroughput =
       <GraphView title={`${testType === 'up' ? 'Upload' : 'Download'} Throughput`}
-    subheader={`Tested using ${windowsOs}, ${linuxOs}, taking the max of 3 runs. `}
-    labels={indices}
-    map={(index) => {
-      if (isMouseDown) {
-        window.location.href = `https://github.com/microsoft/msquic/commit/${rep[index][1]}`
-      }
-      return `<div style = "margin: 10px">
+        subheader={`Tested using ${windowsOs}, ${linuxOs}, taking the max of 3 runs. `}
+        labels={indices}
+        map={(index) => {
+          if (isMouseDown) {
+            window.location.href = `https://github.com/microsoft/msquic/commit/${windowsRepresentative[index][1]}`
+          }
+          return `<div style = "margin: 10px">
+            <p> <b> Build date: </b> ${windowsRepresentative[index][3]} </p>
+            <p> <b> Specific Windows OS version this test ran on: </b> ${windowsRepresentative[index][2]} </p>
+            <p> <b> Specific Linux OS version this test ran on: </b> ${linuxRepresentative[index][2]} </p>
+            <p> <b> Commit hash: </b> <a href="google.com"> ${windowsRepresentative[index][1]} </a> </p>
+            <p> <b> TCP + iocp: </b> ${tcpiocp[index] && tcpiocp[index][0]}, </p>
+            <p> <b> QUIC + iocp: </b> ${quiciocp[index] && quiciocp[index][0]} </p>
+            <p> <b> TCP + epoll: </b> ${tcpepoll[index] && tcpepoll[index][0]} </p>
+            <p> <b> QUIC + epoll: </b> ${quicepoll[index] && quicepoll[index][0]},
+            <b> QUIC + winXDP: </b> ${quicxdp[index] && quicxdp[index][0]},
+            <b> QUIC + wsk: </b> ${quicwsk[index] && quicwsk[index][0]} </p>
+          </div>`
+        }}
+        series={[
+          {
+            name: 'TCP + iocp',
+            type: 'line',
+            fill: 'solid',
+            data: TCPIOCP,
+          },
+          {
+            name: 'QUIC + iocp',
+            type: 'line',
+            fill: 'solid',
+            data: QUICIOCP,
+          },
+          {
+            name: 'TCP + epoll',
+            type: 'line',
+            fill: 'solid',
+            data: TCPEPOLL,
+          },
+          {
+            name: 'QUIC + epoll',
+            type: 'line',
+            fill: 'solid',
+            data: QUICEPOLL,
+          },
+          {
+            name: 'QUIC + winXDP',
+            type: 'line',
+            fill: 'solid',
+            data: QUICXDP,
+          },
+          {
+            name: 'QUIC + wsk',
+            type: 'line',
+            fill: 'solid',
+            data: QUICWSK,
+          },
+        ]}
 
-         <p> <b> Build date: </b> ${rep[index][3]} </p>
-         <p> <b> Specific Windows OS version this test ran on: </b> ${rep[index][2]} </p>
-         <p> <b> Specific Linux OS version this test ran on: </b> ${linuxRep[index][2]} </p>
-         <p> <b> Commit hash: </b> <a href="google.com"> ${rep[index][1]} </a> </p>
-
-         <p> <b> TCP + iocp: </b> ${tcpiocp[index] && tcpiocp[index][0]}, </p>
-         <p> <b> QUIC + iocp: </b> ${quiciocp[index] && quiciocp[index][0]} </p>
-         <p> <b> TCP + epoll: </b> ${tcpepoll[index] && tcpepoll[index][0]} </p>
-         <p> <b> QUIC + epoll: </b> ${quicepoll[index] && quicepoll[index][0]},
-         <b> QUIC + winXDP: </b> ${quicxdp[index] && quicxdp[index][0]},
-         <b> QUIC + wsk: </b> ${quicwsk[index] && quicwsk[index][0]} </p>
-      </div>`
-    }}
-    series={[
-      {
-        name: 'TCP + iocp',
-        type: 'line',
-        fill: 'solid',
-        data: TCPIOCP,
-      },
-      {
-        name: 'QUIC + iocp',
-        type: 'line',
-        fill: 'solid',
-        data: QUICIOCP,
-      },
-      {
-        name: 'TCP + epoll',
-        type: 'line',
-        fill: 'solid',
-        data: TCPEPOLL,
-      },
-      {
-        name: 'QUIC + epoll',
-        type: 'line',
-        fill: 'solid',
-        data: QUICEPOLL,
-      },
-      {
-        name: 'QUIC + winXDP',
-        type: 'line',
-        fill: 'solid',
-        data: QUICXDP,
-      },
-      {
-        name: 'QUIC + wsk',
-        type: 'line',
-        fill: 'solid',
-        data: QUICWSK,
-      },
-    ]}
-
-    options={{
-      markers: {
-        size: 5
-      }
-    }}
+        options={{
+          markers: {
+            size: 5
+          }
+        }}
     />
   }
 
