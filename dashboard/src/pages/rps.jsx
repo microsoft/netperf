@@ -66,17 +66,17 @@ export default function RpsPage() {
 
   if (data) {
     // TODO: Should we find the max of windows / linux run and use that as our baseline?
-    let rep = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `rps-tcp`, `${testType}-tcp`);
-    let linuxRep = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `rps-tcp`, `${testType}-tcp`);
+    let rep = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-rps-tcp`, `${testType}-tcp`);
+    let linuxRep = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `scenario-rps-tcp`, `${testType}-tcp`);
     let indices = Array.from({length: Math.max(rep.length, linuxRep.length)}, (_, i) => i);
     indices.reverse();
 
-    const tcpiocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `rps-tcp`, `${testType}-tcp`);
-    const quiciocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `rps-quic`, `${testType}-quic`);
-    const tcpepoll = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `rps-tcp`, `${testType}-tcp`);
-    const quicepoll = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `rps-quic`, `${testType}-quic`);
-    const quicxdp = accessData(`${windowsOs}-${env}-xdp-schannel`, data, `rps-quic`, `${testType}-quic`);
-    const quicwsk = accessData(`${windowsOs}-${env}-wsk-schannel`, data, `rps-quic`, `${testType}-quic`);
+    const tcpiocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-rps-tcp`, `${testType}-tcp`);
+    const quiciocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-rps-quic`, `${testType}-quic`);
+    const tcpepoll = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `scenario-rps-tcp`, `${testType}-tcp`);
+    const quicepoll = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `scenario-rps-quic`, `${testType}-quic`);
+    const quicxdp = accessData(`${windowsOs}-${env}-xdp-schannel`, data, `scenario-rps-quic`, `${testType}-quic`);
+    const quicwsk = accessData(`${windowsOs}-${env}-wsk-schannel`, data, `scenario-rps-quic`, `${testType}-quic`);
 
     const TCPIOCP = tcpiocp.map(x => x[0]);
     const QUICIOCP = quiciocp.map(x => x[0]);
@@ -242,7 +242,7 @@ export default function RpsPage() {
               onChange={handleChangeTestType}
               defaultValue={0}
             >
-              <MenuItem value={'rps-up-512-down-4000'}>512 kb upload, 4000 kb download</MenuItem>
+              <MenuItem value={'rps-up-512-down-4000'}>RPS Scenario</MenuItem>
             </Select>
           </FormControl>
         </Box>

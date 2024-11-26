@@ -66,15 +66,15 @@ export default function HpsPage() {
 
   if (data) {
     // TODO: Should we find the max of windows / linux run and use that as our baseline?
-    let rep = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `hps-tcp`, `${testType}-tcp`);
-    let linuxRep = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `hps-tcp`, `${testType}-tcp`);
+    let rep = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-hps-tcp`, `${testType}-tcp`);
+    let linuxRep = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `scenario-hps-tcp`, `${testType}-tcp`);
     let indices = Array.from({length: Math.max(rep.length, linuxRep.length)}, (_, i) => i);
     indices.reverse();
-    const tcpiocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `hps-tcp`, `${testType}-tcp`);
-    const quiciocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `hps-quic`, `${testType}-quic`);
-    const tcpepoll = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `hps-tcp`, `${testType}-tcp`);
-    const quicepoll = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `hps-quic`, `${testType}-quic`);
-    const quicxdp = accessData(`${windowsOs}-${env}-xdp-schannel`, data, `hps-quic`, `${testType}-quic`);
+    const tcpiocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-hps-tcp`, `${testType}-tcp`);
+    const quiciocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-hps-quic`, `${testType}-quic`);
+    const tcpepoll = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `scenario-hps-tcp`, `${testType}-tcp`);
+    const quicepoll = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `scenario-hps-quic`, `${testType}-quic`);
+    const quicxdp = accessData(`${windowsOs}-${env}-xdp-schannel`, data, `scenario-hps-quic`, `${testType}-quic`);
     // const quicwsk = data[`${windowsOs}-${env}-wsk-schannel`][`${testType}-quic`]['data'].slice().reverse();
 
     const TCPIOCP = tcpiocp.map(x => x[0]);
@@ -242,7 +242,7 @@ export default function HpsPage() {
               onChange={handleChangeTestType}
               defaultValue={0}
             >
-              <MenuItem value={'hps-conns-100'}>100 Connections</MenuItem>
+              <MenuItem value={'hps-conns-100'}>HPS Scenario</MenuItem>
             </Select>
           </FormControl>
         </Box>

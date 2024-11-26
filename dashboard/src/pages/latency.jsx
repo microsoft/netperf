@@ -100,17 +100,17 @@ export default function LatencyPage() {
 
   if (data) {
     // TODO: Should we find the max of windows / linux run and use that as our baseline?
-    rep = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `latency-tcp`, `${testType}-tcp`);
-    linuxRep = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `latency-tcp`, `${testType}-tcp`);
+    rep = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-latency-tcp`, `${testType}-tcp`);
+    linuxRep = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `scenario-latency-tcp`, `${testType}-tcp`);
     indices = Array.from({ length: Math.max(rep.length, linuxRep.length) }, (_, i) => i);
     indices.reverse();
 
-    tcpiocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `latency-tcp`, `${testType}-tcp`);
-    quiciocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `latency-quic`, `${testType}-quic`);
-    tcpepoll = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `latency-tcp`, `${testType}-tcp`);
-    quicepoll = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `latency-quic`, `${testType}-quic`);
-    quicxdp = accessData(`${windowsOs}-${env}-xdp-schannel`, data, `latency-quic`, `${testType}-quic`);
-    quicwsk = accessData(`${windowsOs}-${env}-wsk-schannel`, data, `latency-quic`, `${testType}-quic`);
+    tcpiocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-latency-tcp`, `${testType}-tcp`);
+    quiciocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-latency-quic`, `${testType}-quic`);
+    tcpepoll = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `scenario-latency-tcp`, `${testType}-tcp`);
+    quicepoll = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `scenario-latency-quic`, `${testType}-quic`);
+    quicxdp = accessData(`${windowsOs}-${env}-xdp-schannel`, data, `scenario-latency-quic`, `${testType}-quic`);
+    quicwsk = accessData(`${windowsOs}-${env}-wsk-schannel`, data, `scenario-latency-quic`, `${testType}-quic`);
 
     mode1View =
       <GraphView title={`Detailed Latency`}
@@ -270,7 +270,7 @@ export default function LatencyPage() {
                 onChange={handleChangeTestType}
                 defaultValue={0}
               >
-                <MenuItem value={'rps-up-512-down-4000'}>512 Kb upload, 4000 Kb download</MenuItem>
+                <MenuItem value={'rps-up-512-down-4000'}>Latency Scenario</MenuItem>
               </Select>
             </FormControl>
           </Box>
