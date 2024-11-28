@@ -313,8 +313,6 @@ jobs:
 
         # Downloads all artifacts uploaded by the callees
         mkdir -Force "artifacts_test_results"
-        mkdir -Force "artifacts_logs"
-        mkdir -Force "artifacts_misc"
         foreach ($row in $truth_table) {
           $callee_workflow_id = $row.dispatched_workflow_id
           if ($callee_workflow_id) {
@@ -326,13 +324,9 @@ jobs:
             foreach ($artifact in $json_response) {
               $name = $artifact.name
               $archive_download_url = $artifact.archive_download_url
-              $response = Invoke-WebRequest -Uri $archive_download_url -Headers $github_headers -Method Get -OutFile "$name.zip"
               if ($name.Contains("test-results")) {
+                Invoke-WebRequest -Uri $archive_download_url -Headers $github_headers -Method Get -OutFile "$name.zip"
                 Expand-Archive -Path "$name.zip" -DestinationPath "artifacts_test_results" -Force
-              } elseif ($name.Contains("logs")) {
-                Expand-Archive -Path "$name.zip" -DestinationPath "artifacts_logs" -Force
-              } else {
-                Expand-Archive -Path "$name.zip" -DestinationPath "artifacts_misc" -Force
               }
             }
           }
@@ -343,24 +337,9 @@ jobs:
       run: |
         Write-Host "Listing test results..."
         Get-ChildItem -Path "artifacts_test_results" -Recurse
-        Write-Host "Listing logs..."
-        Get-ChildItem -Path "artifacts_logs" -Recurse
-        Write-Host "Listing misc..."
-        Get-ChildItem -Path "artifacts_misc" -Recurse
       shell: pwsh
     - name: Upload downloaded artifacts (test results)
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
       with:
         name: lab-test-results
         path: artifacts_test_results
-    - name: Upload downloaded artifacts (logs)
-      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
-      with:
-        name: lab-logs
-        path: artifacts_logs
-    - name: Upload downloaded artifacts (misc.)
-      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
-      with:
-        name: lab-misc
-        path: artifacts_misc
-
