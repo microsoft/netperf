@@ -307,7 +307,7 @@ jobs:
   #
   generate-summary:
     name: Results
-    needs: [run-secnetperf, run-secnetperf-1es] # TODO: Add 'observe-lab' once we fully transition to a stateless lab.
+    needs: [observe-lab, run-secnetperf-1es] # TODO: Add 'observe-lab' once we fully transition to a stateless lab.
     runs-on: 'ubuntu-20.04'
     continue-on-error: true
     steps:
@@ -325,7 +325,7 @@ jobs:
   save-test-results:
     permissions: write-all
     name: Persist Results in DB
-    needs: [run-secnetperf, run-secnetperf-1es] # TODO: Add 'observe-lab' once we fully transition to a stateless lab.
+    needs: [observe-lab, run-secnetperf-1es] # TODO: Add 'observe-lab' once we fully transition to a stateless lab.
     strategy:
       fail-fast: false
     runs-on: 'ubuntu-20.04'
