@@ -77,6 +77,7 @@ jobs:
     - ${{ matrix.vec.env }}
     - os-windows-${{ matrix.vec.os }}
     - ${{ matrix.vec.arch }}
+    - RCU
  
     steps:
     - name: Setup workspace
