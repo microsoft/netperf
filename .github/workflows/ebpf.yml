@@ -36,9 +36,6 @@ on:
     types: [run-ebpf]
       # Args: { guid, sha, ref, pr }
 
-env:
-  XDP_VERSION: '1.1.0'
-
 concurrency:
   group: ebpf-${{ github.event.client_payload.pr || github.event.client_payload.sha || inputs.ref || github.event.pull_request.number || 'main' }}
   cancel-in-progress: true
@@ -199,7 +196,8 @@ jobs:
           $installPath = "${{ github.workspace }}\xdp\x64_release"
           Write-Output "xdp installPath: $installPath"
           Write-Output "Installing XDP for Windows"
-          $process = Start-Process msiexec.exe -Wait -ArgumentList "/i xdp-for-windows.x64.${{env.XDP_VERSION}}.msi INSTALLFOLDER=$installPath /qn /log ${{ github.workspace }}\xdp\xdp_install.log ADDLOCAL=ALL" -PassThru
+          $xdpMsi = (get-item .\xdp-for-windows.x64.*.msi).Name
+          $process = Start-Process msiexec.exe -Wait -ArgumentList "/i $xdpMsi INSTALLFOLDER=$installPath /qn /log ${{ github.workspace }}\xdp\xdp_install.log ADDLOCAL=xdp_ebpf" -PassThru
           if ($process.ExitCode -ne 0) { Get-Content ${{ github.workspace }}\xdp\xdp_install.log; exit $process.ExitCode }
           Write-Output "XDP for Windows installed"
           sc.exe query xdp
