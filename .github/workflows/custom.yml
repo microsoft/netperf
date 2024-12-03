@@ -119,7 +119,7 @@ jobs:
       if: ${{ github.event.inputs.tcp_ip_tracing }}
       run: |
         Get-PSDrive -PSProvider FileSystem
-        #wpr -cancel 2>$null; $global:LASTEXITCODE = 0
+        wpr -cancel 2>$null; $global:LASTEXITCODE = 0
         if (Test-Path "tcpip.wprp") { Remove-Item -Force "tcpip.wprp" }
         Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/main/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
         wpr -start tcpip.wprp -filemode
@@ -178,10 +178,6 @@ jobs:
     - name: Cleanup workspace
       if: always()
       run: |
-        $process = Start-Process -FilePath "msiexec" -ArgumentList "/x {022C44B5-8969-4B75-8DB0-73F98B1BD7DC} /quiet /qn /norestart /log uninstall.log" -Wait -NoNewWindow
-        $process = Start-Process -FilePath "msiexec" -ArgumentList "/x {9363C0E3-4DE9-4067-9F5E-6A1A06034B59} /quiet /qn /norestart /log uninstall.log" -Wait -NoNewWindow
-        $url = "https://raw.githubusercontent.com/microsoft/ebpf-for-windows/main/scripts/Cleanup-Installer.ps1"
-        iex "& { $(irm $url) }"
         if (Test-Path ${{ github.workspace }}\cts-traffic) { Remove-Item -Recurse -Force ${{ github.workspace }}\cts-traffic }
         if (Test-Path ${{ github.workspace }}\nl_perf) { Remove-Item -Recurse -Force ${{ github.workspace }}\nl_perf }
         if (Test-Path ${{ github.workspace }}\ETL) { Remove-Item -Recurse -Force ${{ github.workspace }}\ETL }
