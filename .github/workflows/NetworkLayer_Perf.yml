@@ -23,7 +23,7 @@ on:
 
   pull_request:
     branches:
-    - ge_current_directiof_stack
+    - user/vinodko/NlPerf
     paths:
     - .github/workflows/NetworkLayer_Perf.yml
 
@@ -161,21 +161,7 @@ jobs:
         name: cts_traffic_baseline_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv
 
-    - name: Attach xdp baseline program to interface (first program in xdp.sys)
-      working-directory: ${{ github.workspace }}\bpf_performance
-      run: |
-        Test-Connection -ComputerName netperf-peer -Count 1 -Ping
-        $remote_address = [System.Net.Dns]::GetHostAddresses("netperf-peer")[0]
-        Write-Output "Remote address: $remote_address"
-        $route = Find-NetRoute -RemoteIPAddress $remote_address
-        Write-Output "Route: $route"
-        $if_index = $route[0].InterfaceIndex
-        Write-Output "Interface index: $if_index"
-        Get-NetAdapter -ifIndex $if_index
-        netsh ebpf add prog filenam=xdp.sys interface=$if_index
-        bpftool prog show
-        Test-Connection -ComputerName netperf-peer -Count 1 -Ping
-
+    
     - name: Start TCPIP tracing - XDP
       if: ${{ github.event.inputs.tcp_ip_tracing }}
       run: |
@@ -205,17 +191,6 @@ jobs:
       run: |
         wpr -stop ${{ github.workspace }}\ETL\tcpip_baseline.etl
 
-    - name: Copy ETL files to ETL folder
-      run: |
-        if (Test-Path -Path ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl) { Move-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl -Destination ${{ github.workspace }}\ETL }
-        if (Test-Path -Path ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl) { Move-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl -Destination ${{ github.workspace }}\ETL }
-
-    - name: Detach xdp baseline program from interface
-      run: |
-        $programs = (bpftool prog show)
-        Write-Output "Programs: $programs"
-        if ($programs.length -gt 0) { netsh ebpf del prog ($programs.split(':')[0]) }
-
       # The resulting CSV file's header is updated to match the format produced by the BPF performance tests.
       # The "Average Duration (ns)" column is the metric of interest.
     - name: Fixup cts traffic results xdp
@@ -232,45 +207,7 @@ jobs:
       with:
         name: cts_traffic_xdp_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv
-
-    - name: Run BPF performance tests
-      working-directory: ${{ github.workspace }}\bpf_performance
-      run: |
-        if ("${{inputs.profile}}" -eq "true") {
-          $pre_command = 'wpr.exe -start CPU'
-          $post_command = 'wpr.exe -stop ""${{ github.workspace }}\ETL\%NAME%.etl""'
-          Release\bpf_performance_runner.exe -i tests.yml -e .sys -r -p 4 --pre "$pre_command" --post "$post_command" | Tee-Object -FilePath result.csv
-        }
-        else {
-          Release\bpf_performance_runner.exe -i tests.yml -e .sys -r  -p 4 | Tee-Object -FilePath result.csv
-        }
-        Get-Content result.csv | Where-Object { $_ -notmatch "^Program returned non-zero" } | Set-Content bpf_performance_native.csv
-
-    - name: Upload BPF performance test results
-      if: always()
-      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
-      with:
-        name: bpf_performance_native_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
-        path: ${{ github.workspace }}\bpf_performance\bpf_performance_native.csv
-
-    - name: Merge results
-      working-directory: ${{ github.workspace }}\bpf_performance
-      run: |
-        $baseline = Get-Content -Path ${{ github.workspace }}\cts-traffic\ctsTrafficResults_baseline.csv | ConvertFrom-Csv
-        $baseline | foreach-object { $_.Test += " Baseline"}
-        $xdp = Get-Content -Path ${{ github.workspace }}\cts-traffic\ctsTrafficResults_xdp.csv | ConvertFrom-Csv
-        $xdp | foreach-object { $_.Test += " XDP"}
-        $native = Get-Content -Path ${{ github.workspace }}\bpf_performance\bpf_performance_native.csv | ConvertFrom-Csv
-        $result = $native + $baseline + $xdp
-        $result | Where-Object -Property "Test" -ne "" | ConvertTo-Csv -NoTypeInformation | % { $_ -replace '"', '' } | Out-File -FilePath "ebpf.csv" -Encoding utf8
-
-    - name: Upload merged results
-      if: always()
-      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
-      with:
-        name: ebpf_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
-        path: ${{ github.workspace }}\bpf_performance\ebpf.csv
-
+  
     - name: Upload CPU profile
       if: ${{ inputs.profile == true }}
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
@@ -304,56 +241,3 @@ jobs:
         Update-MpSignature -Verbose
         Start-MpScan -ScanType QuickScan
 
-  # File a bug if the test fails.
-  create_or_update_issue:
-      needs: test
-      if: ${{ failure() }}
-      runs-on: ubuntu-latest
-      steps:
-        - uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
-          if: ${{ github.event_name == 'repository_dispatch' }}
-          env:
-            TITLE: 'eBPF for Windows Performance Test Failed'
-            BODY: |
-              [Failed Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
-              Test name - `eBPF for Windows Performance Test`
-            LABELS: bug
-
-          with:
-            script: |
-              const owner = process.env.GITHUB_REPOSITORY.split('/')[0]
-              const repo = process.env.GITHUB_REPOSITORY.split('/')[1]
-              const body = process.env.BODY;
-              const title = process.env.TITLE;
-              const labels = process.env.LABELS;
-              const label_array = labels ? labels.split(',') : [];
-              console.log(label_array);
-              // Get all issues that have these labels.
-              const opts = github.rest.issues.listForRepo.endpoint.merge({
-                ...context.issue,
-                state: 'open',
-                labels: label_array,
-              });
-              const issues = await github.paginate(opts);
-              // Look for an existing issue with the same title.
-              for (const issue of issues) {
-                if (issue.title === title) {
-                  console.log(`Updating issue ${title}`);
-                  await github.rest.issues.createComment({
-                    issue_number: issue.number,
-                    owner,
-                    repo,
-                    body,
-                  });
-                  return;
-                }
-              }
-              // Existing issue not found, create a new one.
-              console.log(`Creating issue ${title}`);
-              await github.rest.issues.create({
-                owner: owner,
-                repo: repo,
-                title: title,
-                body: body,
-                labels: label_array,
-              });
