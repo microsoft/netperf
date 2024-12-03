@@ -80,6 +80,7 @@ jobs:
       run: |
         Get-ChildItem  | % { Remove-Item -Recurse $_ }
         if (Test-Path ${{ github.workspace }}\cts-traffic) { Remove-Item -Recurse -Force ${{ github.workspace }}\cts-traffic }
+        if (Test-Path ${{ github.workspace }}\nl_perf) { Remove-Item -Recurse -Force ${{ github.workspace }}\nl_perf }
         New-item -ItemType Directory -Path ${{ github.workspace }}\nl_perf
         New-item -ItemType Directory -Path ${{ github.workspace }}\cts-traffic
         
@@ -117,6 +118,7 @@ jobs:
     - name: Start TCPIP tracing - Baseline
       if: ${{ github.event.inputs.tcp_ip_tracing }}
       run: |
+        Get-PSDrive -PSProvider FileSystem
         wpr -cancel 2>$null; $global:LASTEXITCODE = 0
         if (Test-Path "tcpip.wprp") { Remove-Item -Force "tcpip.wprp" }
         Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/main/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
