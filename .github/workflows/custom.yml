@@ -131,9 +131,10 @@ jobs:
       run: |
         dir .
         $profile = 0
+        $peerName = "WIN-4OUAF4010S4.guest.corp.microsoft.com"
         if ("${{inputs.profile}}" -eq "true") { $profile = 1 }
         $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
-        iex "& { $(irm $url) } -CpuProfile $profile"
+        iex "& { $(irm $url) } -CpuProfile $profile -peerName $peerName"
         if ($Profile) { Move-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl -NewName "${{ github.workspace }}\etl\cts_traffic_send_baseline.etl"}
         if ($Profile) { Rename-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl -NewName "${{ github.workspace }}\etl\cts_traffic_recv_baseline.etl" }
         dir ${{ github.workspace }}\etl
@@ -182,6 +183,7 @@ jobs:
         $url = "https://raw.githubusercontent.com/microsoft/ebpf-for-windows/main/scripts/Cleanup-Installer.ps1"
         iex "& { $(irm $url) }"
         if (Test-Path ${{ github.workspace }}\cts-traffic) { Remove-Item -Recurse -Force ${{ github.workspace }}\cts-traffic }
+        if (Test-Path ${{ github.workspace }}\nl_perf) { Remove-Item -Recurse -Force ${{ github.workspace }}\nl_perf }
         if (Test-Path ${{ github.workspace }}\ETL) { Remove-Item -Recurse -Force ${{ github.workspace }}\ETL }
 
     - name: Restore Windows Defender exclusions
