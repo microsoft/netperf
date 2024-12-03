@@ -22,7 +22,7 @@
   "dependencies": {
     "@emotion/react": "^11.11.3",
     "@emotion/styled": "^11.11.0",
-    "@faker-js/faker": "^9.0.0",
+    "@faker-js/faker": "^9.3.0",
     "@iconify/react": "^4.1.1",
     "@mui/lab": "^5.0.0-alpha.165",
     "@mui/material": "^5.15.13",
