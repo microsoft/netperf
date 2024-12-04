@@ -115,6 +115,13 @@ jobs:
         name: "cts-traffic Release"
         path: ${{ github.workspace }}\cts-traffic
   
+    - name: Start TCPIP tracing - Baseline
+        if: ${{ github.event.inputs.tcp_ip_tracing }}
+        run: |
+          wpr -cancel 2>$null; $global:LASTEXITCODE = 0
+          if (Test-Path "tcpip.wprp") { Remove-Item -Force "tcpip.wprp" }
+          Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/main/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
+          wpr -start tcpip.wprp -filemode
 
     # Run CTS traffic to establish a baseline.
     - name: Run CTS cts-traffic baseline
@@ -131,7 +138,13 @@ jobs:
         if ($Profile) { Rename-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl -NewName "${{ github.workspace }}\etl\cts_traffic_recv_baseline.etl" }
         dir ${{ github.workspace }}\etl
 
+    - name: Stop TCPIP tracing - Baseline
+      if: ${{ github.event.inputs.tcp_ip_tracing }}
+      run: |
+        wpr -stop ${{ github.workspace }}\ETL\tcpip_baseline.etl
         # The resulting CSV file's header is updated to match the format produced by the BPF performance tests.
+
+
     # The "Average Duration (ns)" column is the metric of interest.
     - name: Fixup cts traffic results baseline
       working-directory: ${{ github.workspace }}\cts-traffic
@@ -148,6 +161,20 @@ jobs:
         name: cts_traffic_baseline_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv
         
+    - name: Upload CPU profile
+        if: ${{ inputs.profile == true }}
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: CPU_Profile_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+          path: ETL
+
+    - name: Upload TCPIP ETL
+      if: ${{ inputs.tcp_ip_tracing == true }}
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+      with:
+        name: TCPIP_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        path: ${{ github.workspace }}\ETL
+
     - name: Cleanup workspace
       if: always()
       run: |
