@@ -177,9 +177,9 @@ jobs:
     - name: Cleanup workspace
       if: always()
       run: |
-        if (Test-Path ${{ github.workspace }}\cts-traffic) { Remove-Item -Recurse -Force ${{ github.workspace }}\cts-traffic }
-        if (Test-Path ${{ github.workspace }}\nl_perf) { Remove-Item -Recurse -Force ${{ github.workspace }}\nl_perf }
-        if (Test-Path ${{ github.workspace }}\ETL) { Remove-Item -Recurse -Force ${{ github.workspace }}\ETL }
+        #if (Test-Path ${{ github.workspace }}\cts-traffic) { Remove-Item -Recurse -Force ${{ github.workspace }}\cts-traffic }
+        #if (Test-Path ${{ github.workspace }}\nl_perf) { Remove-Item -Recurse -Force ${{ github.workspace }}\nl_perf }
+        #if (Test-Path ${{ github.workspace }}\ETL) { Remove-Item -Recurse -Force ${{ github.workspace }}\ETL }
 
     - name: Restore Windows Defender exclusions
       if: always()
