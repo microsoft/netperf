@@ -141,7 +141,7 @@ jobs:
     - name: Stop TCPIP tracing - Baseline
       if: ${{ github.event.inputs.tcp_ip_tracing }}
       run: |
-        wpr -stop ${{ github.workspace }}\ETL\tcpip_baseline.etl
+        wpr -stop ${{ github.workspace }}\ETL\tcpip_baseline.etl 2>$null; $global:LASTEXITCODE = 0
 
     # The resulting CSV file's header is updated to match the format produced by the BPF performance tests.
     # The "Average Duration (ns)" column is the metric of interest.
