@@ -130,7 +130,8 @@ jobs:
       run: |
         dir .
         $profile = 0
-        $peerName = "WIN-4OUAF4010S4.guest.corp.microsoft.com"
+        #$peerName = "WIN-4OUAF4010S4.guest.corp.microsoft.com"
+        $peerName = "netperf-peer"
         if ("${{inputs.profile}}" -eq "true") { $profile = 1 }
         $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
         iex "& { $(irm $url) } -CpuProfile $profile -peerName $peerName"
