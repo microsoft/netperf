@@ -19,57 +19,57 @@ on:
           type: boolean
 
 jobs:
-    do-reset-all-active:
-      name: Reset all active lab machines
-      if: ${{ inputs.reset-all-active == true }}
-      strategy:
-        fail-fast: false
-        matrix:
-          vec: [
-            { parent-or-child: "parent=rr1-netperf-26\localadminuser",   vm-name: "netperf-windows-2022-client" },
-            { parent-or-child: "parent=rr1-netperf-25\localadminuser",   vm-name: "netperf-windows-2022-server" },
-            { parent-or-child: "parent=rr1-netperf-05\localadminuser",   vm-name: "netperf" },
-            { parent-or-child: "parent=rr1-netperf-10\localadminuser",   vm-name: "netperf" },
-          ]
-        runs-on:
-          - self-hosted
-          - ${{ matrix.vec.parent-or-child }}
-        steps:
-          - name: RESET STATE (parent or child)
-            run: |
-              # TODO: Eventually, for WS 2025, we want to instead CRUD the VMs, instead of simply reseting their checkpoints here.
-              $vmName = "${{ matrix.vec.vm-name }}"
-              $checkPointName = "LATEST"
-              Restore-VMSnapshot -VMName $vmName -Name $checkPointName -Confirm:$false
-          - name: Start VM, wait for online status, alert observer.
-            run: |
-              $vmName = "${{ matrix.vec.vm-name }}"
-              Start-VM -Name $vmName
-              while (-not (Get-VMNetworkAdapter -VMName $vmName).IPAddresses) {
-                Write-Host "Waiting for VM to be online..."
-                Start-Sleep -Seconds 5
-              }
-              Start-Sleep 10
-
-    do-reset-manual:
-      name: Reset parent or child Machine
-      if: ${{ inputs.reset-all-active == false }}
+  do-reset-all-active:
+    name: Reset all active lab machines
+    if: ${{ inputs.reset-all-active == true }}
+    strategy:
+      fail-fast: false
+      matrix:
+        vec: [
+          { parent-or-child: "parent=rr1-netperf-26\localadminuser",   vm-name: "netperf-windows-2022-client" },
+          { parent-or-child: "parent=rr1-netperf-25\localadminuser",   vm-name: "netperf-windows-2022-server" },
+          { parent-or-child: "parent=rr1-netperf-05\localadminuser",   vm-name: "netperf" },
+          { parent-or-child: "parent=rr1-netperf-10\localadminuser",   vm-name: "netperf" },
+        ]
       runs-on:
         - self-hosted
-        - ${{ inputs.parent-or-child }}
+        - ${{ matrix.vec.parent-or-child }}
       steps:
         - name: RESET STATE (parent or child)
           run: |
             # TODO: Eventually, for WS 2025, we want to instead CRUD the VMs, instead of simply reseting their checkpoints here.
-            $vmName = "${{ inputs.vm-name }}"
+            $vmName = "${{ matrix.vec.vm-name }}"
             $checkPointName = "LATEST"
             Restore-VMSnapshot -VMName $vmName -Name $checkPointName -Confirm:$false
         - name: Start VM, wait for online status, alert observer.
           run: |
-            $vmName = "${{ inputs.vm-name }}"
+            $vmName = "${{ matrix.vec.vm-name }}"
             Start-VM -Name $vmName
             while (-not (Get-VMNetworkAdapter -VMName $vmName).IPAddresses) {
               Write-Host "Waiting for VM to be online..."
               Start-Sleep -Seconds 5
             }
             Start-Sleep 10
+
+  do-reset-manual:
+    name: Reset parent or child Machine
+    if: ${{ inputs.reset-all-active == false }}
+    runs-on:
+      - self-hosted
+      - ${{ inputs.parent-or-child }}
+    steps:
+      - name: RESET STATE (parent or child)
+        run: |
+          # TODO: Eventually, for WS 2025, we want to instead CRUD the VMs, instead of simply reseting their checkpoints here.
+          $vmName = "${{ inputs.vm-name }}"
+          $checkPointName = "LATEST"
+          Restore-VMSnapshot -VMName $vmName -Name $checkPointName -Confirm:$false
+      - name: Start VM, wait for online status, alert observer.
+        run: |
+          $vmName = "${{ inputs.vm-name }}"
+          Start-VM -Name $vmName
+          while (-not (Get-VMNetworkAdapter -VMName $vmName).IPAddresses) {
+            Write-Host "Waiting for VM to be online..."
+            Start-Sleep -Seconds 5
+          }
+          Start-Sleep 10
