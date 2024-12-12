@@ -5,12 +5,12 @@ on:
     inputs:
       parent-or-child:
         description: "Lab jobs to observe"
-        required: true
+        required: false
         type: string
       vm-name:
         description: "The name of the VM to reset"
         default: "netperf-windows-2022-client"
-        required: true
+        required: false
         type: string
       reset-all-active:
           description: "Resets all active lab machines"
