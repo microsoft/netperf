@@ -35,21 +35,21 @@ jobs:
         - self-hosted
         - ${{ matrix.vec.parent-or-child }}
       steps:
-        - name: RESET STATE (parent or child)
-          run: |
-            # TODO: Eventually, for WS 2025, we want to instead CRUD the VMs, instead of simply reseting their checkpoints here.
-            $vmName = "${{ matrix.vec.vm-name }}"
-            $checkPointName = "LATEST"
-            Restore-VMSnapshot -VMName $vmName -Name $checkPointName -Confirm:$false
-        - name: Start VM, wait for online status, alert observer.
-          run: |
-            $vmName = "${{ matrix.vec.vm-name }}"
-            Start-VM -Name $vmName
-            while (-not (Get-VMNetworkAdapter -VMName $vmName).IPAddresses) {
-              Write-Host "Waiting for VM to be online..."
-              Start-Sleep -Seconds 5
-            }
-            Start-Sleep 10
+      - name: RESET STATE (parent or child)
+        run: |
+          # TODO: Eventually, for WS 2025, we want to instead CRUD the VMs, instead of simply reseting their checkpoints here.
+          $vmName = "${{ matrix.vec.vm-name }}"
+          $checkPointName = "LATEST"
+          Restore-VMSnapshot -VMName $vmName -Name $checkPointName -Confirm:$false
+      - name: Start VM, wait for online status, alert observer.
+        run: |
+          $vmName = "${{ matrix.vec.vm-name }}"
+          Start-VM -Name $vmName
+          while (-not (Get-VMNetworkAdapter -VMName $vmName).IPAddresses) {
+            Write-Host "Waiting for VM to be online..."
+            Start-Sleep -Seconds 5
+          }
+          Start-Sleep 10
 
   do-reset-manual:
     name: Reset parent or child Machine
@@ -58,18 +58,18 @@ jobs:
       - self-hosted
       - ${{ inputs.parent-or-child }}
     steps:
-      - name: RESET STATE (parent or child)
-        run: |
-          # TODO: Eventually, for WS 2025, we want to instead CRUD the VMs, instead of simply reseting their checkpoints here.
-          $vmName = "${{ inputs.vm-name }}"
-          $checkPointName = "LATEST"
-          Restore-VMSnapshot -VMName $vmName -Name $checkPointName -Confirm:$false
-      - name: Start VM, wait for online status, alert observer.
-        run: |
-          $vmName = "${{ inputs.vm-name }}"
-          Start-VM -Name $vmName
-          while (-not (Get-VMNetworkAdapter -VMName $vmName).IPAddresses) {
-            Write-Host "Waiting for VM to be online..."
-            Start-Sleep -Seconds 5
-          }
-          Start-Sleep 10
+    - name: RESET STATE (parent or child)
+      run: |
+        # TODO: Eventually, for WS 2025, we want to instead CRUD the VMs, instead of simply reseting their checkpoints here.
+        $vmName = "${{ inputs.vm-name }}"
+        $checkPointName = "LATEST"
+        Restore-VMSnapshot -VMName $vmName -Name $checkPointName -Confirm:$false
+    - name: Start VM, wait for online status, alert observer.
+      run: |
+        $vmName = "${{ inputs.vm-name }}"
+        Start-VM -Name $vmName
+        while (-not (Get-VMNetworkAdapter -VMName $vmName).IPAddresses) {
+          Write-Host "Waiting for VM to be online..."
+          Start-Sleep -Seconds 5
+        }
+        Start-Sleep 10
