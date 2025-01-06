@@ -29,12 +29,10 @@ jobs:
     steps:
       - name: Check for active jobs
         run: |
-          $activeJobs = gh api -X GET /repos/${{ github.repository }}/actions/runs \
-            -F status=in_progress \
-            -F per_page=100 \
-            | jq '.workflow_runs | length'
-
-          if ($activeJobs -gt 0) {
+          $url = "https://api.github.com/repos/microsoft/netperf/actions/runs?status=in_progress"
+          Write-Debug "GET $url"
+          $activeRuns = ((Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json).workflow_runs
+          if ($activeRuns -gt 0) {
             Write-Host "There are active jobs running."
             exit 1
           } else {
