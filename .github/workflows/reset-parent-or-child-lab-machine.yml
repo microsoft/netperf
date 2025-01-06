@@ -1,4 +1,4 @@
-name: reset-parent-or-child
+name: reset-parent-or-child-lab-machine
 
 on:
   workflow_dispatch:
@@ -18,10 +18,32 @@ on:
           required: false
           type: boolean
 
+    schedule:
+      - cron: '0 11 * * *' # Runs at 3 AM PST every day
+
 jobs:
+  # This job ensures there is currently no actively running netperf jobs using the Github API. If there is, fail this step.
+  sanity-check:
+    name: Sanity check
+    runs-on: windows-latest
+    steps:
+      - name: Check for active jobs
+        run: |
+          $url = "https://api.github.com/repos/microsoft/netperf/actions/runs?status=in_progress"
+          Write-Debug "GET $url"
+          $activeRuns = ((Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json).workflow_runs
+          if ($activeRuns -gt 0) {
+            Write-Host "There are active jobs running."
+            exit 1
+          } else {
+            Write-Host "No active jobs found."
+          }
+        shell: pwsh
+
   do-reset-all-active:
     name: Reset all active lab machines
-    if: ${{ inputs.reset-all-active == true }}
+    if: ${{ inputs.reset-all-active == true || github.event_name == 'schedule' }}
+    needs: sanity-check
     strategy:
       fail-fast: false
       matrix:
@@ -54,6 +76,7 @@ jobs:
   do-reset-manual:
     name: Reset parent or child Machine
     if: ${{ inputs.reset-all-active == false }}
+    needs: sanity-check
     runs-on:
       - self-hosted
       - ${{ inputs.parent-or-child }}
