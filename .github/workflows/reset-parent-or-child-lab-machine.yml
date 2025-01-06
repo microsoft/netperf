@@ -1,4 +1,4 @@
-name: reset-parent-or-child
+name: reset-parent-or-child-lab-machine
 
 on:
   workflow_dispatch:
