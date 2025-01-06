@@ -75,7 +75,7 @@ jobs:
 
   do-reset-manual:
     name: Reset parent or child Machine
-    if: ${{ inputs.reset-all-active == false }}
+    if: ${{ inputs.reset-all-active == false && github.event_name != 'schedule' }}
     needs: sanity-check
     runs-on:
       - self-hosted
