@@ -1,7 +1,7 @@
 name: reset-parent-or-child-lab-machine
 on:
   schedule:
-    - cron: "0 11 * * *" # Runs at 3 AM PST every day
+    - cron: "0 22-23/3 * * *" # Runs once every 3 hours
   workflow_dispatch:
     inputs:
       parent-or-child:
