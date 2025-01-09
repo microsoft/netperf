@@ -77,20 +77,20 @@ jobs:
           -filter '${{ github.event.client_payload.filter || '' }}'
     - name: Upload Test Results JSON
       if: ${{ always() }}
-      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
       with:
         name: json-test-results-lab-${{ github.event.client_payload.os }}-${{ github.event.client_payload.arch }}-${{ github.event.client_payload.tls }}-${{ github.event.client_payload.io }}.json
         path: json-test-results-lab-${{ github.event.client_payload.os }}-${{ github.event.client_payload.arch }}-${{ github.event.client_payload.tls }}-${{ github.event.client_payload.io }}.json
     - name: Upload Logs
       if: ${{ always() }}
-      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
       with:
         name: logs-lab-${{ github.event.client_payload.os }}-${{ github.event.client_payload.arch }}-${{ github.event.client_payload.tls }}-${{ github.event.client_payload.io }}
         path: artifacts/logs
         if-no-files-found: ignore
     - name: Upload Full Latency Curves
       if: ${{ always() }}
-      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
       with:
         name: latency-lab-${{ github.event.client_payload.os }}-${{ github.event.client_payload.arch }}-${{ github.event.client_payload.tls }}-${{ github.event.client_payload.io }}
         path: latency.txt
