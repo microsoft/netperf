@@ -35,11 +35,11 @@ jobs:
           $url = "https://api.github.com/repos/microsoft/netperf/actions/runs?status=in_progress"
           Write-Debug "GET $url"
           $activeRuns = ((Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json).workflow_runs
-          if ($activeRuns -gt 0) {
-            Write-Host "There are active jobs running."
-            exit 1
-          } else {
-            Write-Host "No active jobs found."
+          foreach ($run in $activeRuns) {
+            if ($run.name -ne "reset-parent-or-child-lab-machine") {
+              Write-Host "Found active netperf job: $($run.name)"
+              exit 1
+            }
           }
         shell: pwsh
 
