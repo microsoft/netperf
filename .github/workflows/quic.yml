@@ -23,6 +23,11 @@ on:
         required: false
         default: false
         type: boolean
+      collect-cpu-traces:
+        description: 'Collect CPU traces'
+        required: false
+        default: false
+        type: boolean
   workflow_dispatch:
     inputs:
       ref:
@@ -56,6 +61,11 @@ on:
           - Full.Verbose
       commit:
         description: 'Publish Results'
+        required: false
+        default: false
+        type: boolean
+      collect-cpu-traces:
+        description: 'Collect CPU traces'
         required: false
         default: false
         type: boolean
@@ -221,6 +231,10 @@ jobs:
         run-cmd: |
           Write-Host "Downloading Watermark_Regression.json file"
           Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/watermark_regression.json" -OutFile "watermark_regression.json" -UseBasicParsing
+    # - name: Start collecting CPU traces
+    #   if: ${{ github.event.client_payload.collect-cpu-traces || inputs.collect-cpu-traces }}
+    #   run: wpr -start CPU -file:cpu.etl
+    #   shell: pwsh
     - name: Run Secnetperf Script
       if: ${{ matrix.role == 'client' }}
       timeout-minutes: 40
