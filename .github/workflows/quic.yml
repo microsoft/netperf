@@ -253,6 +253,7 @@ jobs:
           -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
         matrix: '${{ toJson(matrix) }}'
         syncer-secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
+        collect-cpu-traces: ${{ github.event.client_payload.collect-cpu-traces || inputs.collect-cpu-traces }}
     - name: Stop 1ES Machine
       if: ${{ always() }}
       uses: ./netperfrepo/.github/actions/stop-1es-machine

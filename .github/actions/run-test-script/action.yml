@@ -13,6 +13,10 @@ inputs:
     description: "For use to sync with the remote cache."
     type: string
     required: true
+  collect-cpu-traces:
+    description: "Whether to collect CPU traces or not."
+    type: boolean
+    required: false
 runs:
   using: "composite"
   steps:
@@ -35,13 +39,27 @@ runs:
       run_script_powershell_code = """${{ inputs.run-script-cmd }}"""
       squeezed_code = run_script_powershell_code.replace('\n', '').replace('\r', '').replace('`', ' ')
       print(f"::set-output name=squeezed_code::{squeezed_code}")
+
+  - name: Run Pwsh Command With Tracing
+    if: ${{ inputs.collect-cpu-traces && env.HAS_PWSH == 'false' }}
+    run: |
+      powershell -Command "$env:collect_cpu_traces = $true;${{ steps.netperf_context.outputs.netperf_context }} ${{ steps.squeeze_code.outputs.squeezed_code }}"
+    shell: cmd
+  - name: Run Pwsh Command With Tracing
+    if: ${{ inputs.collect-cpu-traces && env.HAS_PWSH == 'true' }}
+    run: |
+      $env:collect_cpu_traces = $true
+      ./netperfrepo/set-netperf-context.ps1 -Matrix '${{ inputs.matrix }}' -SyncerSecret '${{ inputs.syncer-secret }}' -GithubRunId '${{ github.run_id }}-${{ github.run_attempt }}'
+      Import-Module ./netperfrepo/netperf-lib.psm1
+      ${{ inputs.run-script-cmd }}
+    shell: cmd
   - name: Run Pwsh Command
-    if: ${{ env.HAS_PWSH == 'false' }}
+    if: ${{ env.HAS_PWSH == 'false' && !inputs.collect-cpu-traces }}
     run: |
       powershell -Command "${{ steps.netperf_context.outputs.netperf_context }} ${{ steps.squeeze_code.outputs.squeezed_code }}"
     shell: cmd
   - name: Run Pwsh Command
-    if: ${{ env.HAS_PWSH == 'true' }}
+    if: ${{ env.HAS_PWSH == 'true' && !inputs.collect-cpu-traces }}
     run: |
       ./netperfrepo/set-netperf-context.ps1 -Matrix '${{ inputs.matrix }}' -SyncerSecret '${{ inputs.syncer-secret }}' -GithubRunId '${{ github.run_id }}-${{ github.run_attempt }}'
       Import-Module ./netperfrepo/netperf-lib.psm1
