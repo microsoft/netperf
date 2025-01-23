@@ -52,7 +52,7 @@ runs:
       ./netperfrepo/set-netperf-context.ps1 -Matrix '${{ inputs.matrix }}' -SyncerSecret '${{ inputs.syncer-secret }}' -GithubRunId '${{ github.run_id }}-${{ github.run_attempt }}'
       Import-Module ./netperfrepo/netperf-lib.psm1
       ${{ inputs.run-script-cmd }}
-    shell: cmd
+    shell: pwsh
   - name: Run Pwsh Command
     if: ${{ env.HAS_PWSH == 'false' && !inputs.collect-cpu-traces }}
     run: |
