@@ -18,6 +18,7 @@ runs:
     if: ${{ runner.os != 'Windows' }}
     run: |
       echo 0 | sudo tee /proc/sys/kernel/perf_event_paranoid
+    shell: bash
   - name: Check if powershell 7 (pwsh) is already installed
     if: ${{ runner.os == 'Windows' }}
     run: |
