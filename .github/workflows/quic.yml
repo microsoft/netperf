@@ -23,6 +23,11 @@ on:
         required: false
         default: false
         type: boolean
+      collect-cpu-traces:
+        description: 'Collect CPU traces'
+        required: false
+        default: false
+        type: boolean
   workflow_dispatch:
     inputs:
       ref:
@@ -56,6 +61,11 @@ on:
           - Full.Verbose
       commit:
         description: 'Publish Results'
+        required: false
+        default: false
+        type: boolean
+      collect-cpu-traces:
+        description: 'Collect CPU traces'
         required: false
         default: false
         type: boolean
@@ -221,6 +231,10 @@ jobs:
         run-cmd: |
           Write-Host "Downloading Watermark_Regression.json file"
           Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/watermark_regression.json" -OutFile "watermark_regression.json" -UseBasicParsing
+    # - name: Start collecting CPU traces
+    #   if: ${{ github.event.client_payload.collect-cpu-traces || inputs.collect-cpu-traces }}
+    #   run: wpr -start CPU -file:cpu.etl
+    #   shell: pwsh
     - name: Run Secnetperf Script
       if: ${{ matrix.role == 'client' }}
       timeout-minutes: 40
@@ -239,6 +253,7 @@ jobs:
           -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
         matrix: '${{ toJson(matrix) }}'
         syncer-secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
+        collect-cpu-traces: ${{ github.event.client_payload.collect-cpu-traces || inputs.collect-cpu-traces }}
     - name: Stop 1ES Machine
       if: ${{ always() }}
       uses: ./netperfrepo/.github/actions/stop-1es-machine
@@ -257,6 +272,20 @@ jobs:
       with:
         name: logs-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
         path: artifacts/logs
+        if-no-files-found: ignore
+    - name: Upload CPU traces (client)
+      if: ${{ (github.event.client_payload.collect-cpu-traces || inputs.collect-cpu-traces) && matrix.role == 'client' }}
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      with:
+        name: client-cpu-traces-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
+        path: "**/cpu-traces*"
+        if-no-files-found: ignore
+    - name: Upload CPU traces (server)
+      if: ${{ (github.event.client_payload.collect-cpu-traces || inputs.collect-cpu-traces) && matrix.role == 'server' }}
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      with:
+        name: server-cpu-traces-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
+        path: "**/server-cpu-traces*"
         if-no-files-found: ignore
     - name: Upload Full Latency Curves
       if: ${{ always() }}
