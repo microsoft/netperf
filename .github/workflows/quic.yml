@@ -343,7 +343,10 @@ jobs:
       timeout-minutes: 50
       run: |
           $env:netperf_remote_powershell_supported = $true
-
+          $collectCpuTraces = "${{ github.event.client_payload.collect-cpu-traces || inputs.collect-cpu-traces }}
+          if ($collectCpuTraces -eq "true") {
+            $env:collect_cpu_traces = $true
+          }
           ./scripts/secnetperf.ps1 `
           -LogProfile ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }} `
           -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} `
