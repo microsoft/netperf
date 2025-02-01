@@ -343,7 +343,7 @@ jobs:
       timeout-minutes: 50
       run: |
           $env:netperf_remote_powershell_supported = $true
-          $collectCpuTraces = "${{ github.event.client_payload.collect-cpu-traces || inputs.collect-cpu-traces }}
+          $collectCpuTraces = "${{ github.event.client_payload.collect-cpu-traces || inputs.collect-cpu-traces }}"
           if ($collectCpuTraces -eq "true") {
             $env:collect_cpu_traces = $true
           }
