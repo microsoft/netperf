@@ -340,10 +340,13 @@ jobs:
       shell: pwsh
     - name: Run secnetperf
       shell: pwsh
-      timeout-minutes: 50
+      timeout-minutes: 80
       run: |
           $env:netperf_remote_powershell_supported = $true
-
+          $collectCpuTraces = "${{ github.event.client_payload.collect-cpu-traces || inputs.collect-cpu-traces }}"
+          if ($collectCpuTraces -eq "true") {
+            $env:collect_cpu_traces = $true
+          }
           ./scripts/secnetperf.ps1 `
           -LogProfile ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }} `
           -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} `
@@ -360,6 +363,20 @@ jobs:
       with:
         name: json-test-results-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}.json
         path: json-test-results-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}.json
+    - name: Upload CPU traces (client)
+      if: ${{(github.event.client_payload.collect-cpu-traces || inputs.collect-cpu-traces)}}
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      with:
+        name: client-cpu-traces-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
+        path: "**/cpu-traces*"
+        if-no-files-found: ignore
+    - name: Upload CPU traces (server)
+      if: ${{(github.event.client_payload.collect-cpu-traces || inputs.collect-cpu-traces)}}
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      with:
+        name: server-cpu-traces-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
+        path: "**/server-cpu-traces*"
+        if-no-files-found: ignore
     - name: Upload Logs
       if: ${{ always() }}
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
