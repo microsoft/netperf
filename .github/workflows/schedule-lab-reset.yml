@@ -32,7 +32,7 @@ jobs:
         } | ConvertTo-Json
         Write-Host "Dispatching with body: $body"
         try {
-          Invoke-WebRequest -Uri $url -Headers $github_headers -Method Post -Body $body
+          Invoke-WebRequest -Uri $url -Headers $headers -Method Post -Body $body
         } catch {
           Write-Host "[DispatchCallee] Failed to dispatch callee: $_"
           exit 1
