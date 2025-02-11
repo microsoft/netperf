@@ -231,10 +231,6 @@ jobs:
         run-cmd: |
           Write-Host "Downloading Watermark_Regression.json file"
           Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/watermark_regression.json" -OutFile "watermark_regression.json" -UseBasicParsing
-    # - name: Start collecting CPU traces
-    #   if: ${{ github.event.client_payload.collect-cpu-traces || inputs.collect-cpu-traces }}
-    #   run: wpr -start CPU -file:cpu.etl
-    #   shell: pwsh
     - name: Run Secnetperf Script
       if: ${{ matrix.role == 'client' }}
       timeout-minutes: 40
@@ -295,13 +291,22 @@ jobs:
         path: latency.txt
         if-no-files-found: ignore
 
+
+  attempt-reset-lab:
+    name: Attempting to reset lab before running jobs. Status of this job does not indicate result of lab reset. Look at job details.
+    needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
+    uses: microsoft/netperf/.github/workflows/schedule-lab-reset.yml@main
+    with:
+      matrix_filename: 'quic_matrix.json'
+      workflowId: ${{ github.run_id }}
+
   #
   # Test Jobs.
   # NOTE: tag == env
   #
   run-secnetperf:
     name:  ${{ matrix.optional == 'TRUE' && '[UNRELIABLE]-' || '' }}lab-${{ matrix.os }}-${{ matrix.io }}-${{ matrix.tls }}-${{ matrix.arch }}
-    needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
+    needs: [attempt-reset-lab]
     strategy:
       fail-fast: false
       matrix:
@@ -392,33 +397,10 @@ jobs:
         path: latency.txt
         if-no-files-found: ignore
 
-  # TODO: Uncomment once we fully transition to a stateless lab.
-  # observe-lab:
-  #   name: Observe Lab
-  #   needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
-  #   uses: microsoft/netperf/.github/workflows/observe-lab.yml@main
-  #   with:
-  #     lab-matrix: ${{ needs.prepare-matrix.outputs.lab-stateless-matrix }}
-  #     project-callee: 'lab-quic-callee'
-  #     sha: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
-  #     ref: ${{ github.event.client_payload.ref || inputs.ref || 'main' }}
-  #     pr: ${{ github.event.client_payload.pr }}
-  #   secrets:
-  #     NETPERF_SYNCER_SECRET: ${{ secrets.NETPERF_SYNCER_SECRET }}
-
-  # operate-lab:
-  #   name: Operate Lab
-  #   needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
-  #   uses: microsoft/netperf/.github/workflows/operate-lab.yml@main
-  #   with:
-  #     lab-matrix: ${{ needs.prepare-matrix.outputs.lab-stateless-matrix }}
-  #   secrets:
-  #     NETPERF_SYNCER_SECRET: ${{ secrets.NETPERF_SYNCER_SECRET }}
-
   cleanup-cache:
     name: Cleanup Remote Cache Metadata
     if: ${{ always() }}
-    needs: [run-secnetperf-1es] # TODO: Add 'observe-lab' once we fully transition to a stateless lab.
+    needs: [run-secnetperf-1es]
     runs-on: 'windows-latest'
     steps:
     - name: Send cleanup request to endpoint
@@ -445,12 +427,6 @@ jobs:
         path: artifacts/logs
         pattern: json-test-results-*
         merge-multiple: true
-    # - uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
-    #   with:
-    #     path: artifacts/logs
-    #     name: lab-test-results
-    #     merge-multiple: true
-    #     if-no-files-found: ignore
     - name: Generate Summary
       shell: pwsh # We never block the workflow if its a git merge or someone manually triggered a run with publish_results = true.
       run: ./.github/workflows/generate-summary.ps1 -BlockOnFailure ${{ github.event.client_payload.pr != '' && !inputs.commit }}
