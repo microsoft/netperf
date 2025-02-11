@@ -39,7 +39,7 @@ jobs:
           Write-Debug "GET $url"
           $activeRuns = ((Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json).workflow_runs
           foreach ($run in $activeRuns) {
-            if ($run.name -ne "reset-parent-or-child-lab-machine") {
+            if ($run.name -ne "auto-reset-parent-or-child-lab-machine") {
               Write-Host "Found active netperf job: $($run.name)"
               exit 1
             }
@@ -58,7 +58,7 @@ jobs:
           $workflow_id_that_dispatched_this_workflow = "${{ github.event.client_payload.workflow_id }}"
           $activeRuns = ((Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json).workflow_runs
           foreach ($run in $activeRuns) {
-            if ($run.name -ne "reset-parent-or-child-lab-machine" -and $run.id -ne $workflow_id_that_dispatched_this_workflow) {
+            if ($run.name -ne "auto-reset-parent-or-child-lab-machine" -and $run.id -ne $workflow_id_that_dispatched_this_workflow) {
               Write-Host "Found active netperf job: $($run.name)"
               exit 1
             }
