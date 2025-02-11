@@ -12,7 +12,7 @@ on:
 permissions: write-all
 
 jobs:
-  prepare-matrix:
+  attempt-lab-reset:
     name: Enqueue Lab Reset Workflow And Awaiting Result...
     runs-on: windows-latest
     steps:
@@ -24,7 +24,6 @@ jobs:
           "X-GitHub-Api-Version" = "2022-11-28"
         }
         $url = "https://api.github.com/repos/microsoft/netperf/dispatches"
-        Write-Host "Dispatching with assigned runner: $assigned_runner"
         $body = @{
           event_type = "run-auto-reset-parent-or-child-lab-machine"
           client_payload = @{
@@ -38,9 +37,56 @@ jobs:
           Write-Host "[DispatchCallee] Failed to dispatch callee: $_"
           exit 1
         }
-
+        function Get-Jobs {
+          param([string]$runId)
+          $url = "https://api.github.com/repos/microsoft/netperf/actions/runs/$runId/jobs"
+          Write-Debug "GET $url"
+          return ((Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json).jobs
+        }
+        function Get-Runs {
+          $url = "https://api.github.com/repos/microsoft/netperf/actions/runs?status=in_progress"
+          Write-Debug "GET $url"
+          return ((Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json).workflow_runs
+        }
+        function Get-RunId {
+          for ($i = 0; $i -lt 10; $i++) { # Try up to 10 times
+            $workflows = Get-Runs
+            foreach ($workflow in $workflows) {
+              $jobs = Get-Jobs -runId $workflow.id
+              foreach ($job in $jobs) {
+                if ($job.name.Contains("${{ inputs.workflowId }}")) {
+                  return $workflow.id
+                }
+              }
+            }
+            Start-Sleep -Seconds 10
+          }
+          Write-Host "Failed to find run ID for ${{ inputs.workflowId }}"
+          exit 1
+        }
+        function Get-Run {
+          param([string]$runId)
+          $url = "https://api.github.com/repos/microsoft/netperf/actions/runs/$runId"
+          Write-Debug "GET $url"
+          return (Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json
+        }
+        function Get-RunStatus {
+          param([string]$id)
+          $run = Get-Run $id
+          if ($run.status -ne "completed") {
+              return $false
+          }
+          if ($run.conclusion -ne "success") {
+            Write-Error "WARNING: Run $id did NOT complete successfully."
+          }
+          return $true
+        }
+        $resetJobRunId = Get-RunId
         for ($attempts = 0; $attempts -lt 36; $attempts++) {
-          # TODO: Check if the callee workflow has completed.
+          if (Get-RunStatus $resetJobRunId) {
+            break
+          }
+          Start-Sleep -Seconds 30
         }
 
       shell: pwsh
