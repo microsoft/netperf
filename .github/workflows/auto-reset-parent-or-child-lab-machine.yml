@@ -1,7 +1,7 @@
 name: auto-reset-parent-or-child-lab-machine
 on:
   schedule:
-    - cron: "0 7 * * *" # Runs once every 3 hours
+    - cron: "0 7 * * *" # Runs everyday at 11pm PST
   workflow_dispatch:
     inputs:
       parent-or-child:
@@ -19,7 +19,7 @@ on:
           required: false
           type: boolean
   repository_dispatch:
-    types: [auto-reset-parent-or-child-lab-machine]
+    types: [run-auto-reset-parent-or-child-lab-machine]
 
 jobs:
   # This job ensures there is currently no actively running netperf jobs using the Github API. If there is, fail this step.
