@@ -291,21 +291,13 @@ jobs:
         path: latency.txt
         if-no-files-found: ignore
 
-
-  attempt-reset-lab:
-    name: Attempting to reset lab before running jobs. Status of this job does not indicate result of lab reset. Look at job details.
-    needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
-    uses: microsoft/netperf/.github/workflows/schedule-lab-reset.yml@main
-    with:
-      workflowId: ${{ github.run_id }}
-
   #
   # Test Jobs.
   # NOTE: tag == env
   #
   run-secnetperf:
     name:  ${{ matrix.optional == 'TRUE' && '[UNRELIABLE]-' || '' }}lab-${{ matrix.os }}-${{ matrix.io }}-${{ matrix.tls }}-${{ matrix.arch }}
-    needs: [attempt-reset-lab]
+    needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
     strategy:
       fail-fast: false
       matrix:
@@ -395,6 +387,14 @@ jobs:
         name: latency-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
         path: latency.txt
         if-no-files-found: ignore
+
+  attempt-reset-lab:
+    name: Attempting to reset lab. Status of this job does not indicate result of lab reset. Look at job details.
+    needs: [run-secnetperf]
+    if: ${{ always() }}
+    uses: microsoft/netperf/.github/workflows/schedule-lab-reset.yml@main
+    with:
+      workflowId: ${{ github.run_id }}
 
   cleanup-cache:
     name: Cleanup Remote Cache Metadata
