@@ -1,7 +1,5 @@
 name: auto-reset-parent-or-child-lab-machine
 on:
-  schedule:
-    - cron: "0 7 * * *" # Runs everyday at 11pm PST
   workflow_dispatch:
     inputs:
       parent-or-child:
