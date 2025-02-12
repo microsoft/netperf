@@ -24,7 +24,7 @@ on:
 jobs:
   # This job ensures there is currently no actively running netperf jobs using the Github API. If there is, fail this step.
   sanity-check:
-    name: Sanity check
+    name: Sanity check for ${{ github.event.client_payload.workflow_id || 'dispatch' }}
     runs-on: windows-latest
     steps:
       - name: Check for active jobs
@@ -59,7 +59,7 @@ jobs:
           $activeRuns = ((Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json).workflow_runs
           foreach ($run in $activeRuns) {
             if ($run.name -ne "auto-reset-parent-or-child-lab-machine" -and $run.id -ne $workflow_id_that_dispatched_this_workflow) {
-              Write-Host "Found active netperf job: $($run.name)"
+              Write-Host "Found active netperf job (that didn't trigger this workflow run): $($run.name), id: $($run.id)"
               exit 1
             }
           }
