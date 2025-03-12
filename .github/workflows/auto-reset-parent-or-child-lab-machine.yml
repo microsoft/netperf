@@ -65,6 +65,8 @@ jobs:
           { parent-or-child: "parent=rr1-netperf-10\\localadminuser",   vm-name: "netperf" },
           { parent-or-child: "child=rr1-netperf-42\\localadminuser",    vm-name: "netperf-windows-2022-server" },
           { parent-or-child: "parent=rr1-netperf-43\\localadminuser",   vm-name: "netperf-windows-2022-client" },
+          { parent-or-child: "child=rr1-netperf-11\\localadminuser",    vm-name: "netperf-linux-server" },
+          { parent-or-child: "parent=rr1-netperf-12\\localadminuser",   vm-name: "netperf-linux-client" },
         ]
     runs-on:
       - self-hosted
@@ -103,9 +105,13 @@ jobs:
     - name: Start VM, wait for online status, alert observer.
       run: |
         $vmName = "${{ inputs.vm-name }}"
-        Start-VM -Name $vmName
-        while (-not (Get-VMNetworkAdapter -VMName $vmName).IPAddresses) {
-          Write-Host "Waiting for VM to be online..."
-          Start-Sleep -Seconds 5
+        if ($vmName.Contains("linux")) {
+          Restart-VM -Name $vmName -Force
+        } else {
+          Start-VM -Name $vmName
+          while (-not (Get-VMNetworkAdapter -VMName $vmName).IPAddresses) {
+            Write-Host "Waiting for VM to be online..."
+            Start-Sleep -Seconds 5
+          }
+          Start-Sleep 10
         }
-        Start-Sleep 10
