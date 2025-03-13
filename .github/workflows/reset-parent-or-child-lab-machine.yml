@@ -73,12 +73,16 @@ jobs:
     - name: Start VM, wait for online status, alert observer.
       run: |
         $vmName = "${{ matrix.vec.vm-name }}"
-        Start-VM -Name $vmName
-        while (-not (Get-VMNetworkAdapter -VMName $vmName).IPAddresses) {
-          Write-Host "Waiting for VM to be online..."
-          Start-Sleep -Seconds 5
+        if ($vmName.Contains("linux")) {
+          Restart-VM -Name $vmName -Force
+        } else {
+          Start-VM -Name $vmName
+          while (-not (Get-VMNetworkAdapter -VMName $vmName).IPAddresses) {
+            Write-Host "Waiting for VM to be online..."
+            Start-Sleep -Seconds 5
+          }
+          Start-Sleep 10
         }
-        Start-Sleep 10
 
   do-reset-manual:
     name: Reset parent or child Machine
