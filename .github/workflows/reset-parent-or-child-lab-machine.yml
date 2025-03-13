@@ -57,6 +57,8 @@ jobs:
           { parent-or-child: "parent=rr1-netperf-10\\localadminuser",   vm-name: "netperf" },
           { parent-or-child: "child=rr1-netperf-42\\localadminuser",    vm-name: "netperf-windows-2022-server" },
           { parent-or-child: "parent=rr1-netperf-43\\localadminuser",   vm-name: "netperf-windows-2022-client" },
+          { parent-or-child: "child=rr1-netperf-11\\localadminuser",    vm-name: "netperf-linux-server" },
+          { parent-or-child: "parent=rr1-netperf-12\\localadminuser",   vm-name: "netperf-linux-client" },
         ]
     runs-on:
       - self-hosted
