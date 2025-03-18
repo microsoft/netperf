@@ -1,5 +1,23 @@
 name: auto-reset-parent-or-child-lab-machine
 on:
+  schedule:
+    - cron: "0 */6 * * *" # Runs once every 6 hours
+  workflow_dispatch:
+    inputs:
+      parent-or-child:
+        description: "Lab jobs to observe"
+        required: false
+        type: string
+      vm-name:
+        description: "The name of the VM to reset"
+        default: "netperf-windows-2022-client"
+        required: false
+        type: string
+      reset-all-active:
+        description: "Resets all active lab machines"
+        default: false
+        required: false
+        type: boolean
   repository_dispatch:
     types: [run-auto-reset-parent-or-child-lab-machine]
 
@@ -38,17 +56,21 @@ jobs:
           $url = "https://api.github.com/repos/microsoft/netperf/actions/runs?status=in_progress"
           Write-Debug "GET $url"
           $workflow_id_that_dispatched_this_workflow = "${{ github.event.client_payload.workflow_id }}"
-
+          $stop = $true
           while ($true) {
+            $stop = $true
             $activeRuns = ((Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json).workflow_runs
             foreach ($run in $activeRuns) {
               if ($run.name -ne "auto-reset-parent-or-child-lab-machine" -and $run.id -ne $workflow_id_that_dispatched_this_workflow) {
                 Write-Host "Waiting for active netperf job (that didn't trigger this workflow run): $($run.name), id: $($run.id) to finish first."
                 Start-Sleep -Seconds 30
-                continue
+                $stop = $false
+                break
               }
             }
-            break
+            if ($stop) {
+              break
+            }
           }
 
   do-reset-all-active:
@@ -65,6 +87,8 @@ jobs:
           { parent-or-child: "parent=rr1-netperf-10\\localadminuser",   vm-name: "netperf" },
           { parent-or-child: "child=rr1-netperf-42\\localadminuser",    vm-name: "netperf-windows-2022-server" },
           { parent-or-child: "parent=rr1-netperf-43\\localadminuser",   vm-name: "netperf-windows-2022-client" },
+          { parent-or-child: "child=rr1-netperf-11\\localadminuser",    vm-name: "netperf-linux-server" },
+          { parent-or-child: "parent=rr1-netperf-12\\localadminuser",   vm-name: "netperf-linux-client" },
         ]
     runs-on:
       - self-hosted
@@ -79,12 +103,16 @@ jobs:
     - name: Start VM, wait for online status, alert observer.
       run: |
         $vmName = "${{ matrix.vec.vm-name }}"
-        Start-VM -Name $vmName
-        while (-not (Get-VMNetworkAdapter -VMName $vmName).IPAddresses) {
-          Write-Host "Waiting for VM to be online..."
-          Start-Sleep -Seconds 5
+        if ($vmName.Contains("linux")) {
+          Restart-VM -Name $vmName -Force
+        } else {
+          Start-VM -Name $vmName
+          while (-not (Get-VMNetworkAdapter -VMName $vmName).IPAddresses) {
+            Write-Host "Waiting for VM to be online..."
+            Start-Sleep -Seconds 5
+          }
+          Start-Sleep 10
         }
-        Start-Sleep 10
 
   do-reset-manual:
     name: Reset parent or child Machine
@@ -103,9 +131,13 @@ jobs:
     - name: Start VM, wait for online status, alert observer.
       run: |
         $vmName = "${{ inputs.vm-name }}"
-        Start-VM -Name $vmName
-        while (-not (Get-VMNetworkAdapter -VMName $vmName).IPAddresses) {
-          Write-Host "Waiting for VM to be online..."
-          Start-Sleep -Seconds 5
+        if ($vmName.Contains("linux")) {
+          Restart-VM -Name $vmName -Force
+        } else {
+          Start-VM -Name $vmName
+          while (-not (Get-VMNetworkAdapter -VMName $vmName).IPAddresses) {
+            Write-Host "Waiting for VM to be online..."
+            Start-Sleep -Seconds 5
+          }
+          Start-Sleep 10
         }
-        Start-Sleep 10
