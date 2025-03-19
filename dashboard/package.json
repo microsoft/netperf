@@ -39,7 +39,7 @@
     "react-dom": "^18.2.0",
     "react-helmet-async": "^2.0.4",
     "react-hook-form": "^7.50.1",
-    "react-router-dom": "^7.3.0",
+    "react-router-dom": "^7.4.0",
     "simplebar-react": "^3.2.4",
     "sql.js": "^1.13.0"
   },
