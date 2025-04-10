@@ -78,12 +78,7 @@ for json_file_path in glob.glob('*.json'):
             for row in current_env_data:
                 sku = ""
                 if row[4] == "azure":
-                    if "windows-2025" in row[1]:
-                        sku = "F-Series(4vCPU, 8GiB RAM)"
-                    elif "windows-2022" in row[1]:
-                        sku = "io=wsk, F-Series(4vCPU, 8GiB RAM). io=iocp,xdp, Experimental_Boost4(4vCPU, 8GiB RAM)"
-                    else:
-                        sku = "Experimental_Boost4(4vCPU, 8GiB RAM)"
+                    sku = "Experimental_Boost4(4vCPU, 8GiB RAM)"
                 else:
                     sku = "Dell PowerEdge R650 (80 logical CPUs, 128GB RAM)"
                 print(f"Updating row with SKU: {sku}")
@@ -103,12 +98,7 @@ for json_file_path in glob.glob('*.json'):
                 new_sku = json_obj["SKU"]
             else:
                 if context == "azure":
-                    if "windows-2025" in os_name:
-                        new_sku = "F-Series(4vCPU, 8GiB RAM)"
-                    elif "windows-2022" in os_name:
-                        new_sku = "io=wsk, F-Series(4vCPU, 8GiB RAM). io=iocp,xdp, Experimental_Boost4(4vCPU, 8GiB RAM)"
-                    else:
-                        new_sku = "Experimental_Boost4(4vCPU, 8GiB RAM)"
+                    new_sku = "Experimental_Boost4(4vCPU, 8GiB RAM)"
                 else:
                     new_sku = "Dell PowerEdge R650 (80 logical CPUs, 128GB RAM)"
             print('inserting new row with new environment')
