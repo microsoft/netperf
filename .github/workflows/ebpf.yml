@@ -101,8 +101,6 @@ jobs:
       fail-fast: false
       matrix:
         vec: [
-          #{ env: "azure", os: "2022", arch: "x64" }, # Azure VMs are being deprecated by netperf team.
-          #{ env: "azure", os: "2025", arch: "x64" }, # F4 based VMS are being deprecated by netperf team.
           { env: "lab",   os: "2022", arch: "x64" },
         ]
     runs-on:
@@ -418,6 +416,14 @@ jobs:
         Remove-MpPreference -ExclusionPath ${{ github.workspace }}
         Update-MpSignature -Verbose
         Start-MpScan -ScanType QuickScan
+
+  attempt-reset-lab:
+    name: Attempting to reset lab. Status of this job does not indicate result of lab reset. Look at job details.
+    needs: [test]
+    if: ${{ always() }}
+    uses: microsoft/netperf/.github/workflows/schedule-lab-reset.yml@main
+    with:
+      workflowId: ${{ github.run_id }}
 
   # File a bug if the test fails.
   create_or_update_issue:
