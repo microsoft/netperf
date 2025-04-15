@@ -81,7 +81,7 @@ jobs:
   name:
     name: For ${{ github.event.client_payload.guid }}
     needs: []
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
     - name: Print Parameters
       if: ${{ github.event_name == 'repository_dispatch' }}
@@ -154,7 +154,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: 'ubuntu-20.04'
+          - os: 'ubuntu-22.04'
             tls: 'openssl'
           - os: 'ubuntu-22.04'
             tls: 'openssl3'
@@ -373,7 +373,7 @@ jobs:
   generate-summary:
     name: Results
     needs: [run-secnetperf, run-secnetperf-1es] # TODO: Add 'observe-lab' once we fully transition to a stateless lab.
-    runs-on: 'ubuntu-20.04'
+    runs-on: 'ubuntu-22.04'
     continue-on-error: true
     steps:
     - name: Checkout repository
@@ -393,7 +393,7 @@ jobs:
     needs: [run-secnetperf, run-secnetperf-1es] # TODO: Add 'observe-lab' once we fully transition to a stateless lab.
     strategy:
       fail-fast: false
-    runs-on: 'ubuntu-20.04'
+    runs-on: 'ubuntu-22.04'
     steps:
     - name: Checkout repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -432,7 +432,7 @@ jobs:
     needs: [save-test-results]
     strategy:
       fail-fast: false
-    runs-on: 'ubuntu-20.04'
+    runs-on: 'ubuntu-22.04'
     steps:
     - name: Checkout repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -464,7 +464,7 @@ jobs:
     continue-on-error: true
     strategy:
       fail-fast: false
-    runs-on: 'ubuntu-20.04'
+    runs-on: 'ubuntu-22.04'
     steps:
     - name: Checkout repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
