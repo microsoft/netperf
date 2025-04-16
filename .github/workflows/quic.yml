@@ -175,7 +175,7 @@ jobs:
 
   run-secnetperf-1es:
     name: ${{ matrix.optional == 'TRUE' && '[UNRELIABLE]-' || '' }}azure-${{ matrix.os }}-${{ matrix.io }}-${{ matrix.role }}-${{ matrix.tls }}-${{ matrix.arch }}
-    needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
+    needs: [prepare-matrix, build-windows, build-windows-kernel]
     strategy:
       fail-fast: false
       matrix:
@@ -272,7 +272,7 @@ jobs:
   #
   run-secnetperf:
     name:  ${{ matrix.optional == 'TRUE' && '[UNRELIABLE]-' || '' }}lab-${{ matrix.os }}-${{ matrix.io }}-${{ matrix.tls }}-${{ matrix.arch }}
-    needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
+    needs: [prepare-matrix, build-windows, build-windows-kernel]
     strategy:
       fail-fast: false
       matrix:
