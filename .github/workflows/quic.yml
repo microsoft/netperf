@@ -156,7 +156,7 @@ jobs:
         include:
           - os: 'ubuntu-20.04'
             tls: 'openssl'
-          - os: 'ubuntu-20.04'
+          - os: 'ubuntu-22.04'
             tls: 'openssl3'
     uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml@main
     with:
