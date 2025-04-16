@@ -27,7 +27,30 @@ document.addEventListener('mouseup', function () {
   isMouseDown = false;
 });
 
-// ----------------------------------------------------------------------
+function accessData(envStr, data, newKey, oldKey) {
+  const HISTORY_SIZE = 20;
+  if (!(envStr in data)) {
+    alert(`Could not find ${envStr} in data`);
+    console.error(`Could not find ${envStr} in data`);
+    return [];
+  }
+  const envData = data[envStr];
+  let outputData = [];
+  if (oldKey in envData) {
+    outputData = envData[oldKey]['data'].slice().reverse();
+  } else {
+    console.log("OLD KEY DOES NOT EXIST", oldKey);
+  }
+  if (newKey in envData) {
+    outputData = outputData.concat(envData[newKey]['data'].slice().reverse());
+  } else {
+    console.log("NEW KEY DOES NOT EXIST", newKey);
+  }
+  while (outputData.length > HISTORY_SIZE) {
+    outputData.shift();
+  }
+  return outputData;
+}
 
 export default function LatencyPage() {
   const URL = "https://raw.githubusercontent.com/microsoft/netperf/deploy/historical_latency_page.json";
@@ -77,16 +100,17 @@ export default function LatencyPage() {
 
   if (data) {
     // TODO: Should we find the max of windows / linux run and use that as our baseline?
-    rep = data[`${windowsOs}-${env}-iocp-schannel`][`${testType}-tcp`]['data'].slice().reverse();
-    linuxRep = data[`${linuxOs}-${env}-epoll-openssl`][`${testType}-tcp`]['data'].slice().reverse();
+    rep = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-latency-tcp`, `${testType}-tcp`);
+    linuxRep = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `scenario-latency-tcp`, `${testType}-tcp`);
     indices = Array.from({ length: Math.max(rep.length, linuxRep.length) }, (_, i) => i);
+    indices.reverse();
 
-    tcpiocp = data[`${windowsOs}-${env}-iocp-schannel`][`${testType}-tcp`]['data'].slice().reverse();
-    quiciocp = data[`${windowsOs}-${env}-iocp-schannel`][`${testType}-quic`]['data'].slice().reverse();
-    tcpepoll = data[`${linuxOs}-${env}-epoll-openssl`][`${testType}-tcp`]['data'].slice().reverse();
-    quicepoll = data[`${linuxOs}-${env}-epoll-openssl`][`${testType}-quic`]['data'].slice().reverse();
-    quicxdp = data[`${windowsOs}-${env}-xdp-schannel`][`${testType}-quic`]['data'].slice().reverse();
-    quicwsk = data[`${windowsOs}-${env}-wsk-schannel`][`${testType}-quic`]['data'].slice().reverse();
+    tcpiocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-latency-tcp`, `${testType}-tcp`);
+    quiciocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-latency-quic`, `${testType}-quic`);
+    tcpepoll = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `scenario-latency-tcp`, `${testType}-tcp`);
+    quicepoll = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `scenario-latency-quic`, `${testType}-quic`);
+    quicxdp = accessData(`${windowsOs}-${env}-xdp-schannel`, data, `scenario-latency-quic`, `${testType}-quic`);
+    quicwsk = accessData(`${windowsOs}-${env}-wsk-schannel`, data, `scenario-latency-quic`, `${testType}-quic`);
 
     mode1View =
       <GraphView title={`Detailed Latency`}
@@ -145,9 +169,20 @@ export default function LatencyPage() {
             fill: 'solid',
             data: quicwsk.map((x) => x[5 + percentile]),
           },
-        ]} />
+        ]}
+
+        options = {{
+          xaxis: {
+            tickplacement: 'on',
+          },
+          markers: {
+            size: 5,
+          }
+        }}
+
+        />
   }
-  
+
   const handleChange = (event) => {
     setEnv(event.target.value);
   };
@@ -235,7 +270,7 @@ export default function LatencyPage() {
                 onChange={handleChangeTestType}
                 defaultValue={0}
               >
-                <MenuItem value={'rps-up-512-down-4000'}>512 Kb upload, 4000 Kb download</MenuItem>
+                <MenuItem value={'rps-up-512-down-4000'}>Latency Scenario</MenuItem>
               </Select>
             </FormControl>
           </Box>
@@ -271,7 +306,7 @@ export default function LatencyPage() {
               onChange={handleChangeCommit}
               defaultValue={0}
             >
-              {rep.slice().reverse().map((val, idx) => <MenuItem value={idx}>{rep.length - idx - 1} ----- {val[0]}</MenuItem>)}
+              {rep.slice().reverse().map((val, idx) => <MenuItem value={idx}>Commit {idx}: {val[0]}</MenuItem>)}
             </Select>
           </FormControl>
         </Box>

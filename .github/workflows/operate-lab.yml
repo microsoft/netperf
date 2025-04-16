@@ -1,0 +1,148 @@
+# TODO: Always, as a final step before shutting down, run a step that prints out the workflow URL of the child VM perf test workflow for later consumption.
+
+
+name: Operate Lab
+
+on:
+  workflow_call:
+    inputs:
+      lab-matrix:
+        description: 'The serialized matrix of values to use for the composite action.'
+        required: true
+        type: string
+    secrets:
+      NETPERF_SYNCER_SECRET:
+        required: true
+
+permissions: write-all
+
+jobs:
+  operate-lab-parent: # Consume lab matrix, advertise to the compatible parents, run parent jobs.
+    strategy:
+      matrix:
+        include: ${{fromJson(inputs.lab-matrix)}}
+      fail-fast: false
+    name: Operate-Lab For ${{ matrix.os }}-${{ matrix.io }}-${{ matrix.env_str }}
+    runs-on:
+      - self-hosted
+      - Windows
+      - x64
+      - lab-stateless
+      - os-${{ matrix.os }}
+    steps:
+      - name: Dispatch the child workflow
+        run: |
+          # Use the Github API to trigger child workflow
+          $headers = @{
+            "Authorization" = "Bearer ${{ secrets.GITHUB_TOKEN }}"
+            "Accept" = "application/vnd.github.v3+json"
+          }
+
+          $parent_id = whoami
+          $os = "${{ matrix.os }}"
+          $unique_env_str = "${{ github.run_id }}_${{ github.run_attempt }}_${{ matrix.env_str }}"
+
+          $url = "https://api.github.com/repos/microsoft/netperf/dispatches"
+          $body = @{
+            event_type = "reset-child-machine"
+            client_payload = @{
+              parent_id = "$parent_id"
+              os = "$os"
+              unique_env_str = "$unique_env_str"
+            }
+          } | ConvertTo-Json
+
+          try {
+            $Response = Invoke-WebRequest -Uri $url -Method POST -Headers $headers -Body $body
+            if ($Response.StatusCode -ne 204) {
+              throw "Failed to dispatch child workflow: $Response"
+            }
+          } catch {
+            Write-Host "Failed to dispatch child workflow: $_"
+            exit 1
+          }
+
+      - name: RESET STATE (parent)
+        run: |
+          # TODO: Eventually, for WS 2025, we want to instead CRUD the VMs, instead of simply reseting their checkpoints here.
+          $vmName = "netperf-${{ matrix.os }}-server"
+          $checkPointName = "LATEST"
+          Restore-VMSnapshot -VMName $vmName -Name $checkPointName -Confirm:$false
+      - name: Start VM, wait for online status, alert observer.
+        run: |
+          $vmName = "netperf-${{ matrix.os }}-server"
+          Start-VM -Name $vmName
+          while (-not (Get-VMNetworkAdapter -VMName $vmName).IPAddresses) {
+            Write-Host "Waiting for VM to be online..."
+            Start-Sleep -Seconds 5
+          }
+          Start-Sleep 10
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+          $key = "${{ github.run_id }}_${{ github.run_attempt }}_${{ matrix.env_str }}_parent_reset_done"
+          $value = whoami
+          $api = "https://netperfapi.azurewebsites.net/setkeyvalue?key=$key&value=$value"
+          try {
+            Invoke-WebRequest -Uri $api -Headers $headers -Method Post
+          } catch {
+            Write-Host "Failed to alert observer of parent reset completion: $_"
+            exit 1
+          }
+      - name: Grab workflow ID of callee from the truth table
+        run: |
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+          $key = "${{ github.run_id }}_${{ github.run_attempt }}_truth_table"
+          $done = $false
+          $attempts = 0
+          while (!$done) {
+            $attempts++
+            try {
+              $api = "https://netperfapi.azurewebsites.net/getkeyvalue?key=$key"
+              $response = Invoke-WebRequest -Uri $api -Headers $headers -Method Get
+              if ($response.StatusCode -ne 200) {
+                throw "Failed to grab truth table: $response"
+              }
+              $truth_table = ConvertFrom-Json $response.Content
+              foreach ($row in $truth_table) {
+                if ($row.job.env_str.Contains("${{ matrix.env_str }}")) {
+                  Write-Host "Found matching row in truth table."
+                  if ($row.dispatched_workflow_id) {
+                    $callee_workflow_id = $row.dispatched_workflow_id
+                    echo "CalleeWorkflowId=$callee_workflow_id" >> $env:GITHUB_ENV
+                    $done = $true
+                  }
+                }
+              }
+            } catch {
+              Write-Host "Failed to grab callee workflow ID from truth table: $_"
+            }
+            if (!$done -and $attempts -gt 36) {
+              Write-Host "Failed to grab callee workflow ID from truth table after 12 minutes."
+              exit 1
+            }
+            Start-Sleep -Seconds 20
+          }
+
+      - name: Wait-Callee_${{ env.CalleeWorkflowId }}
+        run: |
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+          $url = "https://api.github.com/repos/microsoft/netperf/actions/runs/${{ env.CalleeWorkflowId }}"
+          while ($true) {
+            $response = Invoke-WebRequest -Uri $url -Headers $headers -Method Get
+            $run_status = ConvertFrom-Json $response.Content
+            if ($run_status.status -eq "completed") {
+              if ($run_status.conclusion -eq "success") {
+                Write-Host "Callee workflow completed successfully."
+                break
+              } else {
+                Write-Host "Callee workflow failed."
+                exit 1
+              }
+            }
+            Start-Sleep -Seconds 30
+          }

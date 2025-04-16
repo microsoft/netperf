@@ -16,7 +16,7 @@ param (
 
     [Parameter(Mandatory = $false)]
     [ValidateSet("Experimental_Boost4", "Standard_DS2_v2", "Standard_F8s_v2")]
-    [string]$VMSize = "Experimental_Boost4",
+    [string]$VMSize = "Standard_F8s_v2", # TODO; once the Azure security team is done cluster migration, change this back.
 
     [Parameter(Mandatory = $false)]
     [string]$ResourceGroupName = "netperf-ex",
@@ -33,6 +33,14 @@ param (
 
 Set-StrictMode -Version "Latest"
 $PSDefaultParameterValues["*:ErrorAction"] = "Stop"
+
+$FoundAzureMatrix = Test-Path .\.github\workflows\azure-matrix.json
+$FoundFullMatrix = Test-Path .\.github\workflows\processed-matrix.json
+
+if (-not $FoundAzureMatrix -or -not $FoundFullMatrix) {
+    Write-Host "Azure matrix or full matrix files not found."
+    exit 0
+}
 
 $AzureMatrixJson = Get-Content -Path .\.github\workflows\azure-matrix.json | ConvertFrom-Json
 $FullMatrixJson = Get-Content -Path .\.github\workflows\processed-matrix.json | ConvertFrom-Json
@@ -97,8 +105,7 @@ for ($i = 0; $i -lt $jobs.Count; $i += 2) {
 Write-Host "`n[$(Get-Date)] Jobs complete!`n"
 $jobs | Remove-Job -Force  # Clean up all the jobs
 if ($RequiredPlatforms.Count -ne $PlatformsCovered.Count) {
-    $MissingPlatforms = $RequiredPlatforms - $PlatformsCovered
-    Write-Error "Failed to create VMs for the following platforms: $MissingPlatforms"
+    Write-Error "Failed to create enough VMs."
     exit 1
 }
 
@@ -246,8 +253,7 @@ foreach ($index in $VMsSuccessfullyCreated) {
     }
 }
 if ($PlatformsSuccessfullyOnboardedToGitHub.Count -ne $RequiredPlatforms.Count) {
-    $MissingPlatforms = $RequiredPlatforms - $PlatformsSuccessfullyOnboardedToGitHub
-    Write-Error "Failed to onboard successfully created VMs to GitHub for the following platforms: $MissingPlatforms"
+    Write-Error "Failed to onboard successfully created VMs to GitHub for the required platforms"
     exit 1
 }
 

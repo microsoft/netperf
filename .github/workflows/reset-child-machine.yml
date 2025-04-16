@@ -1,0 +1,59 @@
+name: reset-child-machine
+
+on:
+  repository_dispatch:
+    types: [reset-child-machine]
+
+jobs:
+  print-params:
+    name: Print Parameters
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print input params
+        run: |
+          echo "parent_id: ${{ github.event.client_payload.parent_id }}" # child id is parent id - 1.
+          echo "os: ${{ github.event.client_payload.os }}"
+          echo "unique_env_str: ${{ github.event.client_payload.unique_env_str }}"
+
+  do-reset:
+    name: Reset child Machine
+    runs-on:
+      - self-hosted
+      - parent=${{ github.event.client_payload.parent_id }}
+    steps:
+      - name: RESET STATE (child)
+        run: |
+          # TODO: Eventually, for WS 2025, we want to instead CRUD the VMs, instead of simply reseting their checkpoints here.
+          $vmName = "netperf-${{ github.event.client_payload.os }}-client"
+          $checkPointName = "LATEST"
+          Restore-VMSnapshot -VMName $vmName -Name $checkPointName -Confirm:$false
+      - name: Start VM, wait for online status, alert observer.
+        run: |
+          $vmName = "netperf-${{ github.event.client_payload.os }}-client"
+          Start-VM -Name $vmName
+          while (-not (Get-VMNetworkAdapter -VMName $vmName).IPAddresses) {
+            Write-Host "Waiting for VM to be online..."
+            Start-Sleep -Seconds 5
+          }
+          Start-Sleep 10
+          $username = "${{ secrets.VM_DUMMY_USERNAME }}"
+          $password = "${{ secrets.VM_DUMMY_PASSWORD }}"
+          $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
+          $credential = New-Object System.Management.Automation.PSCredential ($username, $securePassword)
+          Invoke-Command -VMName $vmName -Credential $credential -ScriptBlock {
+            Start-Service -Name "actions.runner.*"
+            Get-Service -Name "actions.runner.*"
+          }
+          $headers = @{
+            "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+          }
+          $key = "${{ github.event.client_payload.unique_env_str }}_child_reset_done"
+          $value = whoami
+          $api = "https://netperfapi.azurewebsites.net/setkeyvalue?key=$key&value=$value"
+
+          try {
+            Invoke-WebRequest -Uri $api -Headers $headers -Method Post
+          } catch {
+            Write-Host "Failed to alert observer child reset done: $_"
+            exit 1
+          }

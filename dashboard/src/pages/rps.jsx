@@ -25,7 +25,30 @@ document.addEventListener('mouseup', function() {
     isMouseDown = false;
 });
 
-// ----------------------------------------------------------------------
+function accessData(envStr, data, newKey, oldKey) {
+  const HISTORY_SIZE = 20;
+  if (!(envStr in data)) {
+    alert(`Could not find ${envStr} in data`);
+    console.error(`Could not find ${envStr} in data`);
+    return [];
+  }
+  const envData = data[envStr];
+  let outputData = [];
+  if (oldKey in envData) {
+    outputData = envData[oldKey]['data'].slice().reverse();
+  } else {
+    console.log("OLD KEY DOES NOT EXIST", oldKey);
+  }
+  if (newKey in envData) {
+    outputData = outputData.concat(envData[newKey]['data'].slice().reverse());
+  } else {
+    console.log("NEW KEY DOES NOT EXIST", newKey);
+  }
+  while (outputData.length > HISTORY_SIZE) {
+    outputData.shift();
+  }
+  return outputData;
+}
 
 export default function RpsPage() {
 
@@ -43,16 +66,24 @@ export default function RpsPage() {
 
   if (data) {
     // TODO: Should we find the max of windows / linux run and use that as our baseline?
-    let rep = data[`${windowsOs}-${env}-iocp-schannel`][`${testType}-tcp`]['data'].slice().reverse();
-    let linuxRep = data[`${linuxOs}-${env}-epoll-openssl`][`${testType}-tcp`]['data'].slice().reverse();
+    let rep = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-rps-tcp`, `${testType}-tcp`);
+    let linuxRep = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `scenario-rps-tcp`, `${testType}-tcp`);
     let indices = Array.from({length: Math.max(rep.length, linuxRep.length)}, (_, i) => i);
+    indices.reverse();
 
-    const tcpiocp = data[`${windowsOs}-${env}-iocp-schannel`][`${testType}-tcp`]['data'].slice().reverse();
-    const quiciocp = data[`${windowsOs}-${env}-iocp-schannel`][`${testType}-quic`]['data'].slice().reverse();
-    const tcpepoll = data[`${linuxOs}-${env}-epoll-openssl`][`${testType}-tcp`]['data'].slice().reverse();
-    const quicepoll = data[`${linuxOs}-${env}-epoll-openssl`][`${testType}-quic`]['data'].slice().reverse();
-    const quicxdp = data[`${windowsOs}-${env}-xdp-schannel`][`${testType}-quic`]['data'].slice().reverse();
-    const quicwsk = data[`${windowsOs}-${env}-wsk-schannel`][`${testType}-quic`]['data'].slice().reverse();
+    const tcpiocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-rps-tcp`, `${testType}-tcp`);
+    const quiciocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-rps-quic`, `${testType}-quic`);
+    const tcpepoll = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `scenario-rps-tcp`, `${testType}-tcp`);
+    const quicepoll = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `scenario-rps-quic`, `${testType}-quic`);
+    const quicxdp = accessData(`${windowsOs}-${env}-xdp-schannel`, data, `scenario-rps-quic`, `${testType}-quic`);
+    const quicwsk = accessData(`${windowsOs}-${env}-wsk-schannel`, data, `scenario-rps-quic`, `${testType}-quic`);
+
+    const TCPIOCP = tcpiocp.map(x => x[0]);
+    const QUICIOCP = quiciocp.map(x => x[0]);
+    const TCPEPOLL = tcpepoll.map(x => x[0]);
+    const QUICEPOLL = quicepoll.map(x => x[0]);
+    const QUICXDP = quicxdp.map(x => x[0]);
+    const QUICWSK = quicwsk.map(x => x[0]);
 
     rpsCurve =
       <GraphView title={`Requests Per Second Throughput`}
@@ -82,39 +113,46 @@ export default function RpsPage() {
         name: 'TCP + iocp',
         type: 'line',
         fill: 'solid',
-        data: tcpiocp.map((x) => x[0]),
+        data: TCPIOCP,
       },
       {
         name: 'QUIC + iocp',
         type: 'line',
         fill: 'solid',
-        data: quiciocp,
+        data: QUICIOCP,
       },
       {
         name: 'TCP + epoll',
         type: 'line',
         fill: 'solid',
-        data: tcpepoll,
+        data: TCPEPOLL,
       },
       {
         name: 'QUIC + epoll',
         type: 'line',
         fill: 'solid',
-        data: quicepoll,
+        data: QUICEPOLL,
       },
       {
         name: 'QUIC + winXDP',
         type: 'line',
         fill: 'solid',
-        data: quicxdp,
+        data: QUICXDP,
       },
       {
         name: 'QUIC + wsk',
         type: 'line',
         fill: 'solid',
-        data: quicwsk,
+        data: QUICWSK,
       },
-    ]} />
+    ]}
+
+    options={{
+      markers: {
+        size: 5
+      }
+    }}
+    />
   }
 
   const handleChange = (event) => {
@@ -204,7 +242,7 @@ export default function RpsPage() {
               onChange={handleChangeTestType}
               defaultValue={0}
             >
-              <MenuItem value={'rps-up-512-down-4000'}>512 kb upload, 4000 kb download</MenuItem>
+              <MenuItem value={'rps-up-512-down-4000'}>RPS Scenario</MenuItem>
             </Select>
           </FormControl>
         </Box>

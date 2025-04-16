@@ -19,7 +19,7 @@ import useFetchData from 'src/hooks/use-fetch-data';
 import AppWebsiteVisits from '../app-website-visits';
 import AppWidgetSummary from '../app-widget-summary';
 
-
+import getLatestSkuInformation from '../../../utils/sku';
 
 
 function throughputPerformance(download, upload, dweight, uweight) {
@@ -35,10 +35,11 @@ function latencyPerformance(latencies) {
   return (1 / sum) * 100000;
 }
 
+// getLatestSkuInformation("", "", {})
+
 // ----------------------------------------------------------------------
 
 export default function AppView() {
-
   const [env, setEnv] = useState('azure');
 
   const [windowsOs, setWindowsOs] = useState('windows-2022-x64')
@@ -48,6 +49,8 @@ export default function AppView() {
   const windows = useFetchData(
     `https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-${env}-${windowsOs}-schannel-iocp.json/json-test-results-${env}-${windowsOs}-schannel-iocp.json`
   );
+
+  console.log(windows);
   const linux = useFetchData(
     `https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-${env}-${linuxOs}-openssl-epoll.json/json-test-results-${env}-${linuxOs}-openssl-epoll.json`
   );
@@ -114,8 +117,32 @@ export default function AppView() {
   let windowsType = 'Windows Server 2022';
   let linuxType = 'Linux Ubuntu 20.04 LTS';
 
-  function index(object, key, defaultValue) {
-    return object[key] || defaultValue;
+  function index(object, keys, defaultValue) {
+    for (const key of keys) {
+      if (object && key in object) {
+        return object[key];
+      }
+    }
+    return defaultValue;
+  }
+
+  function fetchRPS(data, stub) {
+    // data shape: [ ...8 dummy latency points... RPS for run 1 ... RPS for run 2 ... RPS for run 3]
+    if (!data) {
+      return stub;
+    }
+    const offset = 9;
+    let tot = 0;
+    let n = 0;
+    for (let i = offset; i <= data.length; i += offset) {
+      tot += Number(data[i - 1]);
+      n += 1;
+    }
+    if (n === 0) {
+      return stub;
+    }
+    console.log("RPS", tot, n)
+    return Math.floor(tot / n)
   }
 
   if (windows.data && linux.data && windowsXdp.data && windowsKernel.data) {
@@ -123,26 +150,28 @@ export default function AppView() {
     windowsType = `${windowsOs} ${windows.data.os_version}`
     linuxType = `${linuxOs} ${linux.data.os_version}`
     // Throughput
-    windowsDownloadThroughputQuic = Math.max(...index(windows.data, "tput-down-quic", [-1]));
-    windowsDownloadThroughputTcp = Math.max(...index(windows.data, "tput-down-tcp", [-1]));
-    windowsUploadThroughputQuic = Math.max(...index(windows.data, "tput-up-quic", [-1]));
-    windowsUploadThroughputTcp = Math.max(...index(windows.data, "tput-up-tcp", [-1]));
-    linuxDownloadThroughputQuic = Math.max(...index(linux.data, "tput-down-quic", [-1]));
-    linuxDownloadThroughputTcp = Math.max(...index(linux.data, "tput-down-tcp", [-1]));
-    linuxUploadThroughputQuic = Math.max(...index(linux.data, "tput-up-quic", [-1]));
-    linuxUploadThroughputTcp = Math.max(...index(linux.data, "tput-up-tcp", [-1]));
-    windowsKernelDownloadThroughputQuic = Math.max(...index(windowsKernel.data, "tput-down-quic", [-1]));
-    windowsKernelUploadThroughputQuic = Math.max(...index(windowsKernel.data, "tput-up-quic", [-1]));
-    windowsXdpDownloadThroughputQuic = Math.max(...index(windowsXdp.data, "tput-down-quic", [-1]));
-    windowsXdpUploadThroughputQuic = Math.max(...index(windowsXdp.data, "tput-up-quic", [-1]));
+    windowsDownloadThroughputQuic = Math.max(...index(windows.data, ["download-quic", "tput-down-quic"], [-1]));
+    windowsDownloadThroughputTcp = Math.max(...index(windows.data, ["download-tcp", "tput-down-tcp"], [-1]));
+    windowsUploadThroughputQuic = Math.max(...index(windows.data, ["upload-quic", "tput-up-quic"], [-1]));
+    windowsUploadThroughputTcp = Math.max(...index(windows.data, ["upload-tcp", "tput-up-tcp"], [-1]));
+    linuxDownloadThroughputQuic = Math.max(...index(linux.data, ["download-quic", "tput-down-quic"], [-1]));
+    linuxDownloadThroughputTcp = Math.max(...index(linux.data, ["download-tcp", "tput-down-tcp"], [-1]));
+    linuxUploadThroughputQuic = Math.max(...index(linux.data, ["upload-quic", "tput-up-quic"], [-1]));
+    linuxUploadThroughputTcp = Math.max(...index(linux.data, ["upload-tcp", "tput-up-tcp"], [-1]));
+    windowsKernelDownloadThroughputQuic = Math.max(...index(windowsKernel.data, ["download-quic", "tput-down-quic"], [-1]));
+    windowsKernelUploadThroughputQuic = Math.max(...index(windowsKernel.data, ["upload-quic", "tput-up-quic"], [-1]));
+    windowsXdpDownloadThroughputQuic = Math.max(...index(windowsXdp.data, ["download-quic", "tput-down-quic"], [-1]));
+    windowsXdpUploadThroughputQuic = Math.max(...index(windowsXdp.data, ["upload-quic", "tput-up-quic"], [-1]));
+
+    console.log("WINDOWS XDP TPUT", windowsXdpUploadThroughputQuic)
 
     // Latency
-    windowsLatencyQuic = index(windows.data, "rps-up-512-down-4000-quic", windowsLatencyQuic);
-    windowsLatencyTcp = index(windows.data, "rps-up-512-down-4000-tcp", windowsLatencyTcp);
-    linuxLatencyQuic = index(linux.data, "rps-up-512-down-4000-quic", linuxLatencyQuic);
-    linuxLatencyTcp = index(linux.data, "rps-up-512-down-4000-tcp", linuxLatencyTcp);
-    windowsXdpLatencyQuic = index(windowsXdp.data, "rps-up-512-down-4000-quic", windowsXdpLatencyQuic)
-    windowsKernelLatencyQuic = index(windowsKernel.data, "rps-up-512-down-4000-quic", windowsKernelLatencyQuic)
+    windowsLatencyQuic = index(windows.data, ["latency-quic", "rps-up-512-down-4000-quic"], windowsLatencyQuic);
+    windowsLatencyTcp = index(windows.data, ["latency-tcp", "rps-up-512-down-4000-tcp"], windowsLatencyTcp);
+    linuxLatencyQuic = index(linux.data, ["latency-quic", "rps-up-512-down-4000-quic"], linuxLatencyQuic);
+    linuxLatencyTcp = index(linux.data, ["latency-tcp", "rps-up-512-down-4000-tcp"], linuxLatencyTcp);
+    windowsXdpLatencyQuic = index(windowsXdp.data, ["latency-quic", "rps-up-512-down-4000-quic"], windowsXdpLatencyQuic);
+    windowsKernelLatencyQuic = index(windowsKernel.data, ["latency-quic", "rps-up-512-down-4000-quic"], windowsKernelLatencyQuic);
 
 
     // Compute Scores
@@ -162,19 +191,19 @@ export default function AppView() {
     linuxPerfScoreLatency = latencyPerformance(linuxLatencyQuic);
 
     // HPS
-    windowsHpsQuic = Math.max(...index(windows.data, "hps-conns-100-quic", [-1]));
-    windowsHpsTcp = Math.max(...index(windows.data, "hps-conns-100-tcp", [-1]));
-    linuxHpsQuic = Math.max(...index(linux.data, "hps-conns-100-quic", [-1]));
-    linuxHpsTcp = Math.max(...index(linux.data, "hps-conns-100-tcp", [-1]));
-    windowsXdpHpsQuic = Math.max(...index(windowsXdp.data, "hps-conns-100-quic", [-1]));
+    windowsHpsQuic = Math.max(...index(windows.data, ["hps-quic", "hps-conns-100-quic"], [-1]));
+    windowsHpsTcp = Math.max(...index(windows.data, ["hps-tcp", "hps-conns-100-tcp"], [-1]));
+    linuxHpsQuic = Math.max(...index(linux.data, ["hps-quic", "hps-conns-100-quic"], [-1]));
+    linuxHpsTcp = Math.max(...index(linux.data, ["hps-tcp", "hps-conns-100-tcp"], [-1]));
+    windowsXdpHpsQuic = Math.max(...index(windowsXdp.data, ["hps-quic", "hps-conns-100-quic"], [-1]));
 
     // RPS
-    windowsRpsQuic = windowsLatencyQuic[windowsLatencyQuic.length - 1]; // Average across all runs or not?
-    windowsRpsTcp = windowsLatencyTcp[windowsLatencyTcp.length - 1];
-    linuxRpsQuic = linuxLatencyQuic[linuxLatencyQuic.length - 1];
-    linuxRpsTcp = linuxLatencyTcp[linuxLatencyTcp.length - 1];
-    windowsXdpRpsQuic = windowsXdpLatencyQuic[windowsXdpLatencyQuic.length - 1];
-    windowsKernelRpsQuic = windowsKernelLatencyQuic[windowsKernelLatencyQuic.length - 1];
+    windowsRpsQuic = fetchRPS(index(windows.data, ["rps-quic"], null), windowsLatencyQuic[windowsLatencyQuic.length - 1]);
+    windowsRpsTcp = fetchRPS(index(windows.data, ["rps-tcp"], null), windowsLatencyTcp[windowsLatencyTcp.length - 1]);
+    linuxRpsQuic = fetchRPS(index(linux.data, ["rps-quic"], null), linuxLatencyQuic[linuxLatencyQuic.length - 1]);
+    linuxRpsTcp = fetchRPS(index(linux.data, ["rps-tcp"], null), linuxLatencyTcp[linuxLatencyTcp.length - 1]);
+    windowsXdpRpsQuic = fetchRPS(index(windowsXdp.data, ["rps-quic"], null), windowsXdpLatencyQuic[windowsXdpLatencyQuic.length - 1]);
+    windowsKernelRpsQuic = fetchRPS(index(windowsKernel.data, ["rps-quic"], null), windowsKernelLatencyQuic[windowsKernelLatencyQuic.length - 1]);
 
     // Compute scores
     windowsPerfScoreRps = (windowsRpsQuic + windowsRpsTcp) / 1000000;
@@ -195,67 +224,85 @@ export default function AppView() {
     setLinuxOs(event.target.value);
   }
 
+  const azureWS2025 = (
+    windowsOs.includes("2025") ? `WinPrerelease-Datacenter, build: ${windowsType.split(" ")[1]}` : windowsType
+  )
+
+  const envStr = `${env === "lab" && windowsOs.includes("2025") ? `ge_current_directiof_stack, build: ${windowsType.split(" ")[1]}` : azureWS2025} | ${linuxType}`
+
+  let margin = '0px'
+  let dir = 'row'
+
+  // Check displayport size
+  if (window.innerWidth < 600) {
+    margin = '10px'
+    dir = 'column'
+  }
+
   return (
     <Container maxWidth="xl">
+      <div style={{display: 'flex'}}>
       <Typography variant="h3" sx={{ mb: 5 }}>
         Network Performance Overview
       </Typography>
-      <Typography variant="h5" sx={{ mb: 5 }}>
-        Data based on commit: <a href={`https://github.com/microsoft/msquic/commit/${commitHash}`}>{commitHash}</a>
-      </Typography>
-      <div style={{display: 'flex'}}>
-      <Box sx={{ }}>
-        <FormControl>
-          <InputLabel id="demo-simple-select-label">Context</InputLabel>
-          <Select
-            labelId="demo-simple-select-label"
-            id="demo-simple-select"
-            value={env}
-            label="Context"
-            onChange={handleChange}
-            defaultValue={0}
-          >
-            <MenuItem value='azure'>azure</MenuItem>
-            { windowsOs !== 'windows-2025-x64' && <MenuItem value='lab'>lab</MenuItem> }
-          </Select>
-        </FormControl>
-      </Box>
-      {/* <br /> */}
-      <Box sx={{ minWidth: 120, marginLeft: '10px' }}>
-        <FormControl>
-          <InputLabel id="demo-simple-select-label">Windows Environment</InputLabel>
-          <Select
-            labelId="demo-simple-select-label"
-            id="demo-simple-select"
-            value={windowsOs}
-            label="Windows Environment"
-            onChange={handleChangeWindowsOs}
-            defaultValue={0}
-          >
-            <MenuItem value='windows-2022-x64'>windows-2022-x64</MenuItem>
-            { env === 'azure' && <MenuItem value='windows-2025-x64'>windows-2025-x64</MenuItem> }
-          </Select>
-        </FormControl>
-      </Box>
-      {/* <br /> */}
-      <Box sx={{ minWidth: 120, marginLeft: '10px' }}>
-        <FormControl>
-          <InputLabel id="demo-simple-select-label">Linux Environment</InputLabel>
-          <Select
-            labelId="demo-simple-select-label"
-            id="demo-simple-select"
-            value={linuxOs}
-            label="Linux Environment"
-            onChange={handleChangeLinuxOs}
-            defaultValue={0}
-          >
-            <MenuItem value='ubuntu-20.04-x64'>ubuntu-20.04-x64</MenuItem>
-          </Select>
-        </FormControl>
-      </Box>
       </div>
-      <br />
-
+      <div style={{ display: 'flex', flexDirection: dir, alignItems: 'center' }}>
+        <Box sx={{ marginBottom: margin}}>
+          <FormControl>
+            <InputLabel id="demo-simple-select-label">Context</InputLabel>
+            <Select
+              labelId="demo-simple-select-label"
+              id="demo-simple-select"
+              value={env}
+              label="Context"
+              onChange={handleChange}
+              defaultValue={0}
+            >
+              <MenuItem value='azure'>azure</MenuItem>
+              <MenuItem value='lab'>lab</MenuItem>
+            </Select>
+          </FormControl>
+        </Box>
+        {/* <br /> */}
+        <Box sx={{ minWidth: 120, marginLeft: '10px' }}>
+          <FormControl>
+            <InputLabel id="demo-simple-select-label">Windows Environment</InputLabel>
+            <Select
+              labelId="demo-simple-select-label"
+              id="demo-simple-select"
+              value={windowsOs}
+              label="Windows Environment"
+              onChange={handleChangeWindowsOs}
+              defaultValue={0}
+            >
+              <MenuItem value='windows-2022-x64'>windows-2022-x64</MenuItem>
+              <MenuItem value='windows-2025-x64'>windows-2025-x64</MenuItem>
+            </Select>
+          </FormControl>
+        </Box>
+        {/* <br /> */}
+        <Box sx={{ minWidth: 120, marginLeft: '10px', marginTop: margin }}>
+          <FormControl>
+            <InputLabel id="demo-simple-select-label">Linux Environment</InputLabel>
+            <Select
+              labelId="demo-simple-select-label"
+              id="demo-simple-select"
+              value={linuxOs}
+              label="Linux Environment"
+              onChange={handleChangeLinuxOs}
+              defaultValue={0}
+            >
+              <MenuItem value='ubuntu-20.04-x64'>ubuntu-20.04-x64</MenuItem>
+            </Select>
+          </FormControl>
+        </Box>
+        {/* <Typography variant="h5" sx={{ mb: 5 }}>
+          Data based on commit: <a href={`https://github.com/microsoft/msquic/commit/${commitHash}`}>{commitHash}</a>
+        </Typography> */}
+        <p style={{marginLeft: '10px'}}>Data based on <a href={`https://github.com/microsoft/msquic/commit/${commitHash}`}>commit</a></p>
+      </div>
+      {/* <br /> */}
+      <p><b>Windows hardware SKU:</b> {getLatestSkuInformation(env, windowsOs, windows)} | <b>Linux hardware SKU:</b> {getLatestSkuInformation(env, linuxOs, linux)}</p>
       <Grid container spacing={3}>
         <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
@@ -391,7 +438,7 @@ export default function AppView() {
         <Grid xs={12} md={6} lg={6}>
           <AppWebsiteVisits
             title="Throughput Comparison (kbps), higher the better."
-            subheader={`Tested using ${windowsType}, ${linuxType}`}
+            subheader={` ${envStr}`}
             chart={{
               labels: ['', 'Download', 'Upload', ''],
               series: [
@@ -482,7 +529,7 @@ export default function AppView() {
         <Grid xs={12} md={6} lg={6}>
           <AppWebsiteVisits
             title="Latency Comparison (µs), lower the better."
-            subheader={`Tested using ${windowsType}, ${linuxType}`}
+            subheader={` ${envStr}`}
             chart={{
               // New labels based on percentiles
               labels: [
@@ -675,7 +722,7 @@ export default function AppView() {
         <Grid xs={12} md={6} lg={6}>
           <AppWebsiteVisits
             title="RPS Comparison (requests per second), higher the better."
-            subheader={`Tested using ${windowsType}, ${linuxType}`}
+            subheader={` ${envStr}`}
             chart={{
               labels: ['RPS'],
               series: [
@@ -748,7 +795,7 @@ export default function AppView() {
         <Grid xs={12} md={6} lg={6}>
           <AppWebsiteVisits
             title="HPS Comparison (handshakes per second), higher the better."
-            subheader={`Tested using ${windowsType}, ${linuxType}`}
+            subheader={`${envStr}`}
             chart={{
               labels: ['HPS'],
               series: [

@@ -20,6 +20,11 @@ on:
         required: false
         default: false
         type: boolean
+      tcp_ip_tracing:
+        description: 'Capture TCP/IP tracing'
+        required: false
+        default: false
+        type: boolean
 
   pull_request:
     branches:
@@ -53,7 +58,7 @@ jobs:
         echo "ref: ${{ github.event.client_payload.ref }}"
         echo "pr: ${{ github.event.client_payload.pr }}"
 
-  build:
+  build_ebpf:
     name: Build ebpf-for-windows
     uses: microsoft/ebpf-for-windows/.github/workflows/reusable-build.yml@main
     with:
@@ -66,6 +71,20 @@ jobs:
       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
       perform_skip_check: false
 
+  build_xdp:
+    name: Build XDP
+    strategy:
+      matrix:
+        os: ['2022']
+        arch: [x64]
+      fail-fast: false
+    uses: microsoft/xdp-for-windows/.github/workflows/build.yml@main
+    with:
+      ref: 'main'
+      os: ${{ matrix.os }}
+      platform: ${{ matrix.arch }}
+      artifact_path: "bin_Release_x64"
+
   build_cts_traffic:
     name: Build cts-traffic test tool
     uses: microsoft/ctsTraffic/.github/workflows/reusable-build.yml@master
@@ -77,12 +96,12 @@ jobs:
 
   test:
     name: Test Windows eBPF Performance
-    needs: [build, build_cts_traffic]
+    needs: [build_ebpf, build_xdp, build_cts_traffic]
     strategy:
       fail-fast: false
       matrix:
         vec: [
-          { env: "azure", os: "2022", arch: "x64" },
+          #{ env: "azure", os: "2022", arch: "x64" }, # Azure VMs are being deprecated by netperf team.
           #{ env: "azure", os: "2025", arch: "x64" }, # F4 based VMS are being deprecated by netperf team.
           { env: "lab",   os: "2022", arch: "x64" },
         ]
@@ -91,10 +110,12 @@ jobs:
     - ${{ matrix.vec.env }}
     - os-windows-${{ matrix.vec.os }}
     - ${{ matrix.vec.arch }}
+    - ebpf
 
     steps:
     - name: Setup workspace
       run: |
+        Get-ChildItem  | % { Remove-Item -Recurse $_ }
         $process = Start-Process -FilePath "msiexec" -ArgumentList "/x {022C44B5-8969-4B75-8DB0-73F98B1BD7DC} /quiet /qn /norestart /log uninstall.log" -Wait -NoNewWindow
         $process = Start-Process -FilePath "msiexec" -ArgumentList "/x {9363C0E3-4DE9-4067-9F5E-6A1A06034B59} /quiet /qn /norestart /log uninstall.log" -Wait -NoNewWindow
         $url = "https://raw.githubusercontent.com/microsoft/ebpf-for-windows/main/scripts/Cleanup-Installer.ps1"
@@ -108,6 +129,12 @@ jobs:
         New-item -ItemType Directory -Path ${{ github.workspace }}\cts-traffic
         New-item -ItemType Directory -Path ${{ github.workspace }}\ETL
 
+    - name: Log System information
+      run: |
+        Get-WmiObject -Class Win32_Processor | Select-Object -Property Name,NumberOfCores,NumberOfLogicalProcessors
+        Get-WmiObject -Class Win32_ComputerSystem | Select-Object -Property Manufacturer,Model,TotalPhysicalMemory
+        Get-WmiObject -Class Win32_OperatingSystem | Select-Object -Property Caption,Version,OSArchitecture
+
     # Install the latest anti-malware signatures for Windows Defender to prevent false positives.
     # Windows Defender incorrectly flags some of the test binaries as malware.
     - name: Download latest anti-malware signatures for Windows Defender
@@ -116,8 +143,24 @@ jobs:
         Start-MpScan -ScanType QuickScan
         Add-MpPreference -ExclusionPath ${{ github.workspace }}
 
+    - name: Install latest MSVC redistirbutables
+      run: |
+        Invoke-WebRequest -Uri "https://aka.ms/vs/16/release/vc_redist.x64.exe" -OutFile "vc_redist.x64.exe"
+        Start-Process -FilePath "vc_redist.x64.exe" -ArgumentList "/install /quiet /norestart" -Wait -NoNewWindow
+
+    - name: Download GH CLI if not installed
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        if (-not (Test-Path -Path "C:\Program Files\GitHub CLI\gh.exe")) {
+        $url = "https://github.com/cli/cli/releases/download/v2.48.0/gh_2.48.0_windows_amd64.msi"
+        Invoke-WebRequest -Uri $url -OutFile "gh.msi"
+        Start-Process -FilePath "msiexec" -ArgumentList "/i gh.msi /quiet /qn /norestart /log install.log" -Wait -NoNewWindow
+        }
+        echo "C:\Program Files\GitHub CLI" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
     - name: Download ebpf-for-windows
-      uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+      uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
       with:
         name: "ebpf-for-windows - MSI installer (none_NativeOnlyRelease)"
         path: ${{ github.workspace }}\bpf_performance
@@ -129,49 +172,73 @@ jobs:
         if ($process.ExitCode -ne 0) { exit $process.ExitCode }
         echo "C:\Program Files\ebpf-for-windows" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
+    - name: Upload ebpf-for-windows logs
+      if: always()
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+      with:
+        name: ebpf-for-windows-logs
+        path: ${{ github.workspace }}\bpf_performance\install.log
+
     - name: Download xdp-for-windows
-      working-directory: ${{ github.workspace }}\xdp
-      run: |
-        $ProgressPreference = 'SilentlyContinue'
-        $packageUrl = "https://github.com/microsoft/xdp-for-windows/releases/download/v1.1.0%2B3b7480bf/xdp-for-windows.1.1.0.msi"
-        Invoke-WebRequest -Uri $packageUrl -OutFile xdp-for-windows.1.1.0.msi
-        dir *.msi
-        $packageUrl = "https://github.com/microsoft/xdp-for-windows/releases/download/v1.1.0%2B3b7480bf/xdp-devkit-x64-1.1.0.zip"
-        Invoke-WebRequest -Uri $packageUrl -OutFile xdp-devkit-x64-1.1.0.zip
-        dir *.zip
-        Expand-Archive -Path "xdp-devkit-x64-1.1.0.zip" -DestinationPath .
+      uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+      with:
+        name: "bin_Release_x64"
+        path: ${{ github.workspace }}\xdp
 
     - name: Install xdp-for-windows
       working-directory: ${{ github.workspace }}\xdp
       run: |
-          $installPath = "${{ github.workspace }}\xdp"
+          cd ${{ github.workspace }}\\xdp\x64_Release
+          $CertFileName = 'xdp.cer'
+          Get-AuthenticodeSignature 'xdp.sys' | Select-Object -ExpandProperty SignerCertificate | Export-Certificate -Type CERT -FilePath $CertFileName
+          Import-Certificate -FilePath $CertFileName -CertStoreLocation 'cert:\localmachine\root'
+          Import-Certificate -FilePath $CertFileName -CertStoreLocation 'cert:\localmachine\trustedpublisher'
+          $installPath = "${{ github.workspace }}\xdp\x64_release"
           Write-Output "xdp installPath: $installPath"
           Write-Output "Installing XDP for Windows"
-          CertUtil.exe -addstore Root bin\CoreNetSignRoot.cer
-          CertUtil.exe -addstore TrustedPublisher bin\CoreNetSignRoot.cer
-          $process = Start-Process msiexec.exe -Wait -ArgumentList "/i xdp-for-windows.1.1.0.msi INSTALLFOLDER=$installPath /qn" -PassThru
-          if ($process.ExitCode -ne 0) { exit $process.ExitCode }
+          $xdpMsi = (get-item .\xdp-for-windows.x64.*.msi).Name
+          $process = Start-Process msiexec.exe -Wait -ArgumentList "/i $xdpMsi INSTALLFOLDER=$installPath /qn /log ${{ github.workspace }}\xdp\xdp_install.log ADDLOCAL=xdp_ebpf" -PassThru
+          if ($process.ExitCode -ne 0) { Get-Content ${{ github.workspace }}\xdp\xdp_install.log; exit $process.ExitCode }
           Write-Output "XDP for Windows installed"
           sc.exe query xdp
           reg.exe add HKLM\SYSTEM\CurrentControlSet\Services\xdp\Parameters /v XdpEbpfEnabled /d 1 /t REG_DWORD /f
           sc.exe stop xdp
           sc.exe start xdp
 
+    - name: Upload xdp-for-windows logs
+      if: always()
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+      with:
+        name: xdp-for-windows-logs
+        path: ${{ github.workspace }}\xdp\xdp_install.log
+
     - name: Download bpf_performance repository artifacts
       working-directory: ${{ github.workspace }}\bpf_performance
+      env:
+        GH_TOKEN: ${{ github.token }}
       run: |
-        Invoke-WebRequest https://github.com/microsoft/bpf_performance/releases/download/v0.0.9/build-Release-windows-2022.zip -OutFile bpf_performance.zip
+        $releases = (gh release -R microsoft/bpf_performance list --json name,createdAt | ConvertFrom-Json)
+        $release = ($releases | Sort-Object -Property createdAt -Descending)[0]
+        gh release download -R microsoft/bpf_performance $release.name
 
     - name: Unzip bpf_performance repository artifacts
       working-directory: ${{ github.workspace }}\bpf_performance
       run: |
-        Expand-Archive -Path bpf_performance.zip -DestinationPath .
+        Expand-Archive -Path build-Release-windows-2022.zip -DestinationPath .
 
     - name: Download cts-traffic
-      uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+      uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
       with:
         name: "cts-traffic Release"
         path: ${{ github.workspace }}\cts-traffic
+
+    - name: Start TCPIP tracing - Baseline
+      if: ${{ github.event.inputs.tcp_ip_tracing }}
+      run: |
+        wpr -cancel 2>$null; $global:LASTEXITCODE = 0
+        if (Test-Path "tcpip.wprp") { Remove-Item -Force "tcpip.wprp" }
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/main/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
+        wpr -start tcpip.wprp -filemode
 
     # Run CTS traffic without XDP installed to establish a baseline.
     - name: Run CTS cts-traffic baseline
@@ -185,6 +252,12 @@ jobs:
         iex "& { $(irm $url) } -CpuProfile $profile"
         if ($Profile) { Move-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl -NewName "${{ github.workspace }}\etl\cts_traffic_send_baseline.etl"}
         if ($Profile) { Rename-Item -Path ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl -NewName "${{ github.workspace }}\etl\cts_traffic_recv_baseline.etl" }
+        dir ${{ github.workspace }}\etl
+
+    - name: Stop TCPIP tracing - Baseline
+      if: ${{ github.event.inputs.tcp_ip_tracing }}
+      run: |
+        wpr -stop ${{ github.workspace }}\ETL\tcpip_baseline.etl
 
     # The resulting CSV file's header is updated to match the format produced by the BPF performance tests.
     # The "Average Duration (ns)" column is the metric of interest.
@@ -198,10 +271,10 @@ jobs:
 
     - name: Upload CTS cts-traffic results baseline
       if: always()
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
       with:
         name: cts_traffic_baseline_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
-        path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv 
+        path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv
 
     - name: Attach xdp baseline program to interface (first program in xdp.sys)
       working-directory: ${{ github.workspace }}\bpf_performance
@@ -218,6 +291,15 @@ jobs:
         bpftool prog show
         Test-Connection -ComputerName netperf-peer -Count 1 -Ping
 
+    - name: Start TCPIP tracing - XDP
+      if: ${{ github.event.inputs.tcp_ip_tracing }}
+      run: |
+        Get-PSDrive -PSProvider FileSystem
+        wpr -cancel; $global:LASTEXITCODE = 0
+        if (Test-Path "tcpip.wprp") { Remove-Item -Force "tcpip.wprp" }
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/main/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
+        wpr -start tcpip.wprp -filemode
+
     # Run CTS traffic with XDP installed to measure the impact of XDP on performance.
     - name: Run CTS cts-traffic xdp
       working-directory: ${{ github.workspace }}\cts-traffic
@@ -227,7 +309,16 @@ jobs:
         $profile = 0
         if ("${{inputs.profile}}" -eq "true") { $profile = 1 }
         $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
+        if (Test-Path "tcpip.wprp") { Remove-Item -Force "tcpip.wprp" }
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/main/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
+        if ("${{inputs.tcp_ip_tracing}}" -eq "true") { wpr -start ${{ github.workspace }}\.github\workflows\tcpip.wprp }
         iex "& { $(irm $url) } -CpuProfile $profile"
+        if ("${{inputs.tcp_ip_tracing}}" -eq "true") { wpr -stop ${{ github.workspace }}\ETL\tcpip_xdp.etl }
+
+    - name: Stop TCPIP tracing - Baseline
+      if: ${{ github.event.inputs.tcp_ip_tracing }}
+      run: |
+        wpr -stop ${{ github.workspace }}\ETL\tcpip_baseline.etl
 
     - name: Copy ETL files to ETL folder
       run: |
@@ -252,10 +343,10 @@ jobs:
 
     - name: Upload CTS cts-traffic results xdp
       if: always()
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
       with:
         name: cts_traffic_xdp_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
-        path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv 
+        path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv
 
     - name: Run BPF performance tests
       working-directory: ${{ github.workspace }}\bpf_performance
@@ -272,7 +363,7 @@ jobs:
 
     - name: Upload BPF performance test results
       if: always()
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
       with:
         name: bpf_performance_native_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: ${{ github.workspace }}\bpf_performance\bpf_performance_native.csv
@@ -290,17 +381,24 @@ jobs:
 
     - name: Upload merged results
       if: always()
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
       with:
         name: ebpf_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: ${{ github.workspace }}\bpf_performance\ebpf.csv
 
     - name: Upload CPU profile
       if: ${{ inputs.profile == true }}
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
       with:
         name: CPU_Profile_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: ETL
+
+    - name: Upload TCPIP ETL
+      if: ${{ inputs.tcp_ip_tracing == true }}
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+      with:
+        name: TCPIP_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        path: ${{ github.workspace }}\ETL
 
     - name: Cleanup workspace
       if: always()
@@ -313,7 +411,7 @@ jobs:
         if (Test-Path ${{ github.workspace }}\xdp) { Remove-Item -Recurse -Force ${{ github.workspace }}\xdp }
         if (Test-Path ${{ github.workspace }}\cts-traffic) { Remove-Item -Recurse -Force ${{ github.workspace }}\cts-traffic }
         if (Test-Path ${{ github.workspace }}\ETL) { Remove-Item -Recurse -Force ${{ github.workspace }}\ETL }
-        
+
     - name: Restore Windows Defender exclusions
       if: always()
       run: |
@@ -321,3 +419,56 @@ jobs:
         Update-MpSignature -Verbose
         Start-MpScan -ScanType QuickScan
 
+  # File a bug if the test fails.
+  create_or_update_issue:
+      needs: test
+      if: ${{ failure() }}
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea
+          if: ${{ github.event_name == 'repository_dispatch' }}
+          env:
+            TITLE: 'eBPF for Windows Performance Test Failed'
+            BODY: |
+              [Failed Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+              Test name - `eBPF for Windows Performance Test`
+            LABELS: bug
+
+          with:
+            script: |
+              const owner = process.env.GITHUB_REPOSITORY.split('/')[0]
+              const repo = process.env.GITHUB_REPOSITORY.split('/')[1]
+              const body = process.env.BODY;
+              const title = process.env.TITLE;
+              const labels = process.env.LABELS;
+              const label_array = labels ? labels.split(',') : [];
+              console.log(label_array);
+              // Get all issues that have these labels.
+              const opts = github.rest.issues.listForRepo.endpoint.merge({
+                ...context.issue,
+                state: 'open',
+                labels: label_array,
+              });
+              const issues = await github.paginate(opts);
+              // Look for an existing issue with the same title.
+              for (const issue of issues) {
+                if (issue.title === title) {
+                  console.log(`Updating issue ${title}`);
+                  await github.rest.issues.createComment({
+                    issue_number: issue.number,
+                    owner,
+                    repo,
+                    body,
+                  });
+                  return;
+                }
+              }
+              // Existing issue not found, create a new one.
+              console.log(`Creating issue ${title}`);
+              await github.rest.issues.create({
+                owner: owner,
+                repo: repo,
+                title: title,
+                body: body,
+                labels: label_array,
+              });

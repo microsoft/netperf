@@ -1,0 +1,4 @@
+[
+    { "env": "azure", "os": "windows-2022", "arch": "x64" },
+    { "env": "lab",   "os": "windows-2022", "arch": "x64" }
+]

@@ -1,0 +1,366 @@
+name: Observe Lab
+
+on:
+  workflow_call:
+    inputs:
+      lab-matrix:
+        description: "Lab jobs to observe"
+        required: true
+        type: string
+      project-callee:
+        description: "The callee to dispatch workflows to"
+        required: true
+        type: string
+      sha:
+        description: "commit sha of the project being tested"
+        required: true
+        type: string
+      ref:
+        description: "branch of the project being tested"
+        required: true
+        type: string
+      pr:
+        description: "pull request number of the project being tested"
+        required: true
+        type: string
+    secrets:
+      NETPERF_SYNCER_SECRET:
+        required: true
+jobs:
+  lab-observer:
+    name: Oracle
+    runs-on: windows-latest
+    steps:
+    - name: Observing Lab State...
+      run: |
+        ############################################################################################################
+        # FUNCTION DEFINITIONS
+        ############################################################################################################
+
+        function Get-Historical-WorkflowId {
+          param([PSCustomObject]$job)
+          foreach ($step in $job.steps) {
+            if ($step.name.Contains("Wait-Callee")) {
+              $arr = $step.name.Split("_")
+              if ($arr.Length -lt 2) {
+                Write-Host "Failed to get historical workflow ID for a job that should have succeeded."
+                exit 1
+              }
+              $id = $arr[1]
+              return $id
+            }
+          }
+          Write-Host "Failed to get historical workflow ID for a job that should have succeeded."
+          exit 1
+        }
+
+        function NotDoneYet {
+          $fail_observer = $false
+          foreach ($row in $truth_table) {
+            if ($row.current_state -ne "3_COMPLETED") {
+              return $true
+            }
+            if ($row.conclusion -ne "success") {
+              $fail_observer = $true
+            }
+          }
+
+          if ($fail_observer) {
+            Write-Host "[NotDoneYet] Some jobs failed. Exiting observer loop."
+            exit 1
+          }
+
+          return $false
+        }
+
+        function DispatchCallee {
+          param (
+            [PSCustomObject]$job,
+            [string]$assigned_runner
+          )
+          $url = "https://api.github.com/repos/microsoft/netperf/dispatches"
+          $unique_env_str = "${{ github.run_id }}_${{ github.run_attempt }}_" + $job.env_str
+          Write-Host "Dispatching with assigned runner: $assigned_runner"
+          $body = @{
+            event_type = "${{ inputs.project-callee }}"
+            client_payload = @{
+              assigned_runner = "$assigned_runner"
+              unique_env_str = "$unique_env_str"
+              caller_id = "${{ github.run_id }}"
+              os = $job.os
+              io = $job.io
+              tls = $job.tls
+              arch = $job.arch
+              sha = "${{ inputs.sha }}"
+              ref = "${{ inputs.ref }}"
+              pr = "${{ inputs.pr }}"
+            }
+          } | ConvertTo-Json
+          Write-Host "Dispatching with body: $body"
+          try {
+            Invoke-WebRequest -Uri $url -Headers $github_headers -Method Post -Body $body
+          } catch {
+            Write-Host "[DispatchCallee] Failed to dispatch callee: $_"
+            exit 1
+          }
+        }
+
+        function Get-DispatchedTestRunWorkflowUrl {
+          param([PSCustomObject]$job)
+          $unique_env_str = "${{ github.run_id }}_${{ github.run_attempt }}_" + $job.env_str
+          $last_three_months_from_today = (Get-Date).AddMonths(-3).ToString("yyyy-MM-dd")
+          $api = "https://api.github.com/repos/microsoft/netperf/actions/runs?event=repository_dispatch&created=%3E$last_three_months_from_today"
+          try {
+            $runs = Invoke-WebRequest -Uri $api -Headers $github_headers -Method Get
+            $runs = ($runs.Content | ConvertFrom-Json).workflow_runs
+            foreach ($run in $runs) {
+              if ($run.name -eq "${{ inputs.project-callee }}") {
+                $jobs = Get-Jobs -runId $run.id
+                foreach ($job in $jobs) {
+                  if ($job.name.Contains($unique_env_str)) {
+                    return $run.id
+                  }
+                }
+              }
+            }
+            Write-Host "[Get-DispatchedTestRunWorkflowUrl] Failed to get dispatched test run workflow URL. NOT FOUND."
+            return $null
+          } catch {
+            Write-Host "[Get-DispatchedTestRunWorkflowUrl] Failed to get dispatched test run workflow URL: $_"
+            return $null
+          }
+        }
+
+        function DisplayTruthTable {
+          $first = $true
+          foreach ($row in $truth_table) {
+            if ($first) {
+              Write-Host "`n`n`n"
+              $first = $false
+            }
+            Write-Host "Job: $($row.job.name)"
+            Write-Host "Current State: $($row.current_state)"
+            Write-Host "Conclusion: $($row.conclusion)"
+            if ($row.dispatched_workflow_id) {
+              Write-Host "Dispatched Workflow URL: https://github.com/microsoft/netperf/actions/runs/$($row.dispatched_workflow_id)"
+            } else {
+              Write-Host "Dispatched Workflow URL:"
+            }
+            Write-Host "---------------------------------"
+          }
+        }
+
+        function Get-Assigned-Runner {
+          param([PSCustomObject]$job)
+          Write-Host "[Get-Assigned-Runner] Input params: $job"
+          $parent_key = "${{ github.run_id }}_${{ github.run_attempt }}_" + $job.env_str + "_parent_reset_done"
+          $child_key = "${{ github.run_id }}_${{ github.run_attempt }}_" + $job.env_str + "_child_reset_done"
+          $parent_url = "https://netperfapi.azurewebsites.net/getkeyvalue?key=$parent_key"
+          $child_url = "https://netperfapi.azurewebsites.net/getkeyvalue?key=$child_key"
+          Write-Host "[Get-Assigned-Runner] URLs: $parent_url, $child_url"
+          try {
+            Write-Host "[Get-Assigned-Runner] Looking for parent..."
+            $parent_response = Invoke-WebRequest -Uri $parent_url -Headers $netperf_headers -Method Get
+            Write-Host "[Get-Assigned-Runner] Found!"
+            Write-Host "[Get-Assigned-Runner] Looking for child..."
+            $child_response = Invoke-WebRequest -Uri $child_url -Headers $netperf_headers -Method Get
+            Write-Host "[Get-Assigned-Runner] Found!"
+            if ($parent_response.StatusCode -ne 200 -or $child_response.StatusCode -ne 200) {
+              throw "parent or child not ready"
+            }
+            $parent_id = $parent_response.Content
+            $child_id = $child_response.Content
+            return "$parent_id,$child_id"
+          } catch {
+            Write-Host "[Get-Assigned-Runner] Failed to get assigned runner: $_"
+            return $null
+          }
+        }
+
+        function Get-Jobs {
+            param([string]$runId)
+            $url = "https://api.github.com/repos/microsoft/netperf/actions/runs/$runId/jobs"
+            Write-Debug "GET $url"
+            return ((Invoke-WebRequest -Uri $url -Method GET -Headers $github_headers).Content | ConvertFrom-Json).jobs
+        }
+
+        function Filter-For-Operator-Job {
+          param([PSCustomObject]$jobs, [string]$env_str)
+          foreach ($job in $jobs) {
+            if ($job.name.Contains($env_str)) {
+              return $job
+            }
+          }
+          Write-Host "Failed to find operator job with env_str: $env_str"
+          return $null
+        }
+
+        function Get-Run {
+            param([string]$id)
+            $url = "https://api.github.com/repos/microsoft/netperf/actions/runs/$id"
+            Write-Debug "GET $url"
+            return (Invoke-WebRequest -Uri $url -Method GET -Headers $headers).Content | ConvertFrom-Json
+        }
+
+
+        ############################################################################################################
+        # INITIALIZATION LOGIC
+
+        # State transition table:
+        # 0_AWAIT_PARENT_CHILD_RESET
+        # 1_AWAIT_CALLEE_INITIALIZATION
+        # 2_AWAIT_CALLEE_COMPLETION
+        # 3_COMPLETED
+
+        ############################################################################################################
+
+        $lab_matrix = ConvertFrom-Json '${{ inputs.lab-matrix }}'
+        $truth_table = @()
+        $num_iterations = 0
+        $github_headers = @{
+            "Accept" = "application/vnd.github+json"
+            "Authorization" = "Bearer ${{ secrets.GITHUB_TOKEN }}"
+            "X-GitHub-Api-Version" = "2022-11-28"
+        }
+        $netperf_headers = @{
+          "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+        }
+
+        # Initializing truth table
+        while ($truth_table.Count -lt $lab_matrix.Count) {
+          $jobs = Get-Jobs -runId ${{ github.run_id }}
+          foreach ($job in $jobs) {
+            foreach ($todo in $lab_matrix) {
+              if ($job.name.Contains($todo.env_str)) {
+                if ($job.status -eq "completed") {
+                  $truth_table += [PSCustomObject]@{
+                    "job" = $todo
+                    "current_state" = "3_COMPLETED"
+                    "conclusion" = $job.conclusion
+                    "dispatched_workflow_id" = Get-Historical-WorkflowId -job $job
+                  }
+                } else {
+                  $truth_table += [PSCustomObject]@{
+                    "job" = $todo
+                    "current_state" = "0_AWAIT_PARENT_CHILD_RESET"
+                    "conclusion" = ""
+                    "dispatched_workflow_id" = ""
+                  }
+                }
+              }
+            }
+          }
+          Write-Host "Initializing truth table... Status: $($truth_table.Count)/$($lab_matrix.Count)"
+          Start-Sleep -Seconds 10
+        }
+
+        ############################################################################################################
+        # MAIN OBSERVER LOOP
+        ############################################################################################################
+
+        while (NotDoneYet) {
+          $num_iterations++
+          $operator_jobs = Get-Jobs -runId ${{ github.run_id }}
+          try {
+            foreach ($row in $truth_table) {
+              switch ($row.current_state) {
+                "0_AWAIT_PARENT_CHILD_RESET" {
+                  $operator_job = Filter-For-Operator-Job -jobs $operator_jobs -env_str $row.job.env_str
+                  if ($operator_job.status -eq "queued") {
+                    Write-Host "Operator job is queued. Skipping..."
+                    continue
+                  }
+                  $assigned_runner = Get-Assigned-Runner -job $row.job
+                  if ($assigned_runner) {
+                    DispatchCallee -job $row.job -assigned_runner $assigned_runner
+                    $row.current_state = "1_AWAIT_CALLEE_INITIALIZATION"
+                  }
+                }
+                "1_AWAIT_CALLEE_INITIALIZATION" {
+                  $callee_workflow_id = Get-DispatchedTestRunWorkflowUrl -job $row.job
+                  if ($callee_workflow_id) {
+                    $row.dispatched_workflow_id = $callee_workflow_id
+                    $row.current_state = "2_AWAIT_CALLEE_COMPLETION"
+                  }
+                }
+                "2_AWAIT_CALLEE_COMPLETION" {
+                  $callee_status = Get-Run -id $row.dispatched_workflow_id
+                  if ($callee_status.status -eq "completed") {
+                    $row.current_state = "3_COMPLETED"
+                    $row.conclusion = $callee_status.conclusion
+                  }
+                }
+                "3_COMPLETED" {
+                  # Do nothing
+                }
+              }
+            }
+            # Update truth table in shared cache
+            Write-Host "Updating truth table..."
+            $key = "${{ github.run_id }}_${{ github.run_attempt }}_truth_table"
+            $bodyJson = @{
+              value=$truth_table
+            }
+            $body = $bodyJson | ConvertTo-Json -Depth 10
+            $api = "https://netperfapi.azurewebsites.net/setkeyvalue?key=$key"
+            Invoke-WebRequest -Uri $api -Headers $netperf_headers -Method Post -Body $body -ContentType "application/json" -UseBasicParsing | Out-Null
+            DisplayTruthTable
+          } catch {
+            Write-Host "Observer loop error: $_"
+          }
+          Start-Sleep -Seconds 20
+        }
+
+        # Downloads all artifacts uploaded by the callees
+        mkdir -Force "artifacts_test_results"
+        mkdir -Force "artifacts_logs"
+        mkdir -Force "artifacts_misc"
+        foreach ($row in $truth_table) {
+          $callee_workflow_id = $row.dispatched_workflow_id
+          if ($callee_workflow_id) {
+            $artifacts_metadata_url = "https://api.github.com/repos/microsoft/netperf/actions/runs/$callee_workflow_id/artifacts"
+            Write-Host "Downloading artifacts for workflow ID: $callee_workflow_id"
+            $response = Invoke-WebRequest -Uri $artifacts_metadata_url -Headers $github_headers -Method Get
+            $json_response = $response.Content | ConvertFrom-Json
+            $json_response = $json_response.artifacts
+            foreach ($artifact in $json_response) {
+              $name = $artifact.name
+              $archive_download_url = $artifact.archive_download_url
+              $response = Invoke-WebRequest -Uri $archive_download_url -Headers $github_headers -Method Get -OutFile "$name.zip"
+              if ($name.Contains("test-results")) {
+                Expand-Archive -Path "$name.zip" -DestinationPath "artifacts_test_results" -Force
+              } elseif ($name.Contains("logs")) {
+                Expand-Archive -Path "$name.zip" -DestinationPath "artifacts_logs" -Force
+              } else {
+                Expand-Archive -Path "$name.zip" -DestinationPath "artifacts_misc" -Force
+              }
+            }
+          }
+        }
+
+      shell: pwsh
+    - name: List downloaded artifacts
+      run: |
+        Write-Host "Listing test results..."
+        Get-ChildItem -Path "artifacts_test_results" -Recurse
+        Write-Host "Listing logs..."
+        Get-ChildItem -Path "artifacts_logs" -Recurse
+        Write-Host "Listing misc..."
+        Get-ChildItem -Path "artifacts_misc" -Recurse
+      shell: pwsh
+    - name: Upload downloaded artifacts (test results)
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      with:
+        name: lab-test-results
+        path: artifacts_test_results
+    - name: Upload downloaded artifacts (logs)
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      with:
+        name: lab-logs
+        path: artifacts_logs
+    - name: Upload downloaded artifacts (misc.)
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      with:
+        name: lab-misc
+        path: artifacts_misc
+

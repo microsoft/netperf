@@ -1,0 +1,54 @@
+name: "Prepare 1ES Machine [NEEDS NETPERF REPO CLONED FIRST]"
+description: "This action runs multiple steps as a composite action."
+runs:
+  using: "composite"
+  steps:
+  - name: Check if powershell 7 (pwsh) is already installed
+    if: ${{ runner.os != 'Windows' }}
+    run: |
+      if command -v pwsh &>/dev/null; then
+        echo "PowerShell is already installed."
+        echo "HAS_PWSH=true" >> $GITHUB_ENV
+      else
+        echo "PowerShell is not installed."
+        echo "HAS_PWSH=false" >> $GITHUB_ENV
+      fi
+    shell: bash
+  - name: (On Linux) Enable perf tool
+    if: ${{ runner.os != 'Windows' }}
+    run: |
+      echo 0 | sudo tee /proc/sys/kernel/perf_event_paranoid
+    shell: bash
+  - name: Check if powershell 7 (pwsh) is already installed
+    if: ${{ runner.os == 'Windows' }}
+    run: |
+      @echo off
+      where pwsh >nul 2>nul
+      if %errorlevel% == 0 (
+          echo pwsh is installed
+          pwsh -Command "echo 'HAS_PWSH=true' >> $env:GITHUB_ENV"
+      ) else (
+          echo pwsh is not installed
+          powershell -Command "echo 'HAS_PWSH=false' >> $env:GITHUB_ENV"
+      )
+    shell: cmd
+  - name: Install powershell 7 on Linux
+    if: ${{ env.HAS_PWSH == 'false' && runner.os != 'Windows' }}
+    run: |
+      sudo bash ./netperfrepo/install-pwsh.sh
+      echo "HAS_PWSH=true" >> $GITHUB_ENV
+    shell: bash
+  - name: Lowercase runner.os
+    if: ${{ env.HAS_PWSH == 'true' }}
+    run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
+    shell: pwsh
+  - name: Lowercase OS and Set Environment Variable
+    if: ${{ env.HAS_PWSH == 'false' }}
+    run: |
+      powershell -Command "echo 'OS=windows' >> $env:GITHUB_ENV"
+    shell: cmd
+  - name: Set up Python
+    if: ${{ env.HAS_PWSH == 'false' }}
+    uses: actions/setup-python@v2
+    with:
+      python-version: '3.x'

@@ -14,6 +14,11 @@ on:
         required: false
         default: false
         type: boolean
+      tcp_ip_tracing:
+        description: 'Capture TCP/IP tracing'
+        required: false
+        default: false
+        type: boolean
 
   pull_request:
     branches:
@@ -46,8 +51,8 @@ jobs:
       fail-fast: false
       matrix:
         vec: [
-          { env: "azure", os: "2022", arch: "x64" },
-          { env: "azure", os: "2025", arch: "x64" },
+          # { env: "azure", os: "2022", arch: "x64" },
+          # { env: "azure", os: "2025", arch: "x64" },
           { env: "lab",   os: "2022", arch: "x64" },
         ]
     runs-on:
@@ -59,6 +64,7 @@ jobs:
     steps:
     - name: Setup workspace
       run: |
+        Get-ChildItem  | % { Remove-Item -Recurse $_ }
         if (Test-Path ${{ github.workspace }}\xdp) { Remove-Item -Recurse -Force ${{ github.workspace }}\cts-traffic }
         if (Test-Path ${{ github.workspace }}\ETL) { Remove-Item -Recurse -Force ${{ github.workspace }}\ETL }
         New-item -ItemType Directory -Path ${{ github.workspace }}\cts-traffic
@@ -73,10 +79,18 @@ jobs:
         Add-MpPreference -ExclusionPath ${{ github.workspace }}
 
     - name: Download cts-traffic
-      uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+      uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
       with:
         name: "cts-traffic Release"
         path: ${{ github.workspace }}\cts-traffic
+
+    - name: Start TCPIP tracing
+      if: ${{ github.event.inputs.tcp_ip_tracing }}
+      run: |
+        wpr -cancel 2>$null; $global:LASTEXITCODE = 0
+        if (Test-Path "tcpip.wprp") { Remove-Item -Force "tcpip.wprp" }
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/main/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
+        wpr -start tcpip.wprp -filemode
 
     - name: Run CTS cts-traffic
       working-directory: ${{ github.workspace }}\cts-traffic
@@ -86,23 +100,29 @@ jobs:
         $url = "https://raw.githubusercontent.com/microsoft/bpf_performance/main/scripts/two-machine-perf.ps1"
         iex "& { $(irm $url) } -CpuProfile $profile"
 
+    - name: Stop TCPIP tracing
+      if: ${{ github.event.inputs.tcp_ip_tracing }}
+      run: |
+        wpr -stop ${{ github.workspace }}\ETL\tcpip.etl
+
     - name: Move ETL files to ETLfolder 
       working-directory: ${{ github.workspace }}\cts-traffic
       run: |
         dir .
         if (Test-Path ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl) { Move-Item ${{ github.workspace }}\cts-traffic\cts_traffic_recv.etl ${{ github.workspace }}\ETL }
         if (Test-Path ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl) { Move-Item ${{ github.workspace }}\cts-traffic\cts_traffic_send.etl ${{ github.workspace }}\ETL }
+        if (Test-Path ${{ github.workspace }}\cts-traffic\tcpip_baseline.etl) { Move-Item ${{ github.workspace }}\cts-traffic\tcpip_baseline.etl ${{ github.workspace }}\ETL }
 
     - name: Upload CTS cts-traffic results
       if: always()
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
       with:
         name: cts_traffic_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv 
 
     - name: Upload ETL
-      if: ${{ github.event.inputs.profile }}
-      uses: actions/upload-artifact@v2
+      if: ${{ github.event.inputs.profile }} || ${{ github.event.inputs.tcp_ip_tracing }}
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
       with:
         name: cts_traffic_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}_ETL
         path: ${{ github.workspace }}\ETL\*.etl

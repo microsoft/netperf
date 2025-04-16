@@ -80,11 +80,12 @@ jobs:
   # For automated identification of the workflow.
   name:
     name: For ${{ github.event.client_payload.guid }}
-    if: ${{ github.event_name == 'repository_dispatch' }}
     needs: []
     runs-on: ubuntu-20.04
     steps:
-    - run: |
+    - name: Print Parameters
+      if: ${{ github.event_name == 'repository_dispatch' }}
+      run: |
         echo "Parameters from repository_dispatch:"
         echo "guid: ${{ github.event.client_payload.guid }}"
         echo "sha: ${{ github.event.client_payload.sha }}"
@@ -92,6 +93,28 @@ jobs:
         echo "pr: ${{ github.event.client_payload.pr }}"
         echo "logs: ${{ github.event.client_payload.logs }}"
         echo "filter: ${{ github.event.client_payload.filter }}"
+    - name: Validate inputs for workflow dispatch
+      if: ${{ github.event_name == 'workflow_dispatch' }}
+      run: |
+        if [ "${{ inputs.commit }}" = "true" ] && [ "${{ inputs.ref }}" = "main" ]; then
+          echo "Error: If commit is set to true, ref should not be 'main'"
+          exit 1
+        fi
+    - name: Validate inputs for workflow call
+      if: ${{ github.event_name == 'workflow_call' }}
+      run: |
+        if [ "${{ inputs.commit }}" = "true" ] && [ "${{ inputs.ref }}" = "main" ]; then
+          echo "Error: If commit is set to true, ref should not be 'main'"
+          exit 1
+        fi
+    - name: Validate inputs for repository dispatch
+      if: ${{ github.event_name == 'repository_dispatch' }}
+      run: |
+        if [ "${{ github.event.client_payload.ref }}" = "main" ] && [ '${{ github.event.client_payload.pr }}' = '' ]; then
+          echo "Repository dispatch on merge events must have ref set to a SHA instead of a branch name."
+          exit 1
+        fi
+
 
   #
   # Build Jobs
@@ -130,44 +153,131 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ['ubuntu-20.04']
-        tls: [openssl, openssl3]
+        include:
+          - os: 'ubuntu-20.04'
+            tls: 'openssl'
+          - os: 'ubuntu-22.04'
+            tls: 'openssl3'
     uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml@main
     with:
       os: ${{ matrix.os }}
       tls: ${{ matrix.tls }}
+      xdp: ${{ matrix.xdp }}
       build: -Perf
       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
-
-  #
-  # Manage and create temporary VMs
-  # NOTE: tag == env
-  #
-  create-azure-vms:
-    name: Manage and Create Temporary VMs
-    uses: microsoft/netperf/.github/workflows/create-azure-vms.yml@main
+  prepare-matrix:
+    name: Prepare lab matrix, and Azure 1ES matrix.
+    uses: microsoft/netperf/.github/workflows/prepare-matrix.yml@main
     with:
       matrix_filename: 'quic_matrix.json'
-      workflowId: ${{ github.run_id }}
-    secrets:
-      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-      VM_PASSWORD: ${{ secrets.VM_PASSWORD }}
+      workflowId: ${{ github.run_id }}-${{ github.run_attempt }}
+
+  run-secnetperf-1es:
+    name: ${{ matrix.optional == 'TRUE' && '[UNRELIABLE]-' || '' }}azure-${{ matrix.os }}-${{ matrix.io }}-${{ matrix.role }}-${{ matrix.tls }}-${{ matrix.arch }}
+    needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{fromJson(needs.prepare-matrix.outputs.azure-matrix)}}
+    continue-on-error: ${{ matrix.optional == 'TRUE' }}
+    runs-on:
+    - self-hosted
+    - 1ES.Pool=${{ matrix.assigned_pool }}
+    steps:
+    - name: Checkout microsoft/msquic
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      with:
+        repository: microsoft/msquic
+        ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+    - name: Checkout code
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      with:
+        path: netperfrepo
+    - name: Prepares 1ES Machine
+      if: ${{ matrix.env == 'azure' }}
+      uses: ./netperfrepo/.github/actions/prepare-1es-machine
+    - name: Download Artifacts
+      uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+      with:
+        name: Release-${{env.OS}}-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-Perf
+        path: artifacts
+    - name: Download Kernel Artifacts
+      uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+      if: ${{ matrix.io == 'wsk' }}
+      with:
+        name: Release-winkernel-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}
+        path: artifacts
+    - name: Start 1ES Machine
+      timeout-minutes: 45
+      uses: ./netperfrepo/.github/actions/start-1es-machine
+      with:
+        matrix: '${{ toJson(matrix) }}'
+        callback-script-path: ${{ github.workspace }}/scripts/quic_callback.ps1
+        syncer_secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
+    - name: (Client) Download Watermark_Regression.json file
+      uses: ./netperfrepo/.github/actions/run-general-pwsh-cmd
+      with:
+        run-cmd: |
+          Write-Host "Downloading Watermark_Regression.json file"
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/watermark_regression.json" -OutFile "watermark_regression.json" -UseBasicParsing
+    - name: Run Secnetperf Script
+      if: ${{ matrix.role == 'client' }}
+      timeout-minutes: 40
+      uses: ./netperfrepo/.github/actions/run-test-script
+      with:
+        run-script-cmd: |
+          ./scripts/secnetperf.ps1 `
+          -LogProfile ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }} `
+          -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} `
+          -environment ${{ matrix.env }} `
+          -plat ${{env.OS}} `
+          -os ${{ matrix.os }} `
+          -arch ${{ matrix.arch }} `
+          -tls ${{ matrix.tls }} `
+          -io ${{ matrix.io }} `
+          -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
+        matrix: '${{ toJson(matrix) }}'
+        syncer-secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
+    - name: Stop 1ES Machine
+      if: ${{ always() }}
+      uses: ./netperfrepo/.github/actions/stop-1es-machine
+      with:
+        matrix: '${{ toJson(matrix) }}'
+        syncer_secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
+    - name: Upload Test Results JSON
+      if: ${{ always() }}
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      with:
+        name: json-test-results-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}.json
+        path: json-test-results-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}.json
+    - name: Upload Logs
+      if: ${{ always() }}
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      with:
+        name: logs-${{ matrix.env }}-${{ matrix.role }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
+        path: artifacts/logs
+        if-no-files-found: ignore
+    - name: Upload Full Latency Curves
+      if: ${{ always() }}
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      with:
+        name: latency-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
+        path: latency.txt
+        if-no-files-found: ignore
 
   #
   # Test Jobs.
   # NOTE: tag == env
   #
-  run-secnetperf: # This would be 1 enumeration, after CTS has setup the environment with the correct OS type and version.
-    name: secnetperf
-    needs: [build-unix, build-windows, build-windows-kernel, create-azure-vms]
+  run-secnetperf:
+    name:  ${{ matrix.optional == 'TRUE' && '[UNRELIABLE]-' || '' }}lab-${{ matrix.os }}-${{ matrix.io }}-${{ matrix.tls }}-${{ matrix.arch }}
+    needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
     strategy:
       fail-fast: false
       matrix:
-        include: ${{fromJson(needs.create-azure-vms.outputs.full-matrix)}}
+        include: ${{fromJson(needs.prepare-matrix.outputs.lab-matrix)}}
+    continue-on-error: ${{ matrix.optional == 'TRUE' }}
     runs-on:
     - self-hosted
     - ${{ matrix.runner_id || matrix.env }} # Use auto-generated 'runner id' if present, otherwise assign to 'env'.
@@ -182,16 +292,16 @@ jobs:
     - name: Lowercase runner.os
       shell: pwsh
       run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
-    - name: Download Artifacts
-      uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
-      with:
-        name: Release-${{env.OS}}-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-Perf
-        path: artifacts
-    - name: Download Kernel Artifacts
+    - name: Download Kernel Drivers
       uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
       if: ${{ matrix.io == 'wsk' }}
       with:
         name: Release-winkernel-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}
+        path: artifacts
+    - name: Download Artifacts
+      uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+      with:
+        name: Release-${{env.OS}}-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-Perf
         path: artifacts
     - name: Download Regression.json file
       run: Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/regression.json" -OutFile "regression.json"
@@ -201,8 +311,10 @@ jobs:
       shell: pwsh
     - name: Run secnetperf
       shell: pwsh
-      timeout-minutes: 20
-      run: ./scripts/secnetperf.ps1 `
+      timeout-minutes: 80
+      run: |
+          $env:netperf_remote_powershell_supported = $true
+          ./scripts/secnetperf.ps1 `
           -LogProfile ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }} `
           -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} `
           -environment ${{ matrix.env }} `
@@ -214,32 +326,55 @@ jobs:
           -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
     - name: Upload Test Results JSON
       if: ${{ always() }}
-      uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
       with:
         name: json-test-results-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}.json
         path: json-test-results-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}.json
     - name: Upload Logs
       if: ${{ always() }}
-      uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
       with:
         name: logs-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
         path: artifacts/logs
         if-no-files-found: ignore
     - name: Upload Full Latency Curves
       if: ${{ always() }}
-      uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
       with:
         name: latency-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
         path: latency.txt
         if-no-files-found: ignore
+
+  attempt-reset-lab:
+    name: Attempting to reset lab. Status of this job does not indicate result of lab reset. Look at job details.
+    needs: [run-secnetperf]
+    if: ${{ always() }}
+    uses: microsoft/netperf/.github/workflows/schedule-lab-reset.yml@main
+    with:
+      workflowId: ${{ github.run_id }}
+
+  cleanup-cache:
+    name: Cleanup Remote Cache Metadata
+    if: ${{ always() }}
+    needs: [run-secnetperf-1es]
+    runs-on: 'windows-latest'
+    steps:
+    - name: Send cleanup request to endpoint
+      run: |
+        $headers = @{
+          "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
+        }
+        $url = "https://netperfapi.azurewebsites.net/cleanuprun?runid=${{ github.run_id }}"
+        Invoke-WebRequest -Uri $url -Headers $headers
 
   #
   # Post Processing Jobs
   #
   generate-summary:
     name: Results
-    needs: [run-secnetperf]
+    needs: [run-secnetperf, run-secnetperf-1es] # TODO: Add 'observe-lab' once we fully transition to a stateless lab.
     runs-on: 'ubuntu-20.04'
+    continue-on-error: true
     steps:
     - name: Checkout repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
@@ -255,8 +390,7 @@ jobs:
   save-test-results:
     permissions: write-all
     name: Persist Results in DB
-    needs: [run-secnetperf]
-    if: ${{ (github.event_name == 'repository_dispatch' && github.event.client_payload.pr == '') || inputs.commit }}
+    needs: [run-secnetperf, run-secnetperf-1es] # TODO: Add 'observe-lab' once we fully transition to a stateless lab.
     strategy:
       fail-fast: false
     runs-on: 'ubuntu-20.04'
@@ -269,9 +403,27 @@ jobs:
     - uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
       with:
         pattern: json-test-results-*
-    - run: python sql.py --featureint 2
+    - name: Remove deprecated python scripts
+      run: rm -rf *.py
+    - name: Fetch sql.py and generate_historical_data.py
+      run: |
+        wget https://raw.githubusercontent.com/microsoft/netperf/main/pipeline/sql.py
+        wget https://raw.githubusercontent.com/microsoft/netperf/main/pipeline/generate_historical_data.py
+    - run: python sql.py
+    - run: python generate_historical_data.py
+    - name: Move all generated historical data json files to a new folder
+      run: |
+        mkdir history_pages
+        mv historical*.json history_pages
+    - run: ls
+    - name: Upload history pages
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      with:
+        name: history_pages
+        path: history_pages
     - run: ls
     - name: Git commit
+      if: ${{ (github.event_name == 'repository_dispatch' && github.event.client_payload.pr == '') || inputs.commit }}
       run: 'git config user.name "QUIC Dev[bot]" && git config user.email "quicdev@microsoft.com" && git add netperf.sqlite && git add full_latencies && git commit -m "Update DB" && git push'
 
   update-intermediary-dashboard-json:
@@ -290,15 +442,26 @@ jobs:
     - run: 'rm -rf *.json'
     - uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
       with:
+        name: history_pages
+        path: history_pages
+    - run: ls
+    - name: Flatten directory structure
+      run: |
+        mv history_pages/*.json .
+        rm -rf history_pages
+    - uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+      with:
         pattern: "json-test-results-*"
-    - run: python generate_historical_data.py
+    - run: ls
     - name: Git commit
+      if: ${{ (github.event_name == 'repository_dispatch' && github.event.client_payload.pr == '') || inputs.commit }}
       run: 'git config user.name "QUIC Dev[bot]" && git config user.email "quicdev@microsoft.com" && git pull && git add *.json && git commit -m "Update intermediary dashboard files" && git push'
 
   regression-detection:
     permissions: write-all
     name: Update Regression Metrics
     needs: [update-intermediary-dashboard-json]
+    continue-on-error: true
     strategy:
       fail-fast: false
     runs-on: 'ubuntu-20.04'
@@ -310,5 +473,6 @@ jobs:
         ref: sqlite
     - run: ls
     - run: python regression.py
-    - name: Git commit # TODO: Squash history for this branch to keep size small
+    - name: Git commit
+      if: ${{ (github.event_name == 'repository_dispatch' && github.event.client_payload.pr == '') || inputs.commit }}
       run: 'git config user.name "QUIC Dev[bot]" && git config user.email "quicdev@microsoft.com" && git add *.json && git commit -m "Update regression metrics" && git push'

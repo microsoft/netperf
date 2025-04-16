@@ -72,12 +72,6 @@ else
 # NOTE: Need to further investigate permissions and ideally remove the 777 chmod.
   echo "================= Adding 'Subsystem powershell /usr/bin/pwsh -sshs -NoLogo -NoProfile' to /etc/ssh/sshd_config. ================="
   echo "Subsystem powershell /usr/bin/pwsh -sshs -NoLogo -NoProfile" | sudo tee -a /etc/ssh/sshd_config
-  echo ">>> installing sshpass"
-  sudo apt install sshpass -y
-  echo ">>> Adding new SSH key pair to netperf peer"
-  ssh-keygen -t rsa -N "" -f $HOME/.ssh/id_rsa
-  sudo sshpass -p $password ssh-copy-id -i $HOME/.ssh/id_rsa.pub -o StrictHostKeyChecking=no $username@$peerip
-  chmod 777 $HOME/.ssh/id_rsa
   sudo systemctl restart ssh
 fi
 

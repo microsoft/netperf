@@ -2,6 +2,7 @@
 
 import { useEffect, useState, Fragment } from "react";
 import { GraphView } from 'src/sections/overview/graphing';
+import Slider from '@mui/material/Slider';
 
 const FullLatCurve = (props) => {
     const { tcpiocp, quiciocp, tcpepoll, quicepoll, quicxdp, quicwsk, commitIndex } = props;
@@ -13,6 +14,7 @@ const FullLatCurve = (props) => {
         'QUIC + winXDP',
         'QUIC + wsk',
     ];
+    const [zoom, setZoom] = useState(50);
     const [dataset, setDataset] = useState([]);
     let curve = <div />;
     useEffect(() => {
@@ -72,14 +74,31 @@ const FullLatCurve = (props) => {
                         name: lableNames[idx],
                         type: 'line',
                         fill: 'solid',
-                        data: data.Values.map((x) => Math.min(x, 10000)),
+                        data: data.Values,
                     }
                 })
-            } />
+            }
+            options = {{
+                yaxis: {
+                    max:zoom*8
+                },
+                xaxis: {
+                    tickAmount: 8,
+                    labels: {
+                        hideOverlappingLabels: true,
+                    }
+                },
+            }}
+            />
     }
+
+    const handleChange = (e, newValue) => {
+        setZoom(newValue);
+    };
 
     return (
         <Fragment>
+            <Slider defaultValue={50} aria-label="Default" valueLabelDisplay="auto" onChange={handleChange} />
             {curve}
         </Fragment>
     );

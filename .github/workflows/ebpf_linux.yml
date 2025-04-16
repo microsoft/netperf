@@ -19,7 +19,7 @@ on:
     branches:
     - main
     paths:
-    - .github/workflows/ebpf.yml
+    - .github/workflows/ebpf_linux.yml
 
   repository_dispatch:
     types: [run-ebpf-linux]
@@ -40,7 +40,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5 # v2.7.0
       with:
         ref: ${{ github.event.client_payload.pr || github.event.client_payload.sha || inputs.ref || github.event.pull_request.head.sha || 'main' }}
         submodules: 'recursive'
@@ -94,7 +94,7 @@ jobs:
         exit ${PIPESTATUS[0]}
 
     - name: Upload results
-      uses: actions/upload-artifact@82c141cc518b40d92cc801eee768e7aafc9c2fa2 # v2.3.1
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
       with:
         name: results-${{env.BUILD_TYPE}}-${{inputs.platform}}-${{inputs.option}}
         path: |

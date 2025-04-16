@@ -1,0 +1,97 @@
+name: lab-quic-callee
+
+on:
+  repository_dispatch:
+    types: [lab-quic-callee]
+
+jobs:
+  netperf-register:
+    name: For ${{ github.event.client_payload.unique_env_str }}
+    runs-on: windows-latest
+    steps:
+      - name: Print input params
+        run: |
+          echo "assigned_runner: ${{ github.event.client_payload.assigned_runner }}"
+          echo "unique_env_str: ${{ github.event.client_payload.unique_env_str }}"
+          echo "os: ${{ github.event.client_payload.os }}"
+          echo "io: ${{ github.event.client_payload.io }}"
+          echo "tls: ${{ github.event.client_payload.tls }}"
+          echo "arch: ${{ github.event.client_payload.arch }}"
+          echo "caller id: ${{ github.event.client_payload.caller_id }}"
+          echo "sha: ${{ github.event.client_payload.sha }}"
+          echo "ref: ${{ github.event.client_payload.ref }}"
+          echo "pr: ${{ github.event.client_payload.pr }}"
+
+  run-secnetperf:
+    name: secnetperf
+    needs: [netperf-register]
+    runs-on:
+    - self-hosted
+    - ${{ github.event.client_payload.assigned_runner }}
+    steps:
+    - name: Checkout microsoft/msquic
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      with:
+        repository: microsoft/msquic
+        ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+    - name: Checkout code
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      with:
+        path: netperfrepo
+    - name: Lowercase runner.os
+      shell: pwsh
+      run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
+    - name: Download Kernel Drivers
+      uses: ./netperfrepo/.github/actions/download-caller-artifacts
+      if: ${{ github.event.client_payload.io == 'wsk' }}
+      with:
+        caller_id: ${{ github.event.client_payload.caller_id }}
+        name: Release-winkernel-${{ github.event.client_payload.os == 'windows-2025' && 'windows-2022' || github.event.client_payload.os }}-${{ github.event.client_payload.arch }}-${{ github.event.client_payload.tls }}
+        gh_token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Download Artifacts
+      uses: ./netperfrepo/.github/actions/download-caller-artifacts
+      with:
+        caller_id: ${{ github.event.client_payload.caller_id }}
+        name: Release-${{env.OS}}-${{ github.event.client_payload.os == 'windows-2025' && 'windows-2022' || github.event.client_payload.os }}-${{ github.event.client_payload.arch }}-${{ github.event.client_payload.tls }}-Perf
+        gh_token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Download Regression.json file
+      run: Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/regression.json" -OutFile "regression.json"
+      shell: pwsh
+    - name: Download Watermark_Regression.json file
+      run: Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/watermark_regression.json" -OutFile "watermark_regression.json"
+      shell: pwsh
+    - name: Run secnetperf
+      shell: pwsh
+      timeout-minutes: 40
+      run: |
+          $env:netperf_remote_powershell_supported = $true
+          ./scripts/secnetperf.ps1 `
+          -LogProfile ${{ github.event.client_payload.logs || 'NULL' }} `
+          -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} `
+          -environment lab `
+          -plat ${{env.OS}} `
+          -os ${{ github.event.client_payload.os }} `
+          -arch ${{ github.event.client_payload.arch }} `
+          -tls ${{ github.event.client_payload.tls }} `
+          -io ${{ github.event.client_payload.io }} `
+          -filter '${{ github.event.client_payload.filter || '' }}'
+    - name: Upload Test Results JSON
+      if: ${{ always() }}
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      with:
+        name: json-test-results-lab-${{ github.event.client_payload.os }}-${{ github.event.client_payload.arch }}-${{ github.event.client_payload.tls }}-${{ github.event.client_payload.io }}.json
+        path: json-test-results-lab-${{ github.event.client_payload.os }}-${{ github.event.client_payload.arch }}-${{ github.event.client_payload.tls }}-${{ github.event.client_payload.io }}.json
+    - name: Upload Logs
+      if: ${{ always() }}
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      with:
+        name: logs-lab-${{ github.event.client_payload.os }}-${{ github.event.client_payload.arch }}-${{ github.event.client_payload.tls }}-${{ github.event.client_payload.io }}
+        path: artifacts/logs
+        if-no-files-found: ignore
+    - name: Upload Full Latency Curves
+      if: ${{ always() }}
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      with:
+        name: latency-lab-${{ github.event.client_payload.os }}-${{ github.event.client_payload.arch }}-${{ github.event.client_payload.tls }}-${{ github.event.client_payload.io }}
+        path: latency.txt
+        if-no-files-found: ignore
