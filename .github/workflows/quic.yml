@@ -154,11 +154,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: 'ubuntu-22.04'
+          - os: 'ubuntu-20.04'
             tls: 'openssl'
-          - os: 'ubuntu-22.04'
+          - os: 'ubuntu-20.04'
             tls: 'openssl3'
-    uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml@main
+    uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml@jackhe/fix-for-ubuntu-20.04
     with:
       os: ${{ matrix.os }}
       tls: ${{ matrix.tls }}
@@ -200,7 +200,7 @@ jobs:
     - name: Download Artifacts
       uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
       with:
-        name: Release-${{env.OS}}-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os == 'ubuntu-20.04' && 'ubuntu-22.04' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-Perf
+        name: Release-${{env.OS}}-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-Perf
         path: artifacts
     - name: Download Kernel Artifacts
       uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
@@ -301,7 +301,7 @@ jobs:
     - name: Download Artifacts
       uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
       with:
-        name: Release-${{env.OS}}-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os == 'ubuntu-20.04' && 'ubuntu-22.04' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-Perf
+        name: Release-${{env.OS}}-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-Perf
         path: artifacts
     - name: Download Regression.json file
       run: Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/netperf/sqlite/regression.json" -OutFile "regression.json"
