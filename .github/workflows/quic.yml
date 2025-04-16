@@ -147,24 +147,24 @@ jobs:
       os: ${{ matrix.os }}
       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
-  # build-unix:
-  #   name: Build Unix
-  #   needs: []
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       include:
-  #         - os: 'ubuntu-20.04'
-  #           tls: 'openssl'
-  #         - os: 'ubuntu-22.04'
-  #           tls: 'openssl3'
-  #   uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml@main
-  #   with:
-  #     os: ${{ matrix.os }}
-  #     tls: ${{ matrix.tls }}
-  #     xdp: ${{ matrix.xdp }}
-  #     build: -Perf
-  #     ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+  build-unix:
+    name: Build Unix
+    needs: []
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: 'ubuntu-20.04'
+            tls: 'openssl'
+          - os: 'ubuntu-22.04'
+            tls: 'openssl3'
+    uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml@test-unix-fix
+    with:
+      os: ${{ matrix.os }}
+      tls: ${{ matrix.tls }}
+      xdp: ${{ matrix.xdp }}
+      build: -Perf
+      ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
   prepare-matrix:
     name: Prepare lab matrix, and Azure 1ES matrix.
@@ -175,7 +175,7 @@ jobs:
 
   run-secnetperf-1es:
     name: ${{ matrix.optional == 'TRUE' && '[UNRELIABLE]-' || '' }}azure-${{ matrix.os }}-${{ matrix.io }}-${{ matrix.role }}-${{ matrix.tls }}-${{ matrix.arch }}
-    needs: [prepare-matrix, build-windows, build-windows-kernel]
+    needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
     strategy:
       fail-fast: false
       matrix:
@@ -272,7 +272,7 @@ jobs:
   #
   run-secnetperf:
     name:  ${{ matrix.optional == 'TRUE' && '[UNRELIABLE]-' || '' }}lab-${{ matrix.os }}-${{ matrix.io }}-${{ matrix.tls }}-${{ matrix.arch }}
-    needs: [prepare-matrix, build-windows, build-windows-kernel]
+    needs: [prepare-matrix, build-windows, build-windows-kernel, build-unix]
     strategy:
       fail-fast: false
       matrix:
