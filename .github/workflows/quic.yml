@@ -158,7 +158,7 @@ jobs:
             tls: 'openssl'
           - os: 'ubuntu-20.04'
             tls: 'openssl3'
-    uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml@jackhe/fix-for-ubuntu-20.04
+    uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml@main
     with:
       os: ${{ matrix.os }}
       tls: ${{ matrix.tls }}
