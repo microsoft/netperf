@@ -345,14 +345,6 @@ jobs:
         path: latency.txt
         if-no-files-found: ignore
 
-  attempt-reset-lab:
-    name: Attempting to reset lab. Status of this job does not indicate result of lab reset. Look at job details.
-    needs: [run-secnetperf]
-    if: ${{ always() }}
-    uses: microsoft/netperf/.github/workflows/schedule-lab-reset.yml@main
-    with:
-      workflowId: ${{ github.run_id }}
-
   cleanup-cache:
     name: Cleanup Remote Cache Metadata
     if: ${{ always() }}
