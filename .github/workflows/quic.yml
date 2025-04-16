@@ -127,7 +127,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ['windows-2022']
-        tls: [schannel] # , openssl, openssl3]
+        tls: [schannel, openssl, openssl3]
     uses: microsoft/msquic/.github/workflows/build-reuse-win.yml@main
     with:
       os: ${{ matrix.os }}
@@ -154,7 +154,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: 'ubuntu-20.04'
+          - os: 'ubuntu-22.04'
             tls: 'openssl'
           - os: 'ubuntu-22.04'
             tls: 'openssl3'
