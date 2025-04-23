@@ -15,9 +15,7 @@ Historically, networking performance testing has been spotty, inconsistent, not 
 
 ## Documentation
 
-- [Questions](./docs/questions.md) we're trying to answer
-- [Machine](./docs/machines.md) hardware and configuration used for testing
-- [Architecture](./docs/arch.md) and design of the project
+- [Start Here](./docs/start_here.md) 
 
 ## Contributing
 
