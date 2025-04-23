@@ -17,14 +17,14 @@ Netperf has a protocol for tagging runners, and assigning them to certain jobs.
 
 
 
-![](runner-table.png)
+![](internal/runner-table.png)
 
 ## Ephemeral Runners
 
 The logic for acheiving statelessness between each lab run is done through the use of Hyper-V checkpoint resets. These resets happen on a schedule (every 6 hours) and after each performance test run. See the workflow: `.github/workflows/schedule-lab-reset.yml`. **Running the reset workflow will reset all the physical hosts added to the Netperf Bench.**
 
 Source of truth for Netperf bench:  `.github/workflows/auto-reset-parent-or-child-lab-machine.yml` (the reset workflow):
-![alt text](image.png)
+![alt text](internal/image.png)
 
 You might be wondering what happens if we enqueue a reset workflow run while a perf job (on a lab hyper-V VM)
 is still
