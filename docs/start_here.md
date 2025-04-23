@@ -11,5 +11,5 @@
 
  **Give me the high level overview of Netperf's architecture.** See: [arch.md](arch.md)
 
-**FAQ:**
+**What questions we are trying to answer with Netperf?**
 See: [questions.md](questions.md)
