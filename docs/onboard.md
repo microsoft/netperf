@@ -4,7 +4,7 @@ Create the performance testing workflow for your project in `.github/workflows/<
 
 The details of your performance test (what you measure, how you measure it) is entirely up to you. Netperf merely supplies the hardware + engineering systems infrastructure to run the tests. See [lab_consumption.md](lab_consumption.md) to leverage the lab infrastructure. Open an issue if you want to leverage the Azure infrastructure.
 
-Netperf also offers an API to collect the results into a database, and then visualize them in a dashboard. You do not have use this API to use Netperf. Currently, MsQuic leverages this API to collect data and the results of perf tests can be seen on https://microsoft.github.io/netperf/dist/, while eBPF for Windows does not (they use Grafana instead).
+Netperf also offers an API to collect the results into a database, and then visualize them in a dashboard. You do not have to use this API to use Netperf. Currently, MsQuic leverages this API to collect data and the results of perf tests can be seen on https://microsoft.github.io/netperf/dist/, while eBPF for Windows does not (they use Grafana instead).
 
 If you're interested in this API, see [internal/database.md](internal/database.md) to learn our schema of representing performance data, `/dashboard` for our React frontend dashboard, and open an issue if this works for your project.
 
