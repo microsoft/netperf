@@ -1,3 +1,5 @@
+# Lab Management
+
 ## Github self-hosted runners
 
 We use it for everything lab related. Self hosted runners are essentially agents running on a machine/VM that can accept jobs to execute. Netperf runs these agents in a service so it's always up and running.
@@ -24,7 +26,23 @@ Netperf has a protocol for tagging runners, and assigning them to certain jobs.
 The logic for acheiving statelessness between each lab run is done through the use of Hyper-V checkpoint resets. These resets happen on a schedule (every 6 hours) and after each performance test run. See the workflow: `.github/workflows/schedule-lab-reset.yml`. **Running the reset workflow will reset all the physical hosts added to the Netperf Bench.**
 
 Source of truth for Netperf bench:  `.github/workflows/auto-reset-parent-or-child-lab-machine.yml` (the reset workflow):
-![alt text](internal/image.png)
+
+```yaml
+strategy:
+      fail-fast: false
+      matrix:
+        vec: [
+          { parent-or-child: "parent=rr1-netperf-26\\localadminuser",   vm-name: "netperf-windows-2022-client" },
+          { parent-or-child: "child=rr1-netperf-25\\localadminuser",    vm-name: "netperf-windows-2022-server" },
+          { parent-or-child: "child=rr1-netperf-05\\localadminuser",    vm-name: "netperf" },
+          { parent-or-child: "parent=rr1-netperf-10\\localadminuser",   vm-name: "netperf" },
+          { parent-or-child: "child=rr1-netperf-42\\localadminuser",    vm-name: "netperf-windows-2022-server" },
+          { parent-or-child: "parent=rr1-netperf-43\\localadminuser",   vm-name: "netperf-windows-2022-client" },
+          { parent-or-child: "child=rr1-netperf-11\\localadminuser",    vm-name: "netperf-linux-server" },
+          { parent-or-child: "parent=rr1-netperf-12\\localadminuser",   vm-name: "netperf-linux-client" },
+          # ... add more as we scale up the lab (purchase arm64 hardware)
+        ]
+```
 
 You might be wondering what happens if we enqueue a reset workflow run while a perf job (on a lab hyper-V VM)
 is still

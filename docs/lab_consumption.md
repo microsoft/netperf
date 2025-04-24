@@ -1,3 +1,4 @@
+# Lab Consumption
 
 Write your performance test workflow like:
 ```yaml
