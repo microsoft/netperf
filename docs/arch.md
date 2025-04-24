@@ -2,7 +2,7 @@
 
 This repository maintains a GitHub Action for each different test scenario, [quic.yml](../.github/workflows/quic.yml) for MsQuic for instance, that can be triggered by any project with the appropriate access (controlled via PAT).  The Action then queues one or more jobs on the shared pool of dedicated hardware machines to run the necessary tests.
 
-![](arch.png)
+![](internal/arch.png)
 
 ## Usage
 
