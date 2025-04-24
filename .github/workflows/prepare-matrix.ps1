@@ -76,6 +76,10 @@ foreach ($entry in $MatrixJson) {
         $labclient | Add-Member -MemberType NoteProperty -Name "role" -Value "client"
         $labclient | Add-Member -MemberType NoteProperty -Name "env_str" -Value $env_str
 
+        if (!("assigned_lab_vm_runner_tag" -in $entry.PSObject.Properties.Name)) {
+            $labclient | Add-Member -MemberType NoteProperty -Name "assigned_lab_vm_runner_tag" -Value "lab"
+        }
+
         if ("in_staging_mode" -in $entry.PSObject.Properties.Name) {
             $labclient | Add-Member -MemberType NoteProperty -Name "optional" -Value 'TRUE'
         } else {

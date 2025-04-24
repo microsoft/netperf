@@ -281,6 +281,7 @@ jobs:
     - ${{ matrix.runner_id || matrix.env }} # Use auto-generated 'runner id' if present, otherwise assign to 'env'.
     - os-${{ matrix.os }}
     - ${{ matrix.arch }}
+    - ${{ matrix.assigned_lab_vm_runner_tag }}
     steps:
     - name: Checkout microsoft/msquic
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
