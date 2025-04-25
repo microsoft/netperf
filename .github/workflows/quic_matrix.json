@@ -1,6 +1,7 @@
 [
-    { "env": "lab",   "os": "windows-2022", "arch": "x64", "tls": "schannel", "io": "iocp", "assigned_lab_vm_runner_tag": "vm-27-28" },
-    { "env": "lab",   "os": "windows-2022", "arch": "x64", "tls": "schannel", "io": "xdp", "assigned_lab_vm_runner_tag": "vm-27-28" },
-    { "env": "lab",   "os": "windows-2022", "arch": "x64", "tls": "schannel", "io": "wsk", "assigned_lab_vm_runner_tag": "vm-27-28" },
-    { "env": "lab",   "os": "ubuntu-20.04", "arch": "x64", "tls": "quictls",  "io": "epoll" }
+    { "env": "lab-stateless",   "os": "windows-2022", "arch": "x64", "tls": "schannel", "io": "iocp", "assigned_lab_vm_runner_tag": "vm-01-02" },
+    { "env": "lab-stateless",   "os": "windows-2022", "arch": "x64", "tls": "schannel", "io": "iocp", "assigned_lab_vm_runner_tag": "vm-03-04" },
+    { "env": "lab-stateless",   "os": "windows-2022", "arch": "x64", "tls": "schannel", "io": "iocp", "assigned_lab_vm_runner_tag": "vm-05-06" },
+    { "env": "lab-stateless",   "os": "windows-2022", "arch": "x64", "tls": "schannel", "io": "iocp", "assigned_lab_vm_runner_tag": "vm-07-08" },
+    { "env": "lab-stateless",   "os": "windows-2022", "arch": "x64", "tls": "schannel", "io": "iocp", "assigned_lab_vm_runner_tag": "vm-09-10" }
 ]
