@@ -81,14 +81,14 @@ jobs:
       fail-fast: false
       matrix:
         vec: [
-          { parent-or-child: "parent=rr1-netperf-01\\localadminuser",   vm-name: "netperf-windows-2022-client" },
-          { parent-or-child: "child=rr1-netperf-02\\localadminuser",    vm-name: "netperf-windows-2022-server" },
-          { parent-or-child: "child=rr1-netperf-03\\localadminuser",    vm-name: "netperf-windows-2022-client" },
-          { parent-or-child: "parent=rr1-netperf-04\\localadminuser",   vm-name: "netperf-windows-2022-server" },
-          { parent-or-child: "child=rr1-netperf-06\\localadminuser",    vm-name: "netperf-windows-2022-client" },
-          { parent-or-child: "parent=rr1-netperf-07\\localadminuser",   vm-name: "netperf-windows-2022-server" },
-          { parent-or-child: "child=rr1-netperf-08\\localadminuser",    vm-name: "netperf-windows-2022-client" },
-          { parent-or-child: "parent=rr1-netperf-09\\localadminuser",   vm-name: "netperf-windows-2022-server" }
+          { parent-or-child: "child=rr1-netperf-01\\localadminuser",     vm-name: "netperf-windows-2022-client" },
+          { parent-or-child: "parent=rr1-netperf-02\\localadminuser",    vm-name: "netperf-windows-2022-server" },
+          { parent-or-child: "child=rr1-netperf-03\\localadminuser",     vm-name: "netperf-windows-2022-client" },
+          { parent-or-child: "parent=rr1-netperf-04\\localadminuser",    vm-name: "netperf-windows-2022-server" },
+          { parent-or-child: "child=rr1-netperf-06\\localadminuser",     vm-name: "netperf-windows-2022-client" },
+          { parent-or-child: "parent=rr1-netperf-07\\localadminuser",    vm-name: "netperf-windows-2022-server" },
+          { parent-or-child: "child=rr1-netperf-08\\localadminuser",     vm-name: "netperf-windows-2022-client" },
+          { parent-or-child: "parent=rr1-netperf-09\\localadminuser",    vm-name: "netperf-windows-2022-server" }
         ]
     runs-on:
       - self-hosted
