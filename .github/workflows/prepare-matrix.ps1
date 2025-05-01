@@ -18,17 +18,18 @@ $FullJson = @()
 
 foreach ($entry in $MatrixJson) {
     if ($entry.env -match "azure") {
-        $Windows2022Pool = "netperf-actual-boosted-winprerelease" # TODO: "boost-prerelease" name is misleading. Change it to be "boosted-windows-2022".
-        $Ubuntu2004Pool = "netperf-boosted-linux-pool" # NOTE: This pool is using experimental boost SKUs.
-        $Windows2025Pool = "netperf-boosted-windows-pool" # NOTE: This runs the latest ge_current_directiof_stack build.
+        # fromJson('[''self-hosted'', ''1ES.Pool=1es-msquic-pool'', ''1ES.ImageOverride=WinServerPrerelease-LatestPwsh'']')
+        $Windows2022Pool = "fromJson('[''self-hosted'', ''1ES.Pool=netperf-actual-boosted-winprerelease'']')" # TODO: "boost-prerelease" name is misleading. Change it to be "boosted-windows-2022".
+        $Ubuntu2004Pool = "fromJson('[''self-hosted'', ''1ES.Pool=netperf-boosted-linux-pool'', ''1ES.ImageOverride=boosted-netperf-ubuntu-20.04-gen2'']')" # NOTE: This pool is using experimental boost SKUs.
+        $Windows2025Pool = "fromJson('[''self-hosted'', ''1ES.Pool=netperf-boosted-windows-pool'']')" # NOTE: This runs the latest ge_current_directiof_stack build.
         $client = $entry.PSObject.Copy()
         $server = $entry.PSObject.Copy()
 
         $hasPreferredPoolSku = $entry.PSObject.Properties.Name -contains "preferred_pool_sku"
         if ($hasPreferredPoolSku) {
             if ($entry.preferred_pool_sku -eq "Standard_F8s_v2") {
-                $Windows2022Pool = "netperf-f-series-windows-2022"
-                $Ubuntu2004Pool = "netperf-f-series-ubuntu-20.04"
+                $Windows2022Pool = "fromJson('[''self-hosted'', ''1ES.Pool=netperf-f-series-windows-2022'']')"
+                $Ubuntu2004Pool = "fromJson('[''self-hosted'', ''1ES.Pool=netperf-f-series-ubuntu-20.04'']')"
             }
         }
 
