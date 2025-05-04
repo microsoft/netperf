@@ -19,17 +19,18 @@ $FullJson = @()
 foreach ($entry in $MatrixJson) {
     if ($entry.env -match "azure") {
         # fromJson('[''self-hosted'', ''1ES.Pool=1es-msquic-pool'', ''1ES.ImageOverride=WinServerPrerelease-LatestPwsh'']')
-        $Windows2022Pool = "fromJson('[''self-hosted'', ''1ES.Pool=netperf-actual-boosted-winprerelease'']')" # TODO: "boost-prerelease" name is misleading. Change it to be "boosted-windows-2022".
-        $Ubuntu2004Pool = "fromJson('[''self-hosted'', ''1ES.Pool=netperf-boosted-linux-pool'', ''1ES.ImageOverride=boosted-netperf-ubuntu-20.04-gen2'']')" # NOTE: This pool is using experimental boost SKUs.
-        $Windows2025Pool = "fromJson('[''self-hosted'', ''1ES.Pool=netperf-boosted-windows-pool'']')" # NOTE: This runs the latest ge_current_directiof_stack build.
+        $Windows2022Pool = "'[''self-hosted'', ''1ES.Pool=netperf-actual-boosted-winprerelease'']'" # TODO: "boost-prerelease" name is misleading. Change it to be "boosted-windows-2022".
+        $Ubuntu2004Pool = "'[''self-hosted'', ''1ES.Pool=netperf-boosted-linux-pool'', ''1ES.ImageOverride=boosted-netperf-ubuntu-20.04-gen2'']'" # NOTE: This pool is using experimental boost SKUs.
+        $Ubuntu2404Pool = "'[''self-hosted'', ''1ES.Pool=netperf-boosted-linux-pool'', ''1ES.ImageOverride=boosted-netperf-ubuntu-24.04-gen2'']'" # NOTE: This pool is using experimental boost SKUs.
+        $Windows2025Pool = "'[''self-hosted'', ''1ES.Pool=netperf-boosted-windows-pool'']'" # NOTE: This runs the latest ge_current_directiof_stack build.
         $client = $entry.PSObject.Copy()
         $server = $entry.PSObject.Copy()
 
         $hasPreferredPoolSku = $entry.PSObject.Properties.Name -contains "preferred_pool_sku"
         if ($hasPreferredPoolSku) {
             if ($entry.preferred_pool_sku -eq "Standard_F8s_v2") {
-                $Windows2022Pool = "fromJson('[''self-hosted'', ''1ES.Pool=netperf-f-series-windows-2022'']')"
-                $Ubuntu2004Pool = "fromJson('[''self-hosted'', ''1ES.Pool=netperf-f-series-ubuntu-20.04'']')"
+                $Windows2022Pool = "'[''self-hosted'', ''1ES.Pool=netperf-f-series-windows-2022'']'"
+                $Ubuntu2004Pool = "'[''self-hosted'', ''1ES.Pool=netperf-f-series-ubuntu-20.04'']'"
             }
         }
 
@@ -42,6 +43,11 @@ foreach ($entry in $MatrixJson) {
         } elseif ($entry.os -match "ubuntu-20.04") {
             $client | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value $Ubuntu2004Pool
             $server | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value $Ubuntu2004Pool
+            $client | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
+            $server | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
+        } elseif ($entry.os -match "ubuntu-24.04") {
+            $client | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value $Ubuntu2404Pool
+            $server | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value $Ubuntu2404Pool
             $client | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
             $server | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
         } elseif ($entry.os -match "windows-2025") {
