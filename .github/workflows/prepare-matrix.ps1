@@ -41,6 +41,8 @@ foreach ($entry in $MatrixJson) {
             $server | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value $Windows2022Pool
             $client | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
             $server | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
+            $client.assigned_os = "managed-windows-2022-gen2-try3"
+            $server.assigned_os = "managed-windows-2022-gen2-try3"
         } elseif ($entry.os -match "ubuntu-20.04") {
             $client | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value $UbuntuPool
             $server | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value $UbuntuPool
@@ -60,6 +62,8 @@ foreach ($entry in $MatrixJson) {
             $server | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value $Windows2025Pool
             $client | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
             $server | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
+            $client.assigned_os = "nvme-enabled-ge_current_directiof_stack-try2"
+            $server.assigned_os = "nvme-enabled-ge_current_directiof_stack-try2"
         } else {
             throw "Invalid OS entry (Must be either windows-2022 or ubuntu-20.04). Got: $($entry.os)"
         }
