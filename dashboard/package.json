@@ -57,7 +57,7 @@
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-unused-imports": "^3.0.0",
     "prettier": "^3.5.3",
-    "vite": "^6.2.6",
+    "vite": "^6.3.5",
     "vite-plugin-checker": "^0.8.0"
   },
   "homepage": "https://microsoft.github.io/netperf/dist"
