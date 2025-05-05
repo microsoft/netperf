@@ -153,12 +153,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ['ubuntu-20.04', 'ubuntu-24.04']
+        os: ['ubuntu-20.04', 'ubuntu-24.04']
+        tls: ['quictls']
     uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml@main
     with:
       os: ${{ matrix.os }}
-      tls: 'quictls'
+      tls: ${{ matrix.tls }}
       xdp: ${{ matrix.xdp }}
       build: -Perf
       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
