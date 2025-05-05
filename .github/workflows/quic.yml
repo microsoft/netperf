@@ -153,9 +153,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: 'ubuntu-20.04'
-            tls: 'quictls'
+        os: ['ubuntu-20.04', 'ubuntu-24.04']
+        tls: ['quictls']
     uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml@main
     with:
       os: ${{ matrix.os }}
@@ -182,6 +181,7 @@ jobs:
     runs-on:
     - self-hosted
     - 1ES.Pool=${{ matrix.assigned_pool }}
+    - 1ES.ImageOverride=${{ matrix.assigned_os }}
     steps:
     - name: Checkout microsoft/msquic
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
