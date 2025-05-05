@@ -155,7 +155,7 @@ jobs:
       matrix:
         include:
           - os: ['ubuntu-20.04', 'ubuntu-24.04']
-            tls: 'quictls'
+            tls: ['quictls']
     uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml@main
     with:
       os: ${{ matrix.os }}
