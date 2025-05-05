@@ -3,6 +3,7 @@
     { "env": "azure", "os": "windows-2022", "arch": "x64", "tls": "schannel", "io": "xdp", "preferred_pool_sku": "Experimental_Boost4" },
     { "env": "azure", "os": "windows-2022", "arch": "x64", "tls": "schannel", "io": "wsk", "preferred_pool_sku": "Experimental_Boost4" },
     { "env": "azure", "os": "ubuntu-20.04", "arch": "x64", "tls": "quictls",  "io": "epoll", "preferred_pool_sku": "Experimental_Boost4" },
+    { "env": "azure", "os": "ubuntu-24.04", "arch": "x64", "tls": "quictls",  "io": "epoll", "preferred_pool_sku": "Experimental_Boost4" },
     { "env": "azure", "os": "windows-2025", "arch": "x64", "tls": "schannel", "io": "iocp", "preferred_pool_sku": "Experimental_Boost4" },
     { "env": "azure", "os": "windows-2025", "arch": "x64", "tls": "schannel", "io": "xdp", "preferred_pool_sku": "Experimental_Boost4" },
     { "env": "azure", "os": "windows-2025", "arch": "x64", "tls": "schannel", "io": "wsk", "preferred_pool_sku": "Experimental_Boost4" }
