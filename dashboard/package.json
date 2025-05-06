@@ -25,7 +25,7 @@
     "@faker-js/faker": "^9.7.0",
     "@iconify/react": "^5.2.1",
     "@mui/lab": "^5.0.0-alpha.165",
-    "@mui/material": "^5.15.13",
+    "@mui/material": "^7.1.0",
     "apexcharts": "3.44.2",
     "chart.js": "^4.4.8",
     "date-fns": "^3.5.0",
