@@ -40,7 +40,7 @@ concurrency:
 
 # Need to determine why this is required.
 permissions: write-all
- 
+
 
 jobs:
   # For automated identification of the workflow.
@@ -48,7 +48,7 @@ jobs:
     name: For ${{ github.event.client_payload.guid }}
     if: ${{ github.event_name == 'repository_dispatch' }}
     needs: []
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     steps:
     - run: |
         echo "guid: ${{ github.event.client_payload.guid }}"
@@ -239,7 +239,7 @@ jobs:
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
       with:
         name: cts_traffic_baseline_${{ matrix.env }}_${{ matrix.os }}_${{ matrix.arch }}
-        path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv 
+        path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv
 
     - name: Attach xdp baseline program to interface (first program in xdp.sys)
       working-directory: ${{ github.workspace }}\bpf_performance
@@ -293,7 +293,7 @@ jobs:
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
       with:
         name: cts_traffic_xdp_${{ matrix.env }}_${{ matrix.os }}_${{ matrix.arch }}
-        path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv 
+        path: ${{ github.workspace }}\cts-traffic\ctsTrafficResults.csv
 
     - name: Run BPF performance tests
       working-directory: ${{ github.workspace }}\bpf_performance
@@ -351,11 +351,10 @@ jobs:
         if (Test-Path ${{ github.workspace }}\xdp) { Remove-Item -Recurse -Force ${{ github.workspace }}\xdp }
         if (Test-Path ${{ github.workspace }}\cts-traffic) { Remove-Item -Recurse -Force ${{ github.workspace }}\cts-traffic }
         if (Test-Path ${{ github.workspace }}\ETL) { Remove-Item -Recurse -Force ${{ github.workspace }}\ETL }
-        
+
     - name: Restore Windows Defender exclusions
       if: always()
       run: |
         Remove-MpPreference -ExclusionPath ${{ github.workspace }}
         Update-MpSignature -Verbose
         Start-MpScan -ScanType QuickScan
-

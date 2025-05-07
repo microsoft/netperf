@@ -60,7 +60,7 @@ export default function RpsPage() {
 
   const [windowsOs, setWindowsOs] = useState('windows-2022-x64')
 
-  const [linuxOs, setLinuxOs] = useState('ubuntu-20.04-x64')
+  const [linuxOs, setLinuxOs] = useState('ubuntu-24.04-x64')
 
   const [testType, setTestType] = useState('rps-up-512-down-4000')
 
@@ -227,7 +227,7 @@ export default function RpsPage() {
               onChange={handleChangeLinuxOs}
               defaultValue={0}
             >
-              <MenuItem value='ubuntu-20.04-x64'>ubuntu-20.04-x64</MenuItem>
+              <MenuItem value='ubuntu-24.04-x64'>ubuntu-24.04-x64</MenuItem>
             </Select>
           </FormControl>
         </Box>

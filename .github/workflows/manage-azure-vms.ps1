@@ -170,7 +170,7 @@ foreach ($entry in $MatrixJson) {
         $entry | Add-Member -MemberType NoteProperty -Name "runner_id" -Value $randomTag
         $AzureJson += $entry
         $ProcessedJson += $entry
-    } elseif ($entry.env -match "azure" -and $entry.os -match "ubuntu-20.04") {
+    } elseif ($entry.env -match "azure" -and $entry.os -match "ubuntu-24.04") {
         continue
     } else {
         $ProcessedJson += $entry

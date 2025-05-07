@@ -11,7 +11,7 @@ param (
     [string]$Password,
 
     [Parameter(Mandatory = $false)]
-    [ValidateSet("windows-2025", "windows-2022", "windows-2019", "ubuntu-22.04", "ubuntu-20.04", "ubuntu-18.04", "mariner-2")]
+    [ValidateSet("windows-2025", "windows-2022", "windows-2019", "ubuntu-22.04", "ubuntu-24.04", "ubuntu-18.04", "mariner-2")]
     [string]$Os = "windows-2022",
 
     [Parameter(Mandatory = $false)]
@@ -50,10 +50,8 @@ if ($Os -eq "windows-2025") {
     $image = "MicrosoftWindowsServer:WindowsServer:2019-datacenter-gensecond:17763.5576.240304"
 } elseif ($Os -eq "ubuntu-22.04") {
     $image = "Canonical:0001-com-ubuntu-server-jammy:22_04-lts-gen2:22.04.202403010"
-} elseif ($Os -eq "ubuntu-20.04") {
-    $image = "Canonical:0001-com-ubuntu-server-focal:20_04-lts-gen2:20.04.202402290"
-} elseif ($Os -eq "ubuntu-18.04") {
-    $image = "Canonical:UbuntuServer:18_04-lts-gen2:18.04.202402250"
+} elseif ($Os -eq "ubuntu-24.04") {
+    $image = " Canonical:0001-com-ubuntu-server-jammy:22_04-lts-gen2:latest"
 } elseif ($Os -eq "mariner-2") {
     $image = "MicrosoftCBLMariner:cbl-mariner:cbl-mariner-2-gen2:2.20240223.01" # This image may not exist
 } else {

@@ -33,9 +33,9 @@ permissions:
 
 jobs:
   build:
-    runs-on: 
+    runs-on:
     - self-hosted
-    - os-ubuntu-20.04
+    - os-ubuntu-24.04
     - x64
 
     steps:
@@ -54,7 +54,7 @@ jobs:
           lcov \
           pkg-config \
           libelf-dev
-    
+
     - name: Clone and build libbpf
       run: |
         git clone https://github.com/libbpf/libbpf.git
@@ -74,7 +74,7 @@ jobs:
         cmake \
           -B ${{github.workspace}}/build \
           -DCMAKE_BUILD_TYPE=Release
-    
+
     - name: Build
       run: |
         cmake --build ${{github.workspace}}/build --config Release -- -j $(nproc)

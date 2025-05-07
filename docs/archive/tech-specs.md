@@ -39,7 +39,7 @@ That is how we do Azure testing today with "temporary" VMs.
 
 In our lab, we set the requirement of 1 VM per host. That means for our tests, we need at least 2 physical hosts.
 
-We manually onboarded Windows 2022 VMs on 2 of our lab machines that we hand-picked. We added the "client" Windows 2022 VM as a self-hosted Github runner with some tags we assigned ourselves. We did the same with Ubuntu 20.04.
+We manually onboarded Windows 2022 VMs on 2 of our lab machines that we hand-picked. We added the "client" Windows 2022 VM as a self-hosted Github runner with some tags we assigned ourselves. We did the same with Ubuntu 24.04.
 
 Whenever we need to run lab tests, our Github Actions workflow runs will reference the static VMs we added.
 
@@ -70,4 +70,3 @@ Either 1ES hosted pool or CloudTest can worry about  giving us the resources per
 We don't need to worry about infrastructure.
 
 Either 1ES hosted pool or CloudTest can worry about  giving us the resources per job (2 **test-ready** VMs) and we can just reference them in our Github Actions workflow.
-

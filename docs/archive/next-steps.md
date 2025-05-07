@@ -12,7 +12,7 @@
 
 ### What needs to be done:
 
-- Stand up the 1ES Azure testing for Windows 2022, Windows Prerelease, Ubuntu 20.04, Ubuntu 22.04 using whatever means to get things functional (~2 weeks)
+- Stand up the 1ES Azure testing for Windows 2022, Windows Prerelease, Ubuntu 24.04, Ubuntu 22.04 using whatever means to get things functional (~2 weeks)
 - Stabilize the static lab machine/VMs to eliminate all the environment errors we're seeing (xdp still running!) (~2 weeks)
 
 # Netperf Release V2

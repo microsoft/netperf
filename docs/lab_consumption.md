@@ -4,8 +4,8 @@ Write your performance test workflow like:
 ```yaml
 jobs:
     Your_Perf_Job:
-        # Currently only windows-2022/ubuntu-20.04 lab runners are available.
-        runs-on: [self-hosted, lab, <windows-2022 / ubuntu-20.04>]
+        # Currently only windows-2022/ubuntu-24.04 lab runners are available.
+        runs-on: [self-hosted, lab, <windows-2022 / ubuntu-24.04>]
         steps:
             - ... # Checkout your project repo...
             - ... # Download your perf tools...
