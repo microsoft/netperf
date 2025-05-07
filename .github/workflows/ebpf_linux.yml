@@ -34,9 +34,7 @@ permissions:
 jobs:
   build:
     runs-on:
-    - self-hosted
-    - os-ubuntu-24.04
-    - x64
+    - ubuntu-24.04
 
     steps:
     - name: Checkout
