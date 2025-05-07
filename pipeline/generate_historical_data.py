@@ -97,7 +97,7 @@ def generate_tput_rps_hps_pages(cursor, all_secnetperf_tests, environment_groups
 
         for os_name, arch, context in environment_groups:
             for io in ["iocp", "epoll", "wsk", "xdp"]:
-                for tls in ["schannel", "openssl"]:
+                for tls in ["schannel", "openssl", "quictls"]:
                     env_id_str = f"{os_name}-{arch}-{context}-{io}-{tls}"
                     if "download" in test_id or "upload" in test_id or "tput" in test_id:
                         if not requires_archived_throughput_data and use_archive:
@@ -184,7 +184,7 @@ def generate_latency_page(cursor, all_secnetperf_tests, environment_groups, use_
 
         for os_name, arch, context in environment_groups:
             for io in ["iocp", "epoll", "wsk", "xdp"]:
-                for tls in ["schannel", "openssl"]:
+                for tls in ["schannel", "openssl", "quictls"]:
                     data = execute_latency_query(cursor, os_name, arch, context, io, tls, test_id, HISTORY_LENGTH)
                     if not data:
                         continue

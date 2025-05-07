@@ -270,7 +270,7 @@ def sliding_window():
 
     for testid, _, _ in all_tests:
         for io in ["wsk", "xdp", "epoll", "rio", "iocp"]:
-            for tls in ["openssl", "schannel"]:
+            for tls in ["openssl", "schannel", "quictls"]:
                 for os_name, arch, context in environment_groups:
                         # NOTE: This SQL query makes the implicit assumption that Server environment ID = Client environment ID.
                         # If in the future we decide to test scenarios where we have Linux --> Windows... etc, this query will need to change. As well as a lot of our automation YAML as well.

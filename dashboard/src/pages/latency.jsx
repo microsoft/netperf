@@ -16,6 +16,7 @@ import FormControl from '@mui/material/FormControl';
 import Select from '@mui/material/Select';
 
 import FullLatCurve from './full-lat-curve';
+import accessData from '../utils/common.js'
 
 let isMouseDown = false;
 
@@ -27,30 +28,6 @@ document.addEventListener('mouseup', function () {
   isMouseDown = false;
 });
 
-function accessData(envStr, data, newKey, oldKey) {
-  const HISTORY_SIZE = 20;
-  if (!(envStr in data)) {
-    alert(`Could not find ${envStr} in data`);
-    console.error(`Could not find ${envStr} in data`);
-    return [];
-  }
-  const envData = data[envStr];
-  let outputData = [];
-  if (oldKey in envData) {
-    outputData = envData[oldKey]['data'].slice().reverse();
-  } else {
-    console.log("OLD KEY DOES NOT EXIST", oldKey);
-  }
-  if (newKey in envData) {
-    outputData = outputData.concat(envData[newKey]['data'].slice().reverse());
-  } else {
-    console.log("NEW KEY DOES NOT EXIST", newKey);
-  }
-  while (outputData.length > HISTORY_SIZE) {
-    outputData.shift();
-  }
-  return outputData;
-}
 
 export default function LatencyPage() {
   const URL = "https://raw.githubusercontent.com/microsoft/netperf/deploy/historical_latency_page.json";
@@ -61,6 +38,8 @@ export default function LatencyPage() {
   const [windowsOs, setWindowsOs] = useState('windows-2022-x64')
 
   const [linuxOs, setLinuxOs] = useState('ubuntu-24.04-x64')
+
+  let OLD_LINUX_OS = 'ubuntu-20.04-x64'
 
   const [testType, setTestType] = useState('rps-up-512-down-4000')
 
@@ -101,14 +80,20 @@ export default function LatencyPage() {
   if (data) {
     // TODO: Should we find the max of windows / linux run and use that as our baseline?
     rep = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-latency-tcp`, `${testType}-tcp`);
-    linuxRep = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `scenario-latency-tcp`, `${testType}-tcp`);
+    linuxRep = accessData(`${linuxOs}-${env}-epoll-quictls`, data, `scenario-latency-tcp`, `${testType}-tcp`);
+    tcpepoll = accessData(`${linuxOs}-${env}-epoll-quictls`, data, `scenario-latency-tcp`, `${testType}-tcp`);
+    quicepoll = accessData(`${linuxOs}-${env}-epoll-quictls`, data, `scenario-latency-quic`, `${testType}-quic`);
+    if (linuxRep.length == 0 || quicepoll.length == 0 || tcpepoll.length == 0) {
+      linuxRep = accessData(`${OLD_LINUX_OS}-${env}-epoll-openssl`, data, `scenario-latency-tcp`, `${testType}-tcp`);
+      tcpepoll = accessData(`${OLD_LINUX_OS}-${env}-epoll-openssl`, data, `scenario-latency-tcp`, `${testType}-tcp`);
+      quicepoll = accessData(`${OLD_LINUX_OS}-${env}-epoll-openssl`, data, `scenario-latency-quic`, `${testType}-quic`);
+    }
     indices = Array.from({ length: Math.max(rep.length, linuxRep.length) }, (_, i) => i);
     indices.reverse();
 
     tcpiocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-latency-tcp`, `${testType}-tcp`);
     quiciocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-latency-quic`, `${testType}-quic`);
-    tcpepoll = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `scenario-latency-tcp`, `${testType}-tcp`);
-    quicepoll = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `scenario-latency-quic`, `${testType}-quic`);
+
     quicxdp = accessData(`${windowsOs}-${env}-xdp-schannel`, data, `scenario-latency-quic`, `${testType}-quic`);
     quicwsk = accessData(`${windowsOs}-${env}-wsk-schannel`, data, `scenario-latency-quic`, `${testType}-quic`);
 
