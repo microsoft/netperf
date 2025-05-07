@@ -51,7 +51,7 @@ if ($Os -eq "windows-2025") {
 } elseif ($Os -eq "ubuntu-22.04") {
     $image = "Canonical:0001-com-ubuntu-server-jammy:22_04-lts-gen2:22.04.202403010"
 } elseif ($Os -eq "ubuntu-24.04") {
-    $image = " Canonical:0001-com-ubuntu-server-jammy:22_04-lts-gen2:latest"
+    $image = " Canonical:ubuntu-24_04-lts:server:latest"
 } elseif ($Os -eq "mariner-2") {
     $image = "MicrosoftCBLMariner:cbl-mariner:cbl-mariner-2-gen2:2.20240223.01" # This image may not exist
 } else {
