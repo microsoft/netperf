@@ -50,9 +50,8 @@ export default function AppView() {
     `https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-${env}-${windowsOs}-schannel-iocp.json/json-test-results-${env}-${windowsOs}-schannel-iocp.json`
   );
 
-  console.log(windows);
   const linux = useFetchData(
-    `https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-${env}-${linuxOs}-openssl-epoll.json/json-test-results-${env}-${linuxOs}-openssl-epoll.json`
+    `https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-${env}-${linuxOs}-quictls-epoll.json/json-test-results-${env}-${linuxOs}-quictls-epoll.json`
   );
 
   const windowsXdp = useFetchData(

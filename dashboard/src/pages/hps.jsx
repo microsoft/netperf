@@ -14,6 +14,7 @@ import InputLabel from '@mui/material/InputLabel';
 import MenuItem from '@mui/material/MenuItem';
 import FormControl from '@mui/material/FormControl';
 import Select from '@mui/material/Select';
+import accessData from '../utils/common.js'
 
 let isMouseDown = false;
 
@@ -24,31 +25,6 @@ document.addEventListener('mousedown', function() {
 document.addEventListener('mouseup', function() {
     isMouseDown = false;
 });
-
-function accessData(envStr, data, newKey, oldKey) {
-  const HISTORY_SIZE = 20;
-  if (!(envStr in data)) {
-    alert(`Could not find ${envStr} in data`);
-    console.error(`Could not find ${envStr} in data`);
-    return [];
-  }
-  const envData = data[envStr];
-  let outputData = [];
-  if (oldKey in envData) {
-    outputData = envData[oldKey]['data'].slice().reverse();
-  } else {
-    console.log("OLD KEY DOES NOT EXIST", oldKey);
-  }
-  if (newKey in envData) {
-    outputData = outputData.concat(envData[newKey]['data'].slice().reverse());
-  } else {
-    console.log("NEW KEY DOES NOT EXIST", newKey);
-  }
-  while (outputData.length > HISTORY_SIZE) {
-    outputData.shift();
-  }
-  return outputData;
-}
 
 export default function HpsPage() {
 
@@ -61,19 +37,26 @@ export default function HpsPage() {
   const [windowsOs, setWindowsOs] = useState('windows-2022-x64')
 
   const [linuxOs, setLinuxOs] = useState('ubuntu-24.04-x64')
+  let OLD_LINUX_OS = 'ubuntu-20.04-x64'
 
   const [testType, setTestType] = useState('hps-conns-100')
 
   if (data) {
     // TODO: Should we find the max of windows / linux run and use that as our baseline?
     let rep = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-hps-tcp`, `${testType}-tcp`);
-    let linuxRep = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `scenario-hps-tcp`, `${testType}-tcp`);
+    let linuxRep = accessData(`${linuxOs}-${env}-epoll-quictls`, data, `scenario-hps-tcp`, `${testType}-tcp`);
+    let tcpepoll = accessData(`${linuxOs}-${env}-epoll-quictls`, data, `scenario-hps-tcp`, `${testType}-tcp`);
+    let quicepoll = accessData(`${linuxOs}-${env}-epoll-quictls`, data, `scenario-hps-quic`, `${testType}-quic`);
+    if (linuxRep.length == 0 || quicepoll.length == 0 || tcpepoll.length == 0) {
+      linuxRep = accessData(`${OLD_LINUX_OS}-${env}-epoll-openssl`, data, `scenario-hps-tcp`, `${testType}-tcp`);
+      tcpepoll = accessData(`${OLD_LINUX_OS}-${env}-epoll-openssl`, data, `scenario-hps-tcp`, `${testType}-tcp`);
+      quicepoll = accessData(`${OLD_LINUX_OS}-${env}-epoll-openssl`, data, `scenario-hps-quic`, `${testType}-quic`);
+    }
     let indices = Array.from({length: Math.max(rep.length, linuxRep.length)}, (_, i) => i);
     indices.reverse();
     const tcpiocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-hps-tcp`, `${testType}-tcp`);
     const quiciocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-hps-quic`, `${testType}-quic`);
-    const tcpepoll = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `scenario-hps-tcp`, `${testType}-tcp`);
-    const quicepoll = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `scenario-hps-quic`, `${testType}-quic`);
+
     const quicxdp = accessData(`${windowsOs}-${env}-xdp-schannel`, data, `scenario-hps-quic`, `${testType}-quic`);
     // const quicwsk = data[`${windowsOs}-${env}-wsk-schannel`][`${testType}-quic`]['data'].slice().reverse();
 

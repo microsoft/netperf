@@ -14,6 +14,7 @@ import InputLabel from '@mui/material/InputLabel';
 import MenuItem from '@mui/material/MenuItem';
 import FormControl from '@mui/material/FormControl';
 import Select from '@mui/material/Select';
+import accessData from '../utils/common.js'
 
 let isMouseDown = false;
 
@@ -25,30 +26,6 @@ document.addEventListener('mouseup', function() {
     isMouseDown = false;
 });
 
-function accessData(envStr, data, newKey, oldKey) {
-  const HISTORY_SIZE = 20;
-  if (!(envStr in data)) {
-    alert(`Could not find ${envStr} in data`);
-    console.error(`Could not find ${envStr} in data`);
-    return [];
-  }
-  const envData = data[envStr];
-  let outputData = [];
-  if (oldKey in envData) {
-    outputData = envData[oldKey]['data'].slice().reverse();
-  } else {
-    console.log("OLD KEY DOES NOT EXIST", oldKey);
-  }
-  if (newKey in envData) {
-    outputData = outputData.concat(envData[newKey]['data'].slice().reverse());
-  } else {
-    console.log("NEW KEY DOES NOT EXIST", newKey);
-  }
-  while (outputData.length > HISTORY_SIZE) {
-    outputData.shift();
-  }
-  return outputData;
-}
 
 export default function ThroughputPage() {
 
@@ -62,19 +39,27 @@ export default function ThroughputPage() {
   const [windowsOs, setWindowsOs] = useState('windows-2022-x64')
 
   const [linuxOs, setLinuxOs] = useState('ubuntu-24.04-x64')
+  let OLD_LINUX_OS = 'ubuntu-20.04-x64'
 
   const [testType, setTestType] = useState('up')
 
   if (data) {
     let windowsRepresentative = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-${testType}load-tcp`, `tput-${testType}-tcp`);
-    let linuxRepresentative = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `scenario-${testType}load-tcp`, `tput-${testType}-tcp`);
+    let linuxRepresentative = accessData(`${linuxOs}-${env}-epoll-quictls`, data, `scenario-${testType}load-tcp`, `tput-${testType}-tcp`);
+    let tcpepoll = accessData(`${linuxOs}-${env}-epoll-quictls`, data, `scenario-${testType}load-tcp`, `tput-${testType}-tcp`);
+    let quicepoll = accessData(`${linuxOs}-${env}-epoll-quictls`, data, `scenario-${testType}load-quic`, `tput-${testType}-quic`);
+    if (linuxRepresentative.length == 0 || quicepoll.length == 0 || tcpepoll.length == 0) {
+      linuxRepresentative = accessData(`${OLD_LINUX_OS}-${env}-epoll-openssl`, data, `scenario-${testType}load-tcp`, `tput-${testType}-tcp`);
+      tcpepoll = accessData(`${OLD_LINUX_OS}-${env}-epoll-openssl`, data, `scenario-${testType}load-tcp`, `tput-${testType}-tcp`);
+      quicepoll = accessData(`${OLD_LINUX_OS}-${env}-epoll-openssl`, data, `scenario-${testType}load-quic`, `tput-${testType}-quic`);
+    }
     let indices = Array.from({length: Math.max(linuxRepresentative.length, linuxRepresentative.length)}, (_, i) => i);
     indices.reverse();
 
     const tcpiocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-${testType}load-tcp`, `tput-${testType}-tcp`);
     const quiciocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-${testType}load-quic`, `tput-${testType}-quic`);
-    const tcpepoll = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `scenario-${testType}load-tcp`, `tput-${testType}-tcp`);
-    const quicepoll = accessData(`${linuxOs}-${env}-epoll-openssl`, data, `scenario-${testType}load-quic`, `tput-${testType}-quic`);
+
+
     const quicxdp = accessData(`${windowsOs}-${env}-xdp-schannel`, data, `scenario-${testType}load-quic`, `tput-${testType}-quic`);
     const quicwsk = accessData(`${windowsOs}-${env}-wsk-schannel`, data, `scenario-${testType}load-quic`, `tput-${testType}-quic`);
 
