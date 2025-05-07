@@ -78,7 +78,7 @@ fi
 # Installing powershell 7 (NOTE: Sometimes, will have to run this again because powershell fails to install the first run. Need investigation.)
 echo "================= Installing powershell 7. ================="
 sudo apt-get install -y wget apt-transport-https software-properties-common
-wget -q https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-prod.deb
+wget -q https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb
 sudo dpkg -i packages-microsoft-prod.deb
 echo "================= Updating apt-get again. ================="
 sudo apt-get update

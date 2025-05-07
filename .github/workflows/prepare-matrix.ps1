@@ -19,7 +19,7 @@ $FullJson = @()
 foreach ($entry in $MatrixJson) {
     if ($entry.env -match "azure") {
         $Windows2022Pool = "netperf-actual-boosted-winprerelease" # TODO: "boost-prerelease" name is misleading. Change it to be "boosted-windows-2022".
-        $UbuntuPool =  "netperf-boosted-linux-pool"               # NOTE: This pool is using experimental boost SKUs. boosted-netperf-ubuntu-20.04-gen2.
+        $UbuntuPool =  "netperf-boosted-linux-pool"               # NOTE: This pool is using experimental boost SKUs. boosted-netperf-ubuntu-24.04-gen2.
         $Windows2025Pool = "netperf-boosted-windows-pool"         # NOTE: This runs the latest ge_current_directiof_stack build.
         $client = $entry.PSObject.Copy()
         $server = $entry.PSObject.Copy()
@@ -28,7 +28,7 @@ foreach ($entry in $MatrixJson) {
         if ($hasPreferredPoolSku) {
             if ($entry.preferred_pool_sku -eq "Standard_F8s_v2") {
                 $Windows2022Pool = "netperf-f-series-windows-2022"
-                $Ubuntu2004Pool =  "netperf-f-series-ubuntu-20.04"
+                $Ubuntu2404Pool =  "netperf-f-series-ubuntu-24.04"
             }
         }
 
@@ -43,13 +43,6 @@ foreach ($entry in $MatrixJson) {
             $server | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
             $client.assigned_os = "managed-windows-2022-gen2-try3"
             $server.assigned_os = "managed-windows-2022-gen2-try3"
-        } elseif ($entry.os -match "ubuntu-20.04") {
-            $client | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value $UbuntuPool
-            $server | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value $UbuntuPool
-            $client | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
-            $server | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
-            $client.assigned_os = "boosted-netperf-ubuntu-20.04-gen2"
-            $server.assigned_os = "boosted-netperf-ubuntu-20.04-gen2"
         } elseif ($entry.os -match "ubuntu-24.04") {
             $client | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value $UbuntuPool
             $server | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value $UbuntuPool
@@ -65,7 +58,7 @@ foreach ($entry in $MatrixJson) {
             $client.assigned_os = "nvme-enabled-ge_current_directiof_stack-try2"
             $server.assigned_os = "nvme-enabled-ge_current_directiof_stack-try2"
         } else {
-            throw "Invalid OS entry (Must be either windows-2022 or ubuntu-20.04). Got: $($entry.os)"
+            throw "Invalid OS entry (Must be either windows-2022 or ubuntu-24.04). Got: $($entry.os)"
         }
         $client | Add-Member -MemberType NoteProperty -Name "role" -Value "client"
         $server | Add-Member -MemberType NoteProperty -Name "role" -Value "server"

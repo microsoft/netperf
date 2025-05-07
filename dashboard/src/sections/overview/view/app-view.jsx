@@ -44,7 +44,7 @@ export default function AppView() {
 
   const [windowsOs, setWindowsOs] = useState('windows-2022-x64')
 
-  const [linuxOs, setLinuxOs] = useState('ubuntu-20.04-x64')
+  const [linuxOs, setLinuxOs] = useState('ubuntu-24.04-x64')
 
   const windows = useFetchData(
     `https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-${env}-${windowsOs}-schannel-iocp.json/json-test-results-${env}-${windowsOs}-schannel-iocp.json`
@@ -115,7 +115,7 @@ export default function AppView() {
   let windowsKernelLatencyQuic = [-1, -1, -1, -1, -1, -1, -1, -1];
   let commitHash = "";
   let windowsType = 'Windows Server 2022';
-  let linuxType = 'Linux Ubuntu 20.04 LTS';
+  let linuxType = 'Linux Ubuntu 24.04 LTS';
 
   function index(object, keys, defaultValue) {
     for (const key of keys) {
@@ -292,7 +292,7 @@ export default function AppView() {
               onChange={handleChangeLinuxOs}
               defaultValue={0}
             >
-              <MenuItem value='ubuntu-20.04-x64'>ubuntu-20.04-x64</MenuItem>
+              <MenuItem value='ubuntu-24.04-x64'>ubuntu-24.04-x64</MenuItem>
             </Select>
           </FormControl>
         </Box>
