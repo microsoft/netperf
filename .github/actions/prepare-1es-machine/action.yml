@@ -52,3 +52,7 @@ runs:
     uses: actions/setup-python@v2
     with:
       python-version: '3.x'
+  - name: Invoke setup-runner-windows.ps1
+    if: ${{ runner.os == 'Windows' }}
+    run: ./netperfrepo/setup-runner-windows.ps1
+    shell: PowerShell

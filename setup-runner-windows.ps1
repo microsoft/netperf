@@ -30,11 +30,15 @@ param (
     [switch]$SkipDisableDefender,
 
     [Parameter(Mandatory = $false)]
-    [switch]$IsHost
+    [switch]$IsHost,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$InstallMana = $true
 )
 
 Set-StrictMode -Version 'Latest'
 $PSDefaultParameterValues['*:ErrorAction'] = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
 
 if ($IsHost) {
     $Username = "localadminuser"
@@ -115,6 +119,23 @@ if ($NewIpAddress) {
     ipconfig
 } else {
     Write-Host "-NewIpAddress not provided. Skipping IP address setup."
+}
+
+if ($InstallMana) {
+    # Install MANA drivers.
+    Write-Host "Installing MANA drivers."
+    try {
+        $Tmp = New-TemporaryFile
+        $Tmp = Rename-Item -Path $Tmp -NewName "$Tmp.zip" -PassThru
+        $TmpDir = New-Item -Path "$Tmp.Dir" -ItemType "Directory"
+        Invoke-WebRequest -Uri "https://aka.ms/manawindowsdrivers" -OutFile $Tmp
+        Expand-Archive -Path $Tmp -Destination $TmpDir -Force
+        pnputil.exe /add-driver "$TmpDir\mana_vf_drivers\mana\manavf.inf" /install
+        pnputil.exe /add-driver "$TmpDir\mana_vf_drivers\mana_bus\mana_bus_vf.inf" /install
+    } finally {
+        Remove-Item $TmpDir -Recurse -ErrorAction SilentlyContinue
+        Remove-Item $Tmp -ErrorAction SilentlyContinue
+    }
 }
 
 if ($SanityCheck) {
