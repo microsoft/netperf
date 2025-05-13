@@ -58,5 +58,5 @@ runs:
     shell: PowerShell
   - name: Invoke setup-runner-linux.sh
     if: ${{ runner.os != 'Windows' }}
-    run: ./netperfrepo/setup-runner-linux.sh
+    run: sudo bash ./netperfrepo/setup-runner-linux.sh
     shell: bash
