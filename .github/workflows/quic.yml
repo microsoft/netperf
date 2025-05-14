@@ -322,25 +322,26 @@ jobs:
           -arch ${{ matrix.arch }} `
           -tls ${{ matrix.tls }} `
           -io ${{ matrix.io }} `
+          -serverio ${{ matrix.serverio }} `
           -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
     - name: Upload Test Results JSON
       if: ${{ always() }}
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
       with:
-        name: json-test-results-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}.json
-        path: json-test-results-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}.json
+        name: json-test-results-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}-${{ matrix.serverio }}.json
+        path: json-test-results-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}-${{ matrix.serverio }}.json
     - name: Upload Logs
       if: ${{ always() }}
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
       with:
-        name: logs-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
+        name: logs-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}-${{ matrix.serverio }}
         path: artifacts/logs
         if-no-files-found: ignore
     - name: Upload Full Latency Curves
       if: ${{ always() }}
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
       with:
-        name: latency-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
+        name: latency-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}-${{ matrix.serverio }}
         path: latency.txt
         if-no-files-found: ignore
 
