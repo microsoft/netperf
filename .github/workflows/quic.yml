@@ -234,7 +234,7 @@ jobs:
           -arch ${{ matrix.arch }} `
           -tls ${{ matrix.tls }} `
           -io ${{ matrix.io }} `
-          -serverio ${{ matrix.serverio }} `
+          -serverio '${{ matrix.serverio }}' `
           -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
         matrix: '${{ toJson(matrix) }}'
         syncer-secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
@@ -323,7 +323,7 @@ jobs:
           -arch ${{ matrix.arch }} `
           -tls ${{ matrix.tls }} `
           -io ${{ matrix.io }} `
-          -serverio ${{ matrix.serverio }} `
+          -serverio '${{ matrix.serverio }}' `
           -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
     - name: Upload Test Results JSON
       if: ${{ always() }}
