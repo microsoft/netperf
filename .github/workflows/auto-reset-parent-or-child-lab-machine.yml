@@ -47,6 +47,7 @@ jobs:
         shell: pwsh
       - name: Check_Dispatched_ID;${{ github.event.client_payload.workflow_id }}
         if: ${{ github.event_name == 'repository_dispatch' }}
+        timeout-minutes: 45
         run: |
           $headers = @{
             "Accept" = "application/vnd.github+json"
@@ -63,12 +64,13 @@ jobs:
             foreach ($run in $activeRuns) {
               if ($run.name -ne "auto-reset-parent-or-child-lab-machine" -and $run.id -ne $workflow_id_that_dispatched_this_workflow) {
                 Write-Host "Waiting for active netperf job (that didn't trigger this workflow run): $($run.name), id: $($run.id) to finish first."
-                Start-Sleep -Seconds 30
+                Start-Sleep -Seconds 60
                 $stop = $false
                 break
               }
             }
             if ($stop) {
+              Write-Host "No active jobs (besides this one and the workflow that triggered it) found. Enqueuing reset."
               break
             }
           }
