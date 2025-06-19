@@ -258,7 +258,7 @@ export default function AppView() {
               defaultValue={0}
             >
               <MenuItem value='azure'>azure</MenuItem>
-              <MenuItem value='lab'>lab</MenuItem>
+              { windowsOs === 'windows-2022-x64' && <MenuItem value='lab'>lab</MenuItem> }
             </Select>
           </FormControl>
         </Box>
@@ -275,7 +275,7 @@ export default function AppView() {
               defaultValue={0}
             >
               <MenuItem value='windows-2022-x64'>windows-2022-x64</MenuItem>
-              <MenuItem value='windows-2025-x64'>windows-2025-x64</MenuItem>
+              { env === "azure" && <MenuItem value='windows-2025-x64'>windows-2025-x64</MenuItem>}
             </Select>
           </FormControl>
         </Box>
@@ -298,7 +298,7 @@ export default function AppView() {
         {/* <Typography variant="h5" sx={{ mb: 5 }}>
           Data based on commit: <a href={`https://github.com/microsoft/msquic/commit/${commitHash}`}>{commitHash}</a>
         </Typography> */}
-        <p style={{marginLeft: '10px'}}>Data based on <a href={`https://github.com/microsoft/msquic/commit/${commitHash}`}>commit</a></p>
+        <p style={{marginLeft: '10px'}}>Data based on <a href={`https://github.com/microsoft/msquic/commit/${commitHash}`}>commit</a>. <b>Warning: </b> Lab results for Ubuntu is out-of-sync. Will be fixed shortly!</p>
       </div>
       {/* <br /> */}
       <p><b>Windows hardware SKU:</b> {getLatestSkuInformation(env, windowsOs, windows)} | <b>Linux hardware SKU:</b> {getLatestSkuInformation(env, linuxOs, linux)}</p>

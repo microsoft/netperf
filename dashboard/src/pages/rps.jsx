@@ -54,15 +54,22 @@ export default function RpsPage() {
       tcpepoll = accessData(`${OLD_LINUX_OS}-${env}-epoll-openssl`, data, `scenario-rps-tcp`, `${testType}-tcp`);
       quicepoll = accessData(`${OLD_LINUX_OS}-${env}-epoll-openssl`, data, `scenario-rps-quic`, `${testType}-quic`);
     }
-    // let indices = Array.from({length: Math.max(rep.length, linuxRep.length)}, (_, i) => i);
-    let indices = Array.from({length: Math.max(rep.length, linuxRep.length)}, (_, i) => i);
-    indices.reverse();
 
     const tcpiocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-rps-tcp`, `${testType}-tcp`);
     const quiciocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-rps-quic`, `${testType}-quic`);
 
     const quicxdp = accessData(`${windowsOs}-${env}-xdp-schannel`, data, `scenario-rps-quic`, `${testType}-quic`);
     const quicwsk = accessData(`${windowsOs}-${env}-wsk-schannel`, data, `scenario-rps-quic`, `${testType}-quic`);
+
+    while (rep.length > linuxRep.length) {
+      rep.shift();
+      tcpiocp.shift();
+      quiciocp.shift();
+      quicxdp.shift();
+      quicwsk.shift();
+    }
+    let indices = Array.from({length: Math.max(rep.length, linuxRep.length)}, (_, i) => i);
+    indices.reverse();
 
     const TCPIOCP = tcpiocp.map(x => x[0]);
     const QUICIOCP = quiciocp.map(x => x[0]);

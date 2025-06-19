@@ -53,8 +53,7 @@ export default function ThroughputPage() {
       tcpepoll = accessData(`${OLD_LINUX_OS}-${env}-epoll-openssl`, data, `scenario-${testType}load-tcp`, `tput-${testType}-tcp`);
       quicepoll = accessData(`${OLD_LINUX_OS}-${env}-epoll-openssl`, data, `scenario-${testType}load-quic`, `tput-${testType}-quic`);
     }
-    let indices = Array.from({length: Math.max(linuxRepresentative.length, linuxRepresentative.length)}, (_, i) => i);
-    indices.reverse();
+
 
     const tcpiocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-${testType}load-tcp`, `tput-${testType}-tcp`);
     const quiciocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-${testType}load-quic`, `tput-${testType}-quic`);
@@ -63,12 +62,25 @@ export default function ThroughputPage() {
     const quicxdp = accessData(`${windowsOs}-${env}-xdp-schannel`, data, `scenario-${testType}load-quic`, `tput-${testType}-quic`);
     const quicwsk = accessData(`${windowsOs}-${env}-wsk-schannel`, data, `scenario-${testType}load-quic`, `tput-${testType}-quic`);
 
+
+    while (windowsRepresentative.length > linuxRepresentative.length) {
+      windowsRepresentative.shift();
+      tcpiocp.shift();
+      quiciocp.shift();
+      quicxdp.shift();
+      quicwsk.shift();
+    }
+    let indices = Array.from({length: Math.max(windowsRepresentative.length, linuxRepresentative.length)}, (_, i) => i);
+    indices.reverse();
+
+
     const TCPIOCP = tcpiocp.map(x => x[0]);
     const QUICIOCP = quiciocp.map(x => x[0]);
     const TCPEPOLL = tcpepoll.map(x => x[0]);
     const QUICEPOLL = quicepoll.map(x => x[0]);
     const QUICXDP = quicxdp.map(x => x[0]);
     const QUICWSK = quicwsk.map(x => x[0]);
+
 
     uploadThroughput =
       <GraphView title={`${testType === 'up' ? 'Upload' : 'Download'} Throughput`}
