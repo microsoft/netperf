@@ -55,8 +55,8 @@ foreach ($entry in $MatrixJson) {
             $server | Add-Member -MemberType NoteProperty -Name "assigned_pool" -Value $Windows2025Pool
             $client | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
             $server | Add-Member -MemberType NoteProperty -Name "remote_powershell_supported" -Value 'FALSE'
-            $client.assigned_os = "nvme-enabled-ge_current_directiof_stack-try2"
-            $server.assigned_os = "nvme-enabled-ge_current_directiof_stack-try2"
+            $client.assigned_os = "ge_current_directmb2"
+            $server.assigned_os = "ge_current_directmb2"
         } else {
             throw "Invalid OS entry (Must be either windows-2022 or ubuntu-24.04). Got: $($entry.os)"
         }
