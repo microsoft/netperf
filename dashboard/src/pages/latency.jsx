@@ -88,14 +88,23 @@ export default function LatencyPage() {
       tcpepoll = accessData(`${OLD_LINUX_OS}-${env}-epoll-openssl`, data, `scenario-latency-tcp`, `${testType}-tcp`);
       quicepoll = accessData(`${OLD_LINUX_OS}-${env}-epoll-openssl`, data, `scenario-latency-quic`, `${testType}-quic`);
     }
-    indices = Array.from({ length: Math.max(rep.length, linuxRep.length) }, (_, i) => i);
-    indices.reverse();
+
 
     tcpiocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-latency-tcp`, `${testType}-tcp`);
     quiciocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-latency-quic`, `${testType}-quic`);
 
     quicxdp = accessData(`${windowsOs}-${env}-xdp-schannel`, data, `scenario-latency-quic`, `${testType}-quic`);
     quicwsk = accessData(`${windowsOs}-${env}-wsk-schannel`, data, `scenario-latency-quic`, `${testType}-quic`);
+
+    while (rep.length > linuxRep.length) {
+      rep.shift();
+      tcpiocp.shift();
+      quiciocp.shift();
+      quicxdp.shift();
+      quicwsk.shift();
+    }
+    indices = Array.from({length: Math.max(rep.length, linuxRep.length)}, (_, i) => i);
+    indices.reverse();
 
     mode1View =
       <GraphView title={`Detailed Latency`}

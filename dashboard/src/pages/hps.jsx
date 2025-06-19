@@ -52,13 +52,20 @@ export default function HpsPage() {
       tcpepoll = accessData(`${OLD_LINUX_OS}-${env}-epoll-openssl`, data, `scenario-hps-tcp`, `${testType}-tcp`);
       quicepoll = accessData(`${OLD_LINUX_OS}-${env}-epoll-openssl`, data, `scenario-hps-quic`, `${testType}-quic`);
     }
-    let indices = Array.from({length: Math.max(rep.length, linuxRep.length)}, (_, i) => i);
-    indices.reverse();
     const tcpiocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-hps-tcp`, `${testType}-tcp`);
     const quiciocp = accessData(`${windowsOs}-${env}-iocp-schannel`, data, `scenario-hps-quic`, `${testType}-quic`);
 
     const quicxdp = accessData(`${windowsOs}-${env}-xdp-schannel`, data, `scenario-hps-quic`, `${testType}-quic`);
     // const quicwsk = data[`${windowsOs}-${env}-wsk-schannel`][`${testType}-quic`]['data'].slice().reverse();
+
+    while (rep.length > linuxRep.length) {
+      rep.shift();
+      tcpiocp.shift();
+      quiciocp.shift();
+      quicxdp.shift();
+    }
+    let indices = Array.from({length: Math.max(rep.length, linuxRep.length)}, (_, i) => i);
+    indices.reverse();
 
     const TCPIOCP = tcpiocp.map(x => x[0]);
     const QUICIOCP = quiciocp.map(x => x[0]);
