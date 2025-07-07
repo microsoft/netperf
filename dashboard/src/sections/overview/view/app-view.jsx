@@ -23,7 +23,7 @@ import getLatestSkuInformation from '../../../utils/sku';
 
 
 function throughputPerformance(download, upload, dweight, uweight) {
-  return (download * dweight + upload * uweight) / 100000;
+  return (download * dweight + upload * uweight);
 }
 
 function latencyPerformance(latencies) {
@@ -149,18 +149,19 @@ export default function AppView() {
     windowsType = `${windowsOs} ${windows.data.os_version}`
     linuxType = `${linuxOs} ${linux.data.os_version}`
     // Throughput
-    windowsDownloadThroughputQuic = Math.max(...index(windows.data, ["download-quic", "tput-down-quic"], [-1]));
-    windowsDownloadThroughputTcp = Math.max(...index(windows.data, ["download-tcp", "tput-down-tcp"], [-1]));
-    windowsUploadThroughputQuic = Math.max(...index(windows.data, ["upload-quic", "tput-up-quic"], [-1]));
-    windowsUploadThroughputTcp = Math.max(...index(windows.data, ["upload-tcp", "tput-up-tcp"], [-1]));
-    linuxDownloadThroughputQuic = Math.max(...index(linux.data, ["download-quic", "tput-down-quic"], [-1]));
-    linuxDownloadThroughputTcp = Math.max(...index(linux.data, ["download-tcp", "tput-down-tcp"], [-1]));
-    linuxUploadThroughputQuic = Math.max(...index(linux.data, ["upload-quic", "tput-up-quic"], [-1]));
-    linuxUploadThroughputTcp = Math.max(...index(linux.data, ["upload-tcp", "tput-up-tcp"], [-1]));
-    windowsKernelDownloadThroughputQuic = Math.max(...index(windowsKernel.data, ["download-quic", "tput-down-quic"], [-1]));
-    windowsKernelUploadThroughputQuic = Math.max(...index(windowsKernel.data, ["upload-quic", "tput-up-quic"], [-1]));
-    windowsXdpDownloadThroughputQuic = Math.max(...index(windowsXdp.data, ["download-quic", "tput-down-quic"], [-1]));
-    windowsXdpUploadThroughputQuic = Math.max(...index(windowsXdp.data, ["upload-quic", "tput-up-quic"], [-1]));
+    const DIVISOR = 1000000;
+    windowsDownloadThroughputQuic = Math.max(...index(windows.data, ["download-quic", "tput-down-quic"], [-1])) / DIVISOR;
+    windowsDownloadThroughputTcp = Math.max(...index(windows.data, ["download-tcp", "tput-down-tcp"], [-1])) / DIVISOR;
+    windowsUploadThroughputQuic = Math.max(...index(windows.data, ["upload-quic", "tput-up-quic"], [-1])) / DIVISOR;
+    windowsUploadThroughputTcp = Math.max(...index(windows.data, ["upload-tcp", "tput-up-tcp"], [-1])) / DIVISOR;
+    linuxDownloadThroughputQuic = Math.max(...index(linux.data, ["download-quic", "tput-down-quic"], [-1])) / DIVISOR;
+    linuxDownloadThroughputTcp = Math.max(...index(linux.data, ["download-tcp", "tput-down-tcp"], [-1])) / DIVISOR;
+    linuxUploadThroughputQuic = Math.max(...index(linux.data, ["upload-quic", "tput-up-quic"], [-1])) / DIVISOR;
+    linuxUploadThroughputTcp = Math.max(...index(linux.data, ["upload-tcp", "tput-up-tcp"], [-1])) / DIVISOR;
+    windowsKernelDownloadThroughputQuic = Math.max(...index(windowsKernel.data, ["download-quic", "tput-down-quic"], [-1])) / DIVISOR;
+    windowsKernelUploadThroughputQuic = Math.max(...index(windowsKernel.data, ["upload-quic", "tput-up-quic"], [-1])) / DIVISOR;
+    windowsXdpDownloadThroughputQuic = Math.max(...index(windowsXdp.data, ["download-quic", "tput-down-quic"], [-1])) / DIVISOR;
+    windowsXdpUploadThroughputQuic = Math.max(...index(windowsXdp.data, ["upload-quic", "tput-up-quic"], [-1])) / DIVISOR;
 
     console.log("WINDOWS XDP TPUT", windowsXdpUploadThroughputQuic)
 
@@ -316,9 +317,7 @@ export default function AppView() {
                     alert(`
                 This score is computed as:
 
-                WINDOWS = download_speed * download_weight + upload_speed * upload_weight
-
-                SCORE = WINDOWS / 10000,
+                SCORE = download_speed * download_weight + upload_speed * upload_weight
 
                 where download_weight = 0.8, upload_weight = 0.2
 
@@ -347,9 +346,7 @@ export default function AppView() {
                     alert(`
                 This score is computed as:
 
-                LINUX = download_speed * download_weight + upload_speed * upload_weight
-
-                SCORE = LINUX / 10000,
+                SCORE = download_speed * download_weight + upload_speed * upload_weight
 
                 where download_weight = 0.8, upload_weight = 0.2
 
@@ -436,7 +433,7 @@ export default function AppView() {
         {/* Throughput */}
         <Grid xs={12} md={6} lg={6}>
           <AppWebsiteVisits
-            title="Throughput Comparison (kbps), higher the better."
+            title="Secnetperf Throughput Comparison (Gbps), higher the better."
             subheader={` ${envStr}`}
             chart={{
               labels: ['', 'Download', 'Upload', ''],
@@ -527,7 +524,7 @@ export default function AppView() {
         {/* Latency */}
         <Grid xs={12} md={6} lg={6}>
           <AppWebsiteVisits
-            title="Latency Comparison (µs), lower the better."
+            title="Secnetperf Latency Comparison (µs), lower the better."
             subheader={` ${envStr}`}
             chart={{
               // New labels based on percentiles
