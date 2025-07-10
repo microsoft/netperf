@@ -3,7 +3,7 @@
 - Netperf leverages the [Secnetperf](https://microsoft.github.io/msquic/msquicdocs/src/perf/readme.html?q=secnetperf) application to run multi-machine performance tests.
 - Secnetperf leverages [MsQuic](https://github.com/microsoft/msquic) for it's QUIC/UDP
 implementation, and a
-["QUIC-like" application](https://github.com/microsoft/msquic/blob/release/2.5/src/perf/lib/Tcp.cpp) using the underlying OS's TCP implementation to provide an apples-to-apples comparison between QUIC and TCP. The main motiviation for this pseudo QUIC + TCP implementation is to introduce the concept of streams.
+["QUIC-like" application](https://github.com/microsoft/msquic/blob/release/2.5/src/perf/lib/Tcp.cpp) using the underlying OS's TCP implementation to provide an apples-to-apples comparison between QUIC and TCP. The main motiviation for this pseudo QUIC + TCP implementation is to introduce the concept of streams for TCP.
 - All of Netperf's performance tests involve a client and server on separate machines.
 
 ## Test Scenarios
