@@ -174,7 +174,7 @@ export default function ThroughputPage() {
 
       <Container maxWidth="xl">
         <Typography variant="h3" sx={{ mb: 5 }}>
-          Detailed Throughput
+          Historical throughput
         </Typography>
         <div style={{display: 'flex'}}>
         <Box sx={{ }}>

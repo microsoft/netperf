@@ -172,7 +172,7 @@ export default function RpsPage() {
 
       <Container maxWidth="xl">
         <Typography variant="h3" sx={{ mb: 5 }}>
-          Detailed Requests Per Second
+          Historical Requests Per Second
         </Typography>
         <div style={{display: 'flex'}}>
         <Box sx={{ }}>
