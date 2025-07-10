@@ -169,7 +169,7 @@ export default function HpsPage() {
 
       <Container maxWidth="xl">
         <Typography variant="h3" sx={{ mb: 5 }}>
-          Detailed Handshakes Per Second
+          Historical Handshakes Per Second
         </Typography>
         <div style={{display: 'flex'}}>
         <Box sx={{ }}>

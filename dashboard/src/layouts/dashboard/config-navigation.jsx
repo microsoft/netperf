@@ -13,22 +13,22 @@ const navConfig = [
     icon: icon('ic_analytics'),
   },
   {
-    title: 'detailed throughput',
+    title: 'Historical throughput',
     path: '/throughput',
     icon: icon('ic_analytics'),
   },
   {
-    title: 'detailed latency',
+    title: 'Historical latency',
     path: '/latency',
     icon: icon('ic_analytics'),
   },
   {
-    title: 'Requests Per Second',
+    title: 'Historical RPS',
     path: '/rps',
     icon: icon('ic_analytics'),
   },
   {
-    title: 'Handshakes Per Second',
+    title: 'Historical HPS',
     path: '/hps',
     icon: icon('ic_analytics'),
   },

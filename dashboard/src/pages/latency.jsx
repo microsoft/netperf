@@ -107,7 +107,7 @@ export default function LatencyPage() {
     indices.reverse();
 
     mode1View =
-      <GraphView title={`Detailed Latency`}
+      <GraphView title={`Historical latency`}
         subheader={`Tested using ${windowsOs}, ${linuxOs}, taking the min of P0 of 3 runs. `}
         labels={indices}
         map={(index) => {
@@ -201,7 +201,7 @@ export default function LatencyPage() {
 
       <Container maxWidth="xl">
         <Typography variant="h3" sx={{ mb: 5 }}>
-          Detailed Latency
+          Historical latency
         </Typography>
         <div style={{ display: 'flex' }}>
           <Box sx={{}}>

@@ -22,18 +22,18 @@ import AppWidgetSummary from '../app-widget-summary';
 import getLatestSkuInformation from '../../../utils/sku';
 
 
-function throughputPerformance(download, upload, dweight, uweight) {
-  return (download * dweight + upload * uweight) / 100000;
-}
+// function throughputPerformance(download, upload, dweight, uweight) {
+//   return (download * dweight + upload * uweight);
+// }
 
-function latencyPerformance(latencies) {
-  const weighting = [0.05, 0.1, 0.2, 0.3, 0.1, 0.1, 0.1, 0.05];
-  let sum = 1.0;
-  for (let i = 0; i < 8; i += 1) {
-    sum += weighting[i] * latencies[i];
-  }
-  return (1 / sum) * 100000;
-}
+// function latencyPerformance(latencies) {
+//   const weighting = [0.05, 0.1, 0.2, 0.3, 0.1, 0.1, 0.1, 0.05];
+//   let sum = 1.0;
+//   for (let i = 0; i < 8; i += 1) {
+//     sum += weighting[i] * latencies[i];
+//   }
+//   return (1 / sum) * 100000;
+// }
 
 // getLatestSkuInformation("", "", {})
 
@@ -62,17 +62,17 @@ export default function AppView() {
     `https://raw.githubusercontent.com/microsoft/netperf/deploy/json-test-results-${env}-${windowsOs}-schannel-wsk.json/json-test-results-${env}-${windowsOs}-schannel-wsk.json`
   );
 
-  let windowsPerfScore = 0;
-  let linuxPerfScore = 0;
+  // let windowsPerfScore = 0;
+  // let linuxPerfScore = 0;
 
-  let windowsPerfScoreLatency = 0;
-  let linuxPerfScoreLatency = 0;
+  // let windowsPerfScoreLatency = 0;
+  // let linuxPerfScoreLatency = 0;
 
-  let windowsPerfScoreRps = 0;
-  let linuxPerfScoreRps = 0;
+  // let windowsPerfScoreRps = 0;
+  // let linuxPerfScoreRps = 0;
 
-  let windowsPerfScoreHps = 0;
-  let linuxPerfScoreHps = 0;
+  // let windowsPerfScoreHps = 0;
+  // let linuxPerfScoreHps = 0;
 
   let windowsUploadThroughputQuic = -1;
   let windowsUploadThroughputTcp = -1;
@@ -149,18 +149,19 @@ export default function AppView() {
     windowsType = `${windowsOs} ${windows.data.os_version}`
     linuxType = `${linuxOs} ${linux.data.os_version}`
     // Throughput
-    windowsDownloadThroughputQuic = Math.max(...index(windows.data, ["download-quic", "tput-down-quic"], [-1]));
-    windowsDownloadThroughputTcp = Math.max(...index(windows.data, ["download-tcp", "tput-down-tcp"], [-1]));
-    windowsUploadThroughputQuic = Math.max(...index(windows.data, ["upload-quic", "tput-up-quic"], [-1]));
-    windowsUploadThroughputTcp = Math.max(...index(windows.data, ["upload-tcp", "tput-up-tcp"], [-1]));
-    linuxDownloadThroughputQuic = Math.max(...index(linux.data, ["download-quic", "tput-down-quic"], [-1]));
-    linuxDownloadThroughputTcp = Math.max(...index(linux.data, ["download-tcp", "tput-down-tcp"], [-1]));
-    linuxUploadThroughputQuic = Math.max(...index(linux.data, ["upload-quic", "tput-up-quic"], [-1]));
-    linuxUploadThroughputTcp = Math.max(...index(linux.data, ["upload-tcp", "tput-up-tcp"], [-1]));
-    windowsKernelDownloadThroughputQuic = Math.max(...index(windowsKernel.data, ["download-quic", "tput-down-quic"], [-1]));
-    windowsKernelUploadThroughputQuic = Math.max(...index(windowsKernel.data, ["upload-quic", "tput-up-quic"], [-1]));
-    windowsXdpDownloadThroughputQuic = Math.max(...index(windowsXdp.data, ["download-quic", "tput-down-quic"], [-1]));
-    windowsXdpUploadThroughputQuic = Math.max(...index(windowsXdp.data, ["upload-quic", "tput-up-quic"], [-1]));
+    const DIVISOR = 1000000;
+    windowsDownloadThroughputQuic = Math.max(...index(windows.data, ["download-quic", "tput-down-quic"], [-1])) / DIVISOR;
+    windowsDownloadThroughputTcp = Math.max(...index(windows.data, ["download-tcp", "tput-down-tcp"], [-1])) / DIVISOR;
+    windowsUploadThroughputQuic = Math.max(...index(windows.data, ["upload-quic", "tput-up-quic"], [-1])) / DIVISOR;
+    windowsUploadThroughputTcp = Math.max(...index(windows.data, ["upload-tcp", "tput-up-tcp"], [-1])) / DIVISOR;
+    linuxDownloadThroughputQuic = Math.max(...index(linux.data, ["download-quic", "tput-down-quic"], [-1])) / DIVISOR;
+    linuxDownloadThroughputTcp = Math.max(...index(linux.data, ["download-tcp", "tput-down-tcp"], [-1])) / DIVISOR;
+    linuxUploadThroughputQuic = Math.max(...index(linux.data, ["upload-quic", "tput-up-quic"], [-1])) / DIVISOR;
+    linuxUploadThroughputTcp = Math.max(...index(linux.data, ["upload-tcp", "tput-up-tcp"], [-1])) / DIVISOR;
+    windowsKernelDownloadThroughputQuic = Math.max(...index(windowsKernel.data, ["download-quic", "tput-down-quic"], [-1])) / DIVISOR;
+    windowsKernelUploadThroughputQuic = Math.max(...index(windowsKernel.data, ["upload-quic", "tput-up-quic"], [-1])) / DIVISOR;
+    windowsXdpDownloadThroughputQuic = Math.max(...index(windowsXdp.data, ["download-quic", "tput-down-quic"], [-1])) / DIVISOR;
+    windowsXdpUploadThroughputQuic = Math.max(...index(windowsXdp.data, ["upload-quic", "tput-up-quic"], [-1])) / DIVISOR;
 
     console.log("WINDOWS XDP TPUT", windowsXdpUploadThroughputQuic)
 
@@ -174,20 +175,20 @@ export default function AppView() {
 
 
     // Compute Scores
-    windowsPerfScore = throughputPerformance(
-      windowsDownloadThroughputQuic,
-      windowsUploadThroughputQuic,
-      0.8,
-      0.2
-    );
-    linuxPerfScore = throughputPerformance(
-      linuxDownloadThroughputQuic,
-      linuxUploadThroughputQuic,
-      0.8,
-      0.2
-    );
-    windowsPerfScoreLatency = latencyPerformance(windowsLatencyQuic);
-    linuxPerfScoreLatency = latencyPerformance(linuxLatencyQuic);
+    // windowsPerfScore = throughputPerformance(
+    //   windowsDownloadThroughputQuic,
+    //   windowsUploadThroughputQuic,
+    //   0.8,
+    //   0.2
+    // );
+    // linuxPerfScore = throughputPerformance(
+    //   linuxDownloadThroughputQuic,
+    //   linuxUploadThroughputQuic,
+    //   0.8,
+    //   0.2
+    // );
+    // windowsPerfScoreLatency = latencyPerformance(windowsLatencyQuic);
+    // linuxPerfScoreLatency = latencyPerformance(linuxLatencyQuic);
 
     // HPS
     windowsHpsQuic = Math.max(...index(windows.data, ["hps-quic", "hps-conns-100-quic"], [-1]));
@@ -205,10 +206,10 @@ export default function AppView() {
     windowsKernelRpsQuic = fetchRPS(index(windowsKernel.data, ["rps-quic"], null), windowsKernelLatencyQuic[windowsKernelLatencyQuic.length - 1]);
 
     // Compute scores
-    windowsPerfScoreRps = (windowsRpsQuic + windowsRpsTcp) / 1000000;
-    linuxPerfScoreRps = (linuxRpsQuic + linuxRpsTcp) / 1000000;
-    windowsPerfScoreHps = (windowsHpsQuic + windowsHpsTcp) / 100;
-    linuxPerfScoreHps = (linuxHpsQuic + linuxHpsTcp) / 100;
+    // windowsPerfScoreRps = (windowsRpsQuic + windowsRpsTcp) / 1000000;
+    // linuxPerfScoreRps = (linuxRpsQuic + linuxRpsTcp) / 1000000;
+    // windowsPerfScoreHps = (windowsHpsQuic + windowsHpsTcp) / 100;
+    // linuxPerfScoreHps = (linuxHpsQuic + linuxHpsTcp) / 100;
   }
 
   const handleChange = (event) => {
@@ -298,58 +299,53 @@ export default function AppView() {
         {/* <Typography variant="h5" sx={{ mb: 5 }}>
           Data based on commit: <a href={`https://github.com/microsoft/msquic/commit/${commitHash}`}>{commitHash}</a>
         </Typography> */}
-        <p style={{marginLeft: '10px'}}>Data based on <a href={`https://github.com/microsoft/msquic/commit/${commitHash}`}>commit</a>. <b>Warning: </b> Lab results for Ubuntu is out-of-sync. Will be fixed shortly!</p>
+        <p style={{marginLeft: '10px'}}>Data based on MsQuic <a href={`https://github.com/microsoft/msquic/commit/${commitHash}`}>commit</a>. <b>Warning: </b> Lab results for Ubuntu is out-of-sync. Will be fixed shortly!</p>
       </div>
       {/* <br /> */}
       <p><b>Windows hardware SKU:</b> {getLatestSkuInformation(env, windowsOs, windows)} | <b>Linux hardware SKU:</b> {getLatestSkuInformation(env, linuxOs, linux)}</p>
       <Grid container spacing={3}>
         <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
-            title="Windows Throughput Performance Score."
-            total={windowsPerfScore}
+            title="Secnetperf + QUIC + iocp download throughput"
+            total={windowsDownloadThroughputQuic}
+            total2={windowsDownloadThroughputTcp}
+            title2="Secnetperf + TCP + iocp download throughput"
+            unit="Gbps"
             color="primary"
             icon={
               <div>
                 <img alt="icon" src="/netperf/dist/assets/icons/glass/windows.png" />
-                <Button
-                  onClick={() =>
-                    alert(`
-                This score is computed as:
 
-                WINDOWS = download_speed * download_weight + upload_speed * upload_weight
-
-                SCORE = WINDOWS / 10000,
-
-                where download_weight = 0.8, upload_weight = 0.2
-
-                Essentially, we weigh download speed more than upload speed, since most internet users
-                are using download a lot more often than upload.
-              `)
-                  }
-                >
-                  ?
-                </Button>
               </div>
             }
           />
+          <Button
+                  onClick={() =>
+                    // redirect to the netperf documentation
+                    window.open('https://github.com/microsoft/netperf/tree/main/docs/secnetperf.md', '_blank')
+                  }
+                >
+                  How were these numbers generated using Secnetperf?
+                </Button>
         </Grid>
 
         <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
-            title="Linux Throughput Performance Score."
-            total={linuxPerfScore}
+            title="Secnetperf + QUIC + epoll download throughput"
+            title2="Secnetperf + TCP + epoll download throughput"
+            unit="Gbps"
+            total={linuxDownloadThroughputQuic}
+            total2={linuxDownloadThroughputTcp}
             color="primary"
             icon={
               <div>
                 <img alt="icon" src="/netperf/dist/assets/icons/glass/Ubuntu-Logo.png" />
-                <Button
+                {/* <Button
                   onClick={() =>
                     alert(`
                 This score is computed as:
 
-                LINUX = download_speed * download_weight + upload_speed * upload_weight
-
-                SCORE = LINUX / 10000,
+                SCORE = download_speed * download_weight + upload_speed * upload_weight
 
                 where download_weight = 0.8, upload_weight = 0.2
 
@@ -360,20 +356,24 @@ export default function AppView() {
                   }
                 >
                   ?
-                </Button>
+                </Button> */}
               </div>
             }
           />
+          <p>Note: for io = WSK, the application driving the perf test (Secnetperf) is ALSO in Kernel mode.</p>
         </Grid>
         <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
-            title="Windows Latency Performance Score."
-            total={windowsPerfScoreLatency}
+            title="Secnetperf + QUIC + iocp 99th percentile latency"
+            title2="Secnetperf + TCP + iocp 99th percentile latency"
+            unit="µs"
+            total={windowsLatencyQuic[3]}
+            total2={windowsLatencyTcp[3]}
             color="primary"
             icon={
               <div>
                 <img alt="icon" src="/netperf/dist/assets/icons/glass/windows.png" />
-                <Button
+                {/* <Button
                   onClick={() =>
                     alert(`
                   This score is computed as:
@@ -392,7 +392,7 @@ export default function AppView() {
                   }
                 >
                   ?
-                </Button>
+                </Button> */}
               </div>
             }
           />
@@ -400,13 +400,16 @@ export default function AppView() {
 
         <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
-            title="Linux Latency Performance Score."
-            total={linuxPerfScoreLatency}
+            title="Secnetperf + QUIC + epoll 99th percentile latency"
+            title2="Secnetperf + TCP + epoll 99th percentile latency"
+            unit="µs"
+            total={linuxLatencyQuic[3]}
+            total2={linuxLatencyTcp[3]}
             color="primary"
             icon={
               <div>
                 <img alt="icon" src="/netperf/dist/assets/icons/glass/Ubuntu-Logo.png" />
-                <Button
+                {/* <Button
                   onClick={() =>
                     alert(`
               This score is computed as:
@@ -428,7 +431,7 @@ export default function AppView() {
                   }
                 >
                   ?
-                </Button>
+                </Button> */}
               </div>
             }
           />
@@ -436,7 +439,7 @@ export default function AppView() {
         {/* Throughput */}
         <Grid xs={12} md={6} lg={6}>
           <AppWebsiteVisits
-            title="Throughput Comparison (kbps), higher the better."
+            title="Secnetperf Throughput Comparison (Gbps), higher the better."
             subheader={` ${envStr}`}
             chart={{
               labels: ['', 'Download', 'Upload', ''],
@@ -527,7 +530,7 @@ export default function AppView() {
         {/* Latency */}
         <Grid xs={12} md={6} lg={6}>
           <AppWebsiteVisits
-            title="Latency Comparison (µs), lower the better."
+            title="Secnetperf Latency Comparison (µs), lower the better."
             subheader={` ${envStr}`}
             chart={{
               // New labels based on percentiles
@@ -627,13 +630,15 @@ export default function AppView() {
 
         <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
-            title="Windows RPS Performance Score."
-            total={windowsPerfScoreRps}
+            title="Secnetperf + QUIC + iocp RPS"
+            title2="Secnetperf + TCP + iocp RPS"
+            total={windowsRpsQuic}
+            total2={windowsRpsTcp}
             color="primary"
             icon={
               <div>
                 <img alt="icon" src="/netperf/dist/assets/icons/glass/windows.png" />
-                <Button
+                {/* <Button
                   onClick={() =>
                     alert(`
                   This score is computed as:
@@ -643,20 +648,22 @@ export default function AppView() {
                   }
                 >
                   ?
-                </Button>
+                </Button> */}
               </div>
             }
           />
         </Grid>
         <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
-            title="Linux RPS Performance Score."
-            total={linuxPerfScoreRps}
+            title="Secnetperf + QUIC + epoll RPS"
+            title2="Secnetperf + TCP + epoll RPS"
+            total={linuxRpsQuic}
+            total2={linuxRpsTcp}
             color="primary"
             icon={
               <div>
                 <img alt="icon" src="/netperf/dist/assets/icons/glass/Ubuntu-Logo.png" />
-                <Button
+                {/* <Button
                   onClick={() =>
                     alert(`
                 This score is computed as:
@@ -666,7 +673,7 @@ export default function AppView() {
                   }
                 >
                   ?
-                </Button>
+                </Button> */}
               </div>
             }
           />
@@ -674,13 +681,15 @@ export default function AppView() {
 
         <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
-            title="Windows HPS Performance Score."
-            total={windowsPerfScoreHps}
+            title="Secnetperf + QUIC + iocp HPS"
+            title2="Secnetperf + TCP + iocp HPS"
+            total={windowsHpsQuic}
+            total2={windowsHpsTcp}
             color="primary"
             icon={
               <div>
                 <img alt="icon" src="/netperf/dist/assets/icons/glass/windows.png" />
-                <Button
+                {/* <Button
                   onClick={() =>
                     alert(`
                   This score is computed as:
@@ -689,20 +698,22 @@ export default function AppView() {
                   }
                 >
                   ?
-                </Button>
+                </Button> */}
               </div>
             }
           />
         </Grid>
         <Grid xs={12} sm={6} md={3}>
           <AppWidgetSummary
-            title="Linux HPS Performance Score."
-            total={linuxPerfScoreHps}
+            title="Secnetperf + QUIC + epoll HPS"
+            title2="Secnetperf + TCP + epoll HPS"
+            total={linuxHpsQuic}
+            total2={linuxHpsTcp}
             color="primary"
             icon={
               <div>
                 <img alt="icon" src="/netperf/dist/assets/icons/glass/Ubuntu-Logo.png" />
-                <Button
+                {/* <Button
                   onClick={() =>
                     alert(`
                 This score is computed as:
@@ -712,7 +723,7 @@ export default function AppView() {
                   }
                 >
                   ?
-                </Button>
+                </Button> */}
               </div>
             }
           />
