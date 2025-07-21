@@ -1,13 +1,10 @@
-[Dashboard](https://microsoft.github.io/netperf/dist)
-
 # Network Perfomance Testing
 
-The repo is the common place other Microsoft owned networking projects (including Windows itself) use to run, store and visualize networking performance testing. Currently, the following projects (will) use this:
+The repo is the common place other Microsoft owned open source networking projects use to run, store and visualize networking performance testing. Currently, the following projects (will) use this:
 
-- [microsoft/msquic](https://github.com/microsoft/msquic)
-- [microsoft/xdp-for-Windows](https://github.com/microsoft/xdp-for-windows)
-- [microsoft/ebpf-for-Windows](https://github.com/microsoft/ebpf-for-windows)
-- [Windows Server](https://www.microsoft.com/en-us/windows-server/)
+- [microsoft/msquic](https://github.com/microsoft/msquic) -- [Dashboard](https://microsoft.github.io/netperf/dist) (actively running per PR on Netperf)
+- [microsoft/xdp-for-Windows](https://github.com/microsoft/xdp-for-windows) -- (not supported yet)
+- [microsoft/ebpf-for-Windows](https://github.com/microsoft/ebpf-for-windows) -- [Dashboard](https://bpfperformancegrafana.azurewebsites.net/public-dashboards/3826972d0ff245158b6df21d5e6868a9?orgId=1) (running on a schedule)
 
 ## Goal
 
@@ -15,7 +12,7 @@ Historically, networking performance testing has been spotty, inconsistent, not 
 
 ## Documentation
 
-- [Start Here](./docs/start_here.md) 
+- [Start Here](./docs/start_here.md)
 
 ## Contributing
 
