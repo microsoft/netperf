@@ -6,13 +6,11 @@
   },
   "plugins": [
     "perfectionist",
-    "unused-imports",
-    "prettier"
+    "unused-imports"
   ],
   "extends": [
     "airbnb",
-    "airbnb/hooks",
-    "prettier"
+    "airbnb/hooks"
   ],
   "parserOptions": {
     "ecmaVersion": "latest",
