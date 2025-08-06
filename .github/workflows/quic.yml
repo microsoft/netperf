@@ -196,12 +196,12 @@ jobs:
       if: ${{ matrix.env == 'azure' }}
       uses: ./netperfrepo/.github/actions/prepare-1es-machine
     - name: Download Artifacts
-      uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
       with:
         name: Release-${{env.OS}}-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-Perf
         path: artifacts
     - name: Download Kernel Artifacts
-      uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
       if: ${{ matrix.io == 'wsk' }}
       with:
         name: Release-winkernel-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}
@@ -292,13 +292,13 @@ jobs:
       shell: pwsh
       run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
     - name: Download Kernel Drivers
-      uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
       if: ${{ matrix.io == 'wsk' }}
       with:
         name: Release-winkernel-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}
         path: artifacts
     - name: Download Artifacts
-      uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
       with:
         name: Release-${{env.OS}}-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-Perf
         path: artifacts
@@ -377,7 +377,7 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
-    - uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+    - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
       with:
         path: artifacts/logs
         pattern: json-test-results-*
@@ -399,7 +399,7 @@ jobs:
       with:
         repository: microsoft/netperf
         ref: sqlite
-    - uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+    - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
       with:
         pattern: json-test-results-*
     - name: Remove deprecated python scripts
@@ -439,7 +439,7 @@ jobs:
         repository: microsoft/netperf
         ref: deploy
     - run: 'rm -rf *.json'
-    - uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+    - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
       with:
         name: history_pages
         path: history_pages
@@ -448,7 +448,7 @@ jobs:
       run: |
         mv history_pages/*.json .
         rm -rf history_pages
-    - uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+    - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
       with:
         pattern: "json-test-results-*"
     - run: ls
