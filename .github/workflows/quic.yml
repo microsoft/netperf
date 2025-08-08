@@ -155,11 +155,12 @@ jobs:
       matrix:
         os: ['ubuntu-24.04']
         tls: ['quictls']
+        iouring: ['', '-UseIoUring']
     uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml@main
     with:
       os: ${{ matrix.os }}
       tls: ${{ matrix.tls }}
-      xdp: ${{ matrix.xdp }}
+      iouring: ${{ matrix.iouring }}
       build: -Perf
       ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
 
@@ -198,7 +199,7 @@ jobs:
     - name: Download Artifacts
       uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
       with:
-        name: Release-${{env.OS}}-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-Perf
+        name: Release-${{env.OS}}-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}${{ matrix.iouring }}-Perf
         path: artifacts
     - name: Download Kernel Artifacts
       uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
