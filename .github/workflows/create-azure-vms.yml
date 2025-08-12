@@ -56,7 +56,7 @@ jobs:
     runs-on: windows-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@v5
     - name: Login to Azure
       uses: azure/login@v2
       with:

@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - name: Checkout repository
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5
     - name: NPM install
       working-directory: dashboard
       run: npm install
@@ -51,7 +51,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - name: Checkout repository
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5
       with:
         repository: microsoft/netperf
         ref: deploy

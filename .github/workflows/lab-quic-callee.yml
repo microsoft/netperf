@@ -30,12 +30,12 @@ jobs:
     - ${{ github.event.client_payload.assigned_runner }}
     steps:
     - name: Checkout microsoft/msquic
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5
       with:
         repository: microsoft/msquic
         ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
     - name: Checkout code
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5
       with:
         path: netperfrepo
     - name: Lowercase runner.os

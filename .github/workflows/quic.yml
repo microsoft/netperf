@@ -185,12 +185,12 @@ jobs:
     - 1ES.ImageOverride=${{ matrix.assigned_os }}
     steps:
     - name: Checkout microsoft/msquic
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5
       with:
         repository: microsoft/msquic
         ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
     - name: Checkout code
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5
       with:
         path: netperfrepo
     - name: Prepares 1ES Machine
@@ -285,7 +285,7 @@ jobs:
     - ${{ matrix.assigned_lab_vm_runner_tag }}
     steps:
     - name: Checkout microsoft/msquic
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5
       with:
         repository: microsoft/msquic
         ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
@@ -377,7 +377,7 @@ jobs:
     continue-on-error: true
     steps:
     - name: Checkout repository
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5
     - uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
       with:
         path: artifacts/logs
@@ -396,7 +396,7 @@ jobs:
     runs-on: 'ubuntu-22.04'
     steps:
     - name: Checkout repository
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5
       with:
         repository: microsoft/netperf
         ref: sqlite
@@ -435,7 +435,7 @@ jobs:
     runs-on: 'ubuntu-22.04'
     steps:
     - name: Checkout repository
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5
       with:
         repository: microsoft/netperf
         ref: deploy
@@ -467,7 +467,7 @@ jobs:
     runs-on: 'ubuntu-22.04'
     steps:
     - name: Checkout repository
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5
       with:
         repository: microsoft/netperf
         ref: sqlite
