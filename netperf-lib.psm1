@@ -113,10 +113,14 @@ function NetperfWaitServerFinishExecution {
 function InitNetperfLib {
     param (
         $CallbackName,
-        $RemoteDir
+        $RemoteDir,
+        $RemoteName,
+        $UserNameOnLinux
     )
     $env:CallbackName = $CallbackName
     $env:RemoteDir = $RemoteDir
+    $env:RemoteName = $RemoteName
+    $env:UserNameOnLinux = $UserNameOnLinux
     $RemotePowershellSupported = $env:netperf_remote_powershell_supported
     if ($RemotePowershellSupported -eq $true) {
 
@@ -143,7 +147,7 @@ function InitNetperfLib {
                     $cred = New-Object System.Management.Automation.PSCredential ($username, $password)
                     $Session = New-PSSession -ComputerName $RemoteName -Credential $cred -ConfigurationName PowerShell.7
                 } else {
-                    $Session = New-PSSession -HostName $RemoteName -UserName $UserName -SSHTransport
+                    $Session = New-PSSession -HostName $RemoteName -UserName $UserNameOnLinux -SSHTransport
                 }
                 break
             } catch {
