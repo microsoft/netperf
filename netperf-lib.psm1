@@ -23,7 +23,7 @@ function NetperfSendCommand {
         $CallBackName = $env:CallBackName
         $RemoteDir = $env:RemoteDir
         Invoke-Command -Session $Session -ScriptBlock {
-            & "$Using:RemoteDir/scripts/$Using:CallBackName" -Command $Using:Command
+            & "$Using:RemoteDir/scripts/$Using:CallBackName" -Command $Using:Command -WorkingDir $Using:RemoteDir
         }
         return
     }
