@@ -182,7 +182,6 @@ function Copy-RepoToPeer {
             New-Item -ItemType Directory -Path $Using:RemoteDir -Force | Out-Null
         }
         Copy-Item -ToSession $Session -Path ./* -Destination "$RemoteDir" -Recurse
-        Copy-Item -ToSession $Session -Path ./src/manifest/MsQuic.wprp -Destination "$RemoteDir/scripts"
     } else {
         Write-Host "Not using remote powershell, assuming peer has checked out the repo."
     }
