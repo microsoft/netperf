@@ -13,9 +13,23 @@ function ValidateInheritedParams {
 function NetperfSendCommand {
     param (
         [Parameter(Mandatory = $true)]
-        [string]$Command
+        [string]$Command,
+        [Parameter(Mandatory = $false)]
+        $Session
     )
-    Write-Host "Sending command: $Command"
+
+    if ($Session -and $Session -ne "NOT_SUPPORTED") {
+        Write-Host "Sending command (via remote powershell): $Command"
+        $CallBackName = $env:CallBackName
+        $RemoteDir = $env:RemoteDir
+        Invoke-Command -Session $Session -ScriptBlock {
+            & "$Using:RemoteDir/scripts/$Using:CallBackName" -Command $Using:Command -WorkingDir $Using:RemoteDir
+        }
+        return
+    }
+
+
+    Write-Host "Sending command (via remote cache): $Command"
     # Should send a command to the shared cache and wait for the server process to execute said command before exiting.
     $headers = @{
         "secret" = "$env:netperf_syncer_secret"
@@ -57,9 +71,14 @@ function NetperfWaitServerFinishExecution {
         [Parameter(Mandatory = $false)]
         [int]$WaitPerAttempt = 8,
         [Parameter(Mandatory = $false)]
-        [scriptblock]$UnblockRoutine = {}
+        [scriptblock]$UnblockRoutine = {},
+        [Parameter(Mandatory = $false)]
+        $Session
     )
-
+    if ($Session -and $Session -ne "NOT_SUPPORTED") {
+        Write-Host "No need to wait if we are doing remote powershell..."
+        return
+    }
     for ($i = 0; $i -lt $maxattempts; $i++) {
         $UnblockRoutine.Invoke()
         Write-Host "Waiting for server to finish execution... Attempt $i"
@@ -88,4 +107,70 @@ function NetperfWaitServerFinishExecution {
     }
 
     throw "Server did not finish execution in time! Tried $maxattempts times with $WaitPerAttempt seconds interval."
+}
+
+
+function InitNetperfLib {
+    param (
+        $CallbackName,
+        $RemoteDir,
+        $RemoteName,
+        $UserNameOnLinux
+    )
+    $env:CallbackName = $CallbackName
+    $env:RemoteDir = $RemoteDir
+    $env:RemoteName = $RemoteName
+    $env:UserNameOnLinux = $UserNameOnLinux
+    $RemotePowershellSupported = $env:netperf_remote_powershell_supported
+    if ($RemotePowershellSupported -eq $true) {
+
+        # Set up the connection to the peer over remote powershell.
+        Write-Host "Connecting to $RemoteName"
+        $Attempts = 0
+        while ($Attempts -lt 5) {
+            try {
+                if ($isWindows) {
+                    $username = (Get-ItemProperty 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon').DefaultUserName
+                    $password = (Get-ItemProperty 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon').DefaultPassword | ConvertTo-SecureString -AsPlainText -Force
+                    $cred = New-Object System.Management.Automation.PSCredential ($username, $password)
+                    $Session = New-PSSession -ComputerName $RemoteName -Credential $cred -ConfigurationName PowerShell.7
+                } else {
+                    $Session = New-PSSession -HostName $RemoteName -UserName $UserNameOnLinux -SSHTransport
+                }
+                break
+            } catch {
+                Write-Host "Error $_"
+                $Attempts += 1
+                Start-Sleep -Seconds 10
+            }
+        }
+
+        if ($null -eq $Session) {
+            Write-GHError "Failed to create remote session"
+            exit 1
+        }
+
+    } else {
+        $Session = "NOT_SUPPORTED"
+        Write-Host "Remote PowerShell is not supported in this environment"
+    }
+    return $Session
+}
+
+function Copy-RepoToPeer {
+    param($Session)
+    $RemoteDir = $env:RemoteDir
+    if (!($Session -eq "NOT_SUPPORTED")) {
+        # Copy the artifacts to the peer.
+        Write-Host "Copying files to peer"
+        Invoke-Command -Session $Session -ScriptBlock {
+            if (Test-Path $Using:RemoteDir) {
+                Remove-Item -Force -Recurse $Using:RemoteDir | Out-Null
+            }
+            New-Item -ItemType Directory -Path $Using:RemoteDir -Force | Out-Null
+        }
+        Copy-Item -ToSession $Session -Path ./* -Destination "$RemoteDir" -Recurse
+    } else {
+        Write-Host "Not using remote powershell, assuming peer has checked out the repo."
+    }
 }
