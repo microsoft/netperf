@@ -128,18 +128,6 @@ function InitNetperfLib {
         Write-Host "Connecting to $RemoteName"
         $Attempts = 0
         while ($Attempts -lt 5) {
-            if ($environment -eq "azure") {
-                if ($isWindows) {
-                    Write-Host "Attempting to connect..."
-                    $Session = New-PSSession -ComputerName $RemoteName -ConfigurationName PowerShell.7
-                    break
-                } else {
-                    # On Azure in 1ES Linux environments, remote powershell is not supported (yet).
-                    $Session = "NOT_SUPPORTED"
-                    Write-Host "Remote PowerShell is not supported in Azure 1ES Linux environments"
-                    break
-                }
-            }
             try {
                 if ($isWindows) {
                     $username = (Get-ItemProperty 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon').DefaultUserName
