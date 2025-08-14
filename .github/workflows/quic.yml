@@ -289,6 +289,10 @@ jobs:
       with:
         repository: microsoft/msquic
         ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+    - name: Checkout code
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      with:
+        path: netperfrepo
     - name: Lowercase runner.os
       shell: pwsh
       run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
@@ -313,6 +317,7 @@ jobs:
       shell: pwsh
       timeout-minutes: 80
       run: |
+          Import-Module ./netperfrepo/netperf-lib.psm1
           $env:netperf_remote_powershell_supported = $true
           ./scripts/secnetperf.ps1 `
           -LogProfile ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }} `
