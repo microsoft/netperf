@@ -126,6 +126,7 @@ function InitNetperfLib {
 
         # Set up the connection to the peer over remote powershell.
         Write-Host "Connecting to $RemoteName"
+        Write-Host "Using Callback Script: $RemoteDir/scripts/$CallbackName"
         $Attempts = 0
         while ($Attempts -lt 5) {
             try {
