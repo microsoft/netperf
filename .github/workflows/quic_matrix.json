@@ -1,6 +1,4 @@
 [
-    { "env": "azure", "os": "ubuntu-24.04", "arch": "x64", "tls": "quictls",  "io": "epoll", "preferred_pool_sku": "Experimental_Boost4" },
-    { "env": "azure", "os": "ubuntu-24.04", "arch": "x64", "tls": "quictls",  "io": "iouring", "iouring": "-UseIoUring", "preferred_pool_sku": "Experimental_Boost4" },
     { "env": "lab",   "os": "ubuntu-24.04", "arch": "x64", "tls": "quictls", "io": "epoll" },
-    { "env": "lab",   "os": "windows-2022", "arch": "x64", "tls": "schannel", "io": "iocp" }
+    { "env": "not_lab_not_azure",   "os": "ubuntu-24.04", "arch": "x64", "tls": "quictls", "io": "epoll" }
 ]
