@@ -112,12 +112,12 @@ function NetperfWaitServerFinishExecution {
 
 function InitNetperfLib {
     param (
-        $CallbackName,
+        $CallBackName,
         $RemoteDir,
         $RemoteName,
         $UserNameOnLinux
     )
-    $env:CallbackName = $CallbackName
+    $env:CallBackName = $CallBackName
     $env:RemoteDir = $RemoteDir
     $env:RemoteName = $RemoteName
     $env:UserNameOnLinux = $UserNameOnLinux
@@ -126,7 +126,7 @@ function InitNetperfLib {
 
         # Set up the connection to the peer over remote powershell.
         Write-Host "Connecting to $RemoteName"
-        Write-Host "Using Callback Script: $RemoteDir/scripts/$CallbackName"
+        Write-Host "Using Callback Script: $RemoteDir/scripts/$CallBackName"
         $Attempts = 0
         while ($Attempts -lt 5) {
             try {
