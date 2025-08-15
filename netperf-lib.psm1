@@ -180,7 +180,7 @@ function Copy-RepoToPeer {
             }
             New-Item -ItemType Directory -Path $Using:RemoteDir -Force | Out-Null
         }
-        Copy-Item -ToSession $Session -Path ./* -Destination "$RemoteDir" -Recurse
+        Copy-Item -Path . -Destination "$RemoteDir" -Recurse -Force -ToSession $Session
     } else {
         Write-Host "Not using remote powershell, assuming peer has checked out the repo."
     }
