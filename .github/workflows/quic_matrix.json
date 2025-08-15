@@ -1,4 +1,4 @@
 [
     { "env": "lab",   "os": "ubuntu-24.04", "arch": "x64", "tls": "quictls", "io": "epoll" },
-    { "env": "not_lab_not_azure",   "os": "ubuntu-24.04", "arch": "x64", "tls": "quictls", "io": "epoll" }
+    { "env": "lab",   "os": "invalid_os", "arch": "x64", "tls": "quictls", "io": "epoll" }
 ]
