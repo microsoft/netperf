@@ -19,9 +19,9 @@ function NetperfSendCommand {
     )
 
     if ($Session -and $Session -ne "NOT_SUPPORTED") {
-        Write-Host "Sending command (via remote powershell): $Command"
         $CallBackName = $env:CallBackName
         $RemoteDir = $env:RemoteDir
+        Write-Host "Sending command (via remote powershell): $RemoteDir/scripts/$CallBackName -Command $Command -WorkingDir $RemoteDir"
         Invoke-Command -Session $Session -ScriptBlock {
             & "$Using:RemoteDir/scripts/$Using:CallBackName" -Command $Using:Command -WorkingDir $Using:RemoteDir
         }
