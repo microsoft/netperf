@@ -24,12 +24,15 @@ function NetperfSendCommand {
         if ($isWindows) {
             Write-Host "Sending command (via remote powershell): $RemoteDir/scripts/$CallBackName -Command $Command -WorkingDir $RemoteDir"
             Invoke-Command -Session $Session -ScriptBlock {
-                & "$Using:RemoteDir/scripts/$Using:CallBackName" -Command $Using:Command -WorkingDir $Using:RemoteDir
+                & pwsh -NoProfile -NonInteractive -WorkingDirectory $Using:RemoteDir -File `
+                "$Using:RemoteDir/scripts/$Using:CallBackName" `
+                -Command $Using:Command `
+                -WorkingDir $Using:RemoteDir
             }
         } else {
             Write-Host "Sending command (via remote powershell): sudo -n pwsh -NoProfile -NonInteractive -File $RemoteDir/scripts/$CallBackName -Command $Command -WorkingDir $RemoteDir"
             Invoke-Command -Session $Session -ScriptBlock {
-                & sudo -n pwsh -NoProfile -NonInteractive -File `
+                & sudo -n pwsh -NoProfile -NonInteractive -WorkingDirectory $Using:RemoteDir -File `
                 "$Using:RemoteDir/scripts/$Using:CallBackName" `
                 -Command $Using:Command `
                 -WorkingDir $Using:RemoteDir
