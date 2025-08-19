@@ -177,12 +177,26 @@ function Copy-RepoToPeer {
     if (!($Session -eq "NOT_SUPPORTED")) {
         # Copy the artifacts to the peer.
         Write-Host "Copying files to peer"
-        Invoke-Command -Session $Session -ScriptBlock {
-            if (Test-Path $Using:RemoteDir) {
-                Remove-Item -Force -Recurse $Using:RemoteDir | Out-Null
+        if ($isWindows) {
+            Invoke-Command -Session $Session -ScriptBlock {
+                if (Test-Path $Using:RemoteDir) {
+                    Remove-Item -Force -Recurse $Using:RemoteDir | Out-Null
+                }
+                New-Item -ItemType Directory -Path $Using:RemoteDir -Force | Out-Null
             }
-            New-Item -ItemType Directory -Path $Using:RemoteDir -Force | Out-Null
+        } else {
+            Invoke-Command -Session $Session -ScriptBlock {
+                $dir = $Using:RemoteDir
+                & sudo -n pwsh -NoProfile -NonInteractive -WorkingDirectory $Using:RemoteDir -Command {
+                    param ($p)
+                    if (Test-Path $p) {
+                        Remove-Item -Force -Recurse $p | Out-Null
+                    }
+                    New-Item -ItemType Directory -Path $p -Force | Out-Null
+                } $dir
+            }
         }
+
         Copy-Item -ToSession $Session -Path ./*, ./.* -Destination "$RemoteDir" -Recurse -Force
     } else {
         Write-Host "Not using remote powershell, assuming peer has checked out the repo."
