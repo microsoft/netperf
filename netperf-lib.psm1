@@ -186,13 +186,12 @@ function Copy-RepoToPeer {
             }
         } else {
             Invoke-Command -Session $Session -ScriptBlock {
-                $dir = $Using:RemoteDir
-                & sudo -n -- pwsh -NoProfile -NonInteractive -Command {
+                & sudo -n pwsh -NoProfile -NonInteractive -Command {
                     param($p)
                     Set-Location -Path $p
                     if (Test-Path $p) { Remove-Item -Force -Recurse $p | Out-Null }
                     New-Item -ItemType Directory -Path $p -Force | Out-Null
-                } -- $dir   # the second `--` makes pwsh stop parsing before `$dir` (purely defensive)
+                } $dir
             }
         }
 
