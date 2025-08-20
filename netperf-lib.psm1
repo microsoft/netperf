@@ -194,7 +194,7 @@ function Copy-RepoToPeer {
                 New-Item -ItemType Directory -Path $Using:RemoteDir -Force | Out-Null
 "@
                 Set-Content -Path "$Using:RemoteDir/../tmp_script.ps1" -Value $Script -Force
-                & sudo -n pwsh -NoProfile -NonInteractive -WorkingDirectory $Using:RemoteDir -File `
+                & sudo -n pwsh -NoProfile -NonInteractive -File `
                 "$Using:RemoteDir/../tmp_script.ps1"
             }
         }
