@@ -174,6 +174,7 @@ function InitNetperfLib {
 function Copy-RepoToPeer {
     param($Session)
     $RemoteDir = $env:RemoteDir
+    $UserNameOnLinux = $env:UserNameOnLinux
     if (!($Session -eq "NOT_SUPPORTED")) {
         # Copy the artifacts to the peer.
         Write-Host "Copying files to peer"
@@ -192,6 +193,8 @@ function Copy-RepoToPeer {
                     Remove-Item -Force -Recurse $Using:RemoteDir | Out-Null
                 }
                 New-Item -ItemType Directory -Path $Using:RemoteDir -Force | Out-Null
+                chown $Using:UserNameOnLinux:$Using:UserNameOnLinux $Using:RemoteDir
+                chmod 755 $Using:RemoteDir
 "@
                 Set-Content -Path "$Using:RemoteDir/../tmp_script.ps1" -Value $Script -Force
                 & sudo -n pwsh -NoProfile -NonInteractive -File `
