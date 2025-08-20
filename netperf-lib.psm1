@@ -186,12 +186,16 @@ function Copy-RepoToPeer {
             }
         } else {
             Invoke-Command -Session $Session -ScriptBlock {
-                & sudo -n pwsh -NoProfile -NonInteractive -Command {
-                    param($p)
-                    Set-Location -Path $p
-                    if (Test-Path $p) { Remove-Item -Force -Recurse $p | Out-Null }
-                    New-Item -ItemType Directory -Path $p -Force | Out-Null
-                } $dir
+                # Create tmp script
+                $Script = @"
+                if (Test-Path $Using:RemoteDir) {
+                    Remove-Item -Force -Recurse $Using:RemoteDir | Out-Null
+                }
+                New-Item -ItemType Directory -Path $Using:RemoteDir -Force | Out-Null
+"@
+                Set-Content -Path "$Using:RemoteDir/tmp_script.ps1" -Value $Script -Force
+                & sudo -n pwsh -NoProfile -NonInteractive -WorkingDirectory $Using:RemoteDir -File `
+                "$Using:RemoteDir/tmp_script.ps1" 
             }
         }
 
