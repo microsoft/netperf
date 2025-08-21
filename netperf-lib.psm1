@@ -196,6 +196,8 @@ function Copy-RepoToPeer {
                 chown $Using:UserNameOnLinux:$Using:UserNameOnLinux $Using:RemoteDir
                 chmod 755 $Using:RemoteDir
 "@
+                # Create file
+                New-Item -ItemType File -Path "$Using:RemoteDir/../tmp_script.ps1" -Force | Out-Null
                 Set-Content -Path "$Using:RemoteDir/../tmp_script.ps1" -Value $Script -Force
                 & sudo -n pwsh -NoProfile -NonInteractive -File `
                 "$Using:RemoteDir/../tmp_script.ps1"
