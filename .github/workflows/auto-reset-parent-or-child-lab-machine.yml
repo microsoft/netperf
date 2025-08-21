@@ -111,7 +111,7 @@ jobs:
     - name: Start VM, wait for online status, alert observer.
       run: |
         $vmName = "${{ matrix.vec.vm-name }}"
-        if ($vmName.Contains("linux")) {
+        if ($vmName.Contains("linux") -or $vmName.Contains("ubuntu")) {
           Restart-VM -Name $vmName -Force
         } else {
           Start-VM -Name $vmName
