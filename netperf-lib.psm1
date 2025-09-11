@@ -19,11 +19,24 @@ function NetperfSendCommand {
     )
 
     if ($Session -and $Session -ne "NOT_SUPPORTED") {
-        Write-Host "Sending command (via remote powershell): $Command"
         $CallBackName = $env:CallBackName
         $RemoteDir = $env:RemoteDir
-        Invoke-Command -Session $Session -ScriptBlock {
-            & "$Using:RemoteDir/scripts/$Using:CallBackName" -Command $Using:Command -WorkingDir $Using:RemoteDir
+        if ($isWindows) {
+            Write-Host "Sending command (via remote powershell): $RemoteDir/scripts/$CallBackName -Command $Command -WorkingDir $RemoteDir"
+            Invoke-Command -Session $Session -ScriptBlock {
+                & pwsh -NoProfile -NonInteractive -WorkingDirectory $Using:RemoteDir -File `
+                "$Using:RemoteDir/scripts/$Using:CallBackName" `
+                -Command $Using:Command `
+                -WorkingDir $Using:RemoteDir
+            }
+        } else {
+            Write-Host "Sending command (via remote powershell): sudo -n pwsh -NoProfile -NonInteractive -File $RemoteDir/scripts/$CallBackName -Command $Command -WorkingDir $RemoteDir"
+            Invoke-Command -Session $Session -ScriptBlock {
+                & sudo -n pwsh -NoProfile -NonInteractive -WorkingDirectory $Using:RemoteDir -File `
+                "$Using:RemoteDir/scripts/$Using:CallBackName" `
+                -Command $Using:Command `
+                -WorkingDir $Using:RemoteDir
+            }
         }
         return
     }
@@ -112,12 +125,12 @@ function NetperfWaitServerFinishExecution {
 
 function InitNetperfLib {
     param (
-        $CallbackName,
+        $CallBackName,
         $RemoteDir,
         $RemoteName,
         $UserNameOnLinux
     )
-    $env:CallbackName = $CallbackName
+    $env:CallBackName = $CallBackName
     $env:RemoteDir = $RemoteDir
     $env:RemoteName = $RemoteName
     $env:UserNameOnLinux = $UserNameOnLinux
@@ -126,6 +139,7 @@ function InitNetperfLib {
 
         # Set up the connection to the peer over remote powershell.
         Write-Host "Connecting to $RemoteName"
+        Write-Host "Using Callback Script: $RemoteDir/scripts/$CallBackName"
         $Attempts = 0
         while ($Attempts -lt 5) {
             try {
@@ -160,16 +174,37 @@ function InitNetperfLib {
 function Copy-RepoToPeer {
     param($Session)
     $RemoteDir = $env:RemoteDir
+    $UserNameOnLinux = $env:UserNameOnLinux
     if (!($Session -eq "NOT_SUPPORTED")) {
         # Copy the artifacts to the peer.
         Write-Host "Copying files to peer"
-        Invoke-Command -Session $Session -ScriptBlock {
-            if (Test-Path $Using:RemoteDir) {
-                Remove-Item -Force -Recurse $Using:RemoteDir | Out-Null
+        if ($isWindows) {
+            Invoke-Command -Session $Session -ScriptBlock {
+                if (Test-Path $Using:RemoteDir) {
+                    Remove-Item -Force -Recurse $Using:RemoteDir | Out-Null
+                }
+                New-Item -ItemType Directory -Path $Using:RemoteDir -Force | Out-Null
             }
-            New-Item -ItemType Directory -Path $Using:RemoteDir -Force | Out-Null
+        } else {
+            Invoke-Command -Session $Session -ScriptBlock {
+                # Create tmp script
+                $Script = @"
+                if (Test-Path $Using:RemoteDir) {
+                    Remove-Item -Force -Recurse $Using:RemoteDir | Out-Null
+                }
+                New-Item -ItemType Directory -Path $Using:RemoteDir -Force | Out-Null
+                chown $Using:UserNameOnLinux:$Using:UserNameOnLinux $Using:RemoteDir
+                chmod 755 $Using:RemoteDir
+"@
+                # Create file
+                New-Item -ItemType File -Path "$Using:RemoteDir/../tmp_script.ps1" -Force | Out-Null
+                Set-Content -Path "$Using:RemoteDir/../tmp_script.ps1" -Value $Script -Force
+                & sudo -n pwsh -NoProfile -NonInteractive -File `
+                "$Using:RemoteDir/../tmp_script.ps1"
+            }
         }
-        Copy-Item -ToSession $Session -Path ./* -Destination "$RemoteDir" -Recurse
+
+        Copy-Item -ToSession $Session -Path ./*, ./.* -Destination "$RemoteDir" -Recurse -Force
     } else {
         Write-Host "Not using remote powershell, assuming peer has checked out the repo."
     }

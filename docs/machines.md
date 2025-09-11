@@ -175,6 +175,9 @@ curl https://raw.githubusercontent.com/microsoft/netperf/main/setup-runner-linux
 CLIENTIP='192.168.0.XXX/24'
 sudo apt install net-tools -y
 
+# if eth1 does not exist
+sudo ip link set eth1 up
+
 ifconfig # From the output of ifconfig, look for the netadapter (eth0 or eth1 ...) WITHOUT an inet ipv4 address. Usually, this will be eth1.
 sudo ip addr add $CLIENTIP dev eth1 # make sure eth1 is indeed the netadapter without an inet ipv4 address.
 # Also create a startup script that runs "sudo ip addr add $CLIENTIP dev eth_" so when the VM restarts, the ip persists.
