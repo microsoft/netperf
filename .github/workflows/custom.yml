@@ -1,4 +1,4 @@
-name: Custom Tasks
+name: Exercise RDMA Datapath
 
 on:
   workflow_dispatch:
@@ -21,6 +21,7 @@ jobs:
         tls: [schannel] # , quictls]
     uses: microsoft/msquic/.github/workflows/build-reuse-win.yml@main
     with:
+      config: Debug
       os: ${{ matrix.os }}
       tls: ${{ matrix.tls }}
       build: -Test
@@ -42,7 +43,7 @@ jobs:
       - name: Download Artifacts
         uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
         with:
-          name: Release-windows-windows-2022-x64-schannel-Test
+          name: Debug-windows-windows-2022-x64-schannel-Test
           path: artifacts
       - name: Prepare machine for RDMA
         run: .\scripts\prepare-machine.ps1 -ForTest -InstallSigningCertificates -InstallNetworkDirect
