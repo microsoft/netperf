@@ -26,6 +26,7 @@ jobs:
       tls: ${{ matrix.tls }}
       build: -Test
       ref: ${{ inputs.ref }}
+      arch: x64
 
   run-msquic-rdma-datapath-test:
     name: Run MsQuic RDMA Datapath Test
@@ -48,6 +49,11 @@ jobs:
       - name: Prepare machine for RDMA
         run: .\scripts\prepare-machine.ps1 -ForTest -InstallSigningCertificates -InstallNetworkDirect
         shell: pwsh
+      - name: Inspect directory tree
+        run: tree /F /A
+        shell: pwsh
+      - name: List test cases
+        run: .\scripts\test.ps1 -ListTestCases
       - name: Run Datapath Test
-        run: .\scripts\test.ps1
+        run: .\scripts\test.ps1 -Config Debug -Arch x64 -Tls schannel
         shell: pwsh
