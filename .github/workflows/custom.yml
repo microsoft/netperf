@@ -49,5 +49,5 @@ jobs:
         run: .\scripts\prepare-machine.ps1 -ForTest -InstallSigningCertificates -InstallNetworkDirect
         shell: pwsh
       - name: Run Datapath Test
-        run: .\scripts\test.ps1 -Filter *DataPathTest*
+        run: .\scripts\test.ps1 -Filter '*DataPathTest*'
         shell: pwsh
