@@ -47,10 +47,13 @@ jobs:
           name: Debug-windows-windows-2022-x64-schannel-Test
           path: artifacts
       - name: Prepare machine for RDMA
-        run: .\scripts\prepare-machine.ps1 -ForTest -InstallSigningCertificates -InstallNetworkDirect
+        run: .\scripts\prepare-machine.ps1 -ForTest -InstallNetworkDirect
         shell: pwsh
       - name: Inspect directory tree
         run: tree /F /A
+        shell: pwsh
+      - name: Print test script
+        run: cat .\scripts\test.ps1
         shell: pwsh
       - name: List test cases
         run: .\scripts\test.ps1 -ListTestCases
