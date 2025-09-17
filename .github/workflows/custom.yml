@@ -55,6 +55,8 @@ jobs:
       - name: Print test script
         run: cat .\scripts\test.ps1
         shell: pwsh
+      - name: Invoke executable directly to list test cases
+        run: Invoke-Expression 'C:\a\_work\netperf\netperf\artifacts\bin\windows\x64_Debug_schannel\msquicplatformtest.exe --gtest_list_tests'
       - name: List test cases
         run: .\scripts\test.ps1 -ListTestCases
       - name: Run Datapath Test
