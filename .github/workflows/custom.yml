@@ -46,14 +46,26 @@ jobs:
         with:
           name: Debug-windows-windows-2022-x64-schannel-Test
           path: artifacts
+      - name: Install MANA drivers
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          # Install MANA drivers.
+          Write-Host "Installing MANA drivers."
+          try {
+              $Tmp = New-TemporaryFile
+              $Tmp = Rename-Item -Path $Tmp -NewName "$Tmp.zip" -PassThru
+              $TmpDir = New-Item -Path "$Tmp.Dir" -ItemType "Directory"
+              Invoke-WebRequest -Uri "https://aka.ms/manawindowsdrivers" -OutFile $Tmp
+              Expand-Archive -Path $Tmp -Destination $TmpDir -Force
+              pnputil.exe /add-driver "$TmpDir\mana_vf_drivers\mana\manavf.inf" /install
+              pnputil.exe /add-driver "$TmpDir\mana_vf_drivers\mana_bus\mana_bus_vf.inf" /install
+          } finally {
+              Remove-Item $TmpDir -Recurse -ErrorAction SilentlyContinue
+              Remove-Item $Tmp -ErrorAction SilentlyContinue
+          }
+        shell: pwsh
       - name: Prepare machine for RDMA
         run: .\scripts\prepare-machine.ps1 -ForTest -InstallNetworkDirect
-        shell: pwsh
-      - name: Inspect directory tree
-        run: tree /F /A
-        shell: pwsh
-      - name: Print test script
-        run: cat .\scripts\test.ps1
         shell: pwsh
       - name: Invoke executable directly to list test cases
         run: Invoke-Expression 'C:\a\_work\netperf\netperf\artifacts\bin\windows\x64_Debug_schannel\msquicplatformtest.exe --gtest_list_tests'
