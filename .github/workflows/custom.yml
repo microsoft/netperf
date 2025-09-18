@@ -7,26 +7,114 @@ on:
         description: 'Branch or Commit'
         required: true
         type: string
+      repo:
+        required: false
+        default: microsoft/msquic
+        type: string
+      config:
+        required: false
+        default: 'Debug'
+        type: string
+        # options:
+        #   - Debug
+        #   - Release
+      plat:
+        required: false
+        type: string
+        default: 'windows'
+        # options:
+        #   - windows
+        #   - uwp
+        #   - winkernel
+      os:
+        required: false
+        type: string
+        default: 'windows-2022'
+        # options:
+        #   - windows-2019
+        #   - windows-2022
+      arch:
+        required: false
+        default: 'x64'
+        type: string
+        # options:
+        #   - x86
+        #   - x64
+        #   - arm64
+      tls:
+        required: false
+        default: 'schannel'
+        type: string
+        # options:
+        #   - openssl
+        #   - openssl3
+        #   - schannel
+      static:
+        required: false
+        default: ''
+        type: string
+      sanitize:
+        required: false
+        default: ''
+        type: string
+      build:
+        required: false
+        default: '-Test' # Empty string means build all
+        type: string
+
 
 permissions: write-all
 
 jobs:
   build-windows:
-    name: Build WinUser
-    needs: []
-    strategy:
-      fail-fast: false
-      matrix:
-        os: ['windows-2022']
-        tls: [schannel] # , quictls]
-    uses: microsoft/msquic/.github/workflows/build-reuse-win.yml@main
-    with:
-      config: Debug
-      os: ${{ matrix.os }}
-      tls: ${{ matrix.tls }}
-      build: -Test
-      ref: ${{ inputs.ref }}
-      arch: x64
+    name: Build
+    runs-on: ${{ inputs.os }}
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      with:
+        repository: ${{ inputs.repo}}
+        ref: ${{ inputs.ref }}
+    - name: Install Perl
+      uses: shogo82148/actions-setup-perl@98dfedee230bcf1ee68d5b021931fc8d63f2016e
+      with:
+        perl-version: '5.34'
+    - name: Install NASM
+      uses: ilammy/setup-nasm@13cbeb366c45c4379d3478cdcbadd8295feb5028
+    - name: Prepare Machine
+      shell: pwsh
+      run: scripts/prepare-machine.ps1 -ForBuild -Tls ${{ inputs.tls }} -InstallNetworkDirect
+    - name: Build For Test
+      if: inputs.build == '-Test'
+      shell: pwsh
+      run: scripts/build.ps1 -Config ${{ inputs.config }} -Platform ${{ inputs.plat }} -Arch ${{ inputs.arch }} -Tls ${{ inputs.tls }} -DisablePerf -DynamicCRT ${{ inputs.sanitize }}
+    - name: Build External Platform Test
+      if: inputs.build == '-Test'
+      shell: pwsh
+      run: |
+        cmake --install build\${{ inputs.plat }}\${{ inputs.arch }}_${{ inputs.tls }} --config ${{ inputs.config }}
+        cmake src/platform/unittest/external -G "Visual Studio 17 2022" -A ${{ inputs.arch }} -B build_external "-DCMAKE_INSTALL_PREFIX:PATH=C:/Program Files/msquic"
+        cmake --build build_external --config ${{ inputs.config }}
+    - name: Build For Perf
+      if: inputs.build == '-Perf'
+      shell: pwsh
+      run: scripts/build.ps1 -Config ${{ inputs.config }} -Platform ${{ inputs.plat }} -Arch ${{ inputs.arch }} -Tls ${{ inputs.tls }} -DisableTools -DisableTest ${{ inputs.sanitize }}
+    - name: Build
+      if: inputs.build == ''
+      shell: pwsh
+      run: scripts/build.ps1 -Config ${{ inputs.config }} -Platform ${{ inputs.plat }} -Arch ${{ inputs.arch }} -Tls ${{ inputs.tls }} ${{ inputs.sanitize }} ${{ inputs.static }}
+    - name: Filter Build Artifacts
+      shell: pwsh
+      run: |
+        Remove-Item artifacts/bin/xdp -Recurse -Force -ErrorAction Ignore
+        Remove-Item artifacts/corenet-ci-main -Recurse -Force -ErrorAction Ignore
+        Remove-Item artifacts/xdp -Recurse -Force -ErrorAction Ignore
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
+      with:
+        name: ${{ inputs.config }}-${{ inputs.plat }}-${{ inputs.os }}-${{ inputs.arch }}-${{ inputs.tls }}${{ inputs.sanitize }}${{ inputs.static }}${{ inputs.build }}
+        path: artifacts
+
 
   run-msquic-rdma-datapath-test:
     name: Run MsQuic RDMA Datapath Test
