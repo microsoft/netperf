@@ -155,10 +155,30 @@ jobs:
       - name: Prepare machine for RDMA
         run: .\scripts\prepare-machine.ps1 -ForTest -InstallNetworkDirect
         shell: pwsh
+      - name: Install C++ Runtime DLL
+        run: |
+          $ArtifactsDir = ".\artifacts"
+          $Platform = "x64"
+          function Setup-VcRuntime {
+              $Installed = $false
+              try { $Installed = Get-ChildItem -Path Registry::HKEY_CLASSES_ROOT\Installer\Dependencies | Where-Object { $_.Name -like "*VC,redist*" } } catch {}
+
+              if (!$Installed -or $Force) {
+                  Write-Host "Installing VC++ runtime"
+
+                  if (!(Test-Path $ArtifactsDir)) { mkdir artifacts }
+                  Remove-Item -Force "$ArtifactsDir\vc_redist.$Platform.exe" -ErrorAction Ignore
+
+                  # Download and install.
+                  Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.$Platform.exe" -OutFile "$ArtifactsDir\vc_redist.$Platform.exe"
+                  & $ArtifactsDir\vc_redist.$Platform.exe /install /passive | Write-Verbose
+              }
+          }
+          Setup-VcRuntime
       - name: Invoke executable directly to list test cases
         run: Invoke-Expression 'C:\a\_work\netperf\netperf\artifacts\bin\windows\x64_Debug_schannel\msquicplatformtest.exe --gtest_list_tests'
       - name: List test cases
         run: .\scripts\test.ps1 -ListTestCases
       - name: Run Datapath Test
-        run: .\scripts\test.ps1 -Config Debug -Arch x64 -Tls schannel
+        run: .\scripts\test.ps1 -Filter *DataPathTest*
         shell: pwsh
