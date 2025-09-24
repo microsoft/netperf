@@ -121,8 +121,8 @@ jobs:
     needs: [build-windows]
     runs-on:
       - self-hosted
-      - 1ES.Pool=netperf-boosted-windows-pool
-      - 1ES.ImageOverride=nvme-enabled-ge_current_directiof_stack-try2
+      - 1ES.Pool=netperf-actual-boosted-winprerelease
+      - 1ES.ImageOverride=managed-windows-2022-gen2-try3
     steps:
       - name: Checkout microsoft/msquic
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
