@@ -3,6 +3,10 @@ name: Exercise RDMA Datapath
 on:
   workflow_dispatch:
     inputs:
+      url:
+        required: false
+        default: 'NONE'
+        type: string
       ref:
         description: 'Branch or Commit'
         required: true
@@ -69,6 +73,7 @@ jobs:
   build-windows:
     name: Build
     runs-on: ${{ inputs.os }}
+    if: ${{ inputs.url == 'NONE' }}
     steps:
     - name: Checkout repository
       uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -129,11 +134,19 @@ jobs:
         with:
           repository: microsoft/msquic
           ref: ${{ inputs.ref }}
-      - name: Download Artifacts
+      - name: Download Artifacts (From Build)
+        if: ${{ inputs.url == 'NONE' }}
         uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
         with:
           name: Debug-windows-windows-2022-x64-schannel-Test
           path: artifacts
+      - name: Download Artifacts (From URL)
+        if: ${{ inputs.url != 'NONE' }}
+        run: |
+          mkdir artifacts
+          Invoke-WebRequest -Uri ${{ inputs.url }} -OutFile artifacts.zip
+          Expand-Archive -Path artifacts.zip -DestinationPath artifacts
+        shell: pwsh
       - name: Install MANA drivers
         run: |
           $ProgressPreference = 'SilentlyContinue'
@@ -153,6 +166,7 @@ jobs:
           }
         shell: pwsh
       - name: Prepare machine for RDMA
+        if: ${{ inputs.url != 'NONE' }}
         run: .\scripts\prepare-machine.ps1 -ForTest -InstallNetworkDirect
         shell: pwsh
       - name: Install C++ Runtime DLL
