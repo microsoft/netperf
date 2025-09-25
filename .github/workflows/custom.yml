@@ -139,7 +139,6 @@ jobs:
       - name: Download Artifacts (From URL)
         if: ${{ inputs.url != 'NONE' }}
         run: |
-          mkdir artifacts
           Invoke-WebRequest -Uri ${{ inputs.url }} -OutFile artifacts.zip
           Expand-Archive -Path artifacts.zip -DestinationPath artifacts
         shell: pwsh
