@@ -53,10 +53,6 @@ on:
         #   - openssl
         #   - openssl3
         #   - schannel
-      static:
-        required: false
-        default: ''
-        type: string
       sanitize:
         required: false
         default: ''
@@ -107,7 +103,7 @@ jobs:
     - name: Build
       if: inputs.build == ''
       shell: pwsh
-      run: scripts/build.ps1 -Config ${{ inputs.config }} -Platform ${{ inputs.plat }} -Arch ${{ inputs.arch }} -Tls ${{ inputs.tls }} ${{ inputs.sanitize }} ${{ inputs.static }}
+      run: scripts/build.ps1 -Config ${{ inputs.config }} -Platform ${{ inputs.plat }} -Arch ${{ inputs.arch }} -Tls ${{ inputs.tls }} ${{ inputs.sanitize }}
     - name: Filter Build Artifacts
       shell: pwsh
       run: |
@@ -117,7 +113,7 @@ jobs:
     - name: Upload build artifacts
       uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
       with:
-        name: ${{ inputs.config }}-${{ inputs.plat }}-${{ inputs.os }}-${{ inputs.arch }}-${{ inputs.tls }}${{ inputs.sanitize }}${{ inputs.static }}${{ inputs.build }}
+        name: ${{ inputs.config }}-${{ inputs.plat }}-${{ inputs.os }}-${{ inputs.arch }}-${{ inputs.tls }}${{ inputs.sanitize }}${{ inputs.build }}
         path: artifacts
 
 
