@@ -144,8 +144,6 @@ jobs:
           $URL = $SAS.Split(";")[1]
           Invoke-WebRequest -Uri "$URL" -OutFile mana_drivers.zip
           Expand-Archive -Path mana_drivers.zip -DestinationPath artifacts\mana_drivers
-      - name: List directory structure
-        run: tree /A /F
         shell: pwsh
       - name: Install MANA drivers
         run: |
