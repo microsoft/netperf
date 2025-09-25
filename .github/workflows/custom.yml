@@ -133,27 +133,21 @@ jobs:
       - name: Download Artifacts (From URL)
         if: ${{ inputs.url != 'NONE' }}
         run: |
-          Invoke-WebRequest -Uri "${{ inputs.url }}" -OutFile artifacts.zip
+          $SAS = "${{ secrets.SAS_URL }}"
+          $URL = $SAS.Split(";")[0]
+          Invoke-WebRequest -Uri "$URL" -OutFile artifacts.zip
           Expand-Archive -Path artifacts.zip -DestinationPath artifacts
         shell: pwsh
-      # - name: Install MANA drivers
-      #   run: |
-      #     $ProgressPreference = 'SilentlyContinue'
-      #     # Install MANA drivers.
-      #     Write-Host "Installing MANA drivers."
-      #     try {
-      #         $Tmp = New-TemporaryFile
-      #         $Tmp = Rename-Item -Path $Tmp -NewName "$Tmp.zip" -PassThru
-      #         $TmpDir = New-Item -Path "$Tmp.Dir" -ItemType "Directory"
-      #         Invoke-WebRequest -Uri "https://aka.ms/manawindowsdrivers" -OutFile $Tmp
-      #         Expand-Archive -Path $Tmp -Destination $TmpDir -Force
-      #         pnputil.exe /add-driver "$TmpDir\mana_vf_drivers\mana\manavf.inf" /install
-      #         pnputil.exe /add-driver "$TmpDir\mana_vf_drivers\mana_bus\mana_bus_vf.inf" /install
-      #     } finally {
-      #         Remove-Item $TmpDir -Recurse -ErrorAction SilentlyContinue
-      #         Remove-Item $Tmp -ErrorAction SilentlyContinue
-      #     }
-      #   shell: pwsh
+      - name: Install MANA drivers
+        run: |
+          $SAS = "${{ secrets.SAS_URL }}"
+          $URL = $SAS.Split(";")[1]
+          Invoke-WebRequest -Uri "$URL" -OutFile mana_drivers.zip
+          Expand-Archive -Path mana_drivers.zip -DestinationPath artifacts
+          pnputil.exe /add-driver "artifacts\mana_drivers\content\mana_vf\manavf.inf" /install
+          pnputil.exe /add-driver "artifacts\mana_drivers\content\mana_bus_vf\mana_bus_vf.inf" /install
+          pnputil.exe /add-driver "artifacts\mana_drivers\content\mana_ib\mana_ib_vf.inf" /install
+        shell: pwsh
       - name: Install C++ Runtime DLL
         run: |
           $ArtifactsDir = ".\artifacts"
@@ -243,10 +237,6 @@ jobs:
               }
           }
           Setup-VcRuntime
-      - name: Invoke executable directly to list test cases
-        run: Invoke-Expression 'C:\a\_work\netperf\netperf\artifacts\bin\windows\x64_Debug_schannel\msquicplatformtest.exe --gtest_list_tests'
-      - name: List test cases
-        run: .\scripts\test.ps1 -ListTestCases
       - name: Run Datapath Test
         run: .\scripts\test.ps1 -Filter *DataPathTest*
         shell: pwsh
