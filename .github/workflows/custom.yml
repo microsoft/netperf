@@ -138,12 +138,17 @@ jobs:
           Invoke-WebRequest -Uri "$URL" -OutFile artifacts.zip
           Expand-Archive -Path artifacts.zip -DestinationPath artifacts
         shell: pwsh
-      - name: Install MANA drivers
+      - name: Download MANA drivers
         run: |
           $SAS = "${{ secrets.SAS_URL }}"
           $URL = $SAS.Split(";")[1]
           Invoke-WebRequest -Uri "$URL" -OutFile mana_drivers.zip
-          Expand-Archive -Path mana_drivers.zip -DestinationPath artifacts
+          Expand-Archive -Path mana_drivers.zip -DestinationPath artifacts\mana_drivers
+      - name: List directory structure
+        run: tree /A /F
+        shell: pwsh
+      - name: Install MANA drivers
+        run: |
           pnputil.exe /add-driver "artifacts\mana_drivers\content\mana_vf\manavf.inf" /install
           pnputil.exe /add-driver "artifacts\mana_drivers\content\mana_bus_vf\mana_bus_vf.inf" /install
           pnputil.exe /add-driver "artifacts\mana_drivers\content\mana_ib\mana_ib_vf.inf" /install
@@ -168,10 +173,6 @@ jobs:
               }
           }
           Setup-VcRuntime
-      - name: Invoke executable directly to list test cases
-        run: Invoke-Expression 'C:\a\_work\netperf\netperf\artifacts\bin\windows\x64_Debug_schannel\msquicplatformtest.exe --gtest_list_tests'
-      - name: List test cases
-        run: .\scripts\test.ps1 -ListTestCases
       - name: Run Datapath Test
         run: .\scripts\test.ps1 -Filter *DataPathTest*
         shell: pwsh
