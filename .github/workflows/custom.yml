@@ -119,6 +119,7 @@ jobs:
 
   run-msquic-rdma-datapath-test:
     name: Run MsQuic RDMA Datapath Test
+    if: ${{ inputs.url != 'NONE' }}
     runs-on:
       - self-hosted
       - 1ES.Pool=netperf-actual-boosted-winprerelease
@@ -129,16 +130,10 @@ jobs:
         with:
           repository: microsoft/msquic
           ref: ${{ inputs.ref }}
-      - name: Download Artifacts (From Build)
-        if: ${{ inputs.url == 'NONE' }}
-        uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
-        with:
-          name: Debug-windows-windows-2022-x64-schannel-Test
-          path: artifacts
       - name: Download Artifacts (From URL)
         if: ${{ inputs.url != 'NONE' }}
         run: |
-          Invoke-WebRequest -Uri ${{ inputs.url }} -OutFile artifacts.zip
+          Invoke-WebRequest -Uri "${{ inputs.url }}" -OutFile artifacts.zip
           Expand-Archive -Path artifacts.zip -DestinationPath artifacts
         shell: pwsh
       - name: Install MANA drivers
@@ -159,8 +154,73 @@ jobs:
               Remove-Item $Tmp -ErrorAction SilentlyContinue
           }
         shell: pwsh
+      - name: Install C++ Runtime DLL
+        run: |
+          $ArtifactsDir = ".\artifacts"
+          $Platform = "x64"
+          function Setup-VcRuntime {
+              $Installed = $false
+              try { $Installed = Get-ChildItem -Path Registry::HKEY_CLASSES_ROOT\Installer\Dependencies | Where-Object { $_.Name -like "*VC,redist*" } } catch {}
+
+              if (!$Installed -or $Force) {
+                  Write-Host "Installing VC++ runtime"
+
+                  if (!(Test-Path $ArtifactsDir)) { mkdir artifacts }
+                  Remove-Item -Force "$ArtifactsDir\vc_redist.$Platform.exe" -ErrorAction Ignore
+
+                  # Download and install.
+                  Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.$Platform.exe" -OutFile "$ArtifactsDir\vc_redist.$Platform.exe"
+                  & $ArtifactsDir\vc_redist.$Platform.exe /install /passive | Write-Verbose
+              }
+          }
+          Setup-VcRuntime
+      - name: Invoke executable directly to list test cases
+        run: Invoke-Expression 'C:\a\_work\netperf\netperf\artifacts\bin\windows\x64_Debug_schannel\msquicplatformtest.exe --gtest_list_tests'
+      - name: List test cases
+        run: .\scripts\test.ps1 -ListTestCases
+      - name: Run Datapath Test
+        run: .\scripts\test.ps1 -Filter *DataPathTest*
+        shell: pwsh
+
+  run-msquic-rdma-datapath-test-with-build:
+    needs: [build-windows]
+    name: Run MsQuic RDMA Datapath Test With Build
+    if: ${{ inputs.url == 'NONE' }}
+    runs-on:
+      - self-hosted
+      - 1ES.Pool=netperf-actual-boosted-winprerelease
+      - 1ES.ImageOverride=managed-windows-2022-gen2-try3
+    steps:
+      - name: Checkout microsoft/msquic
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          repository: microsoft/msquic
+          ref: ${{ inputs.ref }}
+      - name: Download Artifacts (From Build)
+        if: ${{ inputs.url == 'NONE' }}
+        uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+        with:
+          name: Debug-windows-windows-2022-x64-schannel-Test
+          path: artifacts
+      - name: Install MANA drivers
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          # Install MANA drivers.
+          Write-Host "Installing MANA drivers."
+          try {
+              $Tmp = New-TemporaryFile
+              $Tmp = Rename-Item -Path $Tmp -NewName "$Tmp.zip" -PassThru
+              $TmpDir = New-Item -Path "$Tmp.Dir" -ItemType "Directory"
+              Invoke-WebRequest -Uri "https://aka.ms/manawindowsdrivers" -OutFile $Tmp
+              Expand-Archive -Path $Tmp -Destination $TmpDir -Force
+              pnputil.exe /add-driver "$TmpDir\mana_vf_drivers\mana\manavf.inf" /install
+              pnputil.exe /add-driver "$TmpDir\mana_vf_drivers\mana_bus\mana_bus_vf.inf" /install
+          } finally {
+              Remove-Item $TmpDir -Recurse -ErrorAction SilentlyContinue
+              Remove-Item $Tmp -ErrorAction SilentlyContinue
+          }
+        shell: pwsh
       - name: Prepare machine for RDMA
-        if: ${{ inputs.url != 'NONE' }}
         run: .\scripts\prepare-machine.ps1 -ForTest -InstallNetworkDirect
         shell: pwsh
       - name: Install C++ Runtime DLL
