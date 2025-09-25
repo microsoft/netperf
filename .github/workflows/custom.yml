@@ -119,7 +119,6 @@ jobs:
 
   run-msquic-rdma-datapath-test:
     name: Run MsQuic RDMA Datapath Test
-    needs: [build-windows]
     runs-on:
       - self-hosted
       - 1ES.Pool=netperf-actual-boosted-winprerelease
