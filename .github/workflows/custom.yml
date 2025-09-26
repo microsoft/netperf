@@ -183,7 +183,7 @@ jobs:
           core.summary
             .addHeading('BVT Failure Issues')
             .addList(issuesToFile.map(i => i.title))
-            .addLink('Workflow run', runUrl)
+            .addLink('Workflow run', run_url)
             .write();
 
   Complete_2:
