@@ -140,6 +140,9 @@ jobs:
           }
 
           // --- Prepare to File Issues ---
+          let owner = context.repo.owner;
+          let repo = context.repo.repo;
+
           const dedup = new Map();
           for (const it of potential_issues) {
             if (!dedup.has(it.title)) dedup.set(it.title, it);
