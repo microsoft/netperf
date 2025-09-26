@@ -26,7 +26,7 @@ jobs:
           mkdir artifacts/logs/msquiccoretest/1
           mkdir artifacts/logs/msquictest/1
           mkdir artifacts/logs/msquiccoretest/1/test_case_1
-          New-Item -Path artifacts/logs/msquiccoretest/1/test_case_1 -ItemType File
+          New-Item -Path artifacts/logs/msquiccoretest/1/test_case_1/test_case_1.log -ItemType File
           mkdir artifacts/logs/msquictest/1/test_case_2
           New-Item -Path artifacts/logs/msquictest/1/test_case_2/test_case_2.log -ItemType File
         shell: pwsh
@@ -91,6 +91,12 @@ jobs:
 
           const root = 'artifacts'
           const potential_issues = [];
+
+          // If root does not exist, exit silently
+          if (!fs.existsSync(root)) {
+              console.log('No artifacts found');
+              process.exit(0);
+          }
 
           class Issue {
               constructor(title, description) {
@@ -213,4 +219,3 @@ jobs:
         pattern: BVT-*
         path: artifacts
         merge-multiple: false
-        
