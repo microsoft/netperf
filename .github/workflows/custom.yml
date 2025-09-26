@@ -6,7 +6,7 @@ on:
 permissions: write-all
 
 jobs:
-  test-job:
+  test-job-fail:
     runs-on: windows-latest
     strategy:
       fail-fast: false
@@ -26,7 +26,7 @@ jobs:
           mkdir artifacts/logs/msquiccoretest/1
           mkdir artifacts/logs/msquictest/1
           mkdir artifacts/logs/msquiccoretest/1/test_case_1
-          New-Item -Path artifacts/logs/msquictest/1/test_case_1/test_case_1.log -ItemType File
+          New-Item -Path artifacts/logs/msquiccoretest/1/test_case_1 -ItemType File
           mkdir artifacts/logs/msquictest/1/test_case_2
           New-Item -Path artifacts/logs/msquictest/1/test_case_2/test_case_2.log -ItemType File
         shell: pwsh
@@ -39,10 +39,29 @@ jobs:
         run: exit 1
         shell: pwsh
 
-  Complete:
-    name: Complete
+  test-job-pass:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        vec: [
+          { env: "lab",   os: "2022", arch: "x64" },
+          { env: "azure",   os: "2022", arch: "x64" },
+        ]
+    steps:
+      - name: Create dummy file/folders
+        run: |
+          mkdir artifacts
+          mkdir artifacts/logs
+          mkdir artifacts/logs/msquiccoretest
+          mkdir artifacts/logs/msquictest
+          mkdir artifacts/logs/msquicplatformtest
+        shell: pwsh
+
+  Complete_1:
+    name: Complete_1
     if: always()
-    needs: [test-job]
+    needs: [test-job-fail]
     runs-on: ubuntu-latest
     permissions: {} # No need for any permissions.
     steps:
@@ -51,10 +70,9 @@ jobs:
       with:
         jobs: ${{ toJSON(needs) }}
 
-
   Create-Or-Update-Issue:
-    needs: [Complete]
-    if: ${{ needs.Complete.outputs.all-green != 'true' }}
+    needs: [Complete_1]
+    if: failure()
     runs-on: ubuntu-latest
     steps:
     - name: Download BVT Failures
@@ -171,3 +189,28 @@ jobs:
             .addList(issuesToFile.map(i => i.title))
             .addLink('Workflow run', runUrl)
             .write();
+
+  Complete_2:
+    name: Complete_2
+    if: always()
+    needs: [test-job-pass]
+    runs-on: ubuntu-latest
+    permissions: {} # No need for any permissions.
+    steps:
+    - name: Decide whether the needed jobs succeeded or failed
+      uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe
+      with:
+        jobs: ${{ toJSON(needs) }}
+
+  Create-Or-Update-Issue_2:
+    needs: [Complete_2]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+    - name: Download BVT Failures
+      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+      with:
+        pattern: BVT-*
+        path: artifacts
+        merge-multiple: false
+        
