@@ -19,7 +19,7 @@ jobs:
         vec: [
           { config: "Debug", plat: "winkernel", os: "windows-2022", arch: "x64", tls: "schannel", build: "-Test" }
         ]
-    uses: microsoft/msquic/.github/workflows/build-reuse-winkernel.yml
+    uses: microsoft/msquic/.github/workflows/build-reuse-winkernel.yml@main
     with:
       config: ${{ matrix.vec.config }}
       plat: ${{ matrix.vec.plat }}
@@ -38,7 +38,7 @@ jobs:
         vec: [
           { config: "Debug", plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", build: "-Test" }
         ]
-    uses: microsoft/msquic/.github/workflows/build-reuse-win.yml
+    uses: microsoft/msquic/.github/workflows/build-reuse-win.yml@main
     with:
       config: ${{ matrix.vec.config }}
       plat: ${{ matrix.vec.plat }}
