@@ -78,27 +78,12 @@ jobs:
       with: # note we always use binaries built on windows-2022.
         name: ${{ matrix.vec.config }}-windows-windows-2022-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}${{ matrix.vec.build }}
         path: artifacts
-    - name: Add Git to PATH
-      shell: pwsh
-      run: |
-        # Common install paths for Git on Windows
-        $candidates = @(
-          'C:\Program Files\Git\cmd',
-          'C:\Program Files\Git\bin',
-          "$env:USERPROFILE\scoop\shims",
-          "$env:USERPROFILE\AppData\Local\Programs\Git\cmd"
-        )
-        foreach ($p in $candidates) {
-          if (Test-Path $p) {
-            # Persist for the rest of the job
-            echo $p >> $env:GITHUB_PATH
-          }
-        }
-        git --version
     - name: Sanity Check
       run: |
         ls
         whoami
+        echo "C:\Program Files\Git\cmd" >> $env:GITHUB_PATH
+        echo "C:\Program Files\Git\cmd" >> $env:PATH
         $env:PATH -split ';' | ForEach-Object { Write-Host $_ }
         git
       shell: pwsh
