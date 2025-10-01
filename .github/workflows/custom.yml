@@ -28,7 +28,6 @@ jobs:
       tls: ${{ matrix.vec.tls }}
       build: ${{ matrix.vec.build }}
       ref: ${{ inputs.ref || '' }}
-      repo: msquic
 
   build-windows:
     name: Build WinUser
@@ -48,7 +47,6 @@ jobs:
       sanitize: ${{ matrix.vec.sanitize }}
       build: ${{ matrix.vec.build }}
       ref: ${{ inputs.ref || '' }}
-      repo: msquic
 
   bvt-kernel:
     name: BVT Kernel
