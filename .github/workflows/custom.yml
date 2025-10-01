@@ -81,6 +81,8 @@ jobs:
     - name: Sanity Check
       run: |
         ls
+        whoami
+        $env:PATH -split ';' | ForEach-Object { Write-Host $_ }
         git
       shell: pwsh
     - name: Prepare Machine
