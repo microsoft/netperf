@@ -84,7 +84,9 @@ jobs:
         whoami
         echo "C:\Program Files\Git\cmd" >> $env:GITHUB_PATH
         $env:GITHUB_PATH -split ';' | ForEach-Object { Write-Host $_ }
-        git
+      shell: pwsh
+    - name: Sanity Check Pt 2
+      run: git
       shell: pwsh
     - name: Prepare Machine
       run: scripts/prepare-machine.ps1 -ForTest -ForKernel
