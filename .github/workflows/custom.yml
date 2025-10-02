@@ -16,105 +16,105 @@ on:
 permissions: write-all
 
 jobs:
-  # build-windows-kernel:
-  #   name: Build WinKernel
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       vec: [
-  #         { config: "Debug", plat: "winkernel", os: "windows-2022", arch: "x64", tls: "schannel", build: "-Test" }
-  #       ]
-  #   uses: microsoft/msquic/.github/workflows/build-reuse-winkernel.yml@main
-  #   with:
-  #     config: ${{ matrix.vec.config }}
-  #     plat: ${{ matrix.vec.plat }}
-  #     os: ${{ matrix.vec.os }}
-  #     arch: ${{ matrix.vec.arch }}
-  #     tls: ${{ matrix.vec.tls }}
-  #     build: ${{ matrix.vec.build }}
-  #     ref: ${{ inputs.ref || '' }}
+  build-windows-kernel:
+    name: Build WinKernel
+    strategy:
+      fail-fast: false
+      matrix:
+        vec: [
+          { config: "Debug", plat: "winkernel", os: "windows-2022", arch: "x64", tls: "schannel", build: "-Test" }
+        ]
+    uses: microsoft/msquic/.github/workflows/build-reuse-winkernel.yml@main
+    with:
+      config: ${{ matrix.vec.config }}
+      plat: ${{ matrix.vec.plat }}
+      os: ${{ matrix.vec.os }}
+      arch: ${{ matrix.vec.arch }}
+      tls: ${{ matrix.vec.tls }}
+      build: ${{ matrix.vec.build }}
+      ref: ${{ inputs.ref || '' }}
 
-  # build-windows:
-  #   name: Build WinUser
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       vec: [
-  #         { config: "Debug", plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", build: "-Test" }
-  #       ]
-  #   uses: microsoft/msquic/.github/workflows/build-reuse-win.yml@main
-  #   with:
-  #     config: ${{ matrix.vec.config }}
-  #     plat: ${{ matrix.vec.plat }}
-  #     os: ${{ matrix.vec.os }}
-  #     arch: ${{ matrix.vec.arch }}
-  #     tls: ${{ matrix.vec.tls }}
-  #     sanitize: ${{ matrix.vec.sanitize }}
-  #     build: ${{ matrix.vec.build }}
-  #     ref: ${{ inputs.ref || '' }}
+  build-windows:
+    name: Build WinUser
+    strategy:
+      fail-fast: false
+      matrix:
+        vec: [
+          { config: "Debug", plat: "windows", os: "windows-2022", arch: "x64", tls: "schannel", build: "-Test" }
+        ]
+    uses: microsoft/msquic/.github/workflows/build-reuse-win.yml@main
+    with:
+      config: ${{ matrix.vec.config }}
+      plat: ${{ matrix.vec.plat }}
+      os: ${{ matrix.vec.os }}
+      arch: ${{ matrix.vec.arch }}
+      tls: ${{ matrix.vec.tls }}
+      sanitize: ${{ matrix.vec.sanitize }}
+      build: ${{ matrix.vec.build }}
+      ref: ${{ inputs.ref || '' }}
 
-  # bvt-kernel:
-  #   name: BVT Kernel
-  #   needs: [build-windows, build-windows-kernel]
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       vec: [
-  #         { config: "Debug", plat: "winkernel", os: "WinServerPrerelease", arch: "x64", tls: "schannel", build: "-Test" }
-  #       ]
-  #   runs-on:
-  #     - self-hosted
-  #     - Windows
-  #     - kernel-bvt
-  #     - kernel-bvt-ci
-  #   steps:
-  #   - name: Checkout repository
-  #     uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-  #     with:
-  #       ref: ${{ inputs.ref || '' }}
-  #       repository: microsoft/msquic
-  #   - name: Download Build Artifacts
-  #     uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
-  #     with: # note we always use binaries built on windows-2022.
-  #       name: ${{ matrix.vec.config }}-${{ matrix.vec.plat }}-windows-2022-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}${{ matrix.vec.build }}
-  #       path: artifacts
-  #   - name: Download Build Artifacts for Testing From WinUser
-  #     uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
-  #     with: # note we always use binaries built on windows-2022.
-  #       name: ${{ matrix.vec.config }}-windows-windows-2022-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}${{ matrix.vec.build }}
-  #       path: artifacts
-  #   - name: Add git to path
-  #     run: |
-  #       ls
-  #       whoami
-  #       echo "C:\Program Files\Git\cmd" >> $env:GITHUB_PATH
-  #       $env:GITHUB_PATH -split ';' | ForEach-Object { Write-Host $_ }
-  #     shell: pwsh
-  #   - name: Prepare Machine
-  #     run: scripts/prepare-machine.ps1 -ForTest -ForKernel
-  #     shell: pwsh
-  #   - name: Install ETW Manifest
-  #     shell: pwsh
-  #     run: |
-  #       $MsQuicDll = ".\artifacts\bin\windows\${{ matrix.vec.arch }}_${{ matrix.vec.config }}_${{ matrix.vec.tls }}\msquic.dll"
-  #       $ManifestPath = ".\src\manifest\MsQuicEtw.man"
-  #       wevtutil.exe um $ManifestPath
-  #       wevtutil.exe im $ManifestPath /rf:$($MsQuicDll) /mf:$($MsQuicDll)
-  #   - name: Test
-  #     shell: pwsh
-  #     timeout-minutes: 90
-  #     run: scripts/test.ps1 -Config ${{ matrix.vec.config }} -Arch ${{ matrix.vec.arch }} -Tls ${{ matrix.vec.tls }} -OsRunner ${{ matrix.vec.os }} -GHA -LogProfile Full.Light -GenerateXmlResults -Kernel -Filter ${{ inputs.filter }}
-  #   - name: Upload on Failure
-  #     uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
-  #     if: failure()
-  #     with:
-  #       name: BVT-Kernel-${{ matrix.vec.config }}-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
-  #       path: artifacts
+  bvt-kernel:
+    name: BVT Kernel
+    needs: [build-windows, build-windows-kernel]
+    strategy:
+      fail-fast: false
+      matrix:
+        vec: [
+          { config: "Debug", plat: "winkernel", os: "WinServerPrerelease", arch: "x64", tls: "schannel", build: "-Test" }
+        ]
+    runs-on:
+      - self-hosted
+      - Windows
+      - kernel-bvt
+      - kernel-bvt-ci
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      with:
+        ref: ${{ inputs.ref || '' }}
+        repository: microsoft/msquic
+    - name: Download Build Artifacts
+      uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+      with: # note we always use binaries built on windows-2022.
+        name: ${{ matrix.vec.config }}-${{ matrix.vec.plat }}-windows-2022-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}${{ matrix.vec.build }}
+        path: artifacts
+    - name: Download Build Artifacts for Testing From WinUser
+      uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+      with: # note we always use binaries built on windows-2022.
+        name: ${{ matrix.vec.config }}-windows-windows-2022-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}${{ matrix.vec.build }}
+        path: artifacts
+    - name: Add git to path
+      run: |
+        ls
+        whoami
+        echo "C:\Program Files\Git\cmd" >> $env:GITHUB_PATH
+        $env:GITHUB_PATH -split ';' | ForEach-Object { Write-Host $_ }
+      shell: pwsh
+    - name: Prepare Machine
+      run: scripts/prepare-machine.ps1 -ForTest -ForKernel
+      shell: pwsh
+    - name: Install ETW Manifest
+      shell: pwsh
+      run: |
+        $MsQuicDll = ".\artifacts\bin\windows\${{ matrix.vec.arch }}_${{ matrix.vec.config }}_${{ matrix.vec.tls }}\msquic.dll"
+        $ManifestPath = ".\src\manifest\MsQuicEtw.man"
+        wevtutil.exe um $ManifestPath
+        wevtutil.exe im $ManifestPath /rf:$($MsQuicDll) /mf:$($MsQuicDll)
+    - name: Test
+      shell: pwsh
+      timeout-minutes: 90
+      run: scripts/test.ps1 -Config ${{ matrix.vec.config }} -Arch ${{ matrix.vec.arch }} -Tls ${{ matrix.vec.tls }} -OsRunner ${{ matrix.vec.os }} -GHA -LogProfile Full.Light -GenerateXmlResults -Kernel -Filter ${{ inputs.filter }}
+    - name: Upload on Failure
+      uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
+      if: failure()
+      with:
+        name: BVT-Kernel-${{ matrix.vec.config }}-${{ matrix.vec.plat }}-${{ matrix.vec.os }}-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}
+        path: artifacts
 
   collect_crashdump_if_any:
     name: Collect Crashdump If Any
-    # needs: [bvt-kernel]
-    # if: failure()
+    needs: [bvt-kernel]
+    if: failure()
     runs-on:
       - self-hosted
       - Windows
