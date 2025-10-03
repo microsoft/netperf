@@ -18,6 +18,23 @@ on:
 permissions: write-all
 
 jobs:
+  # For automated identification of the workflow.
+  name:
+    if: ${{ github.event_name == 'repository_dispatch' }}
+    name: For ${{ github.event.client_payload.guid }}
+    needs: []
+    runs-on: ubuntu-22.04
+    steps:
+    - name: Print Parameters
+      run: |
+        echo "Parameters from repository_dispatch:"
+        echo "guid: ${{ github.event.client_payload.guid }}"
+        echo "sha: ${{ github.event.client_payload.sha }}"
+        echo "ref: ${{ github.event.client_payload.ref }}"
+        echo "pr: ${{ github.event.client_payload.pr }}"
+        echo "logs: ${{ github.event.client_payload.logs }}"
+        echo "filter: ${{ github.event.client_payload.filter }}"
+
   build-windows-kernel:
     name: Build WinKernel
     strategy:
