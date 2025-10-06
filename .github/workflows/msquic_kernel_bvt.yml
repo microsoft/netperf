@@ -9,8 +9,7 @@ on:
         type: string
       filter:
         description: 'Custom Test Filter'
-        default: '-*ValidateConfiguration:*ValidAlpnLengths:*ResumeRejection*:*ClientCertificate*:*LoadBalanced*'
-        required: false
+        required: true
         type: string
     repository_dispatch:
       types: [run-msquic-kernel-bvt]
