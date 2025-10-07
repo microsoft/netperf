@@ -11,8 +11,8 @@ on:
         description: 'Custom Test Filter'
         required: true
         type: string
-    repository_dispatch:
-      types: [run-msquic-kernel-bvt]
+  repository_dispatch:
+    types: [run-msquic-kernel-bvt]
 
 permissions: write-all
 
