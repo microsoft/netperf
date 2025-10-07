@@ -158,7 +158,7 @@ jobs:
   attempt-reset-lab:
     name: Attempting to reset lab. Status of this job does not indicate result of lab reset. Look at job details.
     needs: [collect_crashdump_if_any]
-    if: ${{ success() }}
+    if: ${{ always() }}
     uses: microsoft/netperf/.github/workflows/schedule-lab-reset.yml@main
     with:
       workflowId: ${{ github.run_id }}
