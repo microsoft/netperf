@@ -1,6 +1,7 @@
 name: Custom Tasks
 
 on:
+  workflow_call:
   workflow_dispatch:
     inputs:
       ref:
