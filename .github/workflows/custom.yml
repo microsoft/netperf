@@ -15,5 +15,4 @@ jobs:
     name: Build XDP
     permissions:
       security-events: write  # For CodeQL
-    uses: microsoft/xdp-for-windows/.github/workflows/build_matrix.yml
-    
+    uses: microsoft/xdp-for-windows/.github/workflows/build_matrix.yml@main
