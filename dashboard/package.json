@@ -22,12 +22,12 @@
   "dependencies": {
     "@emotion/react": "^11.11.3",
     "@emotion/styled": "^11.14.1",
-    "@faker-js/faker": "^10.0.0",
+    "@faker-js/faker": "^10.1.0",
     "@iconify/react": "^6.0.2",
     "@mui/lab": "^5.0.0-alpha.165",
     "@mui/material": "^5.15.13",
     "apexcharts": "3.44.2",
-    "chart.js": "^4.5.0",
+    "chart.js": "^4.5.1",
     "date-fns": "^3.5.0",
     "history": "^5.3.0",
     "lodash": "^4.17.21",
@@ -38,14 +38,14 @@
     "react-chartjs-2": "^5.2.0",
     "react-dom": "^18.2.0",
     "react-helmet-async": "^2.0.4",
-    "react-hook-form": "^7.64.0",
+    "react-hook-form": "^7.65.0",
     "react-router-dom": "^7.9.3",
     "simplebar-react": "^3.3.2",
     "sql.js": "^1.13.0"
   },
   "devDependencies": {
-    "@vitejs/plugin-react-swc": "^4.1.0",
-    "vite": "^7.1.9",
+    "@vitejs/plugin-react-swc": "^4.2.0",
+    "vite": "^7.1.10",
     "vite-plugin-checker": "^0.11.0"
   },
   "homepage": "https://microsoft.github.io/netperf/dist"
