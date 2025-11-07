@@ -23,7 +23,7 @@ jobs:
 
   stress_tests:
     name: Stress Tests
-    needs: build
+    needs: build-xdp
     env:
       successThresholdPercent: 1
       xdpmpPollProvider: 'FNDIS'
@@ -91,7 +91,7 @@ jobs:
 
   collect_crashdump_if_any:
     name: Collect Crashdump If Any
-    needs: [bvt-kernel]
+    needs: stress_tests
     if: failure()
     runs-on:
       - self-hosted
