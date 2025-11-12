@@ -87,8 +87,6 @@ jobs:
           { parent-or-child: "child=rr1-netperf-25\\localadminuser",    vm-name: "netperf-windows-2022-server" },
           { parent-or-child: "child=rr1-netperf-05\\localadminuser",    vm-name: "netperf" },
           { parent-or-child: "parent=rr1-netperf-10\\localadminuser",   vm-name: "netperf" },
-          { parent-or-child: "child=rr1-netperf-11\\localadminuser",    vm-name: "netperf-ubuntu24-server" },
-          { parent-or-child: "parent=rr1-netperf-12\\localadminuser",   vm-name: "netperf-ubuntu24-client" },
           { parent-or-child: "child=rr1-netperf-01\\localadminuser",     vm-name: "netperf-windows-2022-server" },
           { parent-or-child: "parent=rr1-netperf-02\\localadminuser",    vm-name: "netperf-windows-2022-client" },
           { parent-or-child: "child=rr1-netperf-03\\localadminuser",     vm-name: "netperf-windows-2022-server" },
