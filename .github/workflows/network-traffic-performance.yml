@@ -1,0 +1,105 @@
+name: network-traffic-performance
+
+# Generic network traffic performance workflow (replaces UDP-specific variant)
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Test Branch or Commit'
+        required: false
+        default: 'main'
+        type: string
+      profile:
+        description: 'Capture CPU profile'
+        required: false
+        default: false
+        type: boolean
+      tcp_ip_tracing:
+        description: 'Capture TCP/IP tracing (WPR)'
+        required: false
+        default: false
+        type: boolean
+      sender_options:
+        description: 'Command-line options for the sender (quoted string)'
+        required: true
+        type: string
+      receiver_options:
+        description: 'Command-line options for the receiver (quoted string)'
+        required: true
+        type: string
+      peername:
+        description: 'Remote peer machine name'
+        required: true
+        type: string
+
+concurrency:
+  group: >-
+    traffic-${{ github.event.client_payload.sha || inputs.ref || github.event.pull_request.number || 'main' }}
+  cancel-in-progress: true
+
+jobs:
+  build_cts_traffic:
+    name: Build cts-traffic
+    uses: microsoft/ctsTraffic/.github/workflows/reusable-build.yml@master
+    with:
+      build_artifact: cts-traffic
+      repository: 'microsoft/ctsTraffic'
+      configurations: '["Release"]'
+      ref: 'master'
+
+  test:
+    name: Network Traffic Test
+    needs: [build_cts_traffic]
+    strategy:
+      fail-fast: false
+      matrix:
+        vec:
+          - env: lab
+            os: "2022"
+            arch: x64
+    runs-on:
+      - self-hosted
+      - ${{ matrix.vec.env }}
+      - os-windows-${{ matrix.vec.os }}
+      - ${{ matrix.vec.arch }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@11bd71901afe3a723b02f3ad7de8de7f86ff0121
+
+    - name: Setup workspace
+      run: |-
+        Get-ChildItem  | % { Remove-Item -Recurse $_ -Force -ErrorAction SilentlyContinue }
+        if (Test-Path ${{ github.workspace }}\cts-traffic) { Remove-Item -Recurse -Force ${{ github.workspace }}\cts-traffic }
+        if (Test-Path ${{ github.workspace }}\ETL) { Remove-Item -Recurse -Force ${{ github.workspace }}\ETL }
+        New-Item -ItemType Directory -Path ${{ github.workspace }}\cts-traffic
+        New-Item -ItemType Directory -Path ${{ github.workspace }}\ETL
+
+    - name: Download cts-traffic
+      uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+      with:
+        name: "cts-traffic Release"
+        path: ${{ github.workspace }}\cts-traffic
+
+    - name: Optional - Start TCPIP tracing
+      if: ${{ github.event.inputs.tcp_ip_tracing }}
+      run: |-
+        if (Test-Path "tcpip.wprp") { Remove-Item -Force "tcpip.wprp" }
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/main/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
+        wpr -start tcpip.wprp -filemode
+
+    - name: Run traffic tests
+      working-directory: ${{ github.workspace }}\cts-traffic
+      env:
+        PROFILE: ${{ inputs.profile }}
+        SENDER_OPTIONS: ${{ inputs.sender_options }}
+        RECEIVER_OPTIONS: ${{ inputs.receiver_options }}
+        PEERNAME: ${{ inputs.peername }}
+      run: pwsh -NoProfile -NonInteractive -File "${{ github.workspace }}\\.github\\scripts\\run-traffic-test.ps1" -Profile:${{ inputs.profile }} -PeerName "netperf-peer" -SenderOptions "${{ inputs.sender_options }}" -ReceiverOptions "${{ inputs.receiver_options }}"
+
+    - name: Upload CTS results
+      if: always()
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      with:
+        name: cts_traffic_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        path: ${{ github.workspace }}\cts-traffic\*.csv
