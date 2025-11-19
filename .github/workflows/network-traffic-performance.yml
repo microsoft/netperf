@@ -27,10 +27,6 @@ on:
         description: 'Command-line options for the receiver (quoted string)'
         required: true
         type: string
-      peername:
-        description: 'Remote peer machine name'
-        required: true
-        type: string
 
 concurrency:
   group: >-
@@ -85,13 +81,14 @@ jobs:
       if: ${{ github.event.inputs.tcp_ip_tracing }}
       run: |-
         if (Test-Path "tcpip.wprp") { Remove-Item -Force "tcpip.wprp" }
-        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/main/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
         wpr -start tcpip.wprp -filemode
 
-    - name: Debug failure
+
+    - name: Download run-traffic-test script
+      working-directory: ${{ github.workspace }}\cts-traffic
       run: |
-        ls ls -Recurse *.ps1
-        write-host "${{ github.workspace }}\\.github\\scripts\\run-traffic-test.ps1"
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/scripts/run-traffic-test.ps1" -OutFile .\run-traffic-test.ps1"
 
     - name: Run traffic tests
       working-directory: ${{ github.workspace }}\cts-traffic
@@ -99,8 +96,7 @@ jobs:
         PROFILE: ${{ inputs.profile }}
         SENDER_OPTIONS: ${{ inputs.sender_options }}
         RECEIVER_OPTIONS: ${{ inputs.receiver_options }}
-        PEERNAME: ${{ inputs.peername }}
-      run: pwsh -NoProfile -NonInteractive -File "${{ github.workspace }}\\.github\\scripts\\run-traffic-test.ps1" -Profile:${{ inputs.profile }} -PeerName "netperf-peer" -SenderOptions "${{ inputs.sender_options }}" -ReceiverOptions "${{ inputs.receiver_options }}"
+      run: pwsh -NoProfile -NonInteractive -File ".\\run-traffic-test.ps1" -Profile:${{ inputs.profile }} -PeerName "netperf-peer" -SenderOptions "${{ inputs.sender_options }}" -ReceiverOptions "${{ inputs.receiver_options }}"
 
     - name: Upload CTS results
       if: always()
