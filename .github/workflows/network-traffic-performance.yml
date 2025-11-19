@@ -88,6 +88,11 @@ jobs:
         Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/main/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
         wpr -start tcpip.wprp -filemode
 
+    - name: Debug failure
+      run: |
+        ls ls -Recurse *.ps1
+        write-host "${{ github.workspace }}\\.github\\scripts\\run-traffic-test.ps1"
+
     - name: Run traffic tests
       working-directory: ${{ github.workspace }}\cts-traffic
       env:
