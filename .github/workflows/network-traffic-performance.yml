@@ -65,7 +65,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@11bd71901afe3a723b02f3ad7de8de7f86ff0121
+      uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633
 
     - name: Setup workspace
       run: |-
@@ -76,7 +76,7 @@ jobs:
         New-Item -ItemType Directory -Path ${{ github.workspace }}\ETL
 
     - name: Download cts-traffic
-      uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+      uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
       with:
         name: "cts-traffic Release"
         path: ${{ github.workspace }}\cts-traffic
