@@ -108,8 +108,9 @@ jobs:
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
       with:
         name: cts_traffic_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
-        path: ${{ github.workspace }}\cts-traffic\*.csv
-        path: ${{ github.workspace }}\cts-traffic\*.log
+        path: |
+          ${{ github.workspace }}\cts-traffic\*.csv
+          ${{ github.workspace }}\cts-traffic\*.log
 
     - name: Upload TCPIP ETL
       if: ${{ github.event.inputs.tcp_ip_tracing == 'true' && always() }}

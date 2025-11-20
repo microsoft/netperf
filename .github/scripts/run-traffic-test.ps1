@@ -2,7 +2,7 @@ param(
   [switch]$Profile,
   [string]$PeerName,
   [string]$SenderOptions,
-  [string]$ReceiverOptions
+  [string]$ReceiverOptions,
   [string]$TimeoutInMilliseconds = '300000'
 )
 
