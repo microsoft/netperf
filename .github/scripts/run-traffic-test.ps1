@@ -1,5 +1,5 @@
 param(
-  [switch]$Profile,
+  [switch]$CpuProfile,
   [string]$PeerName,
   [string]$SenderOptions,
   [string]$ReceiverOptions,
@@ -7,6 +7,15 @@ param(
 )
 
 Set-StrictMode -Version Latest
+
+# Write out the parameters for logging
+Write-Output "Parameters:"
+Write-Output "  CpuProfile: $CpuProfile"
+Write-Output "  PeerName: $PeerName"
+Write-Output "  SenderOptions: $SenderOptions"
+Write-Output "  ReceiverOptions: $ReceiverOptions"
+Write-Output "  TimeoutInMilliseconds: $TimeoutInMilliseconds"
+
 
 # Append TimeLimit to sender and receiver options if not already present
 if ($SenderOptions -notmatch '-TimeLimit:') {
@@ -54,11 +63,6 @@ function Parse-Args($s) {
   }
   return $out
 }
-
-# Settings
-$Duration = 60000
-$CpuProfile = $false
-if ($Profile) { $CpuProfile = $true }
 
 # Ensure an args array contains a '-target:<name>' entry; replace if present, append if missing
 function Ensure-TargetArg {
