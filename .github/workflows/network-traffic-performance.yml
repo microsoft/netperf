@@ -27,10 +27,6 @@ on:
         description: 'Command-line options for the receiver (quoted string)'
         required: true
         type: string
-      peername:
-        description: 'Remote peer machine name'
-        required: true
-        type: string
 
 concurrency:
   group: >-
@@ -65,7 +61,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@11bd71901afe3a723b02f3ad7de8de7f86ff0121
+      uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633
 
     - name: Setup workspace
       run: |-
@@ -76,7 +72,7 @@ jobs:
         New-Item -ItemType Directory -Path ${{ github.workspace }}\ETL
 
     - name: Download cts-traffic
-      uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+      uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
       with:
         name: "cts-traffic Release"
         path: ${{ github.workspace }}\cts-traffic
@@ -85,8 +81,13 @@ jobs:
       if: ${{ github.event.inputs.tcp_ip_tracing }}
       run: |-
         if (Test-Path "tcpip.wprp") { Remove-Item -Force "tcpip.wprp" }
-        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/main/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
         wpr -start tcpip.wprp -filemode
+
+    - name: Download run-traffic-test script
+      working-directory: ${{ github.workspace }}\cts-traffic
+      run: |
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/scripts/run-traffic-test.ps1" -OutFile ".\run-traffic-test.ps1"
 
     - name: Run traffic tests
       working-directory: ${{ github.workspace }}\cts-traffic
@@ -94,8 +95,8 @@ jobs:
         PROFILE: ${{ inputs.profile }}
         SENDER_OPTIONS: ${{ inputs.sender_options }}
         RECEIVER_OPTIONS: ${{ inputs.receiver_options }}
-        PEERNAME: ${{ inputs.peername }}
-      run: pwsh -NoProfile -NonInteractive -File "${{ github.workspace }}\\.github\\scripts\\run-traffic-test.ps1" -Profile:${{ inputs.profile }} -PeerName "netperf-peer" -SenderOptions "${{ inputs.sender_options }}" -ReceiverOptions "${{ inputs.receiver_options }}"
+      shell: pwsh
+      run: .\\run-traffic-test.ps1 ${{ inputs.profile == 'true' && '-Profile' || '' }} -PeerName "netperf-peer" -SenderOptions "${{ inputs.sender_options }}" -ReceiverOptions "${{ inputs.receiver_options }}"
 
     - name: Upload CTS results
       if: always()
