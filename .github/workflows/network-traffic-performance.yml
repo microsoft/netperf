@@ -124,7 +124,7 @@ jobs:
         Invoke-Expression $cmd
 
     - name: Optional - Stop TCPIP tracing
-      if: ${{ always() && github.event.inputs.tcp_ip_tracing == 'true' }}
+      if: ${{ github.event.inputs.tcp_ip_tracing == 'true' }}
       run: |
         wpr -stop ${{ github.workspace }}\ETL\tcpip_trace.etl
 
