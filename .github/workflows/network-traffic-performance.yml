@@ -78,7 +78,7 @@ jobs:
         path: ${{ github.workspace }}\cts-traffic
 
     - name: Optional - Start TCPIP tracing
-      if: ${{ github.event.inputs.tcp_ip_tracing }}
+      if: ${{ github.event.inputs.tcp_ip_tracing == 'true' }}
       run: |-
         if (Test-Path "tcpip.wprp") { Remove-Item -Force "tcpip.wprp" }
         Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
