@@ -229,7 +229,6 @@ function Stop-WprCpuProfile {
   }
 }
 
-
 # =========================
 # Remote job helpers
 # =========================
