@@ -96,7 +96,7 @@ jobs:
         SENDER_OPTIONS: ${{ inputs.sender_options }}
         RECEIVER_OPTIONS: ${{ inputs.receiver_options }}
       shell: pwsh
-        run: .\\run-traffic-test.ps1 ${{ inputs.profile == 'true' && '-Profile' || '' }} -PeerName "netperf-peer" -SenderOptions "${{ inputs.sender_options }}" -ReceiverOptions "${{ inputs.receiver_options }}"
+      run: .\\run-traffic-test.ps1 -PeerName "netperf-peer" -SenderOptions "${{ inputs.sender_options }}" -ReceiverOptions "${{ inputs.receiver_options }}"
 
     - name: Upload CTS results
       if: always()
