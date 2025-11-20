@@ -96,7 +96,14 @@ jobs:
         SENDER_OPTIONS: ${{ inputs.sender_options }}
         RECEIVER_OPTIONS: ${{ inputs.receiver_options }}
       shell: pwsh
-      run: .\\run-traffic-test.ps1 -Profile:${{ inputs.profile }} -PeerName "netperf-peer" -SenderOptions "${{ inputs.sender_options }}" -ReceiverOptions "${{ inputs.receiver_options }}"
+      run: |-
+        $params = @{
+          PeerName = 'netperf-peer'
+          SenderOptions = '${{ inputs.sender_options }}'
+          ReceiverOptions = '${{ inputs.receiver_options }}'
+        }
+        if ('${{ inputs.profile }}' -eq 'true') { $params.Profile = $true }
+        .\run-traffic-test.ps1 @params
 
     - name: Upload CTS results
       if: always()
