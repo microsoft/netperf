@@ -89,6 +89,15 @@ jobs:
       run: |
         Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/scripts/run-traffic-test.ps1" -OutFile ".\run-traffic-test.ps1"
 
+    - name: Log all input parameters for this workflow
+      run: |
+        Write-Output "Input parameters:"
+        Write-Output "  Profile: ${{ inputs.profile }}"
+        Write-Output "  SenderOptions: ${{ inputs.sender_options }}"
+        Write-Output "  ReceiverOptions: ${{ inputs.receiver_options }}"
+        Write-Output "  TCP IP Tracing: ${{ inputs.tcp_ip_tracing }}"
+        Write-Output "  ref: ${{ inputs.ref }}"
+
     - name: Run traffic tests
       working-directory: ${{ github.workspace }}\cts-traffic
       env:
