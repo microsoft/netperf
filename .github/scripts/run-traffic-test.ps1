@@ -255,7 +255,7 @@ try {
   #
   $serverArgs = Parse-Args $SenderOptions
   # When the remote is the sender, ensure it targets the local machine (receiver)
-  $serverArgs = Ensure-TargetArg -ArgsArray $serverArgs -TargetName $env:COMPUTERNAME
+  $serverArgs = Ensure-TargetArg -ArgsArray $serverArgs -TargetName $PeerName
   # Normalize server args: ensure each explicit option starts with '-'
   $serverArgs = $serverArgs | ForEach-Object {
     if ([string]::IsNullOrEmpty($_)) { $_ } else { if ($_ -like '-*') { $_ } else { '-' + $_ } }
