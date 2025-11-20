@@ -98,9 +98,20 @@ jobs:
       shell: pwsh
       run: .\\run-traffic-test.ps1 ${{ inputs.profile == 'true' && '-Profile' || '' }} -PeerName "netperf-peer" -SenderOptions "${{ inputs.sender_options }}" -ReceiverOptions "${{ inputs.receiver_options }}"
 
+    - name: Optional - Stop TCPIP tracing
+      if: ${{ github.event.inputs.tcp_ip_tracing == 'true' }}
+      run: |
+        wpr -stop ${{ github.workspace }}\ETL\tcpip_trace.etl
+
     - name: Upload CTS results
       if: always()
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
       with:
         name: cts_traffic_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: ${{ github.workspace }}\cts-traffic\*.csv
+
+    - name: Upload TCPIP ETL
+      if: ${{ github.event.inputs.tcp_ip_tracing == 'true' && always() }}
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      with:
+        name: tcpip_trace_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
