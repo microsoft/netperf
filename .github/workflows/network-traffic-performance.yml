@@ -120,7 +120,7 @@ jobs:
         path: ${{ github.workspace }}\ETL\tcpip_trace.etl
 
     - name: Upload CPU Profile
-      if:  always() && ${{ && inputs.profile == 'true' }}
+      if:  always() && ${{ inputs.profile == 'true' }}
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
       with:
         name: cpu_profile_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
