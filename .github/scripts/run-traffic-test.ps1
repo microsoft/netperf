@@ -2,10 +2,29 @@ param(
   [switch]$Profile,
   [string]$PeerName,
   [string]$SenderOptions,
-  [string]$ReceiverOptions
+  [string]$ReceiverOptions,
+  [string]$TimeoutInMilliseconds = '300000'
 )
 
 Set-StrictMode -Version Latest
+
+# Append TimeLimit to sender and receiver options if not already present
+if ($SenderOptions -notmatch '-TimeLimit:') {
+  $SenderOptions += " -TimeLimit:$TimeoutInMilliseconds"
+}
+
+if ($ReceiverOptions -notmatch '-TimeLimit:') {
+  $ReceiverOptions += " -TimeLimit:$TimeoutInMilliseconds"
+}
+
+# Append error file name options if not already present
+if ($SenderOptions -notmatch '-ErrorFileName:') {
+  $SenderOptions += " -ErrorFileName:ctsTraffic_Errors_Send.log"
+}
+
+if ($ReceiverOptions -notmatch '-ErrorFileName:') {
+  $ReceiverOptions += " -ErrorFileName:ctsTraffic_Errors_Recv.log"
+}
 
 # Make errors terminate so catch can handle them
 $ErrorActionPreference = 'Stop'
