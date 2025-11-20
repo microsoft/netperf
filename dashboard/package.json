@@ -45,7 +45,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react-swc": "^4.2.2",
-    "vite": "^7.2.2",
+    "vite": "^7.2.4",
     "vite-plugin-checker": "^0.11.0"
   },
   "homepage": "https://microsoft.github.io/netperf/dist"
