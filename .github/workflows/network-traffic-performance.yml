@@ -78,7 +78,7 @@ jobs:
         path: ${{ github.workspace }}\cts-traffic
 
     - name: Optional - Start TCPIP tracing
-      if: ${{ github.event.inputs.tcp_ip_tracing == 'true' }}
+      if: ${{ github.event.inputs.tcp_ip_tracing }}
       run: |-
         if (Test-Path "tcpip.wprp") { Remove-Item -Force "tcpip.wprp" }
         Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
@@ -96,14 +96,7 @@ jobs:
         SENDER_OPTIONS: ${{ inputs.sender_options }}
         RECEIVER_OPTIONS: ${{ inputs.receiver_options }}
       shell: pwsh
-      run: |-
-        $params = @{
-          PeerName = 'netperf-peer'
-          SenderOptions = '${{ inputs.sender_options }}'
-          ReceiverOptions = '${{ inputs.receiver_options }}'
-        }
-        if ('${{ inputs.profile }}' -eq 'true') { $params.Profile = $true }
-        .\run-traffic-test.ps1 @params
+        run: .\\run-traffic-test.ps1 ${{ inputs.profile == 'true' && '-Profile' || '' }} -PeerName "netperf-peer" -SenderOptions "${{ inputs.sender_options }}" -ReceiverOptions "${{ inputs.receiver_options }}"
 
     - name: Upload CTS results
       if: always()
