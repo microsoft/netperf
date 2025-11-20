@@ -79,6 +79,52 @@ function Ensure-TargetArg {
   return $ArgsArray
 }
 
+# WPR CPU profiling helpers
+$script:WprProfiles = @{}
+
+function Start-WprCpuProfile {
+  param([Parameter(Mandatory=$true)][string]$Which)
+
+  if (-not $CpuProfile) { return }
+
+  if (-not $Workspace) { $Workspace = $env:GITHUB_WORKSPACE }
+  $etlDir = Join-Path $Workspace 'ETL'
+  if (-not (Test-Path $etlDir)) { New-Item -ItemType Directory -Path $etlDir | Out-Null }
+
+  $outFile = Join-Path $etlDir ("cpu_profile-$Which.etl")
+  if (Test-Path $outFile) { Remove-Item $outFile -Force -ErrorAction SilentlyContinue }
+
+  Write-Output "Starting WPR CPU profiling -> $outFile"
+  try {
+    & wpr -start CPU -filemode | Out-Null
+    $script:WprProfiles[$Which] = $outFile
+  }
+  catch {
+    Write-Output "Failed to start WPR: $($_.Exception.Message)"
+  }
+}
+
+function Stop-WprCpuProfile {
+  param([Parameter(Mandatory=$true)][string]$Which)
+
+  if (-not $CpuProfile) { return }
+
+  if (-not $script:WprProfiles.ContainsKey($Which)) {
+    Write-Output "No WPR profile active for '$Which'"
+    return
+  }
+
+  $outFile = $script:WprProfiles[$Which]
+  Write-Output "Stopping WPR CPU profiling, saving to $outFile"
+  try {
+    & wpr -stop $outFile | Out-Null
+    $script:WprProfiles.Remove($Which) | Out-Null
+  }
+  catch {
+    Write-Output "Failed to stop WPR: $($_.Exception.Message)"
+  }
+}
+
 # =========================
 # Remote job helpers
 # =========================
@@ -245,8 +291,11 @@ try {
   Write-Output "[Local] Running: .\ctsTraffic.exe"
   Write-Output "[Local] Arguments:"
   foreach ($a in $clientArgs) { Write-Output "  $a" }
+  Start-WprCpuProfile -Which 'send'
   & .\ctsTraffic.exe @clientArgs
-  if ($LASTEXITCODE -ne 0) { throw "Local ctsTraffic.exe (Send) exited with code $LASTEXITCODE" }
+  $localExit = $LASTEXITCODE
+  Stop-WprCpuProfile -Which 'send'
+  if ($localExit -ne 0) { throw "Local ctsTraffic.exe (Send) exited with code $localExit" }
 
   Receive-JobOrThrow -Job $Job
 
@@ -280,8 +329,11 @@ try {
   Write-Output "[Local] Running: .\ctsTraffic.exe"
   Write-Output "[Local] Arguments:"
   foreach ($a in $clientArgs) { Write-Output "  $a" }
+  Start-WprCpuProfile -Which 'recv'
   & .\ctsTraffic.exe @clientArgs
-  if ($LASTEXITCODE -ne 0) { throw "Local ctsTraffic.exe (Recv) exited with code $LASTEXITCODE" }
+  $localExit = $LASTEXITCODE
+  Stop-WprCpuProfile -Which 'recv'
+  if ($localExit -ne 0) { throw "Local ctsTraffic.exe (Recv) exited with code $localExit" }
 
   Receive-JobOrThrow -Job $Job
 
