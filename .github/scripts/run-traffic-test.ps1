@@ -118,9 +118,14 @@ function Start-WprCpuProfile {
         Write-Output "Failed to cancel existing WPR session: $($_.Exception.Message). Proceeding to start a new profile anyway."
       }
     }
-
-    # Start a fresh CPU profile
-    & wpr -start CPU -filemode | Out-Null
+    $repoWprp = Join-Path $Workspace 'cpu_snapshot.wprp'
+    if (Test-Path $repoWprp) {
+      Write-Output "Found custom WPR profile: $repoWprp. Starting WPR with that profile..."
+      & wpr -start $repoWprp -filemode | Out-Null
+    }
+    else {
+      throw "Custom WPR profile not found at $repoWprp"
+    }
     $script:WprProfiles[$Which] = $outFile
   }
   catch {
@@ -159,133 +164,6 @@ function Stop-WprCpuProfile {
   }
 }
 
-# Capture network counters (NDIS / Network Interface and TCP/IP) snapshot
-function Get-NetworkSnapshot {
-  param()
-
-  $snap = [ordered]@{}
-  $snap.Timestamp = Get-Date
-
-  # Adapter counters (NDIS-level) using Get-NetAdapterStatistics when available
-  $adapters = @()
-  try {
-    $netAdapters = Get-NetAdapter -ErrorAction Stop
-    foreach ($a in $netAdapters) {
-      $entry = [ordered]@{ Name = $a.Name }
-      try { $s = Get-NetAdapterStatistics -Name $a.Name -ErrorAction Stop } catch { $s = $null }
-      if ($s) {
-        foreach ($prop in @('ReceivedUnicastPackets','ReceivedMulticastPackets','ReceivedBroadcastPackets','SentUnicastPackets','SentMulticastPackets','SentBroadcastPackets','ReceivedPackets','SentPackets','ReceivedBytes','SentBytes')) {
-          if ($s.PSObject.Properties.Name -contains $prop) { $entry[$prop] = [int64]($s.$prop) }
-        }
-      }
-      $adapters += $entry
-    }
-  }
-  catch {
-    # Fallback: use Get-Counter to fetch Network Interface packet counters
-    $adapters = @()
-    try {
-      $c = Get-Counter '\Network Interface(*)\Packets Received/sec','\Network Interface(*)\Packets Sent/sec' -ErrorAction Stop
-      foreach ($sample in $c.CounterSamples) {
-        $name = $sample.Path -replace '^.+\\Network Interface\\\(|\)\\.+$',''
-      }
-    } catch { }
-  }
-  $snap.Adapters = $adapters
-
-  # IP-level counters using Get-NetIPStatistics
-  $ip = [ordered]@{}
-  try {
-    $ipstats = Get-NetIPStatistics -ErrorAction Stop
-    foreach ($prop in $ipstats.PSObject.Properties.Name) {
-      $val = $ipstats.$prop
-      if ($val -is [int] -or $val -is [long] -or $val -is [uint64] -or $val -is [int64]) { $ip[$prop] = [int64]$val }
-    }
-  }
-  catch {
-    # ignore
-  }
-  $snap.IP = $ip
-
-  # TCP-level counters using Get-NetTCPStatistics
-  $tcp = [ordered]@{}
-  try {
-    $tcpstats = Get-NetTCPStatistics -ErrorAction Stop
-    foreach ($prop in $tcpstats.PSObject.Properties.Name) {
-      $val = $tcpstats.$prop
-      if ($val -is [int] -or $val -is [long] -or $val -is [uint64] -or $val -is [int64]) { $tcp[$prop] = [int64]$val }
-    }
-  }
-  catch {
-    # ignore
-  }
-  $snap.TCP = $tcp
-
-  return $snap
-}
-
-# Compute and log deltas between two snapshots
-function Write-NetworkDelta {
-  param(
-    [Parameter(Mandatory=$true)] $Before,
-    [Parameter(Mandatory=$true)] $After,
-    [Parameter(Mandatory=$true)][string] $Label
-  )
-
-  if (-not $Workspace) { $Workspace = $env:GITHUB_WORKSPACE }
-  $etlDir = Join-Path $Workspace 'ETL'
-  if (-not (Test-Path $etlDir)) { New-Item -ItemType Directory -Path $etlDir | Out-Null }
-
-  $outFile = Join-Path $etlDir ("network_counters-${Label}.json")
-
-  $delta = [ordered]@{}
-  $delta.Label = $Label
-  $delta.BeforeTimestamp = $Before.Timestamp
-  $delta.AfterTimestamp = $After.Timestamp
-
-  # Adapter deltas: match by Name
-  $adapterDeltas = @()
-  foreach ($b in $Before.Adapters) {
-    $match = $After.Adapters | Where-Object { $_.Name -eq $b.Name } | Select-Object -First 1
-    if ($match) {
-      $adDelta = [ordered]@{ Name = $b.Name }
-      foreach ($prop in $b.Keys) {
-        if ($prop -eq 'Name') { continue }
-        $bv = $b[$prop]
-        $av = $null
-        if ($match -is [System.Collections.IDictionary]) {
-          if ($match.ContainsKey($prop)) { $av = $match[$prop] }
-        }
-        else {
-          if ($match.PSObject.Properties.Name -contains $prop) { $av = $match.$prop }
-        }
-        if ($bv -ne $null -and $av -ne $null) { $adDelta[$prop] = ([int64]$av - [int64]$bv) }
-      }
-      $adapterDeltas += $adDelta
-    }
-  }
-  $delta.AdapterDeltas = $adapterDeltas
-
-  # IP deltas
-  $ipD = [ordered]@{}
-  foreach ($prop in $Before.IP.Keys) {
-    if ($After.IP.ContainsKey($prop)) { $ipD[$prop] = ([int64]$After.IP[$prop] - [int64]$Before.IP[$prop]) }
-  }
-  $delta.IPDeltas = $ipD
-
-  # TCP deltas
-  $tcpD = [ordered]@{}
-  foreach ($prop in $Before.TCP.Keys) {
-    if ($After.TCP.ContainsKey($prop)) { $tcpD[$prop] = ([int64]$After.TCP[$prop] - [int64]$Before.TCP[$prop]) }
-  }
-  $delta.TCPDeltas = $tcpD
-
-  $json = $delta | ConvertTo-Json -Depth 5
-  $json | Out-File -FilePath $outFile -Encoding UTF8
-
-  Write-Output "Network counters delta for '$Label' written to $outFile"
-  Write-Output $json
-}
 
 # =========================
 # Remote job helpers
