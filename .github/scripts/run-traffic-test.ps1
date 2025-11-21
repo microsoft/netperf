@@ -100,6 +100,26 @@ function Start-WprCpuProfile {
 
   Write-Output "Starting WPR CPU profiling -> $outFile"
   try {
+    # Check if WPR is already running to avoid the "profiles are already running" error
+    $status = $null
+    try {
+      $status = & wpr -status 2>&1
+    } catch {
+      $status = $_.ToString()
+    }
+
+    if ($status -and $status -match 'profile(s)?\s+are\s+already\s+running|Profiles are already running|The profiles are already running') {
+      Write-Output "WPR already running. Cancelling any existing profiles so we can start a fresh one..."
+      try {
+        & wpr -cancel 2>&1 | Out-Null
+        Start-Sleep -Seconds 1
+      }
+      catch {
+        Write-Output "Failed to cancel existing WPR session: $($_.Exception.Message). Proceeding to start a new profile anyway."
+      }
+    }
+
+    # Start a fresh CPU profile
     & wpr -start CPU -filemode | Out-Null
     $script:WprProfiles[$Which] = $outFile
   }
@@ -121,7 +141,17 @@ function Stop-WprCpuProfile {
   $outFile = $script:WprProfiles[$Which]
   Write-Output "Stopping WPR CPU profiling, saving to $outFile"
   try {
-    & wpr -stop $outFile | Out-Null
+    # Attempt to stop WPR and save to the given file. If no profile is running, log and continue.
+    try {
+      & wpr -stop $outFile | Out-Null
+    }
+    catch {
+      Write-Output "wpr -stop failed: $($_.Exception.Message). Attempting to query status..."
+      try {
+        $s = & wpr -status 2>&1
+        Write-Output "WPR status: $s"
+      } catch { }
+    }
     $script:WprProfiles.Remove($Which) | Out-Null
   }
   catch {
