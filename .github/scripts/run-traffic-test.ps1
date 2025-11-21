@@ -125,75 +125,45 @@ function Start-WprCpuProfile {
 
     # Embedded default WPRP profile (written if the file is missing)
     $embeddedWprp = @'
-<?xml version="1.0" encoding="utf-8"?>
-<!--
-  CPU snapshot WPR profile for collecting sampled CPU/profile and dispatcher events.
-  Writes traces to file mode with maximum file size ~1024 MB (1 GB).
-  Includes both sampled hardware counters (for sampling) and kernel event providers (for context).
--->
-<WindowsPerformanceRecorder Version="1.0" Author="Microsoft Corporation" Copyright="Microsoft Corporation" Company="Microsoft Corporation">
+<?xml version="1.0" encoding="utf-8" standalone='yes'?>
+<WindowsPerformanceRecorder Version="1.0" Author="EcoSystem Performance Platform" Team="EcoSystem Performance Platform" Company="Microsoft Corporation" Copyright="Microsoft Corporation" Tag="BuiltIn">
   <Profiles>
-    <!-- System collector that references the hardware counter for sampling -->
-    <SystemCollector Id="SystemCollector_Cpu" Name="CpuSystemCollector">
-      <BufferSize Value="256" />
-      <Buffers Value="4096" />
+    <SystemCollector Id="SystemCollector_WPRSystemCollectorInFile" Base="" Realtime="false">
+      <BufferSize Value="1024"/>
+      <Buffers Value="20"/>
+      <MaximumFileSize Value="1024" FileMode="Sequential" />
     </SystemCollector>
-
-    <!-- Event collector tuned for CPU profiling -->
-    <EventCollector Id="EventCollector_Cpu" Name="CpuEventCollector">
-      <BufferSize Value="256" />
-      <Buffers Value="4096" />
-      <FlushTimer Value="1000" />
-      <FlushThreshold Value="80" />
-    </EventCollector>
-
-    <!-- System provider with sampled profile keyword -->
-    <SystemProvider Id="SystemProvider_Cpu">
-      <Keywords>
-        <Keyword Value="SampledProfile" />
+    <SystemProvider Id="SystemProvider_CPU_Without_Stacks" Base="SystemProvider_Base">
+      <Keywords Operation="Add">
+        <Keyword Value="CSwitch"/>
+        <Keyword Value="MemoryInfo"/>
+        <Keyword Value="Power"/>
+        <Keyword Value="ReadyThread"/>
+        <Keyword Value="SampledProfile"/>
+        <Keyword Value="ThreadPriority"/>
+        <Keyword Value="IdealProcessor"/>
       </Keywords>
     </SystemProvider>
-
-    <!-- Hardware counters and processor sampling -->
-    <HardwareCounter Id="SampledProfile">
-      <SampledCounters>
-        <!-- Interval is in 100-ns units; adjust as needed -->
-        <SampledCounter Value="SampledProfile" Interval="1000000" />
-      </SampledCounters>
-    </HardwareCounter>
-
-    <!-- Common kernel and process providers useful for CPU analysis -->
-    <EventProvider Id="Microsoft-Windows-Kernel-Processor" Name="9A280AC8-4A5E-4A9A-9B1B-7BD84A5D2E1A" NonPagedMemory="true" Level="5"/>
-    <EventProvider Id="Microsoft-Windows-Kernel-ContextSwitch" Name="9CB1E29E-6B9E-4F8E-8D56-CC4D6D6B4E6B" NonPagedMemory="true" Level="5"/>
-    <EventProvider Id="Microsoft-Windows-Kernel-Thread" Name="A1F3A6E4-07D2-4DA9-9F0A-2E57B3E0A4B7" NonPagedMemory="true" Level="5"/>
-
-    <Profile
-        Id="CpuSnapshot-File.Verbose.File"
-        Name="CpuSnapshot-File"
-        Description="CPU sampled profile; file logging; capped to ~1GB."
-        LoggingMode="File"
-        DetailLevel="Verbose">
-      <Collectors>
-        <SystemCollectorId Value="SystemCollector_Cpu">
-          <MaximumFileSize Value="1024" FileMode="Sequential" />
-          <FileMax Value="1" />
-          <SystemProviderId Value="SystemProvider_Cpu" />
-          <HardwareCounterId Value="SampledProfile" />
+    <Profile Id="CPU.Verbose.File" Name="CPU" Description="@WindowsPerformanceRecorderControl.dll,-5002" DetailLevel="Verbose" Base="BaseProfile.Verbose" LoggingMode="File">
+      <ProblemCategories Operation="Add">
+        <ProblemCategory Value="@WindowsPerformanceRecorderControl.dll,-6001"/>
+      </ProblemCategories>
+      <Collectors Operation="Add">
+        <SystemCollectorId Value="SystemCollector_WPRSystemCollectorInFile">
+          <SystemProviderId Value="SystemProvider_CPU" />
         </SystemCollectorId>
-
-        <EventCollectorId Value="EventCollector_Cpu">
-          <!-- Configure file size to approximately 1GB and use sequential file mode -->
-          <MaximumFileSize Value="1024" FileMode="Sequential" />
-          <FileMax Value="1" />
+        <EventCollectorId Value="EventCollector_WPREventCollectorInFile">
           <EventProviders>
-            <EventProviderId Value="Microsoft-Windows-Kernel-Processor"/>
-            <EventProviderId Value="Microsoft-Windows-Kernel-ContextSwitch"/>
-            <EventProviderId Value="Microsoft-Windows-Kernel-Thread"/>
+            <EventProviderId Value="EventProvider_DWMWin32k" />
+            <EventProviderId Value="EventProvider_DWMWin32kWin8_WaitAnalysis" />
+            <EventProviderId Value="EventProvider_DWMWin32kWin8_WaitAnalysis_CaptureState" />
+            <EventProviderId Value="EventProvider_Microsoft-Windows-Networking-Correlation" />
+            <EventProviderId Value="EventProvider_Microsoft-Windows-RPC_Level4"/>
+            <EventProviderId Value="EventProvider_Microsoft-Windows-RPCSS_Level4"/>
           </EventProviders>
         </EventCollectorId>
       </Collectors>
     </Profile>
-
   </Profiles>
 </WindowsPerformanceRecorder>
 '@
