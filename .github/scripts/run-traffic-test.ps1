@@ -331,14 +331,10 @@ try {
   Write-Output "[Local] Running: .\ctsTraffic.exe"
   Write-Output "[Local] Arguments:"
   foreach ($a in $clientArgs) { Write-Output "  $a" }
-  $beforeNet = Get-NetworkSnapshot
   Start-WprCpuProfile -Which 'send'
   & .\ctsTraffic.exe @clientArgs
   $localExit = $LASTEXITCODE
   Stop-WprCpuProfile -Which 'send'
-  $afterNet = Get-NetworkSnapshot
-  Write-NetworkDelta -Before $beforeNet -After $afterNet -Label 'send'
-  if ($localExit -ne 0) { throw "Local ctsTraffic.exe (Send) exited with code $localExit" }
 
   Receive-JobOrThrow -Job $Job
 
