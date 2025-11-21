@@ -31,8 +31,24 @@ if ($SenderOptions -notmatch '-ErrorFileName:') {
   $SenderOptions += " -ErrorFileName:ctsTraffic_Errors_Send.log"
 }
 
+if ($SenderOptions -notmatch '-statusfilename:') {
+  $SenderOptions += " -statusfilename:ctsTrafficStatus_Send.csv"
+}
+
+if ($SenderOptions -notmatch '-connectionfilename:') {
+  $SenderOptions += " -connectionfilename:ctsTrafficConnections_Send.csv.log"
+}
+
 if ($ReceiverOptions -notmatch '-ErrorFileName:') {
   $ReceiverOptions += " -ErrorFileName:ctsTraffic_Errors_Recv.log"
+}
+
+if ($ReceiverOptions -notmatch '-statusfilename:') {
+  $ReceiverOptions += " -statusfilename:ctsTrafficStatus_Send.csv"
+}
+
+if ($ReceiverOptions -notmatch '-connectionfilename:') {
+  $ReceiverOptions += " -connectionfilename:ctsTrafficConnections_Send.csv.log"
 }
 
 # Make errors terminate so catch can handle them
@@ -81,6 +97,22 @@ function Ensure-TargetArg {
   }
   if (-not $found) { $ArgsArray += "-target:$TargetName" }
   return $ArgsArray
+}
+
+# Rename a local file if it exists; ignore if not present
+function Rename-LocalIfExists {
+  param(
+    [Parameter(Mandatory=$true)][string]$Path,
+    [Parameter(Mandatory=$true)][string]$NewName
+  )
+  try {
+    if (Test-Path $Path) {
+      Rename-Item -Path $Path -NewName $NewName -ErrorAction Stop
+    }
+  }
+  catch {
+    Write-Output "Failed to rename $Path -> $NewName: $($_.Exception.Message)"
+  }
 }
 
 # WPR CPU profiling helpers
@@ -315,8 +347,6 @@ try {
   $Job = Invoke-CtsInSession -Session $Session -RemoteDir $RemoteDir -Options $serverArgs
 
   $clientArgs = Parse-Args $SenderOptions
-  # Add option to capture status file and connection file.
-  $clientArgs += @('-statusfilename:ctsTrafficStatus_Send.csv', '-connectionfilename:ctsTrafficConnections_Send.csv')
 
   # Ensure local sender targets the remote receiver
   $clientArgs = Ensure-TargetArg -ArgsArray $clientArgs -TargetName $PeerName
@@ -337,6 +367,16 @@ try {
   Stop-WprCpuProfile -Which 'send'
 
   Receive-JobOrThrow -Job $Job
+
+  # After send test: rename local send files with a local suffix and fetch remote recv files with remote suffix
+  Rename-LocalIfExists -Path 'ctsTraffic_Errors_Send.log' -NewName 'ctsTraffic_Errors_Send_Local.log'
+  Rename-LocalIfExists -Path 'ctsTrafficStatus_Send.csv' -NewName 'ctsTrafficStatus_Send_Local.csv'
+  Rename-LocalIfExists -Path 'ctsTrafficConnections_Send.csv' -NewName 'ctsTrafficConnections_Send_Local.csv'
+
+  # Fetch the remote receiver (recv) logs and add a remote suffix
+  Copy-Item -FromSession $Session -Path "$RemoteDir\cts-traffic\ctsTraffic_Errors_Recv.log" -Destination 'ctsTraffic_Errors_Recv_Remote.log' -ErrorAction SilentlyContinue
+  Copy-Item -FromSession $Session -Path "$RemoteDir\cts-traffic\ctsTrafficStatus_Recv.csv" -Destination 'ctsTrafficStatus_Recv_Remote.csv' -ErrorAction SilentlyContinue
+  Copy-Item -FromSession $Session -Path "$RemoteDir\cts-traffic\ctsTrafficConnections_Recv.csv" -Destination 'ctsTrafficConnections_Recv_Remote.csv' -ErrorAction SilentlyContinue
 
   #
   # === Recv tests: remote sender, local receiver ===
@@ -374,6 +414,15 @@ try {
   Stop-WprCpuProfile -Which 'recv'
 
   Receive-JobOrThrow -Job $Job
+  # After recv test: rename local recv files with a local suffix and fetch remote send files with remote suffix
+  Rename-LocalIfExists -Path 'ctsTraffic_Errors_Recv.log' -NewName 'ctsTraffic_Errors_Recv_Local.log'
+  Rename-LocalIfExists -Path 'ctsTrafficStatus_Recv.csv' -NewName 'ctsTrafficStatus_Recv_Local.csv'
+  Rename-LocalIfExists -Path 'ctsTrafficConnections_Recv.csv' -NewName 'ctsTrafficConnections_Recv_Local.csv'
+
+  # Fetch the remote sender (send) logs and add a remote suffix
+  Copy-Item -FromSession $Session -Path "$RemoteDir\cts-traffic\ctsTraffic_Errors_Send.log" -Destination 'ctsTraffic_Errors_Send_Remote.log' -ErrorAction SilentlyContinue
+  Copy-Item -FromSession $Session -Path "$RemoteDir\cts-traffic\ctsTrafficStatus_Send.csv" -Destination 'ctsTrafficStatus_Send_Remote.csv' -ErrorAction SilentlyContinue
+  Copy-Item -FromSession $Session -Path "$RemoteDir\cts-traffic\ctsTrafficConnections_Send.csv" -Destination 'ctsTrafficConnections_Send_Remote.csv' -ErrorAction SilentlyContinue
 
   Write-Output "cts-traffic tests completed successfully."
 }
