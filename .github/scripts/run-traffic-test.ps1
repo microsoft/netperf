@@ -118,13 +118,50 @@ function Start-WprCpuProfile {
         Write-Output "Failed to cancel existing WPR session: $($_.Exception.Message). Proceeding to start a new profile anyway."
       }
     }
-    $repoWprp = Join-Path $Workspace 'cpu_snapshot.wprp'
-    if (Test-Path $repoWprp) {
-      Write-Output "Found custom WPR profile: $repoWprp. Starting WPR with that profile..."
+    # Path where we prefer to store the profile inside the repo workflows folder
+    $workflowsDir = Join-Path $Workspace '.github\workflows'
+    if (-not (Test-Path $workflowsDir)) { New-Item -ItemType Directory -Path $workflowsDir | Out-Null }
+    $repoWprp = Join-Path $workflowsDir 'cpu_snapshot.wprp'
+
+    # Embedded default WPRP profile (written if the file is missing)
+    $embeddedWprp = @'
+<?xml version="1.0"?>
+<WindowsPerformanceRecorder Version="1.0">
+  <Profiles>
+    <Profile Name="CPU Snapshot" Description="Lightweight CPU sampling" LoggingMode="File" MaxFileSize="1024MB">
+      <Collectors>
+        <EventCollector Id="CPUCollector" Name="CPUCollector">
+          <BufferSize Value="256" />
+          <Buffers Value="64" />
+        </EventCollector>
+      </Collectors>
+      <Providers>
+        <!-- CPU Sampling -->
+        <Provider Id="CPU" Name="Microsoft-Windows-Kernel-Processor-Power" Level="Light" />
+        <Provider Id="Stack" Name="Microsoft-Windows-Kernel-Stack" Level="Light" />
+      </Providers>
+    </Profile>
+  </Profiles>
+</WindowsPerformanceRecorder>
+'@
+
+    if (-not (Test-Path $repoWprp)) {
+      Write-Output "Custom WPR profile not found; writing embedded profile to $repoWprp"
+      try {
+        $embeddedWprp | Out-File -FilePath $repoWprp -Encoding UTF8 -Force
+      }
+      catch {
+        Write-Output "Failed to write embedded WPR profile: $($_.Exception.Message)"
+      }
+    }
+
+    Write-Output "Starting WPR with profile: $repoWprp"
+    try {
       & wpr -start $repoWprp -filemode | Out-Null
     }
-    else {
-      throw "Custom WPR profile not found at $repoWprp"
+    catch {
+      Write-Output "wpr -start with custom profile failed: $($_.Exception.Message). Falling back to built-in CPU profile."
+      try { & wpr -start CPU -filemode | Out-Null } catch { Write-Output "Fallback CPU start also failed: $($_.Exception.Message)" }
     }
     $script:WprProfiles[$Which] = $outFile
   }
