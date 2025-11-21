@@ -253,7 +253,12 @@ function Write-NetworkDelta {
         if ($prop -eq 'Name') { continue }
         $bv = $b[$prop]
         $av = $null
-        if ($match.PSObject.Properties.Name -contains $prop) { $av = $match.$prop }
+        if ($match -is [System.Collections.IDictionary]) {
+          if ($match.ContainsKey($prop)) { $av = $match[$prop] }
+        }
+        else {
+          if ($match.PSObject.Properties.Name -contains $prop) { $av = $match.$prop }
+        }
         if ($bv -ne $null -and $av -ne $null) { $adDelta[$prop] = ([int64]$av - [int64]$bv) }
       }
       $adapterDeltas += $adDelta
