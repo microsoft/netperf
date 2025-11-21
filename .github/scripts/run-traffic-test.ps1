@@ -371,6 +371,7 @@ try {
   Start-WprCpuProfile -Which 'recv'
   & .\ctsTraffic.exe @clientArgs
   $localExit = $LASTEXITCODE
+  Stop-WprCpuProfile -Which 'recv'
 
   Receive-JobOrThrow -Job $Job
 
