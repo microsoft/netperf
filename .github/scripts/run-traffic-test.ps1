@@ -118,69 +118,9 @@ function Start-WprCpuProfile {
         Write-Output "Failed to cancel existing WPR session: $($_.Exception.Message). Proceeding to start a new profile anyway."
       }
     }
-    # Path where we prefer to store the profile inside the repo workflows folder
-    $workflowsDir = Join-Path $Workspace '.github\workflows'
-    if (-not (Test-Path $workflowsDir)) { New-Item -ItemType Directory -Path $workflowsDir | Out-Null }
-    $repoWprp = Join-Path $workflowsDir 'cpu_snapshot.wprp'
 
-    # Embedded default WPRP profile (written if the file is missing)
-    $embeddedWprp = @'
-<?xml version="1.0" encoding="utf-8" standalone='yes'?>
-<WindowsPerformanceRecorder Version="1.0" Author="EcoSystem Performance Platform" Team="EcoSystem Performance Platform" Company="Microsoft Corporation" Copyright="Microsoft Corporation" Tag="BuiltIn">
-  <Profiles>
-    <SystemCollector Id="SystemCollector_WPRSystemCollectorInFile" Base="" Realtime="false">
-      <BufferSize Value="1024"/>
-      <Buffers Value="20"/>
-      <MaximumFileSize Value="1024" FileMode="Sequential" />
-    </SystemCollector>
-    <SystemProvider Id="SystemProvider_CPU_Without_Stacks" Base="SystemProvider_Base">
-      <Keywords Operation="Add">
-        <Keyword Value="CSwitch"/>
-        <Keyword Value="MemoryInfo"/>
-        <Keyword Value="Power"/>
-        <Keyword Value="ReadyThread"/>
-        <Keyword Value="SampledProfile"/>
-        <Keyword Value="ThreadPriority"/>
-        <Keyword Value="IdealProcessor"/>
-      </Keywords>
-    </SystemProvider>
-    <Profile Id="CPU.Verbose.File" Name="CPU" Description="@WindowsPerformanceRecorderControl.dll,-5002" DetailLevel="Verbose" Base="BaseProfile.Verbose" LoggingMode="File">
-      <ProblemCategories Operation="Add">
-        <ProblemCategory Value="@WindowsPerformanceRecorderControl.dll,-6001"/>
-      </ProblemCategories>
-      <Collectors Operation="Add">
-        <SystemCollectorId Value="SystemCollector_WPRSystemCollectorInFile">
-          <SystemProviderId Value="SystemProvider_CPU" />
-        </SystemCollectorId>
-        <EventCollectorId Value="EventCollector_WPREventCollectorInFile">
-          <EventProviders>
-            <EventProviderId Value="EventProvider_DWMWin32k" />
-            <EventProviderId Value="EventProvider_DWMWin32kWin8_WaitAnalysis" />
-            <EventProviderId Value="EventProvider_DWMWin32kWin8_WaitAnalysis_CaptureState" />
-            <EventProviderId Value="EventProvider_Microsoft-Windows-Networking-Correlation" />
-            <EventProviderId Value="EventProvider_Microsoft-Windows-RPC_Level4"/>
-            <EventProviderId Value="EventProvider_Microsoft-Windows-RPCSS_Level4"/>
-          </EventProviders>
-        </EventCollectorId>
-      </Collectors>
-    </Profile>
-  </Profiles>
-</WindowsPerformanceRecorder>
-'@
-
-    if (-not (Test-Path $repoWprp)) {
-      Write-Output "Custom WPR profile not found; writing embedded profile to $repoWprp"
-      try {
-        $embeddedWprp | Out-File -FilePath $repoWprp -Encoding UTF8 -Force
-      }
-      catch {
-        Write-Output "Failed to write embedded WPR profile: $($_.Exception.Message)"
-      }
-    }
-
-    Write-Output "Starting WPR with profile: $repoWprp"
     try {
-      & wpr -start $repoWprp -filemode | Out-Null
+      & wpr -start CPU -filemode | Out-Null
     }
     catch {
       Write-Output "wpr -start with custom profile failed: $($_.Exception.Message). Falling back to built-in CPU profile."
