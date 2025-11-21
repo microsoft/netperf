@@ -412,7 +412,7 @@ function Run-RecvTest {
   $serverArgs = $serverArgs | ForEach-Object { if ([string]::IsNullOrEmpty($_)) { $_ } else { if ($_ -like '-*') { $_ } else { '-' + $_ } } }
   Write-Output "[Local->Remote] Invoking remote job with arguments:"
   if ($serverArgs -is [System.Array]) { foreach ($arg in $serverArgs) { Write-Output "  $arg" } } else { Write-Output "  $serverArgs" }
-  $Job = Invoke-CtsInSession -Session $Session -RemoteDir $script:RemoteDir -Options $serverArgs
+  $Job = Invoke-CtsInSession -Session $Session -RemoteDir $script:RemoteDir -Options $serverArgs -StartDelay $true
 
   $clientArgs = Convert-ArgStringToArray $ReceiverOptions
   $clientArgs = $clientArgs | ForEach-Object { if ([string]::IsNullOrEmpty($_)) { $_ } else { if ($_ -like '-*') { $_ } else { '-' + $_ } } }
