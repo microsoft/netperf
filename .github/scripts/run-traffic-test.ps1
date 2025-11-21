@@ -111,7 +111,32 @@ function Rename-LocalIfExists {
     }
   }
   catch {
-    Write-Output "Failed to rename $Path -> $NewName: $($_.Exception.Message)"
+    Write-Output "Failed to rename $Path -> $NewName $($_.Exception.Message)"
+  }
+}
+
+# Print detailed information for an ErrorRecord or Exception. Supports pipeline input.
+function Write-DetailedError {
+  param(
+    [Parameter(ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)] $InputObject
+  )
+
+  process {
+    $er = $InputObject
+    if ($null -eq $er) { return }
+    if ($er -is [System.Management.Automation.ErrorRecord]) {
+      Write-Output "ERROR: $($er.Exception.Message)"
+      if ($er.Exception.StackTrace) { Write-Output "StackTrace: $($er.Exception.StackTrace)" }
+      if ($er.InvocationInfo) { Write-Output "Invocation: $($er.InvocationInfo.PositionMessage)" }
+      Write-Output "ErrorRecord: $er"
+    }
+    elseif ($er -is [System.Exception]) {
+      Write-Output "EXCEPTION: $($er.Message)"
+      if ($er.StackTrace) { Write-Output "StackTrace: $($er.StackTrace)" }
+    }
+    else {
+      Write-Output $er
+    }
   }
 }
 
