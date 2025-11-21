@@ -57,19 +57,19 @@ $Session = $null
 $exitCode = 0
 
 # Helper to parse quoted command-line option strings into an array
-function Parse-Args($s) {
+function Convert-ArgStringToArray($s) {
   if ([string]::IsNullOrEmpty($s)) { return @() }
   # Pattern allows quoted strings with backslash-escaped characters, or unquoted tokens
-  $pattern = '("((?:\\.|[^"\\])*)"|[^"\s]+)'
-  $matches = [regex]::Matches($s, $pattern)
+  $pattern = '("((?:\.|[^"\])*)"|[^"\s]+)'
+  $regexMatches = [regex]::Matches($s, $pattern)
   $out = @()
-  foreach ($m in $matches) {
+  foreach ($m in $regexMatches) {
     if ($m.Groups[2].Success) {
       # Quoted token; Group 2 contains inner text with possible escapes
       $val = $m.Groups[2].Value
       # Unescape backslash-escaped sequences commonly used in CLI args
-      $val = $val -replace '\\\\', '\\'
-      $val = $val -replace '\\"', '"'
+      $val = $val -replace '\\', '\'
+      $val = $val -replace '\"', '"'
     }
     else {
       # Unquoted token in Group 1
@@ -81,7 +81,7 @@ function Parse-Args($s) {
 }
 
 # Ensure an args array contains a '-target:<name>' entry; replace if present, append if missing
-function Ensure-TargetArg {
+function Set-TargetArg {
   param(
     [Parameter(Mandatory = $true)] $ArgsArray,
     [Parameter(Mandatory = $true)] [string] $TargetName
@@ -201,7 +201,7 @@ function Stop-WprCpuProfile {
 # Remote job helpers
 # =========================
 function Invoke-CtsInSession {
-  param($Session, $RemoteDir, $Options)
+  param($Session, $RemoteDir, $Options, $StartDelay)
 
   $Job = Invoke-Command -Session $Session -ScriptBlock {
     param($RemoteDir, $Options)
@@ -216,7 +216,13 @@ function Invoke-CtsInSession {
       Write-Output "[Remote] Arguments (string):"
       Write-Output "  $Options"
     }
-        
+    
+    # If StartDelay is set, wait 5 seconds before starting.
+    if ($using:StartDelay) {
+      Write-Output "[Remote] StartDelay is set; waiting 5 seconds before starting ctsTraffic.exe..."
+      Start-Sleep -Seconds 5
+    }
+
     # PowerShell 7 supports positional splatting for arrays
     if ($Options -is [System.Array]) {
       & $CtsTraffic @Options
@@ -269,42 +275,33 @@ function Receive-JobOrThrow {
   }
 }
 
-# =========================
-# Main workflow
-# =========================
-$Workspace = $env:GITHUB_WORKSPACE
-Write-Output "Workspace: $Workspace"
+# -------------------------
+# Refactored workflow functions
+# -------------------------
 
-try {
-  if (-not $Workspace) { throw 'GITHUB_WORKSPACE is not set' }
-  Set-Location (Join-Path $Workspace 'cts-traffic')
-
-
-  # Initialize localFwState variable
-  $localFwState = 
-  @(
-    [PSCustomObject]@{ Name = "Domain"; Enabled = $true }
-    [PSCustomObject]@{ Name = "Private"; Enabled = $true }
-    [PSCustomObject]@{ Name = "Public"; Enabled = $true }
+function Create-Session {
+  param(
+    [Parameter(Mandatory=$true)][string]$PeerName,
+    [string]$RemotePSConfiguration = 'PowerShell.7'
   )
 
-  # Establish remote session
-  $RemotePSConfiguration = 'PowerShell.7'
-  $RemoteDir = 'C:\_work'
+  $script:RemotePSConfiguration = $RemotePSConfiguration
+  $script:RemoteDir = 'C:\_work'
+
   $Username = (Get-ItemProperty 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon').DefaultUserName
   $Password = (Get-ItemProperty 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon').DefaultPassword | ConvertTo-SecureString -AsPlainText -Force
   $Creds = New-Object System.Management.Automation.PSCredential ($Username, $Password)
 
   try {
     Write-Output "Creating PSSession to $PeerName using configuration '$RemotePSConfiguration'..."
-    $Session = New-PSSession -ComputerName $PeerName -Credential $Creds -ConfigurationName $RemotePSConfiguration -ErrorAction Stop
+    $s = New-PSSession -ComputerName $PeerName -Credential $Creds -ConfigurationName $RemotePSConfiguration -ErrorAction Stop
     Write-Output "Session created using configuration '$RemotePSConfiguration'."
   }
   catch {
     Write-Output "Failed to create session using configuration '$RemotePSConfiguration': $($_.Exception.Message)"
     Write-Output "Attempting fallback: creating session without ConfigurationName..."
     try {
-      $Session = New-PSSession -ComputerName $PeerName -Credential $Creds -ErrorAction Stop
+      $s = New-PSSession -ComputerName $PeerName -Credential $Creds -ErrorAction Stop
       Write-Output "Session created using default configuration."
     }
     catch {
@@ -313,9 +310,15 @@ try {
     }
   }
 
-  # Disable firewall locally and on remote (save previous states)
+  $script:Session = $s
+  return $s
+}
+
+function Save-And-Disable-Firewalls {
+  param([Parameter(Mandatory=$true)]$Session)
+
   Write-Output "Saving and disabling local firewall profiles..."
-  $localFwState = Get-NetFirewallProfile -Profile Domain, Public, Private | Select-Object Name, Enabled
+  $script:localFwState = Get-NetFirewallProfile -Profile Domain, Public, Private | Select-Object Name, Enabled
   Set-NetFirewallProfile -Profile Domain, Public, Private -Enabled False
 
   Write-Output "Disabling firewall on remote machine..."
@@ -325,115 +328,93 @@ try {
     Set-Variable -Name __SavedFirewallState -Value $fw -Scope Global -Force
     Set-NetFirewallProfile -Profile Domain, Public, Private -Enabled False
   } -ErrorAction Stop
+}
 
-  # Copy cts-traffic folder to remote machine
-  Copy-Item -ToSession $Session -Path (Resolve-Path .).Path -Destination "$RemoteDir\cts-traffic" -Recurse -Force
+function Copy-CtsTrafficToRemote {
+  param([Parameter(Mandatory=$true)]$Session)
+  Copy-Item -ToSession $Session -Path (Resolve-Path .).Path -Destination "$script:RemoteDir\cts-traffic" -Recurse -Force
+}
 
-  #
-  # === Send tests: remote receiver, local sender ===
-  #
-  $serverArgs = Parse-Args $ReceiverOptions
-  # Normalize server args: ensure each explicit option starts with '-'
-  $serverArgs = $serverArgs | ForEach-Object {
-    if ([string]::IsNullOrEmpty($_)) { $_ } else { if ($_ -like '-*') { $_ } else { '-' + $_ } }
-  }
+function Run-SendTest {
+  param(
+    [Parameter(Mandatory=$true)][string]$PeerName,
+    [Parameter(Mandatory=$true)]$Session,
+    [Parameter(Mandatory=$true)][string]$SenderOptions,
+    [Parameter(Mandatory=$true)][string]$ReceiverOptions
+  )
+
+  $serverArgs = Convert-ArgStringToArray $ReceiverOptions
+  # Normalize server args
+  $serverArgs = $serverArgs | ForEach-Object { if ([string]::IsNullOrEmpty($_)) { $_ } else { if ($_ -like '-*') { $_ } else { '-' + $_ } } }
   Write-Output "[Local->Remote] Invoking remote job with arguments:"
-  if ($serverArgs -is [System.Array]) {
-    foreach ($arg in $serverArgs) { Write-Output "  $arg" }
-  }
-  else {
-    Write-Output "  $serverArgs"
-  }
-  $Job = Invoke-CtsInSession -Session $Session -RemoteDir $RemoteDir -Options $serverArgs
+  if ($serverArgs -is [System.Array]) { foreach ($arg in $serverArgs) { Write-Output "  $arg" } } else { Write-Output "  $serverArgs" }
+  $Job = Invoke-CtsInSession -Session $Session -RemoteDir $script:RemoteDir -Options $serverArgs
 
-  $clientArgs = Parse-Args $SenderOptions
-
-  # Ensure local sender targets the remote receiver
-  $clientArgs = Ensure-TargetArg -ArgsArray $clientArgs -TargetName $PeerName
-
-  # Normalize args: ensure each explicit option starts with '-'
-  $clientArgs = $clientArgs | ForEach-Object {
-    if ([string]::IsNullOrEmpty($_)) { $_ } else {
-      if ($_ -like '-*') { $_ } else { '-' + $_ }
-    }
-  }
+  $clientArgs = Convert-ArgStringToArray $SenderOptions
+  $clientArgs = Set-TargetArg -ArgsArray $clientArgs -TargetName $PeerName
+  $clientArgs = $clientArgs | ForEach-Object { if ([string]::IsNullOrEmpty($_)) { $_ } else { if ($_ -like '-*') { $_ } else { '-' + $_ } } }
 
   Write-Output "[Local] Running: .\ctsTraffic.exe"
   Write-Output "[Local] Arguments:"
   foreach ($a in $clientArgs) { Write-Output "  $a" }
   Start-WprCpuProfile -Which 'send'
   & .\ctsTraffic.exe @clientArgs
-  $localExit = $LASTEXITCODE
+  $script:localExit = $LASTEXITCODE
   Stop-WprCpuProfile -Which 'send'
 
   Receive-JobOrThrow -Job $Job
 
-  # After send test: rename local send files with a local suffix and fetch remote recv files with remote suffix
+  # After send test: rename local send files and fetch remote recv files
   Rename-LocalIfExists -Path 'ctsTraffic_Errors_Send.log' -NewName 'ctsTraffic_Errors_Send_Local.log'
   Rename-LocalIfExists -Path 'ctsTrafficStatus_Send.csv' -NewName 'ctsTrafficStatus_Send_Local.csv'
   Rename-LocalIfExists -Path 'ctsTrafficConnections_Send.csv' -NewName 'ctsTrafficConnections_Send_Local.csv'
 
-  # Fetch the remote receiver (recv) logs and add a remote suffix
-  Copy-Item -FromSession $Session -Path "$RemoteDir\cts-traffic\ctsTraffic_Errors_Recv.log" -Destination 'ctsTraffic_Errors_Recv_Remote.log' -ErrorAction SilentlyContinue
-  Copy-Item -FromSession $Session -Path "$RemoteDir\cts-traffic\ctsTrafficStatus_Recv.csv" -Destination 'ctsTrafficStatus_Recv_Remote.csv' -ErrorAction SilentlyContinue
-  Copy-Item -FromSession $Session -Path "$RemoteDir\cts-traffic\ctsTrafficConnections_Recv.csv" -Destination 'ctsTrafficConnections_Recv_Remote.csv' -ErrorAction SilentlyContinue
+  Copy-Item -FromSession $Session -Path "$script:RemoteDir\cts-traffic\ctsTraffic_Errors_Recv.log" -Destination 'ctsTraffic_Errors_Recv_Remote.log' -ErrorAction SilentlyContinue
+  Copy-Item -FromSession $Session -Path "$script:RemoteDir\cts-traffic\ctsTrafficStatus_Recv.csv" -Destination 'ctsTrafficStatus_Recv_Remote.csv' -ErrorAction SilentlyContinue
+  Copy-Item -FromSession $Session -Path "$script:RemoteDir\cts-traffic\ctsTrafficConnections_Recv.csv" -Destination 'ctsTrafficConnections_Recv_Remote.csv' -ErrorAction SilentlyContinue
+}
 
-  #
-  # === Recv tests: remote sender, local receiver ===
-  #
-  $serverArgs = Parse-Args $SenderOptions
-  # When the remote is the sender, ensure it targets the local machine (receiver)
-  $serverArgs = Ensure-TargetArg -ArgsArray $serverArgs -TargetName $PeerName
-  # Normalize server args: ensure each explicit option starts with '-'
-  $serverArgs = $serverArgs | ForEach-Object {
-    if ([string]::IsNullOrEmpty($_)) { $_ } else { if ($_ -like '-*') { $_ } else { '-' + $_ } }
-  }
+function Run-RecvTest {
+  param(
+    [Parameter(Mandatory=$true)][string]$PeerName,
+    [Parameter(Mandatory=$true)]$Session,
+    [Parameter(Mandatory=$true)][string]$SenderOptions,
+    [Parameter(Mandatory=$true)][string]$ReceiverOptions
+  )
+
+  $serverArgs = Convert-ArgStringToArray $SenderOptions
+  $serverArgs = Set-TargetArg -ArgsArray $serverArgs -TargetName $PeerName
+  $serverArgs = $serverArgs | ForEach-Object { if ([string]::IsNullOrEmpty($_)) { $_ } else { if ($_ -like '-*') { $_ } else { '-' + $_ } } }
   Write-Output "[Local->Remote] Invoking remote job with arguments:"
-  if ($serverArgs -is [System.Array]) {
-    foreach ($arg in $serverArgs) { Write-Output "  $arg" }
-  }
-  else {
-    Write-Output "  $serverArgs"
-  }
-  $Job = Invoke-CtsInSession -Session $Session -RemoteDir $RemoteDir -Options $serverArgs
+  if ($serverArgs -is [System.Array]) { foreach ($arg in $serverArgs) { Write-Output "  $arg" } } else { Write-Output "  $serverArgs" }
+  $Job = Invoke-CtsInSession -Session $Session -RemoteDir $script:RemoteDir -Options $serverArgs
 
-  $clientArgs = Parse-Args $ReceiverOptions
-  # Normalize recv args as well
-  $clientArgs = $clientArgs | ForEach-Object {
-    if ([string]::IsNullOrEmpty($_)) { $_ } else {
-      if ($_ -like '-*') { $_ } else { '-' + $_ }
-    }
-  }
+  $clientArgs = Convert-ArgStringToArray $ReceiverOptions
+  $clientArgs = $clientArgs | ForEach-Object { if ([string]::IsNullOrEmpty($_)) { $_ } else { if ($_ -like '-*') { $_ } else { '-' + $_ } } }
 
   Write-Output "[Local] Running: .\ctsTraffic.exe"
   Write-Output "[Local] Arguments:"
   foreach ($a in $clientArgs) { Write-Output "  $a" }
   Start-WprCpuProfile -Which 'recv'
   & .\ctsTraffic.exe @clientArgs
-  $localExit = $LASTEXITCODE
+  $script:localExit = $LASTEXITCODE
   Stop-WprCpuProfile -Which 'recv'
 
   Receive-JobOrThrow -Job $Job
-  # After recv test: rename local recv files with a local suffix and fetch remote send files with remote suffix
+
+  # After recv test: rename local recv files and fetch remote send files
   Rename-LocalIfExists -Path 'ctsTraffic_Errors_Recv.log' -NewName 'ctsTraffic_Errors_Recv_Local.log'
   Rename-LocalIfExists -Path 'ctsTrafficStatus_Recv.csv' -NewName 'ctsTrafficStatus_Recv_Local.csv'
   Rename-LocalIfExists -Path 'ctsTrafficConnections_Recv.csv' -NewName 'ctsTrafficConnections_Recv_Local.csv'
 
-  # Fetch the remote sender (send) logs and add a remote suffix
-  Copy-Item -FromSession $Session -Path "$RemoteDir\cts-traffic\ctsTraffic_Errors_Send.log" -Destination 'ctsTraffic_Errors_Send_Remote.log' -ErrorAction SilentlyContinue
-  Copy-Item -FromSession $Session -Path "$RemoteDir\cts-traffic\ctsTrafficStatus_Send.csv" -Destination 'ctsTrafficStatus_Send_Remote.csv' -ErrorAction SilentlyContinue
-  Copy-Item -FromSession $Session -Path "$RemoteDir\cts-traffic\ctsTrafficConnections_Send.csv" -Destination 'ctsTrafficConnections_Send_Remote.csv' -ErrorAction SilentlyContinue
+  Copy-Item -FromSession $Session -Path "$script:RemoteDir\cts-traffic\ctsTraffic_Errors_Send.log" -Destination 'ctsTraffic_Errors_Send_Remote.log' -ErrorAction SilentlyContinue
+  Copy-Item -FromSession $Session -Path "$script:RemoteDir\cts-traffic\ctsTrafficStatus_Send.csv" -Destination 'ctsTrafficStatus_Send_Remote.csv' -ErrorAction SilentlyContinue
+  Copy-Item -FromSession $Session -Path "$script:RemoteDir\cts-traffic\ctsTrafficConnections_Send.csv" -Destination 'ctsTrafficConnections_Send_Remote.csv' -ErrorAction SilentlyContinue
+}
 
-  Write-Output "cts-traffic tests completed successfully."
-}
-catch {
-  # $_ is an ErrorRecord; print everything useful
-  Write-Output "cts-traffic tests failed."
-  Write-Output $_
-  $exitCode = 2
-}
-finally {
-  # Restore firewall state on remote and local if we changed it
+function Restore-FirewallAndCleanup {
+  param([object]$Session)
+
   try {
     if ($null -ne $Session) {
       try {
@@ -473,10 +454,47 @@ finally {
       Set-NetFirewallProfile -Profile Domain, Public, Private -Enabled True
     }
   }
-  finally {
+  catch {
+    $_ | Write-DetailedError
+  }
+}
+
+# =========================
+# Main workflow
+# =========================
+$Workspace = $env:GITHUB_WORKSPACE
+Write-Output "Workspace: $Workspace"
+
+try {
+  if (-not $Workspace) { throw 'GITHUB_WORKSPACE is not set' }
+  Set-Location (Join-Path $Workspace 'cts-traffic')
+
+  # Create remote session
+  $Session = Create-Session -PeerName $PeerName -RemotePSConfiguration 'PowerShell.7'
+
+  # Save and disable firewalls
+  Save-And-Disable-Firewalls -Session $Session
+
+  # Copy cts-traffic to remote
+  Copy-CtsTrafficToRemote -Session $Session
+
+  # Run tests
+  Run-SendTest -PeerName $PeerName -Session $Session -SenderOptions $SenderOptions -ReceiverOptions $ReceiverOptions
+  Run-RecvTest -PeerName $PeerName -Session $Session -SenderOptions $SenderOptions -ReceiverOptions $ReceiverOptions
+
+  Write-Output "cts-traffic tests completed successfully."
+}
+catch {
+  # $_ is an ErrorRecord; print everything useful
+  Write-Output "cts-traffic tests failed."
+  Write-Output $_
+  $exitCode = 2
+}
+finally {
+    # Use refactored cleanup function
+    Restore-FirewallAndCleanup -Session $Session
     Write-Output "Exiting with code $exitCode"
     exit $exitCode
-  }
 }
 
 <#
