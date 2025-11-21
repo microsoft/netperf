@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<WindowsPerformanceRecorder Version="1.0">
+  <Profiles>
+    <Profile Name="CPU Snapshot" Description="Lightweight CPU sampling" LoggingMode="File" MaxFileSize="1024MB">
+      <Collectors>
+        <EventCollector Id="CPUCollector" Name="CPUCollector">
+          <BufferSize Value="256" />
+          <Buffers Value="64" />
+        </EventCollector>
+      </Collectors>
+      <Providers>
+        <!-- CPU Sampling -->
+        <Provider Id="CPU" Name="Microsoft-Windows-Kernel-Processor-Power" Level="Light" />
+        <Provider Id="Stack" Name="Microsoft-Windows-Kernel-Stack" Level="Light" />
+      </Providers>
+    </Profile>
+  </Profiles>
+</WindowsPerformanceRecorder>
