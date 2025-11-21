@@ -149,4 +149,4 @@ jobs:
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
       with:
         name: cpu_profile_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
-        path: ${{ github.workspace }}\cts-traffic\ETL\cpu_profile-*.etl
+        path: ${{ github.workspace }}\ETL\cpu_profile-*.etl
