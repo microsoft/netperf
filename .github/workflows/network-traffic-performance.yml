@@ -89,6 +89,15 @@ jobs:
       run: |
         Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/scripts/run-traffic-test.ps1" -OutFile ".\run-traffic-test.ps1"
 
+    - name: Log all input parameters for this workflow
+      run: |
+        Write-Output "Input parameters:"
+        Write-Output "  Profile: ${{ inputs.profile }}"
+        Write-Output "  SenderOptions: ${{ inputs.sender_options }}"
+        Write-Output "  ReceiverOptions: ${{ inputs.receiver_options }}"
+        Write-Output "  TCP IP Tracing: ${{ inputs.tcp_ip_tracing }}"
+        Write-Output "  ref: ${{ inputs.ref }}"
+
     - name: Run traffic tests
       working-directory: ${{ github.workspace }}\cts-traffic
       env:
@@ -96,7 +105,23 @@ jobs:
         SENDER_OPTIONS: ${{ inputs.sender_options }}
         RECEIVER_OPTIONS: ${{ inputs.receiver_options }}
       shell: pwsh
-      run: .\\run-traffic-test.ps1 ${{ inputs.profile == 'true' && '-Profile' || '' }} -PeerName "netperf-peer" -SenderOptions "${{ inputs.sender_options }}" -ReceiverOptions "${{ inputs.receiver_options }}"
+      run: |
+        # Build the command and only include -CpuProfile when PROFILE is truthy ('true' or true)
+        $cpuSwitch = ''
+        if ($env:PROFILE -eq 'true' -or $env:PROFILE -eq 'True' -or $env:PROFILE -eq 'TRUE' -or $env:PROFILE -eq $true) {
+          $cpuSwitch = '-CpuProfile'
+        }
+
+        $cmd = @(
+          '.\\run-traffic-test.ps1',
+          $cpuSwitch,
+          '-PeerName', '"netperf-peer"',
+          '-SenderOptions', '"' + $env:SENDER_OPTIONS + '"',
+          '-ReceiverOptions', '"' + $env:RECEIVER_OPTIONS + '"'
+        ) -join ' '
+
+        Write-Output "Running: $cmd"
+        Invoke-Expression $cmd
 
     - name: Optional - Stop TCPIP tracing
       if: ${{ github.event.inputs.tcp_ip_tracing == 'true' }}
@@ -113,7 +138,15 @@ jobs:
           ${{ github.workspace }}\cts-traffic\*.log
 
     - name: Upload TCPIP ETL
-      if: ${{ github.event.inputs.tcp_ip_tracing == 'true' && always() }}
+      if: always()
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
       with:
         name: tcpip_trace_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        path: ${{ github.workspace }}\ETL\tcpip_trace.etl
+
+    - name: Upload CPU Profile
+      if:  always()
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      with:
+        name: cpu_profile_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        path: ${{ github.workspace }}\ETL\cpu_profile-*.etl
