@@ -27,6 +27,11 @@ on:
         description: 'Command-line options for the receiver (quoted string)'
         required: true
         type: string
+      cts_traffic_ref:
+        description: 'Branch or ref to build cts-traffic from (repo: microsoft/ctsTraffic)'
+        required: false
+        default: 'master'
+        type: string
 
 concurrency:
   group: >-
@@ -41,7 +46,7 @@ jobs:
       build_artifact: cts-traffic
       repository: 'microsoft/ctsTraffic'
       configurations: '["Release"]'
-      ref: 'master'
+      ref: ${{ inputs.cts_traffic_ref }}
 
   test:
     name: Network Traffic Test
