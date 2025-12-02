@@ -169,10 +169,10 @@ jobs:
   build_echo_test:
     if: ${{ inputs.test_tool == 'echo' }}
     name: Build echo server
-    uses: alan-jowett/scalable_echo_server_demo/.github/workflows/reusable-build.yml@main
+    uses: alan-jowett/WinUDPShardedEcho/.github/workflows/reusable-build.yml@main
     with:
       artifact_name: echo_test
-      repository: 'alan-jowett/scalable_echo_server_demo'
+      repository: 'alan-jowett/WinUDPShardedEcho'
 
   test_echo_server:
     if: ${{ inputs.test_tool == 'echo' }}
