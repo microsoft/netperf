@@ -217,7 +217,7 @@ jobs:
             Write-Host "Session: $($session.Name)"
             Write-Host "-----------------------------------"
             # Query providers for this session using logman
-            $providers = logman query $session.Name -ets | Select-String "GUID" -Context 0,1
+            $providers = logman query $session.Name -ets
             if ($providers) {
                 $providers | ForEach-Object {
                     Write-Host $_.Line
