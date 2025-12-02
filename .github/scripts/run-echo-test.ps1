@@ -555,7 +555,7 @@ Write-Host "Workspace: $Workspace"
 
 try {
   if (-not $Workspace) { throw 'GITHUB_WORKSPACE is not set' }
-  Set-Location (Join-Path $Workspace 'echo')
+  Set-Location ($Workspace)
 
   # Create remote session
   $Session = Create-Session -PeerName $PeerName -RemotePSConfiguration 'PowerShell.7'
