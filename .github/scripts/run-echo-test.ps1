@@ -151,7 +151,7 @@ function Start-WprCpuProfile {
 
   if (-not $CpuProfile) { return }
 
-  if (-not $Workspace) { $Workspace = $env:GITHUB_WORKSPACE }
+  $Workspace = $env:GITHUB_WORKSPACE
   $etlDir = Join-Path $Workspace 'ETL'
   if (-not (Test-Path $etlDir)) { New-Item -ItemType Directory -Path $etlDir | Out-Null }
 
@@ -544,7 +544,6 @@ try {
   
   # Print the current working directory
   $cwd = (Get-Location).Path
-  $Workspace = $env:GITHUB_WORKSPACE
   Write-Host "Current working directory: $cwd"
 
   # Create remote session
