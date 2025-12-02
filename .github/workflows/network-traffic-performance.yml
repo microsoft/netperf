@@ -173,6 +173,7 @@ jobs:
     with:
       artifact_name: echo_test
       repository: 'alan-jowett/WinUDPShardedEcho'
+      config: 'RelWithDebInfo'
 
   test_echo_server:
     if: ${{ inputs.test_tool == 'echo' }}
@@ -200,7 +201,7 @@ jobs:
         Get-ChildItem  | % { Remove-Item -Recurse $_ -Force -ErrorAction SilentlyContinue }
         if (Test-Path ${{ github.workspace }}\echo) { Remove-Item -Recurse -Force ${{ github.workspace }}\echo }
         if (Test-Path ${{ github.workspace }}\ETL) { Remove-Item -Recurse -Force ${{ github.workspace }}\ETL }
-        New-Item -ItemType Directory -Path ${{ github.workspace }}\echo\release
+        New-Item -ItemType Directory -Path ${{ github.workspace }}\echo\RelWithDebInfo
         New-Item -ItemType Directory -Path ${{ github.workspace }}\ETL
 
     - name: Download echo test tool
@@ -222,7 +223,7 @@ jobs:
         Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/scripts/cpu.wprp" -OutFile "${{ github.workspace }}\ETL\cpu.wprp" 
 
     - name: Download run-echo-test script
-      working-directory: ${{ github.workspace }}\echo\release
+      working-directory: ${{ github.workspace }}\echo\RelWithDebInfo
       run: |
         Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/scripts/run-echo-test.ps1" -OutFile ".\run-echo-test.ps1"
 
@@ -235,13 +236,13 @@ jobs:
         Write-Output "  TCP IP Tracing: ${{ inputs.tcp_ip_tracing }}"
         Write-Output "  ref: ${{ inputs.ref }}"
 
-    - name: Diagonstic - List files in echo release directory
+    - name: Diagonstic - List files in echo RelWithDebInfo directory
       run: |
-        Write-Output "Files in echo release directory:"
-        Get-ChildItem -Path ${{ github.workspace }}\echo\release -Recurse
+        Write-Output "Files in echo RelWithDebInfo directory:"
+        Get-ChildItem -Path ${{ github.workspace }}\echo\RelWithDebInfo -Recurse
 
     - name: Run traffic tests
-      working-directory: ${{ github.workspace }}\echo\release
+      working-directory: ${{ github.workspace }}\echo\RelWithDebInfo
       env:
         PROFILE: ${{ inputs.profile }}
         SENDER_OPTIONS: ${{ inputs.sender_options }}
