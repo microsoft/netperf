@@ -231,7 +231,7 @@ jobs:
         Write-Output "  ref: ${{ inputs.ref }}"
 
     - name: Run traffic tests
-      working-directory: ${{ github.workspace }}\echo
+      working-directory: ${{ github.workspace }}\echo\release
       env:
         PROFILE: ${{ inputs.profile }}
         SENDER_OPTIONS: ${{ inputs.sender_options }}
