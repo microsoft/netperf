@@ -550,12 +550,10 @@ function Restore-FirewallAndCleanup {
 # =========================
 # Main workflow
 # =========================
-$Workspace = $env:GITHUB_WORKSPACE
-Write-Host "Workspace: $Workspace"
-
 try {
-  if (-not $Workspace) { throw 'GITHUB_WORKSPACE is not set' }
-  Set-Location ($Workspace)
+  # Print the current working directory
+  $cwd = (Get-Location).Path
+  Write-Host "Current working directory: $cwd"
 
   # Create remote session
   $Session = Create-Session -PeerName $PeerName -RemotePSConfiguration 'PowerShell.7'
