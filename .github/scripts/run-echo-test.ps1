@@ -180,7 +180,7 @@ function Start-WprCpuProfile {
     }
 
     try {
-      & wpr -start CPU -filemode | Out-Null
+      & wpr -start CPU.wprp -filemode | Out-Null
     }
     catch {
       Write-Host "wpr -start with custom profile failed: $($_.Exception.Message). Falling back to built-in CPU profile."

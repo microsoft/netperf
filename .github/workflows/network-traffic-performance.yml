@@ -216,6 +216,11 @@ jobs:
         Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
         wpr -start tcpip.wprp -filemode
 
+    - name: Download modified CPU profile script
+      working-directory: ${{ github.workspace }}\ETL
+      run: |
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/scripts/CPU.wprp" -OutFile ".\cpu.wprp" 
+
     - name: Download run-echo-test script
       working-directory: ${{ github.workspace }}\echo\release
       run: |
