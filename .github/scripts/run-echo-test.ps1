@@ -155,6 +155,8 @@ function Start-WprCpuProfile {
   $etlDir = Join-Path $Workspace 'ETL'
   if (-not (Test-Path $etlDir)) { New-Item -ItemType Directory -Path $etlDir | Out-Null }
 
+  $WprProfile = Join-Path $etlDir 'cpu.wprp'
+
   $outFile = Join-Path $etlDir ("cpu_profile-$Which.etl")
   if (Test-Path $outFile) { Remove-Item $outFile -Force -ErrorAction SilentlyContinue }
 
@@ -180,7 +182,7 @@ function Start-WprCpuProfile {
     }
 
     try {
-      & wpr -start CPU.wprp -filemode | Out-Null
+      & wpr -start $WprProfile -filemode | Out-Null
     }
     catch {
       Write-Host "wpr -start with custom profile failed: $($_.Exception.Message). Falling back to built-in CPU profile."
