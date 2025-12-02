@@ -541,8 +541,10 @@ function Restore-FirewallAndCleanup {
 # Main workflow
 # =========================
 try {
+  
   # Print the current working directory
   $cwd = (Get-Location).Path
+  $Workspace = $env:GITHUB_WORKSPACE
   Write-Host "Current working directory: $cwd"
 
   # Create remote session
