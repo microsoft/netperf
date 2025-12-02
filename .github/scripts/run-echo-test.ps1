@@ -229,10 +229,10 @@ function Stop-WprCpuProfile {
 # Remote job helpers
 # =========================
 function Invoke-EchoInSession {
-  param($Session, $RemoteDir, $Name, $Options, $StartDelay, [int]$WaitSeconds = 0)
+  param($Session, $RemoteDir, $Name, $Options, [int]$WaitSeconds = 0)
 
   $Job = Invoke-Command -Session $Session -ScriptBlock {
-    param($RemoteDir, $Name, $Options, $StartDelay, $WaitSeconds)
+    param($RemoteDir, $Name, $Options, $WaitSeconds)
 
     Set-Location (Join-Path $RemoteDir 'echo')
 
@@ -250,12 +250,6 @@ function Invoke-EchoInSession {
       if (-not [string]::IsNullOrEmpty($Options)) { $argList = @($Options) }
     }
     
-    # If StartDelay is set, wait 10 seconds before starting.
-    if ($StartDelay) {
-      Write-Host "[Remote] StartDelay is set; waiting 10 seconds before starting $Name.exe..."
-      Start-Sleep -Seconds 10
-    }
-
     try {
       $proc = Start-Process -FilePath $Tool -ArgumentList $argList -NoNewWindow -PassThru -ErrorAction Stop
       Write-Host "[Remote] Started process Id=$($proc.Id)"
@@ -281,7 +275,7 @@ function Invoke-EchoInSession {
     catch {
       throw "Failed to launch or monitor process $Tool $($_.Exception.Message)"
     }
-  } -ArgumentList $RemoteDir, $Name, $Options, $StartDelay, $WaitSeconds -AsJob -ErrorAction Stop
+  } -ArgumentList $RemoteDir, $Name, $Options, $WaitSeconds -AsJob -ErrorAction Stop
 
   return $Job
 }
@@ -456,10 +450,6 @@ function Run-SendTest {
   $clientArgs = Set-TargetArg -ArgsArray $clientArgs -TargetName $PeerName
   $clientArgs = Normalize-Args -Tokens $clientArgs
 
-  # Delay 10 seconds to allow remote server to start before client connects
-  Write-Host "[Local] Waiting 10 seconds before starting send test to allow remote receiver to initialize..."
-  Start-Sleep -Seconds 10
-
   Write-Host "[Local] Running: .\echo_client.exe"
   Write-Host "[Local] Arguments:"
   foreach ($a in $clientArgs) { Write-Host "  $a" }
@@ -484,7 +474,7 @@ function Run-RecvTest {
   $serverArgs = Normalize-Args -Tokens $serverArgs
   Write-Host "[Local->Remote] Invoking remote job with arguments:"
   if ($serverArgs -is [System.Array]) { foreach ($arg in $serverArgs) { Write-Host "  $arg" } } else { Write-Host "  $serverArgs" }
-  $Job = Invoke-EchoInSession -Session $Session -RemoteDir $script:RemoteDir -Name "echo_client" -Options $serverArgs -StartDelay $true -WaitSeconds 20
+  $Job = Invoke-EchoInSession -Session $Session -RemoteDir $script:RemoteDir -Name "echo_client" -Options $serverArgs -WaitSeconds 20
 
   $clientArgs = Convert-ArgStringToArray $ReceiverOptions
   $clientArgs = Normalize-Args -Tokens $clientArgs
