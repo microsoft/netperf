@@ -253,25 +253,61 @@ function Invoke-EchoInSession {
     }
     
     try {
-      $proc = Start-Process -FilePath $Tool -ArgumentList $argList -NoNewWindow -PassThru -ErrorAction Stop
-      Write-Host "[Remote] Started process Id=$($proc.Id)"
-
+      # Invoke the tool directly. When a timeout is requested, run the invocation
+      # inside a PowerShell background job so we can enforce a timeout and cancel
+      # the job (and any matching process) if it doesn't finish in time.
       if ($WaitSeconds -and $WaitSeconds -gt 0) {
-        # Wait for exit with timeout (milliseconds)
-        $ms = [int]($WaitSeconds * 1000)
-        Write-Host "[Remote] Waiting up to $WaitSeconds seconds for process to exit..."
-        $exited = $proc.WaitForExit($ms)
-        if (-not $exited) {
-          Write-Host "[Remote] Process did not exit within timeout; killing process Id=$($proc.Id)"
-          try { $proc | Stop-Process -Force -ErrorAction SilentlyContinue } catch { }
+        Write-Host "[Remote] Starting tool as background job for timeout control..."
+        $jobScript = {
+          param($ToolPath, $ArgList)
+          if ($ArgList -is [System.Array]) {
+            & $ToolPath @ArgList
+          }
+          elseif (-not [string]::IsNullOrEmpty($ArgList)) {
+            & $ToolPath $ArgList
+          }
+          else {
+            & $ToolPath
+          }
+          return $LASTEXITCODE
+        }
+
+        $j = Start-Job -ScriptBlock $jobScript -ArgumentList $Tool, $argList -ErrorAction Stop
+        Write-Host "[Remote] Started job Id=$($j.Id)"
+
+        # Wait-Job uses seconds for timeout
+        $waitSec = [int]$WaitSeconds
+        $completed = $j | Wait-Job -Timeout $waitSec
+        if (-not $completed) {
+          Write-Host "[Remote] Process did not exit within timeout; stopping job and attempting to kill matching process(es)"
+          try {
+            $j | Stop-Job -Force -ErrorAction SilentlyContinue
+          } catch { }
+
+          try {
+            $pname = [System.IO.Path]::GetFileNameWithoutExtension($Tool)
+            $procs = Get-Process -Name $pname -ErrorAction SilentlyContinue
+            foreach ($p in $procs) {
+              try { $p | Stop-Process -Force -ErrorAction SilentlyContinue } catch { }
+            }
+          } catch { }
+
+          throw "Remote $Tool did not exit within timeout"
         }
         else {
-          Write-Host "[Remote] Process exited with code $($proc.ExitCode)"
-          if ($proc.ExitCode -ne 0) { throw "Remote $Tool.exe exited with code $($proc.ExitCode)" }
+          $output = Receive-Job $j -Keep
+          # The job returns the tool's exit code as the last object
+          $rc = $output | Where-Object { ($_ -is [int]) -or ($_ -match '^[0-9]+$') } | Select-Object -Last 1
+          if ($rc -eq $null) { $rc = 0 }
+          Write-Host "[Remote] Process (job) exited with code $rc"
+          if ($rc -ne 0) { throw "Remote $Tool.exe exited with code $rc" }
         }
       }
       else {
-        Write-Host "[Remote] Not waiting for process to exit (no timeout configured)"
+        Write-Host "[Remote] Running tool in foreground (no timeout)..."
+        if ($argList -is [System.Array]) { & $Tool @argList } elseif (-not [string]::IsNullOrEmpty($argList)) { & $Tool $argList } else { & $Tool }
+        Write-Host "[Remote] Process exited with code $LASTEXITCODE"
+        if ($LASTEXITCODE -ne 0) { throw "Remote $Tool.exe exited with code $LASTEXITCODE" }
       }
     }
     catch {
