@@ -231,7 +231,7 @@ function Stop-WprCpuProfile {
 # Remote job helpers
 # =========================
 function Invoke-EchoInSession {
-  param($Session, $RemoteDir, $Name, $Options, [int]$WaitSeconds = 0)
+  param($Session, $RemoteDir, $Name, $Options)
 
   $Job = Invoke-Command -Session $Session -ScriptBlock {
     param($RemoteDir, $Name, $Options, $WaitSeconds)
@@ -276,32 +276,13 @@ function Invoke-EchoInSession {
         Write-Host "[Remote] Started job Id=$($j.Id)"
 
         # Wait-Job uses seconds for timeout
-        $waitSec = [int]$WaitSeconds
-        $completed = $j | Wait-Job -Timeout $waitSec
-        if (-not $completed) {
-          Write-Host "[Remote] Process did not exit within timeout; stopping job and attempting to kill matching process(es)"
-          try {
-            $j | Stop-Job -Force -ErrorAction SilentlyContinue
-          } catch { }
-
-          try {
-            $pname = [System.IO.Path]::GetFileNameWithoutExtension($Tool)
-            $procs = Get-Process -Name $pname -ErrorAction SilentlyContinue
-            foreach ($p in $procs) {
-              try { $p | Stop-Process -Force -ErrorAction SilentlyContinue } catch { }
-            }
-          } catch { }
-
-          throw "Remote $Tool did not exit within timeout"
-        }
-        else {
-          $output = Receive-Job $j -Keep
-          # The job returns the tool's exit code as the last object
-          $rc = $output | Where-Object { ($_ -is [int]) -or ($_ -match '^[0-9]+$') } | Select-Object -Last 1
-          if ($rc -eq $null) { $rc = 0 }
-          Write-Host "[Remote] Process (job) exited with code $rc"
-          if ($rc -ne 0) { throw "Remote $Tool.exe exited with code $rc" }
-        }
+        $completed = $j | Wait-Job 
+        $output = Receive-Job $j -Keep
+        # The job returns the tool's exit code as the last object
+        $rc = $output | Where-Object { ($_ -is [int]) -or ($_ -match '^[0-9]+$') } | Select-Object -Last 1
+        if ($rc -eq $null) { $rc = 0 }
+        Write-Host "[Remote] Process (job) exited with code $rc"
+        if ($rc -ne 0) { throw "Remote $Tool.exe exited with code $rc" }
       }
       else {
         Write-Host "[Remote] Running tool in foreground (no timeout)..."
@@ -313,7 +294,7 @@ function Invoke-EchoInSession {
     catch {
       throw "Failed to launch or monitor process $Tool $($_.Exception.Message)"
     }
-  } -ArgumentList $RemoteDir, $Name, $Options, $WaitSeconds -AsJob -ErrorAction Stop
+  } -ArgumentList $RemoteDir, $Name, $Options -AsJob -ErrorAction Stop
 
   return $Job
 }
@@ -482,7 +463,7 @@ function Run-SendTest {
   $serverArgs = Normalize-Args -Tokens $serverArgs
   Write-Host "[Local->Remote] Invoking remote job with arguments:"
   if ($serverArgs -is [System.Array]) { foreach ($arg in $serverArgs) { Write-Host "  $arg" } } else { Write-Host "  $serverArgs" }
-  $Job = Invoke-EchoInSession -Session $Session -RemoteDir $script:RemoteDir -Name "echo_server" -Options $serverArgs -WaitSeconds 20
+  $Job = Invoke-EchoInSession -Session $Session -RemoteDir $script:RemoteDir -Name "echo_server" -Options $serverArgs
 
   $clientArgs = Convert-ArgStringToArray $SenderOptions
   $clientArgs = Set-TargetArg -ArgsArray $clientArgs -TargetName $PeerName
@@ -512,7 +493,7 @@ function Run-RecvTest {
   $serverArgs = Normalize-Args -Tokens $serverArgs
   Write-Host "[Local->Remote] Invoking remote job with arguments:"
   if ($serverArgs -is [System.Array]) { foreach ($arg in $serverArgs) { Write-Host "  $arg" } } else { Write-Host "  $serverArgs" }
-  $Job = Invoke-EchoInSession -Session $Session -RemoteDir $script:RemoteDir -Name "echo_client" -Options $serverArgs -WaitSeconds 20
+  $Job = Invoke-EchoInSession -Session $Session -RemoteDir $script:RemoteDir -Name "echo_client" -Options $serverArgs
 
   $clientArgs = Convert-ArgStringToArray $ReceiverOptions
   $clientArgs = Normalize-Args -Tokens $clientArgs
