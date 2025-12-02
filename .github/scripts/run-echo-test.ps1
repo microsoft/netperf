@@ -52,25 +52,6 @@ function Convert-ArgStringToArray($s) {
   return $out
 }
 
-# Ensure an args array contains a '-target:<name>' entry; replace if present, append if missing
-function Set-TargetArg {
-  param(
-    [Parameter(Mandatory = $true)] $ArgsArray,
-    [Parameter(Mandatory = $true)] [string] $TargetName
-  )
-  if ($null -eq $ArgsArray) { $ArgsArray = @() }
-  $found = $false
-  for ($i = 0; $i -lt $ArgsArray.Count; $i++) {
-    if ($ArgsArray[$i] -match '^-target:' ) {
-      $ArgsArray[$i] = "-target:$TargetName"
-      $found = $true
-      break
-    }
-  }
-  if (-not $found) { $ArgsArray += "-target:$TargetName" }
-  return $ArgsArray
-}
-
 # Normalize tokens: prefix '-' only for standalone tokens that don't look like values
 function Normalize-Args {
   param([Parameter(Mandatory=$true)][object[]]$Tokens)
@@ -466,7 +447,6 @@ function Run-SendTest {
   $Job = Invoke-EchoInSession -Session $Session -RemoteDir $script:RemoteDir -Name "echo_server" -Options $serverArgs
 
   $clientArgs = Convert-ArgStringToArray $SenderOptions
-  $clientArgs = Set-TargetArg -ArgsArray $clientArgs -TargetName $PeerName
   $clientArgs = Normalize-Args -Tokens $clientArgs
 
   Write-Host "[Local] Running: .\echo_client.exe"
@@ -489,7 +469,6 @@ function Run-RecvTest {
   )
 
   $serverArgs = Convert-ArgStringToArray $SenderOptions
-  $serverArgs = Set-TargetArg -ArgsArray $serverArgs -TargetName $PeerName
   $serverArgs = Normalize-Args -Tokens $serverArgs
   Write-Host "[Local->Remote] Invoking remote job with arguments:"
   if ($serverArgs -is [System.Array]) { foreach ($arg in $serverArgs) { Write-Host "  $arg" } } else { Write-Host "  $serverArgs" }
