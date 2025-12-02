@@ -230,6 +230,11 @@ jobs:
         Write-Output "  TCP IP Tracing: ${{ inputs.tcp_ip_tracing }}"
         Write-Output "  ref: ${{ inputs.ref }}"
 
+    - name: Diagonstic - List files in echo release directory
+      run: |
+        Write-Output "Files in echo release directory:"
+        Get-ChildItem -Path ${{ github.workspace }}\echo\release -Recurse
+
     - name: Run traffic tests
       working-directory: ${{ github.workspace }}\echo\release
       env:
