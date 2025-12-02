@@ -209,6 +209,25 @@ jobs:
         name: "echo_test"
         path: ${{ github.workspace }}\echo
 
+    - name: List ETW sessions with providers
+      run: |
+        # Enumerate all ETW sessions and their providers
+        $Sessions = Get-EtwTraceSession -Name *
+        foreach ($session in $Sessions) {
+            Write-Host "Session: $($session.Name)"
+            Write-Host "-----------------------------------"
+            # Query providers for this session using logman
+            $providers = logman query $session.Name -ets | Select-String "GUID" -Context 0,1
+            if ($providers) {
+                $providers | ForEach-Object {
+                    Write-Host $_.Line
+                }
+            } else {
+                Write-Host "No providers found."
+            }
+            Write-Host "`n"
+        }
+
     - name: Optional - Start TCPIP tracing
       if: ${{ github.event.inputs.tcp_ip_tracing == 'true' }}
       run: |-

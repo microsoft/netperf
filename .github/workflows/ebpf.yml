@@ -226,11 +226,7 @@ jobs:
       with:
         name: "cts-traffic Release"
         path: ${{ github.workspace }}\cts-traffic
-
-    - name: Cancel any existing WPR traces
-      run: |
-        wpr -cancel 2>$null; $global:LASTEXITCODE = 0
-
+    
     - name: Start TCPIP tracing - Baseline
       if: ${{ github.event.inputs.tcp_ip_tracing }}
       run: |
