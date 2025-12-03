@@ -262,7 +262,7 @@ function Set-RssSettings {
 
         Write-Host "Setting RSS to use CPUs 0..$useMax in group $useGroup"
         try {
-            Set-NetAdapterRss -Name $ReachableNIC -BaseProcessorGroup $useGroup -MaxProcessorNumber $useMax -MaxProcessors $CpuCount -Profile NUMAStatic  -ErrorAction Stop
+            Set-NetAdapterRss -Name $ReachableNIC -BaseProcessorGroup $useGroup -MaxProcessorNumber $useMax -MaxProcessors ($useMax+1) -Profile NUMAStatic  -ErrorAction Stop
         } catch {
             Write-Host "Failed to set RSS on '$ReachableNIC': $($_.Exception.Message)"
             return
