@@ -341,6 +341,13 @@ jobs:
         name: cpu_profile_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: ${{ github.workspace }}\ETL\cpu_profile-*.etl
 
+    - name: Upload PktMon Drop ETL
+      if:  always()
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      with:
+        name: pktmon_drop_trace_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        path: ${{ github.workspace }}\ETL\pktmon_drop_trace.etl
+
     - name: Upload Crash Dumps
       if:  always()
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882

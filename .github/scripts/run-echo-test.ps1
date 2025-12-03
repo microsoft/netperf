@@ -746,6 +746,9 @@ try {
   $perfResults = Receive-Job -Job $perfCounterJob -Wait -AutoRemoveJob
   $perfJsonPath = Join-Path $cwd 'echo_server_perf_counters.json'
 
+  # Copy the stats file to the parent folder for GitHub Actions artifact upload
+  Copy-Item -Path *.json -Destination $cwd\.. -Force
+
   Write-Host "echo tests completed successfully."
 }
 catch {
