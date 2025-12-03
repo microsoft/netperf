@@ -649,6 +649,9 @@ try {
       $i++
       Write-Host "CPU$i $([math]::Round([double]$val, 2)) %"
     }
+    # Compute and print overall average across all CPUs
+    $overall = (($cpuUsagePerCpu | Measure-Object -Average).Average)
+    Write-Host "Overall average CPU Usage: $([math]::Round($overall, 2)) %"
   }
   else {
     Write-Host "CPU1 $([math]::Round([double]$cpuUsagePerCpu, 2)) %"
@@ -667,6 +670,9 @@ try {
       $i++
       Write-Host "CPU$i $([math]::Round([double]$val, 2)) %"
     }
+    # Compute and print overall average across all CPUs
+    $overall = (($cpuUsagePerCpu | Measure-Object -Average).Average)
+    Write-Host "Overall average CPU Usage: $([math]::Round($overall, 2)) %"
   }
   else {
     Write-Host "CPU1 $([math]::Round([double]$cpuUsagePerCpu, 2)) %"
