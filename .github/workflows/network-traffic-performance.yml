@@ -41,10 +41,10 @@ on:
           - ctsTraffic
           - echo
 
-concurrency:
-  group: >-
-    traffic-${{ github.event.client_payload.sha || inputs.ref || github.event.pull_request.number || 'main' }}
-  cancel-in-progress: true
+# concurrency:
+#   group: >-
+#     traffic-${{ github.event.client_payload.sha || inputs.ref || github.event.pull_request.number || 'main' }}
+#   cancel-in-progress: true
 
 jobs:
   build_cts_traffic:
