@@ -206,6 +206,14 @@ jobs:
         New-Item -ItemType Directory -Path ${{ github.workspace }}\echo\RelWithDebInfo
         New-Item -ItemType Directory -Path ${{ github.workspace }}\ETL
 
+    - name: Configure Windows Error Reporting to make a local copy of any crashes that occur.
+      id: configure_windows_error_reporting
+      run: |
+        $DumpFolder = "${{ github.workspace }}\echo\RelWithDebInfo"
+        New-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps" -ErrorAction SilentlyContinue
+        New-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps" -Name "DumpType" -Value 2 -PropertyType DWord -ErrorAction SilentlyContinue
+        New-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps" -Name "DumpFolder" -Value "$DumpFolder" -PropertyType ExpandString -ErrorAction SilentlyContinue
+
     - name: Download echo test tool
       uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
       with:
@@ -295,3 +303,11 @@ jobs:
       with:
         name: cpu_profile_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: ${{ github.workspace }}\ETL\cpu_profile-*.etl
+
+    - name: Upload Crash Dumps
+      if:  always()
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      with:
+        name: crash_dumps_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        path: |
+          ${{ github.workspace }}\echo\RelWithDebInfo
