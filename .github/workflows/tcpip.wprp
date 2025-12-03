@@ -13,6 +13,7 @@
     </EventCollector>
 
     <EventProvider Id="Microsoft-Windows-TCPIP" Name="2F07E2EE-15DB-40F1-90EF-9D7BA282188A" NonPagedMemory="true" Level="5"/>
+    <EventProvider Id="Microsoft-Windows-Winsock-AFD" Name="E53C6823-7BB8-44BB-90DC-3F86090D48A6" NonPagedMemory="true" Level="5"/>
 
     <Profile
         Id="TcpIpProvider-File.Verbose.File"
@@ -24,6 +25,7 @@
         <EventCollectorId Value="EventCollector_TcpIpProvider">
           <EventProviders>
             <EventProviderId Value="Microsoft-Windows-TCPIP"/>
+            <EventProviderId Value="Microsoft-Windows-Winsock-AFD"/>
           </EventProviders>
         </EventCollectorId>
       </Collectors>
@@ -39,6 +41,7 @@
         <EventCollectorId Value="EventCollector_TcpIpProvider">
           <EventProviders>
             <EventProviderId Value="Microsoft-Windows-TCPIP"/>
+            <EventProviderId Value="Microsoft-Windows-Winsock-AFD"/>
           </EventProviders>
         </EventCollectorId>
       </Collectors>
