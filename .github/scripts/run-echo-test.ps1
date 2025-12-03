@@ -718,6 +718,56 @@ function CaptureIndividualCpuUsagePerformanceMonitorAsJob {
 }
 
 
+function CapturePerformanceMonitorAsJob {
+  param(
+    [Parameter(Mandatory=$true)][string]$DurationSeconds,
+    [Parameter(Mandatory=$false)][string[]]$Counters = @('\Processor Information(*)\% Processor Time')
+  )
+
+  # Ensure numeric duration
+  $intDuration = [int]::Parse($DurationSeconds)
+
+  $perfJob = Start-Job -ScriptBlock {
+    param($duration, $counters)
+
+    $d = [int]$duration
+    if (-not $counters -or $counters.Count -eq 0) {
+      $counters = @('\Processor Information(*)\% Processor Time')
+    }
+
+    try {
+      # Collect all requested counters in one Get-Counter call if possible
+      $samples = Get-Counter -Counter $counters -SampleInterval 1 -MaxSamples $d -ErrorAction Stop
+
+      # Group by counter path and instance name, compute per-instance averages
+      # CounterSamples contain Path, InstanceName, CounterName, CookedValue
+      $groupedByCounter = $samples.CounterSamples | Group-Object -Property Path
+
+      $results = @()
+      foreach ($counterGroup in $groupedByCounter) {
+        $path = $counterGroup.Name
+        $innerGroups = $counterGroup.Group | Group-Object -Property InstanceName
+        foreach ($inst in $innerGroups) {
+          $instName = $inst.Name
+          if ([string]::IsNullOrEmpty($instName) -or $instName -eq '_Total') { continue }
+          $vals = $inst.Group | ForEach-Object { [double]$_.CookedValue }
+          $avg = ($vals | Measure-Object -Average).Average
+          $results += [PSCustomObject]@{ Counter = $path; Instance = $instName; Average = $avg }
+        }
+      }
+
+      # Emit structured results: an array of PSObjects with Counter, Instance, Average
+      $results
+    }
+    catch {
+      Write-Output (@([PSCustomObject]@{ Counter = 'error'; Instance = ''; Average = 0 }))
+    }
+  } -ArgumentList $intDuration, $Counters
+
+  return $perfJob
+}
+
+
 function Restore-FirewallAndCleanup {
   param([object]$Session)
 
@@ -765,6 +815,27 @@ function Restore-FirewallAndCleanup {
   }
 }
 
+$PerformanceCounters = 
+@(
+  '\UDPv4\Datagrams Received Errors',
+  '\UDPv6\Datagrams Received Errors',
+
+  '\Network Interface(*)\Packets Received Errors',
+  '\Network Interface(*)\Packets Received Discarded',
+  '\Network Interface(*)\Packets Outbound Discarded',
+
+  '\IPv4\Datagrams Received Discarded',
+  '\IPv4\Datagrams Received Header Errors',
+  '\IPv4\Datagrams Received Address Errors',
+
+  '\IPv6\Datagrams Received Discarded',
+  '\IPv6\Datagrams Received Header Errors',
+  '\IPv6\Datagrams Received Address Errors',
+
+  '\WFPv4\Packets Discarded/sec',
+  '\WFPv6\Packets Discarded/sec'
+)
+
 # =========================
 # Main workflow
 # =========================
@@ -797,9 +868,9 @@ try {
   #   Set-RssSettings -AdapterName $n -CpuCount $RssCpuCount
   # }
   
-  # Debug RSS state for all NICs
-  Write-Host "\n[Debug] Current RSS settings for all adapters:"
-  $RssState = Get-NetAdapterRss
+  # # Debug RSS state for all NICs
+  # Write-Host "\n[Debug] Current RSS settings for all adapters:"
+  # $RssState = Get-NetAdapterRss
   # Format the output nicely
   $output = $RssState | Format-Table Name, Enabled, BaseProcessorGroup, MaxProcessorNumber, MaxProcessors, Profile -AutoSize
   Write-Host $output
@@ -817,6 +888,7 @@ try {
 
   # Launch per-CPU usage monitor as a background job (returns array of per-CPU averages)
   $cpuMonitorJob = CaptureIndividualCpuUsagePerformanceMonitorAsJob $Duration
+  $perfCounterJob = CapturePerformanceMonitorAsJob -DurationSeconds $Duration -Counters $PerformanceCounters
 
   # Run tests
   Run-SendTest -PeerName $PeerName -Session $Session -SenderOptions $SenderOptions -ReceiverOptions $ReceiverOptions
@@ -837,8 +909,13 @@ try {
     Write-Host "CPU1 $([math]::Round([double]$cpuUsagePerCpu, 2)) %"
   }
 
+  # Write the performance counter results as a JSON file
+  $perfResults = Receive-Job -Job $perfCounterJob -Wait -AutoRemoveJob
+  $perfJsonPath = Join-Path $cwd 'echo_client_perf_counters.json'
+
   # Launch another per-CPU usage monitor for the recv test
   $cpuMonitorJob = CaptureIndividualCpuUsagePerformanceMonitorAsJob $Duration
+  $perfCounterJob = CapturePerformanceMonitorAsJob -DurationSeconds $Duration -Counters $PerformanceCounters
 
   Run-RecvTest -PeerName $PeerName -Session $Session -SenderOptions $SenderOptions -ReceiverOptions $ReceiverOptions
 
@@ -857,6 +934,10 @@ try {
   else {
     Write-Host "CPU1 $([math]::Round([double]$cpuUsagePerCpu, 2)) %"
   }
+
+  # Write the performance counter results as a JSON file
+  $perfResults = Receive-Job -Job $perfCounterJob -Wait -AutoRemoveJob
+  $perfJsonPath = Join-Path $cwd 'echo_server_perf_counters.json'
 
   Write-Host "echo tests completed successfully."
 }
