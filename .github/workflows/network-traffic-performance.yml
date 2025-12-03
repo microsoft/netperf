@@ -27,10 +27,10 @@ on:
         description: 'Command-line options for the receiver (quoted string)'
         required: true
         type: string
-      cts_traffic_ref:
-        description: 'Branch or ref to build cts-traffic from (repo: microsoft/ctsTraffic)'
+      test_tool_ref:
+        description: 'Branch or ref to build the test tool from'
         required: false
-        default: 'master'
+        default: 'main'
         type: string
       test_tool:
         description: 'The network test tool to use'
@@ -55,7 +55,8 @@ jobs:
       build_artifact: cts-traffic
       repository: 'microsoft/ctsTraffic'
       configurations: '["Release"]'
-      ref: ${{ inputs.cts_traffic_ref }}
+      # Need to translate main to master for ctsTraffic repo 
+      ref: ${{ inputs.test_tool_ref == 'main' && 'master' || inputs.test_tool_ref }}
 
   test_cts_traffic:
     if: ${{ inputs.test_tool == 'ctsTraffic' }}
@@ -174,6 +175,7 @@ jobs:
       artifact_name: echo_test
       repository: 'alan-jowett/WinUDPShardedEcho'
       config: 'RelWithDebInfo'
+      ref: ${{ inputs.test_tool_ref }}
 
   test_echo_server:
     if: ${{ inputs.test_tool == 'echo' }}
