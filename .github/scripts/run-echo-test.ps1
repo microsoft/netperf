@@ -794,7 +794,8 @@ try {
   
   # Debug RSS state for all NICs
   Write-Host "\n[Debug] Current RSS settings for all adapters:"
-  Get-NetAdapterRss
+  $RssState = Get-NetAdapterRss
+  Write-Host $RssState
   
   Write-Host "\nStarting echo tests to peer '$PeerName' with duration $Duration seconds..."
 
