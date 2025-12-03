@@ -845,36 +845,8 @@ try {
   $cwd = (Get-Location).Path
   Write-Host "Current working directory: $cwd"
 
-  # # Debug: list adapters and IPv4 addresses to help with troubleshooting
-  # Write-Host "\n[Debug] Network adapters:"
-  # try {
-  #     Get-NetAdapter | Format-Table Name, Status, LinkSpeed, InterfaceDescription -AutoSize
-  # } catch {
-  #     Write-Host "[Debug] Get-NetAdapter not available: $($_.Exception.Message)"
-  # }
-  # Write-Host "\n[Debug] IPv4 addresses:"
-  # try {
-  #     Get-NetIPAddress -AddressFamily IPv4 | Format-Table InterfaceAlias, IPAddress, PrefixLength -AutoSize
-  # } catch {
-  #     Write-Host "[Debug] Get-NetIPAddress not available: $($_.Exception.Message)"
-  # }
+  Get-NetAdapterRss
 
-  # # Determine the NIC to configure RSS on (10Gbps or higher)
-  # $Nic = (Get-NetAdapter | where-object -Property LinkSpeed -GE 10).Name
-
-  # # Set this on each NIC that meets the criteria
-  # foreach ($n in $Nic) {
-  #   Write-Host "Configuring RSS on adapter '$Nic' to use $RssCpuCount CPUs..."
-  #   Set-RssSettings -AdapterName $n -CpuCount $RssCpuCount
-  # }
-  
-  # # Debug RSS state for all NICs
-  # Write-Host "\n[Debug] Current RSS settings for all adapters:"
-  # $RssState = Get-NetAdapterRss
-  # Format the output nicely
-  $output = $RssState | Format-Table Name, Enabled, BaseProcessorGroup, MaxProcessorNumber, MaxProcessors, Profile -AutoSize
-  Write-Host $output
-  
   Write-Host "\nStarting echo tests to peer '$PeerName' with duration $Duration seconds..."
 
   # Create remote session
