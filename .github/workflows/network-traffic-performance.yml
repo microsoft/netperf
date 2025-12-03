@@ -213,6 +213,7 @@ jobs:
       - ${{ matrix.vec.env }}
       - os-windows-${{ matrix.vec.os }}
       - ${{ matrix.vec.arch }}
+      - ebpf
 
     steps:
     - name: Checkout repository
