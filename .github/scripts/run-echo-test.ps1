@@ -137,25 +137,11 @@ function Write-DetailedError {
 
 function Set-RssOnCpus {
     param(
-        [Parameter(Mandatory=$true)][string]$TargetServer,
+        [Parameter(Mandatory=$true)][string]$AdapterName,
         [Parameter(Mandatory=$false)][int]$CpuCount
     )
 
-    Write-Host "Checking connectivity to '$TargetServer'..."
-
-    # Debug: list adapters and IPv4 addresses to help with troubleshooting
-    Write-Host "\n[Debug] Network adapters:"
-    try {
-        Get-NetAdapter | Format-Table Name, Status, LinkSpeed, InterfaceDescription -AutoSize
-    } catch {
-        Write-Host "[Debug] Get-NetAdapter not available: $($_.Exception.Message)"
-    }
-    Write-Host "\n[Debug] IPv4 addresses:"
-    try {
-        Get-NetIPAddress -AddressFamily IPv4 | Format-Table InterfaceAlias, IPAddress, PrefixLength -AutoSize
-    } catch {
-        Write-Host "[Debug] Get-NetIPAddress not available: $($_.Exception.Message)"
-    }
+    Write-Host "Applying RSS settings to adapter '$AdapterName'..."
 
     function Get-RssCapabilities {
         param([string]$AdapterName)
@@ -192,22 +178,18 @@ function Set-RssOnCpus {
         return $null
     }
 
-    # Simple reachability test: use Test-NetConnection once. If it succeeds, pick a usable NIC.
+    # Use the adapter name provided by the caller and validate it exists and is operational
     try {
-        $result = Test-NetConnection -ComputerName $TargetServer -WarningAction SilentlyContinue
+        $adapter = Get-NetAdapter -Name $AdapterName -ErrorAction SilentlyContinue
     } catch {
-        $result = $null
+        $adapter = $null
     }
-
-    if (-not ($result -and $result.PingSucceeded)) {
-        Write-Host "Target '$TargetServer' is not reachable from this host. Returning without changes."
+    if (-not $adapter) {
+        Write-Host "Adapter '$AdapterName' not found. Returning."
         return
     }
-
-    # Choose the first 'Up' physical adapter as the target NIC
-    $adapter = Get-NetAdapter -Physical | Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1
-    if (-not $adapter) {
-        Write-Host "No operational physical network adapter found. Returning."
+    if ($adapter.Status -ne 'Up') {
+        Write-Host "Adapter '$AdapterName' is not operational (Status: $($adapter.Status)). Returning."
         return
     }
 
@@ -787,7 +769,26 @@ try {
   $cwd = (Get-Location).Path
   Write-Host "Current working directory: $cwd"
 
-  Set-RssOnCpus -TargetServer $PeerName -CpuCount $RssCpuCount
+  # Debug: list adapters and IPv4 addresses to help with troubleshooting
+  Write-Host "\n[Debug] Network adapters:"
+  try {
+      Get-NetAdapter | Format-Table Name, Status, LinkSpeed, InterfaceDescription -AutoSize
+  } catch {
+      Write-Host "[Debug] Get-NetAdapter not available: $($_.Exception.Message)"
+  }
+  Write-Host "\n[Debug] IPv4 addresses:"
+  try {
+      Get-NetIPAddress -AddressFamily IPv4 | Format-Table InterfaceAlias, IPAddress, PrefixLength -AutoSize
+  } catch {
+      Write-Host "[Debug] Get-NetIPAddress not available: $($_.Exception.Message)"
+  }
+
+
+  # Get NIC adapter with at least 10 Gbps link speed
+  $Nic = (Get-NetAdapter | where-object -Property LinkSpeed -GE 10).Name
+
+  Write-Output "Configuring RSS on adapter '$Nic' to use $RssCpuCount CPUs..."
+  Set-RssOnCpus -AdapterName $Nic -CpuCount $RssCpuCount
   
   # Create remote session
   $Session = Create-Session -PeerName $PeerName -RemotePSConfiguration 'PowerShell.7'
