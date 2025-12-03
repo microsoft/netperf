@@ -647,11 +647,11 @@ try {
     $i = 0
     foreach ($val in $cpuUsagePerCpu) {
       $i++
-      Write-Host "CPU$i: $([math]::Round([double]$val, 2)) %"
+      Write-Host "CPU$i $([math]::Round([double]$val, 2)) %"
     }
   }
   else {
-    Write-Host "CPU1: $([math]::Round([double]$cpuUsagePerCpu, 2)) %"
+    Write-Host "CPU1 $([math]::Round([double]$cpuUsagePerCpu, 2)) %"
   }
 
   # Launch another per-CPU usage monitor for the recv test
@@ -665,11 +665,11 @@ try {
     $i = 0
     foreach ($val in $cpuUsagePerCpu) {
       $i++
-      Write-Host "CPU$i: $([math]::Round([double]$val, 2)) %"
+      Write-Host "CPU$i $([math]::Round([double]$val, 2)) %"
     }
   }
   else {
-    Write-Host "CPU1: $([math]::Round([double]$cpuUsagePerCpu, 2)) %"
+    Write-Host "CPU1 $([math]::Round([double]$cpuUsagePerCpu, 2)) %"
   }
 
   Write-Host "echo tests completed successfully."
