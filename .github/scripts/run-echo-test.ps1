@@ -783,12 +783,14 @@ try {
       Write-Host "[Debug] Get-NetIPAddress not available: $($_.Exception.Message)"
   }
 
-
-  # Get NIC adapter with at least 10 Gbps link speed
+  # Determine the NIC to configure RSS on (10Gbps or higher)
   $Nic = (Get-NetAdapter | where-object -Property LinkSpeed -GE 10).Name
 
-  Write-Output "Configuring RSS on adapter '$Nic' to use $RssCpuCount CPUs..."
-  Set-RssOnCpus -AdapterName $Nic -CpuCount $RssCpuCount
+  # Set this on each NIC that meets the criteria
+  foreach ($n in $Nic) {
+    Write-Output "Configuring RSS on adapter '$Nic' to use $RssCpuCount CPUs..."
+    Set-RssOnCpus -AdapterName $n -CpuCount $RssCpuCount
+  }
   
   # Create remote session
   $Session = Create-Session -PeerName $PeerName -RemotePSConfiguration 'PowerShell.7'
