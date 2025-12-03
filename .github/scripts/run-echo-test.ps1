@@ -788,10 +788,16 @@ try {
 
   # Set this on each NIC that meets the criteria
   foreach ($n in $Nic) {
-    Write-Output "Configuring RSS on adapter '$Nic' to use $RssCpuCount CPUs..."
+    Write-Host "Configuring RSS on adapter '$Nic' to use $RssCpuCount CPUs..."
     Set-RssOnCpus -AdapterName $n -CpuCount $RssCpuCount
   }
   
+  # Debug RSS state for all NICs
+  Write-Host "\n[Debug] Current RSS settings for all adapters:"
+  Get-NetAdapterRss
+  
+  Write-Host "\nStarting echo tests to peer '$PeerName' with duration $Duration seconds..."
+
   # Create remote session
   $Session = Create-Session -PeerName $PeerName -RemotePSConfiguration 'PowerShell.7'
 
