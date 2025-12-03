@@ -273,6 +273,12 @@ jobs:
         Write-Output "Files in echo RelWithDebInfo directory:"
         Get-ChildItem -Path ${{ github.workspace }}\echo\RelWithDebInfo -Recurse
 
+    - name: Start PktMon drop Capture
+      run: |
+        pktmon filter add -p 7
+        pktmon filter list
+        pktmon start --etw -c
+
     - name: Run traffic tests
       working-directory: ${{ github.workspace }}\echo\RelWithDebInfo
       env:
@@ -298,6 +304,13 @@ jobs:
 
         Write-Output "Running: $cmd"
         Invoke-Expression $cmd
+
+    - name: Stop PktMon drop Capture
+      run: |
+        pktmon stop
+        copy pktmon.etl ${{ github.workspace }}\ETL\pktmon_drop_trace.etl
+        pktmon reset
+        pktmon filter remove all
 
     - name: Optional - Stop TCPIP tracing
       if: ${{ github.event.inputs.tcp_ip_tracing == 'true' }}
