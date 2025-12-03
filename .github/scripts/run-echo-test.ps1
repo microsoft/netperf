@@ -135,7 +135,7 @@ function Write-DetailedError {
   }
 }
 
-function Set-RssOnCpus {
+function Set-RssSettings {
     param(
         [Parameter(Mandatory=$true)][string]$AdapterName,
         [Parameter(Mandatory=$false)][int]$CpuCount
@@ -262,7 +262,7 @@ function Set-RssOnCpus {
 
         Write-Host "Setting RSS to use CPUs 0..$useMax in group $useGroup"
         try {
-            Set-NetAdapterRss -Name $ReachableNIC -BaseProcessorGroup $useGroup -MaxProcessorNumber $useMax -ErrorAction Stop
+            Set-NetAdapterRss -Name $ReachableNIC -BaseProcessorGroup $useGroup -MaxProcessorNumber $useMax -MaxProcessors CpuCount -Profile NUMAStatic  -ErrorAction Stop
         } catch {
             Write-Host "Failed to set RSS on '$ReachableNIC': $($_.Exception.Message)"
             return
@@ -789,7 +789,7 @@ try {
   # Set this on each NIC that meets the criteria
   foreach ($n in $Nic) {
     Write-Host "Configuring RSS on adapter '$Nic' to use $RssCpuCount CPUs..."
-    Set-RssOnCpus -AdapterName $n -CpuCount $RssCpuCount
+    Set-RssSettings -AdapterName $n -CpuCount $RssCpuCount
   }
   
   # Debug RSS state for all NICs
