@@ -281,7 +281,7 @@ jobs:
         ) -join ' '
 
         Write-Output "Running: $cmd"
-        & $cmd
+        Invoke-Expression $cmd
 
     - name: Optional - Stop TCPIP tracing
       if: ${{ github.event.inputs.tcp_ip_tracing == 'true' }}
