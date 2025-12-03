@@ -40,6 +40,11 @@ on:
         options:
           - ctsTraffic
           - echo
+      duration:
+        description: 'Duration of the test in seconds'
+        required: false
+        default: '60'
+        type: string
 
 # concurrency:
 #   group: >-
@@ -271,6 +276,7 @@ jobs:
           '-PeerName', '"netperf-peer"',
           '-SenderOptions', '"' + $env:SENDER_OPTIONS + '"',
           '-ReceiverOptions', '"' + $env:RECEIVER_OPTIONS + '"'
+          '-Duration ', ${{ inputs.duration }}
         ) -join ' '
 
         Write-Output "Running: $cmd"

@@ -2,7 +2,8 @@ param(
   [switch]$CpuProfile,
   [string]$PeerName,
   [string]$SenderOptions,
-  [string]$ReceiverOptions
+  [string]$ReceiverOptions,
+  [string]$Duration = "60" # Duration in seconds for the test runs (default 60s)
 )
 
 Set-StrictMode -Version Latest
@@ -17,6 +18,15 @@ Write-Host "  ReceiverOptions: $ReceiverOptions"
 # Add --server to the sender/client options if not already present
 if ($SenderOptions -notmatch '--server') {
   $SenderOptions += " --server $PeerName"
+}
+
+# Add duration option if specified and not already present to both sender and receiver
+if ($Duration -and $Duration -gt 0 -and $SenderOptions -notmatch '--duration') {
+  $SenderOptions += " --duration $Duration"
+}
+
+if ($Duration -and $Duration -gt 0 -and $ReceiverOptions -notmatch '--duration') {
+  $ReceiverOptions += " --duration $Duration"
 }
 
 # Make errors terminate so catch can handle them
@@ -488,6 +498,37 @@ function Run-RecvTest {
   Receive-JobOrThrow -Job $Job
 }
 
+function CaptureCpuUsagePerformanceMonitorAsJob {
+  param(
+    [Parameter(Mandatory=$true)][string]$DurationSeconds
+  )
+  # Ensure we pass a numeric duration into the job and use that value inside
+  $intDuration = [int]::Parse($DurationSeconds)
+
+  $cpuMonitorJob = Start-Job -ScriptBlock {
+    param($duration)
+
+    $counter = '\Processor(_Total)\% Processor Time'
+    $d = [int]$duration
+
+    try {
+      $samples = Get-Counter -Counter $counter -SampleInterval 1 -MaxSamples $d -ErrorAction Stop
+      $values = $samples.CounterSamples | ForEach-Object { [double]$_.CookedValue }
+    }
+    catch {
+      $values = @(0)
+    }
+
+    
+    $average = ($values | Measure-Object -Average).Average 
+    
+    # Emit a raw numeric value so the caller can parse it reliably
+    Write-Output $average
+  } -ArgumentList $intDuration
+
+  return $cpuMonitorJob
+}
+
 function Restore-FirewallAndCleanup {
   param([object]$Session)
 
@@ -553,9 +594,24 @@ try {
   # Copy tool to remote
   Copy-EchoToRemote -Session $Session
 
+  # Launch CaptureCpuUsagePerformanceMonitor as a background job
+  $cpuMonitorJob = CaptureCpuUsagePerformanceMonitorAsJob $Duration
+
   # Run tests
   Run-SendTest -PeerName $PeerName -Session $Session -SenderOptions $SenderOptions -ReceiverOptions $ReceiverOptions
+
+  # Recover CPU usage data
+  $cpuUsage = Receive-Job -Job $cpuMonitorJob -Wait -AutoRemoveJob
+  Write-Host "Average CPU Usage during test: $([math]::Round($cpuUsage, 2)) %"
+
+  # Launch another CPU monitor for the recv test
+  $cpuMonitorJob = CaptureCpuUsagePerformanceMonitorAsJob $Duration
+
   Run-RecvTest -PeerName $PeerName -Session $Session -SenderOptions $SenderOptions -ReceiverOptions $ReceiverOptions
+
+  # Recover CPU usage data
+  $cpuUsage = Receive-Job -Job $cpuMonitorJob -Wait -AutoRemoveJob
+  Write-Host "Average CPU Usage during test: $([math]::Round($cpuUsage, 2)) %"
 
   Write-Host "echo tests completed successfully."
 }
