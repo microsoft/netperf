@@ -134,6 +134,49 @@ function Write-DetailedError {
   }
 }
 
+function Set-RssOnAllCpu {
+  param([Parameter(Mandatory=$true)][string]$TargetServer)
+
+  # Get all NICs with IPv4 addresses
+  $NICs = Get-NetIPAddress | Where-Object { $_.AddressFamily -eq 'IPv4' -and $_.IPAddress -notlike '169.*' }
+
+  $ReachableNIC = $null
+
+  Write-Host "Testing connectivity to $TargetServer from each NIC..."
+
+  foreach ($nic in $NICs) {
+      $result = Test-NetConnection -ComputerName $TargetServer -SourceAddress $nic.IPAddress -WarningAction SilentlyContinue
+      if ($result.PingSucceeded) {
+          Write-Host "NIC '$($nic.InterfaceAlias)' with IP $($nic.IPAddress) can reach $TargetServer"
+          $ReachableNIC = $nic.InterfaceAlias
+          break
+      }
+  }
+
+  if (-not $ReachableNIC) {
+      Write-Host "No NIC could reach $TargetServer. Exiting."
+      exit
+  }
+
+  Write-Host "`nConfiguring RSS on NIC: $ReachableNIC"
+
+  # Enable RSS
+  Enable-NetAdapterRss -Name $ReachableNIC
+
+  # Get RSS capabilities to determine CPU range
+  $cap = Get-NetAdapterRssCapabilities -Name $ReachableNIC
+  $maxCPU = $cap.MaxProcessorNumber
+  $maxGroup = $cap.MaxProcessorGroup
+
+  # We assume group 0 exists and use its full range
+  Write-Host "Setting RSS to use all CPUs in group 0 (0..$maxCPU)"
+  Set-NetAdapterRss -Name $ReachableNIC -BaseProcessorGroup 0 -MaxProcessorNumber $maxCPU
+
+  # Verify settings
+  Write-Host "`nUpdated RSS settings:"
+  Get-NetAdapterRss -Name $ReachableNIC
+}
+
 # WPR CPU profiling helpers
 $script:WprProfiles = @{}
 
@@ -606,6 +649,8 @@ try {
   # Print the current working directory
   $cwd = (Get-Location).Path
   Write-Host "Current working directory: $cwd"
+
+  Set-RssOnAllCpu -TargetServer $PeerName
 
   # Create remote session
   $Session = Create-Session -PeerName $PeerName -RemotePSConfiguration 'PowerShell.7'
