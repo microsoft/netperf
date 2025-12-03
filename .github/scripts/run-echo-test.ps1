@@ -3,7 +3,8 @@ param(
   [string]$PeerName,
   [string]$SenderOptions,
   [string]$ReceiverOptions,
-  [string]$Duration = "60" # Duration in seconds for the test runs (default 60s)
+  [string]$Duration = "60", # Duration in seconds for the test runs (default 60s)
+  [int]$RssCpuCount = 0 # Number of CPUs to enable RSS on the remote server (0 = max available
 )
 
 Set-StrictMode -Version Latest
@@ -134,48 +135,198 @@ function Write-DetailedError {
   }
 }
 
-function Set-RssOnAllCpu {
-  param([Parameter(Mandatory=$true)][string]$TargetServer)
+function Set-RssOnCpus {
+    param(
+        [Parameter(Mandatory=$true)][string]$TargetServer,
+        [Parameter(Mandatory=$false)][int]$CpuCount
+    )
 
-  # Get all NICs with IPv4 addresses
-  $NICs = Get-NetIPAddress | Where-Object { $_.AddressFamily -eq 'IPv4' -and $_.IPAddress -notlike '169.*' }
+    Write-Host "Checking connectivity to '$TargetServer'..."
 
-  $ReachableNIC = $null
+    function Get-RssCapabilities {
+        param([string]$AdapterName)
 
-  Write-Host "Testing connectivity to $TargetServer from each NIC..."
+        # Prefer the convenient cmdlet if available
+        if (Get-Command -Name Get-NetAdapterRssCapabilities -ErrorAction SilentlyContinue) {
+            try {
+                $res = Get-NetAdapterRssCapabilities -Name $AdapterName -ErrorAction SilentlyContinue
+                if ($res) {
+                    return [PSCustomObject]@{
+                        MaxProcessorNumber = [int]$res.MaxProcessorNumber
+                        MaxProcessorGroup  = [int]$res.MaxProcessorGroup
+                    }
+                }
+                return $null
+            } catch {
+                return $null
+            }
+        }
 
-  foreach ($nic in $NICs) {
-      $result = Test-NetConnection -ComputerName $TargetServer -SourceAddress $nic.IPAddress -WarningAction SilentlyContinue
-      if ($result.PingSucceeded) {
-          Write-Host "NIC '$($nic.InterfaceAlias)' with IP $($nic.IPAddress) can reach $TargetServer"
-          $ReachableNIC = $nic.InterfaceAlias
-          break
-      }
-  }
+        # Fallback: query the CIM class directly
+        try {
+            $filter = "Name='$AdapterName'"
+            $obj = Get-CimInstance -Namespace root/StandardCimv2 -ClassName MSFT_NetAdapterRssSettingData -Filter $filter -ErrorAction SilentlyContinue
+            if ($obj) {
+                return [PSCustomObject]@{
+                    MaxProcessorNumber = [int]$obj.MaxProcessorNumber
+                    MaxProcessorGroup  = [int]$obj.MaxProcessorGroup
+                }
+            }
+        } catch {
+            # ignore
+        }
+        return $null
+    }
 
-  if (-not $ReachableNIC) {
-      Write-Host "No NIC could reach $TargetServer. Exiting."
-      exit
-  }
+    # Simple reachability test: use Test-NetConnection once. If it succeeds, pick a usable NIC.
+    try {
+        $result = Test-NetConnection -ComputerName $TargetServer -WarningAction SilentlyContinue
+    } catch {
+        $result = $null
+    }
 
-  Write-Host "`nConfiguring RSS on NIC: $ReachableNIC"
+    if (-not ($result -and $result.PingSucceeded)) {
+        Write-Host "Target '$TargetServer' is not reachable from this host. Returning without changes."
+        return
+    }
 
-  # Enable RSS
-  Enable-NetAdapterRss -Name $ReachableNIC
+    # Choose the first 'Up' physical adapter as the target NIC
+    $adapter = Get-NetAdapter -Physical | Where-Object { $_.Status -eq 'Up' } | Select-Object -First 1
+    if (-not $adapter) {
+        Write-Host "No operational physical network adapter found. Returning."
+        return
+    }
 
-  # Get RSS capabilities to determine CPU range
-  $cap = Get-NetAdapterRssCapabilities -Name $ReachableNIC
-  $maxCPU = $cap.MaxProcessorNumber
-  $maxGroup = $cap.MaxProcessorGroup
+    $ReachableNIC = $adapter.Name
+    Write-Host "Configuring RSS on adapter: $ReachableNIC"
 
-  # We assume group 0 exists and use its full range
-  Write-Host "Setting RSS to use all CPUs in group 0 (0..$maxCPU)"
-  Set-NetAdapterRss -Name $ReachableNIC -BaseProcessorGroup 0 -MaxProcessorNumber $maxCPU
+    # Check RSS capabilities (cmdlet or CIM fallback)
+    $capCheck = Get-RssCapabilities -AdapterName $ReachableNIC
+    if (-not $capCheck) {
+        Write-Host "Adapter '$ReachableNIC' does not expose RSS capabilities or does not support RSS. Skipping RSS configuration."
+        return
+    }
 
-  # Verify settings
-  Write-Host "`nUpdated RSS settings:"
-  Get-NetAdapterRss -Name $ReachableNIC
+    # Enable RSS if the cmdlet exists; otherwise inform and continue to capability-only flow
+    if (Get-Command -Name Enable-NetAdapterRss -ErrorAction SilentlyContinue) {
+        try {
+            Enable-NetAdapterRss -Name $ReachableNIC -ErrorAction Stop
+        } catch {
+            Write-Host "Failed to enable RSS on '$ReachableNIC': $($_.Exception.Message)"
+            return
+        }
+    } else {
+        Write-Host "Enable-NetAdapterRss cmdlet not present; skipping enable step."
+    }
+
+    # Get RSS capabilities to determine CPU range
+    # Re-read capabilities (cmdlet or CIM fallback)
+    $cap = Get-RssCapabilities -AdapterName $ReachableNIC
+    if (-not $cap) {
+        Write-Host "No RSS capability information returned. Returning."
+        return
+    }
+
+    $maxCPU = $cap.MaxProcessorNumber
+    $maxGroup = $cap.MaxProcessorGroup
+
+    if (-not ($maxCPU -is [int]) -or -not ($maxGroup -is [int])) {
+        Write-Host "Unexpected RSS capability values. Returning."
+        return
+    }
+
+    if ($maxGroup -lt 1) {
+        Write-Host "No processor groups reported. Assuming group 0."
+        $useGroup = 0
+    } else {
+        $useGroup = 0
+    }
+    if ($maxCPU -lt 0) {
+        Write-Host "Invalid MaxProcessorNumber ($maxCPU). Returning."
+        return
+    }
+
+    if (Get-Command -Name Set-NetAdapterRss -ErrorAction SilentlyContinue) {
+        # Determine how many CPUs to set. Use provided CpuCount if valid, otherwise the adapter max.
+        if ($CpuCount) {
+            if ($CpuCount -lt 1) {
+                Write-Host "Provided CpuCount ($CpuCount) is invalid; must be >= 1. Returning."
+                return
+            }
+            if ($CpuCount -gt ($maxCPU + 1)) {
+                Write-Host "Provided CpuCount ($CpuCount) exceeds adapter MaxProcessorNumber ($maxCPU + 1). Clamping to max."
+                $useMax = $maxCPU
+            } else {
+                # Convert CpuCount (count) to MaxProcessorNumber (index)
+                $useMax = [int]($CpuCount - 1)
+            }
+        } else {
+            $useMax = $maxCPU
+        }
+
+        Write-Host "Setting RSS to use CPUs 0..$useMax in group $useGroup"
+        try {
+            Set-NetAdapterRss -Name $ReachableNIC -BaseProcessorGroup $useGroup -MaxProcessorNumber $useMax -ErrorAction Stop
+        } catch {
+            Write-Host "Failed to set RSS on '$ReachableNIC': $($_.Exception.Message)"
+            return
+        }
+
+        if (Get-Command -Name Get-NetAdapterRss -ErrorAction SilentlyContinue) {
+            Write-Host "Updated RSS settings for '$ReachableNIC':"
+            Get-NetAdapterRss -Name $ReachableNIC
+        } else {
+            Write-Host "Set successful (no Get-NetAdapterRss cmdlet present to display settings)."
+        }
+    } else {
+        Write-Host "Set-NetAdapterRss cmdlet not present; cannot modify RSS settings. Displaying reported capabilities instead:"
+        Write-Host "MaxProcessorNumber: $maxCPU, MaxProcessorGroup: $maxGroup"
+    }
 }
+
+
+# function Set-RssOnAllCpu {
+#   param([Parameter(Mandatory=$true)][string]$TargetServer)
+
+#   # Get all NICs with IPv4 addresses
+#   $NICs = Get-NetIPAddress | Where-Object { $_.AddressFamily -eq 'IPv4' -and $_.IPAddress -notlike '169.*' }
+
+#   $ReachableNIC = $null
+
+#   Write-Host "Testing connectivity to $TargetServer from each NIC..."
+
+#   foreach ($nic in $NICs) {
+#       $result = Test-NetConnection -ComputerName $TargetServer -SourceAddress $nic.IPAddress -WarningAction SilentlyContinue
+#       if ($result.PingSucceeded) {
+#           Write-Host "NIC '$($nic.InterfaceAlias)' with IP $($nic.IPAddress) can reach $TargetServer"
+#           $ReachableNIC = $nic.InterfaceAlias
+#           break
+#       }
+#   }
+
+#   if (-not $ReachableNIC) {
+#       Write-Host "No NIC could reach $TargetServer. Exiting."
+#       exit
+#   }
+
+#   Write-Host "`nConfiguring RSS on NIC: $ReachableNIC"
+
+#   # Enable RSS
+#   Enable-NetAdapterRss -Name $ReachableNIC
+
+#   # Get RSS capabilities to determine CPU range
+#   $cap = Get-NetAdapterRssCapabilities -Name $ReachableNIC
+#   $maxCPU = $cap.MaxProcessorNumber
+#   $maxGroup = $cap.MaxProcessorGroup
+
+#   # We assume group 0 exists and use its full range
+#   Write-Host "Setting RSS to use all CPUs in group 0 (0..$maxCPU)"
+#   Set-NetAdapterRss -Name $ReachableNIC -BaseProcessorGroup 0 -MaxProcessorNumber $maxCPU
+
+#   # Verify settings
+#   Write-Host "`nUpdated RSS settings:"
+#   Get-NetAdapterRss -Name $ReachableNIC
+# }
 
 # WPR CPU profiling helpers
 $script:WprProfiles = @{}
@@ -650,8 +801,8 @@ try {
   $cwd = (Get-Location).Path
   Write-Host "Current working directory: $cwd"
 
-  Set-RssOnAllCpu -TargetServer $PeerName
-
+  Set-RssOnCpus -TargetServer $PeerName -CpuCount $RssCpuCount
+  
   # Create remote session
   $Session = Create-Session -PeerName $PeerName -RemotePSConfiguration 'PowerShell.7'
 
