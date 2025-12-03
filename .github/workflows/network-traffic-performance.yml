@@ -250,6 +250,7 @@ jobs:
         Write-Output "  ReceiverOptions: ${{ inputs.receiver_options }}"
         Write-Output "  TCP IP Tracing: ${{ inputs.tcp_ip_tracing }}"
         Write-Output "  ref: ${{ inputs.ref }}"
+        Write-Output "  Duration: ${{ inputs.duration }}"
 
     - name: Diagonstic - List files in echo RelWithDebInfo directory
       run: |

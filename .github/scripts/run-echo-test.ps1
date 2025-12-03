@@ -529,6 +529,47 @@ function CaptureCpuUsagePerformanceMonitorAsJob {
   return $cpuMonitorJob
 }
 
+function CaptureIndividualCpuUsagePerformanceMonitorAsJob {
+  param(
+    [Parameter(Mandatory=$true)][string]$DurationSeconds
+  )
+
+  # Ensure we pass a numeric duration into the job and use that value inside
+  $intDuration = [int]::Parse($DurationSeconds)
+
+  $cpuMonitorJob = Start-Job -ScriptBlock {
+    param($duration)
+
+    $counter = '\Processor(*)\% Processor Time'
+    $d = [int]$duration
+
+    try {
+      $samples = Get-Counter -Counter $counter -SampleInterval 1 -MaxSamples $d -ErrorAction Stop
+      # Group samples by instance (processor index) and compute average per instance
+      $grouped = $samples.CounterSamples | Group-Object -Property InstanceName
+      $results = @()
+      foreach ($g in $grouped) {
+        $vals = $g.Group | ForEach-Object { [double]$_.CookedValue }
+        $avg = ($vals | Measure-Object -Average).Average
+        $results += [PSCustomObject]@{ Processor = $g.Name; Average = $avg }
+      }
+      # Sort by processor name to have consistent ordering (e.g., _Total last or first)
+      $sorted = $results | Sort-Object @{Expression={$_.Processor -replace '^CPU',''}},Processor
+      # Emit numeric array (only per-CPU numeric averages, excluding the _Total instance)
+      $numeric = $sorted | Where-Object { $_.Processor -ne '_Total' } | ForEach-Object { [double]$_.Average }
+    }
+    catch {
+      $numeric = @(0)
+    }
+
+    # Emit the numeric array so the caller receives per-CPU averages
+    Write-Output $numeric
+  } -ArgumentList $intDuration
+
+  return $cpuMonitorJob
+}
+
+
 function Restore-FirewallAndCleanup {
   param([object]$Session)
 
@@ -594,24 +635,42 @@ try {
   # Copy tool to remote
   Copy-EchoToRemote -Session $Session
 
-  # Launch CaptureCpuUsagePerformanceMonitor as a background job
-  $cpuMonitorJob = CaptureCpuUsagePerformanceMonitorAsJob $Duration
+  # Launch per-CPU usage monitor as a background job (returns array of per-CPU averages)
+  $cpuMonitorJob = CaptureIndividualCpuUsagePerformanceMonitorAsJob $Duration
 
   # Run tests
   Run-SendTest -PeerName $PeerName -Session $Session -SenderOptions $SenderOptions -ReceiverOptions $ReceiverOptions
 
-  # Recover CPU usage data
-  $cpuUsage = Receive-Job -Job $cpuMonitorJob -Wait -AutoRemoveJob
-  Write-Host "Average CPU Usage during test: $([math]::Round($cpuUsage, 2)) %"
+  # Recover CPU usage data (monitor returns per-CPU averages). Print per-CPU values.
+  $cpuUsagePerCpu = Receive-Job -Job $cpuMonitorJob -Wait -AutoRemoveJob
+  if ($cpuUsagePerCpu -is [System.Array]) {
+    $i = 0
+    foreach ($val in $cpuUsagePerCpu) {
+      $i++
+      Write-Host "CPU$i: $([math]::Round([double]$val, 2)) %"
+    }
+  }
+  else {
+    Write-Host "CPU1: $([math]::Round([double]$cpuUsagePerCpu, 2)) %"
+  }
 
-  # Launch another CPU monitor for the recv test
-  $cpuMonitorJob = CaptureCpuUsagePerformanceMonitorAsJob $Duration
+  # Launch another per-CPU usage monitor for the recv test
+  $cpuMonitorJob = CaptureIndividualCpuUsagePerformanceMonitorAsJob $Duration
 
   Run-RecvTest -PeerName $PeerName -Session $Session -SenderOptions $SenderOptions -ReceiverOptions $ReceiverOptions
 
-  # Recover CPU usage data
-  $cpuUsage = Receive-Job -Job $cpuMonitorJob -Wait -AutoRemoveJob
-  Write-Host "Average CPU Usage during test: $([math]::Round($cpuUsage, 2)) %"
+  # Recover CPU usage data (monitor returns per-CPU averages). Print per-CPU values.
+  $cpuUsagePerCpu = Receive-Job -Job $cpuMonitorJob -Wait -AutoRemoveJob
+  if ($cpuUsagePerCpu -is [System.Array]) {
+    $i = 0
+    foreach ($val in $cpuUsagePerCpu) {
+      $i++
+      Write-Host "CPU$i: $([math]::Round([double]$val, 2)) %"
+    }
+  }
+  else {
+    Write-Host "CPU1: $([math]::Round([double]$cpuUsagePerCpu, 2)) %"
+  }
 
   Write-Host "echo tests completed successfully."
 }
