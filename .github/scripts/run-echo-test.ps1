@@ -135,168 +135,169 @@ function Write-DetailedError {
   }
 }
 
-function Set-RssSettings {
-    param(
-        [Parameter(Mandatory=$true)][string]$AdapterName,
-        [Parameter(Mandatory=$false)][int]$CpuCount
-    )
+# Mellanox CX5 limits RSS to 8 CPUs even if more are available, so setting this is pointless.
+# function Set-RssSettings {
+#     param(
+#         [Parameter(Mandatory=$true)][string]$AdapterName,
+#         [Parameter(Mandatory=$false)][int]$CpuCount
+#     )
 
-    Write-Host "Applying RSS settings to adapter '$AdapterName'..."
+#     Write-Host "Applying RSS settings to adapter '$AdapterName'..."
 
-    function Get-RssCapabilities {
-        param([string]$AdapterName)
+#     function Get-RssCapabilities {
+#         param([string]$AdapterName)
 
-        # Prefer the convenient cmdlet if available
-        if (Get-Command -Name Get-NetAdapterRssCapabilities -ErrorAction SilentlyContinue) {
-            try {
-                $res = Get-NetAdapterRssCapabilities -Name $AdapterName -ErrorAction SilentlyContinue
-                if ($res) {
-                    return [PSCustomObject]@{
-                        MaxProcessorNumber = [int]$res.MaxProcessorNumber
-                        MaxProcessorGroup  = [int]$res.MaxProcessorGroup
-                    }
-                }
-                return $null
-            } catch {
-                return $null
-            }
-        }
+#         # Prefer the convenient cmdlet if available
+#         if (Get-Command -Name Get-NetAdapterRssCapabilities -ErrorAction SilentlyContinue) {
+#             try {
+#                 $res = Get-NetAdapterRssCapabilities -Name $AdapterName -ErrorAction SilentlyContinue
+#                 if ($res) {
+#                     return [PSCustomObject]@{
+#                         MaxProcessorNumber = [int]$res.MaxProcessorNumber
+#                         MaxProcessorGroup  = [int]$res.MaxProcessorGroup
+#                     }
+#                 }
+#                 return $null
+#             } catch {
+#                 return $null
+#             }
+#         }
 
-        # Fallback: query the CIM class directly
-        try {
-            $filter = "Name='$AdapterName'"
-            $obj = Get-CimInstance -Namespace root/StandardCimv2 -ClassName MSFT_NetAdapterRssSettingData -Filter $filter -ErrorAction SilentlyContinue
-            if ($obj) {
-                return [PSCustomObject]@{
-                    MaxProcessorNumber = [int]$obj.MaxProcessorNumber
-                    MaxProcessorGroup  = [int]$obj.MaxProcessorGroup
-                }
-            }
-        } catch {
-            # ignore
-        }
-        return $null
-    }
+#         # Fallback: query the CIM class directly
+#         try {
+#             $filter = "Name='$AdapterName'"
+#             $obj = Get-CimInstance -Namespace root/StandardCimv2 -ClassName MSFT_NetAdapterRssSettingData -Filter $filter -ErrorAction SilentlyContinue
+#             if ($obj) {
+#                 return [PSCustomObject]@{
+#                     MaxProcessorNumber = [int]$obj.MaxProcessorNumber
+#                     MaxProcessorGroup  = [int]$obj.MaxProcessorGroup
+#                 }
+#             }
+#         } catch {
+#             # ignore
+#         }
+#         return $null
+#     }
 
-    # Use the adapter name provided by the caller and validate it exists and is operational
-    try {
-        $adapter = Get-NetAdapter -Name $AdapterName -ErrorAction SilentlyContinue
-    } catch {
-        $adapter = $null
-    }
-    if (-not $adapter) {
-        Write-Host "Adapter '$AdapterName' not found. Returning."
-        return
-    }
-    if ($adapter.Status -ne 'Up') {
-        Write-Host "Adapter '$AdapterName' is not operational (Status: $($adapter.Status)). Returning."
-        return
-    }
+#     # Use the adapter name provided by the caller and validate it exists and is operational
+#     try {
+#         $adapter = Get-NetAdapter -Name $AdapterName -ErrorAction SilentlyContinue
+#     } catch {
+#         $adapter = $null
+#     }
+#     if (-not $adapter) {
+#         Write-Host "Adapter '$AdapterName' not found. Returning."
+#         return
+#     }
+#     if ($adapter.Status -ne 'Up') {
+#         Write-Host "Adapter '$AdapterName' is not operational (Status: $($adapter.Status)). Returning."
+#         return
+#     }
 
-    $ReachableNIC = $adapter.Name
-    Write-Host "Configuring RSS on adapter: $ReachableNIC"
+#     $ReachableNIC = $adapter.Name
+#     Write-Host "Configuring RSS on adapter: $ReachableNIC"
 
-    # Check RSS capabilities (cmdlet or CIM fallback)
-    $capCheck = Get-RssCapabilities -AdapterName $ReachableNIC
-    if (-not $capCheck) {
-        Write-Host "Adapter '$ReachableNIC' does not expose RSS capabilities or does not support RSS. Skipping RSS configuration."
-        return
-    }
+#     # Check RSS capabilities (cmdlet or CIM fallback)
+#     $capCheck = Get-RssCapabilities -AdapterName $ReachableNIC
+#     if (-not $capCheck) {
+#         Write-Host "Adapter '$ReachableNIC' does not expose RSS capabilities or does not support RSS. Skipping RSS configuration."
+#         return
+#     }
 
-    # Enable RSS if the cmdlet exists; otherwise inform and continue to capability-only flow
-    if (Get-Command -Name Enable-NetAdapterRss -ErrorAction SilentlyContinue) {
-        try {
-            Enable-NetAdapterRss -Name $ReachableNIC -ErrorAction Stop
-        } catch {
-            Write-Host "Failed to enable RSS on '$ReachableNIC': $($_.Exception.Message)"
-            return
-        }
-    } else {
-        Write-Host "Enable-NetAdapterRss cmdlet not present; skipping enable step."
-    }
+#     # Enable RSS if the cmdlet exists; otherwise inform and continue to capability-only flow
+#     if (Get-Command -Name Enable-NetAdapterRss -ErrorAction SilentlyContinue) {
+#         try {
+#             Enable-NetAdapterRss -Name $ReachableNIC -ErrorAction Stop
+#         } catch {
+#             Write-Host "Failed to enable RSS on '$ReachableNIC': $($_.Exception.Message)"
+#             return
+#         }
+#     } else {
+#         Write-Host "Enable-NetAdapterRss cmdlet not present; skipping enable step."
+#     }
 
-    # Get RSS capabilities to determine CPU range
-    # Re-read capabilities (cmdlet or CIM fallback)
-    $cap = Get-RssCapabilities -AdapterName $ReachableNIC
-    if (-not $cap) {
-        Write-Host "No RSS capability information returned. Returning."
-        return
-    }
+#     # Get RSS capabilities to determine CPU range
+#     # Re-read capabilities (cmdlet or CIM fallback)
+#     $cap = Get-RssCapabilities -AdapterName $ReachableNIC
+#     if (-not $cap) {
+#         Write-Host "No RSS capability information returned. Returning."
+#         return
+#     }
 
-    $maxCPU = $cap.MaxProcessorNumber
-    $maxGroup = $cap.MaxProcessorGroup
+#     $maxCPU = $cap.MaxProcessorNumber
+#     $maxGroup = $cap.MaxProcessorGroup
 
-    if (-not ($maxCPU -is [int]) -or -not ($maxGroup -is [int])) {
-        Write-Host "Unexpected RSS capability values. Returning."
-        return
-    }
+#     if (-not ($maxCPU -is [int]) -or -not ($maxGroup -is [int])) {
+#         Write-Host "Unexpected RSS capability values. Returning."
+#         return
+#     }
 
-    if ($maxGroup -lt 1) {
-        Write-Host "No processor groups reported. Assuming group 0."
-        $useGroup = 0
-    } else {
-        $useGroup = 0
-    }
-    if ($maxCPU -lt 0) {
-        Write-Host "Invalid MaxProcessorNumber ($maxCPU). Returning."
-        return
-    }
+#     if ($maxGroup -lt 1) {
+#         Write-Host "No processor groups reported. Assuming group 0."
+#         $useGroup = 0
+#     } else {
+#         $useGroup = 0
+#     }
+#     if ($maxCPU -lt 0) {
+#         Write-Host "Invalid MaxProcessorNumber ($maxCPU). Returning."
+#         return
+#     }
 
-    if (Get-Command -Name Set-NetAdapterRss -ErrorAction SilentlyContinue) {
-        # Determine how many CPUs to set. Use provided CpuCount if valid, otherwise the adapter max.
-        if ($CpuCount) {
-            if ($CpuCount -lt 1) {
-                Write-Host "Provided CpuCount ($CpuCount) is invalid; must be >= 1. Returning."
-                return
-            }
-            if ($CpuCount -gt ($maxCPU + 1)) {
-                Write-Host "Provided CpuCount ($CpuCount) exceeds adapter MaxProcessorNumber ($maxCPU + 1). Clamping to max."
-                $useMax = $maxCPU
-            } else {
-                # Convert CpuCount (count) to MaxProcessorNumber (index)
-                $useMax = [int]($CpuCount - 1)
-            }
-        } else {
-            $useMax = $maxCPU
-        }
+#     if (Get-Command -Name Set-NetAdapterRss -ErrorAction SilentlyContinue) {
+#         # Determine how many CPUs to set. Use provided CpuCount if valid, otherwise the adapter max.
+#         if ($CpuCount) {
+#             if ($CpuCount -lt 1) {
+#                 Write-Host "Provided CpuCount ($CpuCount) is invalid; must be >= 1. Returning."
+#                 return
+#             }
+#             if ($CpuCount -gt ($maxCPU + 1)) {
+#                 Write-Host "Provided CpuCount ($CpuCount) exceeds adapter MaxProcessorNumber ($maxCPU + 1). Clamping to max."
+#                 $useMax = $maxCPU
+#             } else {
+#                 # Convert CpuCount (count) to MaxProcessorNumber (index)
+#                 $useMax = [int]($CpuCount - 1)
+#             }
+#         } else {
+#             $useMax = $maxCPU
+#         }
 
-        $CpuCount = $useMax + 1
+#         $CpuCount = $useMax + 1
 
-        Write-Host "Setting RSS to use CPUs 0..$useMax in group $useGroup"
-        try {
-            Set-NetAdapterRss -Name $ReachableNIC -BaseProcessorGroup $useGroup -MaxProcessorNumber $useMax -MaxProcessors $CpuCount -Profile NUMAStatic  -ErrorAction Stop
-        } catch {
-            Write-Host "Failed to set RSS on '$ReachableNIC': $($_.Exception.Message)"
-            return
-        }
+#         Write-Host "Setting RSS to use CPUs 0..$useMax in group $useGroup"
+#         try {
+#             Set-NetAdapterRss -Name $ReachableNIC -BaseProcessorGroup $useGroup -MaxProcessorNumber $useMax -MaxProcessors $CpuCount -Profile NUMAStatic  -ErrorAction Stop
+#         } catch {
+#             Write-Host "Failed to set RSS on '$ReachableNIC': $($_.Exception.Message)"
+#             return
+#         }
 
-        # Disable then re-enable the adapter to ensure settings apply
-        if ((Get-Command -Name Disable-NetAdapter -ErrorAction SilentlyContinue) -and (Get-Command -Name Enable-NetAdapter -ErrorAction SilentlyContinue)) {
-            try {
-                Write-Host "Disabling adapter '$ReachableNIC' to apply settings..."
-                Disable-NetAdapter -Name $ReachableNIC -Confirm:$false -ErrorAction Stop
-                Start-Sleep -Seconds 2
-                Write-Host "Re-enabling adapter '$ReachableNIC'..."
-                Enable-NetAdapter -Name $ReachableNIC -Confirm:$false -ErrorAction Stop
-                Start-Sleep -Seconds 2
-            } catch {
-                Write-Host "Warning: failed to toggle adapter '$ReachableNIC': $($_.Exception.Message)"
-            }
-        } else {
-            Write-Host "Disable/Enable adapter cmdlets not present; skipping adapter toggle."
-        }
+#         # Disable then re-enable the adapter to ensure settings apply
+#         if ((Get-Command -Name Disable-NetAdapter -ErrorAction SilentlyContinue) -and (Get-Command -Name Enable-NetAdapter -ErrorAction SilentlyContinue)) {
+#             try {
+#                 Write-Host "Disabling adapter '$ReachableNIC' to apply settings..."
+#                 Disable-NetAdapter -Name $ReachableNIC -Confirm:$false -ErrorAction Stop
+#                 Start-Sleep -Seconds 2
+#                 Write-Host "Re-enabling adapter '$ReachableNIC'..."
+#                 Enable-NetAdapter -Name $ReachableNIC -Confirm:$false -ErrorAction Stop
+#                 Start-Sleep -Seconds 2
+#             } catch {
+#                 Write-Host "Warning: failed to toggle adapter '$ReachableNIC': $($_.Exception.Message)"
+#             }
+#         } else {
+#             Write-Host "Disable/Enable adapter cmdlets not present; skipping adapter toggle."
+#         }
 
-        if (Get-Command -Name Get-NetAdapterRss -ErrorAction SilentlyContinue) {
-            Write-Host "Updated RSS settings for '$ReachableNIC':"
-            Get-NetAdapterRss -Name $ReachableNIC
-        } else {
-            Write-Host "Set successful (no Get-NetAdapterRss cmdlet present to display settings)."
-        }
-    } else {
-        Write-Host "Set-NetAdapterRss cmdlet not present; cannot modify RSS settings. Displaying reported capabilities instead:"
-        Write-Host "MaxProcessorNumber: $maxCPU, MaxProcessorGroup: $maxGroup"
-    }
-}
+#         if (Get-Command -Name Get-NetAdapterRss -ErrorAction SilentlyContinue) {
+#             Write-Host "Updated RSS settings for '$ReachableNIC':"
+#             Get-NetAdapterRss -Name $ReachableNIC
+#         } else {
+#             Write-Host "Set successful (no Get-NetAdapterRss cmdlet present to display settings)."
+#         }
+#     } else {
+#         Write-Host "Set-NetAdapterRss cmdlet not present; cannot modify RSS settings. Displaying reported capabilities instead:"
+#         Write-Host "MaxProcessorNumber: $maxCPU, MaxProcessorGroup: $maxGroup"
+#     }
+# }
 
 # WPR CPU profiling helpers
 $script:WprProfiles = @{}
@@ -771,33 +772,35 @@ try {
   $cwd = (Get-Location).Path
   Write-Host "Current working directory: $cwd"
 
-  # Debug: list adapters and IPv4 addresses to help with troubleshooting
-  Write-Host "\n[Debug] Network adapters:"
-  try {
-      Get-NetAdapter | Format-Table Name, Status, LinkSpeed, InterfaceDescription -AutoSize
-  } catch {
-      Write-Host "[Debug] Get-NetAdapter not available: $($_.Exception.Message)"
-  }
-  Write-Host "\n[Debug] IPv4 addresses:"
-  try {
-      Get-NetIPAddress -AddressFamily IPv4 | Format-Table InterfaceAlias, IPAddress, PrefixLength -AutoSize
-  } catch {
-      Write-Host "[Debug] Get-NetIPAddress not available: $($_.Exception.Message)"
-  }
+  # # Debug: list adapters and IPv4 addresses to help with troubleshooting
+  # Write-Host "\n[Debug] Network adapters:"
+  # try {
+  #     Get-NetAdapter | Format-Table Name, Status, LinkSpeed, InterfaceDescription -AutoSize
+  # } catch {
+  #     Write-Host "[Debug] Get-NetAdapter not available: $($_.Exception.Message)"
+  # }
+  # Write-Host "\n[Debug] IPv4 addresses:"
+  # try {
+  #     Get-NetIPAddress -AddressFamily IPv4 | Format-Table InterfaceAlias, IPAddress, PrefixLength -AutoSize
+  # } catch {
+  #     Write-Host "[Debug] Get-NetIPAddress not available: $($_.Exception.Message)"
+  # }
 
-  # Determine the NIC to configure RSS on (10Gbps or higher)
-  $Nic = (Get-NetAdapter | where-object -Property LinkSpeed -GE 10).Name
+  # # Determine the NIC to configure RSS on (10Gbps or higher)
+  # $Nic = (Get-NetAdapter | where-object -Property LinkSpeed -GE 10).Name
 
-  # Set this on each NIC that meets the criteria
-  foreach ($n in $Nic) {
-    Write-Host "Configuring RSS on adapter '$Nic' to use $RssCpuCount CPUs..."
-    Set-RssSettings -AdapterName $n -CpuCount $RssCpuCount
-  }
+  # # Set this on each NIC that meets the criteria
+  # foreach ($n in $Nic) {
+  #   Write-Host "Configuring RSS on adapter '$Nic' to use $RssCpuCount CPUs..."
+  #   Set-RssSettings -AdapterName $n -CpuCount $RssCpuCount
+  # }
   
   # Debug RSS state for all NICs
   Write-Host "\n[Debug] Current RSS settings for all adapters:"
   $RssState = Get-NetAdapterRss
-  Write-Host $RssState | Format-Table -AutoSize
+  # Format the output nicely
+  $output = $RssState | Format-Table Name, Enabled, BaseProcessorGroup, MaxProcessorNumber, MaxProcessors, Profile -AutoSize
+  Write-Host $output
   
   Write-Host "\nStarting echo tests to peer '$PeerName' with duration $Duration seconds..."
 
