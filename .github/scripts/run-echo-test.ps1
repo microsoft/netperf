@@ -624,6 +624,8 @@ function Run-SendTest {
   $clientArgs = Convert-ArgStringToArray $SenderOptions
   $clientArgs = Normalize-Args -Tokens $clientArgs
 
+  $clientArgs += @('--stats-file', 'echo_client_stats.json')
+
   Write-Host "[Local] Running: .\echo_client.exe"
   Write-Host "[Local] Arguments:"
   foreach ($a in $clientArgs) { Write-Host "  $a" }
