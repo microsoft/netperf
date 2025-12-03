@@ -334,14 +334,12 @@ jobs:
         path: |
           ${{ github.workspace }}\echo\RelWithDebInfo
 
-    - name: Attempt to reset lab (trigger schedule-lab-reset)
-      if: always()
-      uses: peter-evans/workflow-dispatch@v1
-      with:
-        repository: microsoft/netperf
-        workflow: .github/workflows/schedule-lab-reset.yml
-        ref: main
-        inputs: |
-          workflowId: ${{ github.run_id }}
-        token: ${{ secrets.RESET_WORKFLOW_TOKEN }}
+  attempt-reset-lab:
+    name: Attempting to reset lab. Status of this job does not indicate result of lab reset. Look at job details.
+    needs: [test_cts_traffic, test_echo_server]
+    if: ${{ always() }}
+    uses: microsoft/netperf/.github/workflows/schedule-lab-reset.yml@main
+    with:
+      workflowId: ${{ github.run_id }}
 
+  
