@@ -46,6 +46,8 @@ on:
         default: '60'
         type: string
 
+permissions: write-all
+
 # concurrency:
 #   group: >-
 #     traffic-${{ github.event.client_payload.sha || inputs.ref || github.event.pull_request.number || 'main' }}
