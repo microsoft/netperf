@@ -272,6 +272,22 @@ function Set-RssOnCpus {
             return
         }
 
+        # Disable then re-enable the adapter to ensure settings apply
+        if ((Get-Command -Name Disable-NetAdapter -ErrorAction SilentlyContinue) -and (Get-Command -Name Enable-NetAdapter -ErrorAction SilentlyContinue)) {
+            try {
+                Write-Host "Disabling adapter '$ReachableNIC' to apply settings..."
+                Disable-NetAdapter -Name $ReachableNIC -Confirm:$false -ErrorAction Stop
+                Start-Sleep -Seconds 2
+                Write-Host "Re-enabling adapter '$ReachableNIC'..."
+                Enable-NetAdapter -Name $ReachableNIC -Confirm:$false -ErrorAction Stop
+                Start-Sleep -Seconds 2
+            } catch {
+                Write-Host "Warning: failed to toggle adapter '$ReachableNIC': $($_.Exception.Message)"
+            }
+        } else {
+            Write-Host "Disable/Enable adapter cmdlets not present; skipping adapter toggle."
+        }
+
         if (Get-Command -Name Get-NetAdapterRss -ErrorAction SilentlyContinue) {
             Write-Host "Updated RSS settings for '$ReachableNIC':"
             Get-NetAdapterRss -Name $ReachableNIC
