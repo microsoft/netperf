@@ -498,37 +498,6 @@ function Run-RecvTest {
   Receive-JobOrThrow -Job $Job
 }
 
-function CaptureCpuUsagePerformanceMonitorAsJob {
-  param(
-    [Parameter(Mandatory=$true)][string]$DurationSeconds
-  )
-  # Ensure we pass a numeric duration into the job and use that value inside
-  $intDuration = [int]::Parse($DurationSeconds)
-
-  $cpuMonitorJob = Start-Job -ScriptBlock {
-    param($duration)
-
-    $counter = '\Processor(_Total)\% Processor Time'
-    $d = [int]$duration
-
-    try {
-      $samples = Get-Counter -Counter $counter -SampleInterval 1 -MaxSamples $d -ErrorAction Stop
-      $values = $samples.CounterSamples | ForEach-Object { [double]$_.CookedValue }
-    }
-    catch {
-      $values = @(0)
-    }
-
-    
-    $average = ($values | Measure-Object -Average).Average 
-    
-    # Emit a raw numeric value so the caller can parse it reliably
-    Write-Output $average
-  } -ArgumentList $intDuration
-
-  return $cpuMonitorJob
-}
-
 function CaptureIndividualCpuUsagePerformanceMonitorAsJob {
   param(
     [Parameter(Mandatory=$true)][string]$DurationSeconds
@@ -540,23 +509,35 @@ function CaptureIndividualCpuUsagePerformanceMonitorAsJob {
   $cpuMonitorJob = Start-Job -ScriptBlock {
     param($duration)
 
-    $counter = '\Processor(*)\% Processor Time'
+    # Use the Processor Information counter which contains CPU instances across all groups
+    # (e.g., "0,0", "0,1", "1,0" etc.) so we capture CPUs from every group, not just group 0.
+    $counter = '\Processor Information(*)\% Processor Time'
     $d = [int]$duration
 
     try {
       $samples = Get-Counter -Counter $counter -SampleInterval 1 -MaxSamples $d -ErrorAction Stop
-      # Group samples by instance (processor index) and compute average per instance
+      # Group samples by instance (processor information name) and compute average per instance.
+      # InstanceName for Processor Information uses formats like "0,0" (group,index) or descriptive names.
       $grouped = $samples.CounterSamples | Group-Object -Property InstanceName
       $results = @()
       foreach ($g in $grouped) {
+        $instName = $g.Name
+        # Normalize instance names: skip the _Total instance and any empty names
+        if ([string]::IsNullOrEmpty($instName) -or $instName -eq '_Total') { continue }
         $vals = $g.Group | ForEach-Object { [double]$_.CookedValue }
         $avg = ($vals | Measure-Object -Average).Average
-        $results += [PSCustomObject]@{ Processor = $g.Name; Average = $avg }
+        $results += [PSCustomObject]@{ Processor = $instName; Average = $avg }
       }
-      # Sort by processor name to have consistent ordering (e.g., _Total last or first)
-      $sorted = $results | Sort-Object @{Expression={$_.Processor -replace '^CPU',''}},Processor
-      # Emit numeric array (only per-CPU numeric averages, excluding the _Total instance)
-      $numeric = $sorted | Where-Object { $_.Processor -ne '_Total' } | ForEach-Object { [double]$_.Average }
+      # Sort by numeric ordering where possible, otherwise by name for consistent output
+      $sorted = $results | Sort-Object @{Expression={
+          $n = $_.Processor -replace '[^0-9,]',''
+          # If the processor string contains a comma (group,index), split and compute a sortable key
+          if ($n -match ',') { $parts = $n -split ','; return ([int]$parts[0]*1000 + [int]$parts[1]) }
+          if ($n -match '^[0-9]+$') { return [int]$n }
+          return $_.Processor
+        }},Processor
+      # Emit numeric array of per-CPU numeric averages
+      $numeric = $sorted | ForEach-Object { [double]$_.Average }
     }
     catch {
       $numeric = @(0)

@@ -318,3 +318,19 @@ jobs:
         name: crash_dumps_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: |
           ${{ github.workspace }}\echo\RelWithDebInfo
+
+  attempt-reset-labecho:
+    name: Attempting to reset lab. Status of this job does not indicate result of lab reset. Look at job details.
+    needs: [test_echo_server]
+    if: ${{ always() }}
+    uses: microsoft/netperf/.github/workflows/schedule-lab-reset.yml@main
+    with:
+      workflowId: ${{ github.run_id }}
+
+  attempt-reset-lab-cts:
+    name: Attempting to reset lab. Status of this job does not indicate result of lab reset. Look at job details.
+    needs: [test_cts_traffic]
+    if: ${{ always() }}
+    uses: microsoft/netperf/.github/workflows/schedule-lab-reset.yml@main
+    with:
+      workflowId: ${{ github.run_id }}
