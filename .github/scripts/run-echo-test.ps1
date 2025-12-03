@@ -719,6 +719,7 @@ try {
   # Write the performance counter results as a JSON file
   $perfResults = Receive-Job -Job $perfCounterJob -Wait -AutoRemoveJob
   $perfJsonPath = Join-Path $cwd 'echo_client_perf_counters.json'
+  $perfResults | ConvertTo-Json | Out-File -FilePath $perfJsonPath -Encoding utf8 -Force
 
   # Launch another per-CPU usage monitor for the recv test
   $cpuMonitorJob = CaptureIndividualCpuUsagePerformanceMonitorAsJob $Duration
@@ -745,6 +746,17 @@ try {
   # Write the performance counter results as a JSON file
   $perfResults = Receive-Job -Job $perfCounterJob -Wait -AutoRemoveJob
   $perfJsonPath = Join-Path $cwd 'echo_server_perf_counters.json'
+  $perfResults | ConvertTo-Json | Out-File -FilePath $perfJsonPath -Encoding utf8 -Force
+ 
+  # List json files in cwd
+  Write-Host "JSON files in $cwd:"
+  Get-ChildItem -Path $cwd -Filter *.json | ForEach-Object { Write-Host "  $($_.FullName)" }
+
+  # Print each JSON file's contents
+  Get-ChildItem -Path $cwd -Filter *.json | ForEach-Object {
+    Write-Host "Contents of $($_.FullName):"
+    Get-Content -Path $_.FullName | ForEach-Object { Write-Host "  $_" }
+  }
 
   # Copy the stats file to the parent folder for GitHub Actions artifact upload
   Copy-Item -Path *.json -Destination $cwd\.. -Force
