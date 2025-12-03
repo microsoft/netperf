@@ -277,7 +277,7 @@ jobs:
           '-PeerName', '"netperf-peer"',
           '-SenderOptions', '"' + $env:SENDER_OPTIONS + '"',
           '-ReceiverOptions', '"' + $env:RECEIVER_OPTIONS + '"'
-          '-Duration ', ${{ inputs.duration }}
+          '-Duration ', '"${{ inputs.duration }}"'
         ) -join ' '
 
         Write-Output "Running: $cmd"
