@@ -754,7 +754,7 @@ try {
 
   # Print each JSON file's contents
   Get-ChildItem -Path $cwd -Filter *.json | ForEach-Object {
-    Write-Host "Contents of $($_.FullName):"
+    Write-Host "Contents of $($_.FullName) - "
     Get-Content -Path $_.FullName | ForEach-Object { Write-Host "  $_" }
   }
 
