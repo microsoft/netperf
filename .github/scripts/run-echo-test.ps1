@@ -595,7 +595,7 @@ function CapturePerformanceMonitorAsJob {
       $results
     }
     catch {
-      Write-Output (@([PSCustomObject]@{ Counter = 'error'; Instance = ''; Average = 0 }))
+      Write-Output (@([PSCustomObject]@{ Counter = 'error'; Instance = ''; Average = 0; ErrorMessage = $_.Exception.Message }))
     }
   } -ArgumentList $intDuration, $Counters
 
@@ -668,7 +668,8 @@ $PerformanceCounters =
   '\IPv6\Datagrams Received Address Errors',
 
   '\WFPv4\Packets Discarded/sec',
-  '\WFPv6\Packets Discarded/sec'
+  '\WFPv6\Packets Discarded/sec',
+  '\Processor Information(*)\% Processor Time'
 )
 
 # =========================

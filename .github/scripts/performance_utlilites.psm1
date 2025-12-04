@@ -459,3 +459,52 @@ function Set-RssSettings {
         Write-Host "MaxProcessorNumber: $maxCPU, MaxProcessorGroup: $maxGroup"
     }
 }
+
+function CapturePerformanceMonitorAsJob {
+  param(
+    [Parameter(Mandatory=$true)][string]$DurationSeconds,
+    [Parameter(Mandatory=$false)][string[]]$Counters = @('\Processor Information(*)\% Processor Time')
+  )
+
+  # Ensure numeric duration
+  $intDuration = [int]::Parse($DurationSeconds)
+
+  $perfJob = Start-Job -ScriptBlock {
+    param($duration, $counters)
+
+    $d = [int]$duration
+    if (-not $counters -or $counters.Count -eq 0) {
+      $counters = @('\Processor Information(*)\% Processor Time')
+    }
+
+    try {
+      # Collect all requested counters in one Get-Counter call if possible
+      $samples = Get-Counter -Counter $counters -SampleInterval 1 -MaxSamples $d -ErrorAction Stop
+
+      # Group by counter path and instance name, compute per-instance averages
+      # CounterSamples contain Path, InstanceName, CounterName, CookedValue
+      $groupedByCounter = $samples.CounterSamples | Group-Object -Property Path
+
+      $results = @()
+      foreach ($counterGroup in $groupedByCounter) {
+        $path = $counterGroup.Name
+        $innerGroups = $counterGroup.Group | Group-Object -Property InstanceName
+        foreach ($inst in $innerGroups) {
+          $instName = $inst.Name
+          if ([string]::IsNullOrEmpty($instName) -or $instName -eq '_Total') { continue }
+          $vals = $inst.Group | ForEach-Object { [double]$_.CookedValue }
+          $avg = ($vals | Measure-Object -Average).Average
+          $results += [PSCustomObject]@{ Counter = $path; Instance = $instName; Average = $avg }
+        }
+      }
+
+      # Emit structured results: an array of PSObjects with Counter, Instance, Average
+      $results
+    }
+    catch {
+      Write-Output (@([PSCustomObject]@{ Counter = 'error'; Instance = ''; Average = 0; ErrorMessage = $_.Exception.Message }))
+    }
+  } -ArgumentList $intDuration, $Counters
+
+  return $perfJob
+}
