@@ -749,7 +749,7 @@ try {
   $perfResults | ConvertTo-Json | Out-File -FilePath $perfJsonPath -Encoding utf8 -Force
  
   # List json files in cwd
-  Write-Host "JSON files in $cwd:"
+  Write-Host "JSON files in $cwd"
   Get-ChildItem -Path $cwd -Filter *.json | ForEach-Object { Write-Host "  $($_.FullName)" }
 
   # Print each JSON file's contents
