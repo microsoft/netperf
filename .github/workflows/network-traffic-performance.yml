@@ -275,7 +275,7 @@ jobs:
 
     - name: Log pktmon drop counters before test
       run: |
-        pktmon comp counters --counter-type drops
+        pktmon comp counters --type drop
 
     - name: Start PktMon drop Capture
       run: |
@@ -318,7 +318,7 @@ jobs:
 
     - name: Log pktmon drop counters after test
       run: |
-        pktmon comp counters --counter-type drops
+        pktmon comp counters --type drop
 
     - name: Optional - Stop TCPIP tracing
       if: ${{ github.event.inputs.tcp_ip_tracing == 'true' }}
