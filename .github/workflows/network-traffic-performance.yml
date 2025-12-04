@@ -273,6 +273,10 @@ jobs:
         Write-Output "Files in echo RelWithDebInfo directory:"
         Get-ChildItem -Path ${{ github.workspace }}\echo\RelWithDebInfo -Recurse
 
+    - name: Log pktmon drop counters before test
+      run: |
+        pktmon comp counters --counter-type drops
+
     - name: Start PktMon drop Capture
       run: |
         pktmon filter add -p 7
@@ -311,6 +315,10 @@ jobs:
         copy pktmon.etl ${{ github.workspace }}\ETL\pktmon_drop_trace.etl
         pktmon reset
         pktmon filter remove all
+
+    - name: Log pktmon drop counters after test
+      run: |
+        pktmon comp counters --counter-type drops
 
     - name: Optional - Stop TCPIP tracing
       if: ${{ github.event.inputs.tcp_ip_tracing == 'true' }}
