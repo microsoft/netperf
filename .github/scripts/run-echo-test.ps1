@@ -570,33 +570,58 @@ function CapturePerformanceMonitorAsJob {
       $counters = @('\Processor Information(*)\% Processor Time')
     }
 
-    try {
-      # Collect all requested counters in one Get-Counter call if possible
-      $samples = Get-Counter -Counter $counters -SampleInterval 1 -MaxSamples $d -ErrorAction Stop
+    # Sample once per second for the requested duration and accumulate per-counter values.
+    $store = @{}
 
-      # Group by counter path and instance name, compute per-instance averages
-      # CounterSamples contain Path, InstanceName, CounterName, CookedValue
-      $groupedByCounter = $samples.CounterSamples | Group-Object -Property Path
-
-      $results = @()
-      foreach ($counterGroup in $groupedByCounter) {
-        $path = $counterGroup.Name
-        $innerGroups = $counterGroup.Group | Group-Object -Property InstanceName
-        foreach ($inst in $innerGroups) {
-          $instName = $inst.Name
-          if ([string]::IsNullOrEmpty($instName) -or $instName -eq '_Total') { continue }
-          $vals = $inst.Group | ForEach-Object { [double]$_.CookedValue }
-          $avg = ($vals | Measure-Object -Average).Average
-          $results += [PSCustomObject]@{ Counter = $path; Instance = $instName; Average = $avg }
+    for ($i = 0; $i -lt $d; $i++) {
+      $samples = $null
+      try {
+        # Try to collect all counters in a single quick sample (returns immediately)
+        $samples = Get-Counter -Counter $counters -MaxSamples 1 -ErrorAction Stop
+      }
+      catch {
+        # If that fails, collect available counters individually (quick single-sample calls)
+        $samples = New-Object System.Collections.Generic.List[object]
+        foreach ($c in $counters) {
+          try {
+            $s = Get-Counter -Counter $c -MaxSamples 1 -ErrorAction Stop
+            if ($s.CounterSamples) { $s.CounterSamples | ForEach-Object { [void]$samples.Add($_) } }
+          }
+          catch {
+            # skip bad counter
+            continue
+          }
         }
       }
 
-      # Emit structured results: an array of PSObjects with Counter, Instance, Average
-      $results
+      if ($samples -ne $null) {
+        $csamples = $samples.CounterSamples
+        if (-not $csamples -and ($samples -is [System.Collections.IEnumerable])) { $csamples = $samples }
+        foreach ($cs in $csamples) {
+          $path = $cs.Path
+          $inst = $cs.InstanceName
+          if ([string]::IsNullOrEmpty($inst) -or $inst -eq '_Total') { continue }
+          if ($cs.Status -ne 'Success') { continue }
+          $key = "$path`|$inst"
+          if (-not $store.ContainsKey($key)) { $store[$key] = New-Object System.Collections.ArrayList }
+          [void]$store[$key].Add([double]$cs.CookedValue)
+        }
+      }
+
+      Start-Sleep -Seconds 1
     }
-    catch {
-      Write-Output (@([PSCustomObject]@{ Counter = 'error'; Instance = ''; Average = 0; ErrorMessage = $_.Exception.Message }))
+
+    $results = @()
+    foreach ($k in $store.Keys) {
+      $parts = $k -split '\|',2
+      $path = $parts[0]
+      $inst = $parts[1]
+      $avg = ($store[$k] | Measure-Object -Average).Average
+      $results += [PSCustomObject]@{ Counter = $path; Instance = $inst; Average = $avg }
     }
+
+    # Emit structured results: an array of PSObjects with Counter, Instance, Average
+    $results
   } -ArgumentList $intDuration, $Counters
 
   return $perfJob
