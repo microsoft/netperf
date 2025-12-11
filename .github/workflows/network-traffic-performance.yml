@@ -25,5 +25,5 @@ jobs:
 
     - name: Test
       run: |
-        ping netperf-peer
+        ping -c 8 netperf-peer
       shell: pwsh
