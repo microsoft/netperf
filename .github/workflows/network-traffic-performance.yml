@@ -23,6 +23,11 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633
 
+    - name: Get OS info
+      run: |
+        uname -a
+      shell: pwsh
+
     - name: Test
       run: |
         ping -c 8 netperf-peer
