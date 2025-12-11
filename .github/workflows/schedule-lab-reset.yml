@@ -8,9 +8,6 @@ on:
         required: true
         type: string
 
-
-permissions: write-all
-
 jobs:
   attempt-lab-reset:
     name: Enqueue Lab Reset Workflow
