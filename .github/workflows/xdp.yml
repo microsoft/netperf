@@ -83,7 +83,7 @@ jobs:
       run: tools/two-machine-perf.ps1 -Config Release -Arch ${{ matrix.vec.arch }} -Verbose
     - name: Upload Logs
       if: ${{ always() }}
-      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
       with:
         name: logs_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: artifacts/logs
