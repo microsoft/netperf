@@ -78,6 +78,7 @@ jobs:
   do-reset-all-active:
     name: Reset all active lab machines
     if: ${{ inputs.reset-all-active == true || github.event_name == 'schedule' || github.event_name == 'repository_dispatch' }}
+    timeout-minutes: 8
     needs: sanity-check
     strategy:
       fail-fast: false
@@ -127,6 +128,7 @@ jobs:
     name: Reset parent or child Machine
     if: ${{ inputs.reset-all-active == false && github.event_name != 'schedule' && github.event_name != 'repository_dispatch' }}
     needs: sanity-check
+    timeout-minutes: 8
     runs-on:
       - self-hosted
       - ${{ inputs.parent-or-child }}
