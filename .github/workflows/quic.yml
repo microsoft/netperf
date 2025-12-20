@@ -1,4 +1,4 @@
-name: QUIC
+name: QUIC1
 
 on:
   workflow_call:
