@@ -2,7 +2,9 @@ param(
   [string]$PeerName = "netperf-peer",
   [string]$SenderOptions,
   [string]$ReceiverOptions,
-  [string]$Duration = "60"
+  [string]$Duration = "60",
+  [string]$RemoteServerPath = "/tmp/echo_server",
+  [string]$RemoteServerLogPath = "/tmp/server.log"
 )
 
 $ErrorActionPreference = 'Stop'
@@ -30,14 +32,14 @@ try {
 }
 
 # Copy server binary to peer and ensure executable
-Write-Host "Copying server binary to peer"
-Copy-Item -Path $serverPath -Destination '~/echo_server' -ToSession $session
-Invoke-Command -Session $session -ScriptBlock { chmod +x ~/echo_server }
+Write-Host "Copying server binary to peer at $RemoteServerPath"
+Copy-Item -Path $serverPath -Destination $RemoteServerPath -ToSession $session
+Invoke-Command -Session $session -ScriptBlock { chmod +x $using:RemoteServerPath }
 
 # Start server in background on peer, capture PID
 Write-Host "Starting server on peer"
 $startServer = @"
-  bash -lc "nohup ~/echo_server $using:ReceiverOptions > ~/server.log 2>&1 & echo \$!"
+  bash -lc "nohup $using:RemoteServerPath $using:ReceiverOptions > $using:RemoteServerLogPath 2>&1 & echo \$!"
 "@
 $serverPid = Invoke-Command -Session $session -ScriptBlock ([ScriptBlock]::Create($startServer))
 Write-Host "Server PID on peer: $serverPid"
@@ -45,7 +47,9 @@ Start-Sleep -Seconds 2
 
 # Run client locally and capture output
 Write-Host "Running echo client locally"
-$clientCmd = "bash -lc \"$clientPath $SenderOptions --duration $Duration\""
+$clientCmd = @"
+bash -lc '$clientPath $SenderOptions --duration $Duration'
+"@
 $clientOutput = & pwsh -NoProfile -Command $clientCmd 2>&1
 $clientExit = $LASTEXITCODE
 
@@ -80,7 +84,7 @@ Start-Sleep -Seconds 1
 
 Write-Host "Fetching server log from peer"
 try {
-  Copy-Item -FromSession $session -Path '~/server.log' -Destination 'server.log'
+  Copy-Item -FromSession $session -Path $RemoteServerLogPath -Destination 'server.log'
 } catch {
   Write-Host "Failed to copy server.log: $_"
 }
