@@ -343,19 +343,34 @@ function Create-Session {
   $Creds = New-Object System.Management.Automation.PSCredential ($Username, $Password)
 
   try {
-    Write-Host "Creating PSSession to $PeerName using configuration '$RemotePSConfiguration'..."
-    $s = New-PSSession -ComputerName $PeerName -Credential $Creds -ConfigurationName $RemotePSConfiguration -ErrorAction Stop
-    Write-Host "Session created using configuration '$RemotePSConfiguration'."
+    Write-Host "[$(Get-Date -Format o)] Creating PSSession to $PeerName using configuration '$RemotePSConfiguration'..."
+    # Run New-PSSession inside a background job and enforce a timeout so it doesn't hang indefinitely
+    $psJob = Start-Job -ScriptBlock { param($pn,$rcfg,$c) try { New-PSSession -ComputerName $pn -Credential $c -ConfigurationName $rcfg -ErrorAction Stop } catch { throw } } -ArgumentList $PeerName,$RemotePSConfiguration,$Creds -ErrorAction Stop
+    $waited = $psJob | Wait-Job -Timeout 60
+    if (-not $waited) {
+      Write-Host "[$(Get-Date -Format o)] Timeout waiting for New-PSSession to $PeerName (60s). Attempting to stop job and throw."
+      try { Stop-Job $psJob -Force -ErrorAction SilentlyContinue } catch { }
+      Receive-Job $psJob -ErrorAction SilentlyContinue | Out-Null
+      throw "Timeout creating PSSession to $PeerName"
+    }
+    $s = Receive-Job $psJob -ErrorAction Stop
+    Write-Host "[$(Get-Date -Format o)] Session created using configuration '$RemotePSConfiguration'."
+    Remove-Job $psJob -Force -ErrorAction SilentlyContinue
   }
   catch {
-    Write-Host "Failed to create session using configuration '$RemotePSConfiguration': $($_.Exception.Message)"
-    Write-Host "Attempting fallback: creating session without ConfigurationName..."
+    Write-Host "[$(Get-Date -Format o)] Failed to create session using configuration '$RemotePSConfiguration': $($_.Exception.Message)"
+    Write-Host "[$(Get-Date -Format o)] Attempting fallback: creating session without ConfigurationName..."
     try {
-      $s = New-PSSession -ComputerName $PeerName -Credential $Creds -ErrorAction Stop
-      Write-Host "Session created using default configuration."
+      # fallback also timeboxed
+      $psJob2 = Start-Job -ScriptBlock { param($pn,$c) try { New-PSSession -ComputerName $pn -Credential $c -ErrorAction Stop } catch { throw } } -ArgumentList $PeerName,$Creds -ErrorAction Stop
+      $waited2 = $psJob2 | Wait-Job -Timeout 30
+      if (-not $waited2) { Stop-Job $psJob2 -Force -ErrorAction SilentlyContinue; Receive-Job $psJob2 -ErrorAction SilentlyContinue | Out-Null; throw "Timeout creating fallback PSSession to $PeerName" }
+      $s = Receive-Job $psJob2 -ErrorAction Stop
+      Write-Host "[$(Get-Date -Format o)] Session created using default configuration."
+      Remove-Job $psJob2 -Force -ErrorAction SilentlyContinue
     }
     catch {
-      Write-Host "Fallback session creation failed: $($_.Exception.Message)"
+      Write-Host "[$(Get-Date -Format o)] Fallback session creation failed: $($_.Exception.Message)"
       throw "Failed to create remote session to $PeerName"
     }
   }
@@ -702,13 +717,13 @@ $PerformanceCounters =
 # =========================
 try {
   
-  # Print the current working directory
+  # Print the current working directory with timestamp
   $cwd = (Get-Location).Path
-  Write-Host "Current working directory: $cwd"
+  Write-Host "[$(Get-Date -Format o)] Current working directory: $cwd"
 
   Get-NetAdapterRss
 
-  Write-Host "\nStarting echo tests to peer '$PeerName' with duration $Duration seconds..."
+  Write-Host "[$(Get-Date -Format o)] Starting echo tests to peer '$PeerName' with duration $Duration seconds..."
 
   # Create remote session
   $Session = Create-Session -PeerName $PeerName -RemotePSConfiguration 'PowerShell.7'
