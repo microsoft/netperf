@@ -1,8 +1,37 @@
 # WPR CPU profiling helpers
 $script:WprProfiles = @{}
+$script:localFwState = $null
+
+# Print detailed information for an ErrorRecord or Exception. Supports pipeline input.
+function Write-DetailedError {
+  param(
+    [Parameter(ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)] $InputObject
+  )
+
+  process {
+    $er = $InputObject
+    if ($null -eq $er) { return }
+    if ($er -is [System.Management.Automation.ErrorRecord]) {
+      Write-Host "ERROR: $($er.Exception.Message)"
+      if ($er.Exception.StackTrace) { Write-Host "StackTrace: $($er.Exception.StackTrace)" }
+      if ($er.InvocationInfo) { Write-Host "Invocation: $($er.InvocationInfo.PositionMessage)" }
+      Write-Host "ErrorRecord: $er"
+    }
+    elseif ($er -is [System.Exception]) {
+      Write-Host "EXCEPTION: $($er.Message)"
+      if ($er.StackTrace) { Write-Host "StackTrace: $($er.StackTrace)" }
+    }
+    else {
+      Write-Host $er
+    }
+  }
+}
 
 function Start-WprCpuProfile {
-  param([Parameter(Mandatory=$true)][string]$Which)
+  param(
+    [Parameter(Mandatory=$true)][string]$Which,
+    [Parameter(Mandatory=$false)][switch]$CpuProfile
+  )
 
   if (-not $CpuProfile) { return }
 
@@ -51,7 +80,10 @@ function Start-WprCpuProfile {
 }
 
 function Stop-WprCpuProfile {
-  param([Parameter(Mandatory=$true)][string]$Which)
+  param(
+    [Parameter(Mandatory=$true)][string]$Which,
+    [Parameter(Mandatory=$false)][switch]$CpuProfile
+  )
 
   if (-not $CpuProfile) { return }
 
@@ -283,8 +315,8 @@ function Restore-FirewallAndCleanup {
     }
 
     Write-Host "Restoring local firewall state..."
-    if ($localFwState) {
-      foreach ($p in $localFwState) {
+    if ($script:localFwState) {
+      foreach ($p in $script:localFwState) {
         Set-NetFirewallProfile -Profile $p.Name -Enabled $p.Enabled
       }
     }

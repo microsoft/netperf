@@ -27,15 +27,16 @@ on:
         default: '60'
         type: string
 
-permissions: write-all
+permissions:
+  contents: read
 
 jobs:
   build_echo_test_linux:
     name: Build echo server/client (Linux)
-    uses: Alan-Jowett/LinuxUDPShardedEcho/.github/workflows/reusable-build.yml@main
+    uses: alan-jowett/LinuxUDPShardedEcho/.github/workflows/reusable-build.yml@main
     with:
       artifact_name: echo_test
-      repository: 'Alan-Jowett/LinuxUDPShardedEcho'
+      repository: 'alan-jowett/LinuxUDPShardedEcho'
       config: 'RelWithDebInfo'
       ref: ${{ inputs.test_tool_ref }}
 

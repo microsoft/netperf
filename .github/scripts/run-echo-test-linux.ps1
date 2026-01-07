@@ -38,8 +38,10 @@ Invoke-Command -Session $session -ScriptBlock { chmod +x $using:RemoteServerPath
 
 # Start server in background on peer, capture PID
 Write-Host "Starting server on peer"
+# Properly escape ReceiverOptions for safe shell execution
+$escapedReceiverOptions = $ReceiverOptions -replace "'", "'\"'\"'" # escape single quotes
 $startServer = @"
-  bash -lc "nohup $using:RemoteServerPath $using:ReceiverOptions > $using:RemoteServerLogPath 2>&1 & echo \$!"
+  bash -lc "nohup '$using:RemoteServerPath' $using:escapedReceiverOptions > '$using:RemoteServerLogPath' 2>&1 & echo \`$!"
 "@
 $serverPid = Invoke-Command -Session $session -ScriptBlock ([ScriptBlock]::Create($startServer))
 Write-Host "Server PID on peer: $serverPid"
@@ -47,8 +49,11 @@ Start-Sleep -Seconds 2
 
 # Run client locally and capture output
 Write-Host "Running echo client locally"
+# Properly escape arguments for safe shell execution
+$escapedSenderOptions = $SenderOptions -replace "'", "'\"'\"'" # escape single quotes
+$escapedDuration = $Duration -replace "[^0-9]", "" # only allow digits
 $clientCmd = @"
-bash -lc '$clientPath $SenderOptions --duration $Duration'
+bash -lc ''$clientPath' $escapedSenderOptions --duration $escapedDuration'
 "@
 $clientOutput = & pwsh -NoProfile -Command $clientCmd 2>&1
 $clientExit = $LASTEXITCODE
@@ -61,8 +66,8 @@ Write-Host "Client exit: $clientExit"
 $sent = 0
 $received = 0
 try {
-  $sentMatch = ($clientOutput | Select-String -Pattern "Packets sent: (\\d+)")
-  $recvMatch = ($clientOutput | Select-String -Pattern "Packets received: (\\d+)")
+  $sentMatch = ($clientOutput | Select-String -Pattern "Packets sent: (\d+)")
+  $recvMatch = ($clientOutput | Select-String -Pattern "Packets received: (\d+)")
   if ($sentMatch) { $sent = [int]($sentMatch.Matches[0].Groups[1].Value) }
   if ($recvMatch) { $received = [int]($recvMatch.Matches[0].Groups[1].Value) }
 } catch { }

@@ -50,8 +50,8 @@ function Convert-ArgStringToArray($s) {
       # Quoted token; Group 2 contains inner text with possible escapes
       $val = $m.Groups[2].Value
       # Unescape backslash-escaped sequences commonly used in CLI args
-      $val = $val -replace '\\', '\'
-      $val = $val -replace '\"', '"'
+      $val = $val -replace '\\\\', '\'
+      $val = $val -replace '\\"', '"'
     }
     else {
       # Unquoted token in Group 1
@@ -222,7 +222,7 @@ function Stop-WprCpuProfile {
 # Remote job helpers
 # =========================
 function Invoke-EchoInSession {
-  param($Session, $RemoteDir, $Name, $Options)
+  param($Session, $RemoteDir, $Name, $Options, $WaitSeconds = 0)
 
   $Job = Invoke-Command -Session $Session -ScriptBlock {
     param($RemoteDir, $Name, $Options, $WaitSeconds)
@@ -285,7 +285,7 @@ function Invoke-EchoInSession {
     catch {
       throw "Failed to launch or monitor process $Tool $($_.Exception.Message)"
     }
-  } -ArgumentList $RemoteDir, $Name, $Options -AsJob -ErrorAction Stop
+  } -ArgumentList $RemoteDir, $Name, $Options, $WaitSeconds -AsJob -ErrorAction Stop
 
   return $Job
 }

@@ -46,12 +46,13 @@ on:
         default: '60'
         type: string
 
-permissions: write-all
+permissions:
+  contents: read
 
-# concurrency:
-#   group: >-
-#     traffic-${{ github.event.client_payload.sha || inputs.ref || github.event.pull_request.number || 'main' }}
-#   cancel-in-progress: true
+concurrency:
+  group: >-
+    traffic-${{ github.event.client_payload.sha || inputs.ref || github.event.pull_request.number || 'main' }}
+  cancel-in-progress: true
 
 jobs:
   build_cts_traffic:
@@ -268,7 +269,7 @@ jobs:
         Write-Output "  ref: ${{ inputs.ref }}"
         Write-Output "  Duration: ${{ inputs.duration }}"
 
-    - name: Diagonstic - List files in echo RelWithDebInfo directory
+    - name: Diagnostic - List files in echo RelWithDebInfo directory
       run: |
         Write-Output "Files in echo RelWithDebInfo directory:"
         Get-ChildItem -Path ${{ github.workspace }}\echo\RelWithDebInfo -Recurse
@@ -302,7 +303,7 @@ jobs:
           $cpuSwitch,
           '-PeerName', '"netperf-peer"',
           '-SenderOptions', '"' + $env:SENDER_OPTIONS + '"',
-          '-ReceiverOptions', '"' + $env:RECEIVER_OPTIONS + '"'
+          '-ReceiverOptions', '"' + $env:RECEIVER_OPTIONS + '"',
           '-Duration ', '"${{ inputs.duration }}"'
         ) -join ' '
 
