@@ -454,7 +454,7 @@ function Run-SendTest {
   $serverArgs = Normalize-Args -Tokens $serverArgs
   Write-Host "[Local->Remote] Invoking remote job with arguments:"
   if ($serverArgs -is [System.Array]) { foreach ($arg in $serverArgs) { Write-Host "  $arg" } } else { Write-Host "  $serverArgs" }
-  $Job = Invoke-EchoInSession -Session $Session -RemoteDir $script:RemoteDir -Name "echo_server" -Options $serverArgs
+  $Job = Invoke-EchoInSession -Session $Session -RemoteDir $script:RemoteDir -Name "echo_server" -Options $serverArgs -WaitSeconds 0
 
   $clientArgs = Convert-ArgStringToArray $SenderOptions
   $clientArgs = Normalize-Args -Tokens $clientArgs
@@ -484,7 +484,7 @@ function Run-RecvTest {
   $serverArgs = Normalize-Args -Tokens $serverArgs
   Write-Host "[Local->Remote] Invoking remote job with arguments:"
   if ($serverArgs -is [System.Array]) { foreach ($arg in $serverArgs) { Write-Host "  $arg" } } else { Write-Host "  $serverArgs" }
-  $Job = Invoke-EchoInSession -Session $Session -RemoteDir $script:RemoteDir -Name "echo_client" -Options $serverArgs
+  $Job = Invoke-EchoInSession -Session $Session -RemoteDir $script:RemoteDir -Name "echo_client" -Options $serverArgs -WaitSeconds 0
 
   $clientArgs = Convert-ArgStringToArray $ReceiverOptions
   $clientArgs = Normalize-Args -Tokens $clientArgs
