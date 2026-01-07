@@ -720,7 +720,7 @@ try {
   Copy-EchoToRemote -Session $Session
 
   # Launch per-CPU usage monitor as a background job (returns array of per-CPU averages)
-  $cpuMonitorJob = CaptureIndividualCpuUsagePerformanceMonitorAsJob $Duration
+  $cpuMonitorJob = CaptureIndividualCpuUsagePerformanceMonitorAsJob -DurationSeconds $Duration
   $perfCounterJob = CapturePerformanceMonitorAsJob -DurationSeconds $Duration -Counters $PerformanceCounters
 
   # Run tests
@@ -748,7 +748,7 @@ try {
   $perfResults | ConvertTo-Json | Out-File -FilePath $perfJsonPath -Encoding utf8 -Force
 
   # Launch another per-CPU usage monitor for the recv test
-  $cpuMonitorJob = CaptureIndividualCpuUsagePerformanceMonitorAsJob $Duration
+  $cpuMonitorJob = CaptureIndividualCpuUsagePerformanceMonitorAsJob -DurationSeconds $Duration
   $perfCounterJob = CapturePerformanceMonitorAsJob -DurationSeconds $Duration -Counters $PerformanceCounters
 
   Run-RecvTest -PeerName $PeerName -Session $Session -SenderOptions $SenderOptions -ReceiverOptions $ReceiverOptions
