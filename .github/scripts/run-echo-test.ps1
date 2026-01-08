@@ -49,73 +49,10 @@ $localFwState = $null
 # =========================
 # Remote job helpers
 # =========================
+# Backward-compatible wrapper for Invoke-EchoInSession -> Invoke-ToolInSession
 function Invoke-EchoInSession {
   param($Session, $RemoteDir, $Name, $Options, $WaitSeconds = 0)
-
-  $Job = Invoke-Command -Session $Session -ScriptBlock {
-    param($RemoteDir, $Name, $Options, $WaitSeconds)
-
-    Set-Location (Join-Path $RemoteDir 'echo')
-
-    $Tool = Join-Path $RemoteDir ("echo\$Name.exe")
-    Write-Host "[Remote] Running: $Tool"
-    if ($Options -is [System.Array]) {
-      Write-Host "[Remote] Arguments (array):"
-      foreach ($arg in $Options) { Write-Host "  $arg" }
-      $argList = $Options
-    }
-    else {
-      Write-Host "[Remote] Arguments (string):"
-      Write-Host "  $Options"
-      $argList = @()
-      if (-not [string]::IsNullOrEmpty($Options)) { $argList = @($Options) }
-    }
-    
-    try {
-      # Invoke the tool directly. When a timeout is requested, run the invocation
-      # inside a PowerShell background job so we can enforce a timeout and cancel
-      # the job (and any matching process) if it doesn't finish in time.
-      if ($WaitSeconds -and $WaitSeconds -gt 0) {
-        Write-Host "[Remote] Starting tool as background job for timeout control..."
-        $jobScript = {
-          param($ToolPath, $ArgList)
-          if ($ArgList -is [System.Array]) {
-            & $ToolPath @ArgList
-          }
-          elseif (-not [string]::IsNullOrEmpty($ArgList)) {
-            & $ToolPath $ArgList
-          }
-          else {
-            & $ToolPath
-          }
-          return $LASTEXITCODE
-        }
-
-        $j = Start-Job -ScriptBlock $jobScript -ArgumentList $Tool, $argList -ErrorAction Stop
-        Write-Host "[Remote] Started job Id=$($j.Id)"
-
-        # Wait-Job uses seconds for timeout
-        $completed = $j | Wait-Job 
-        $output = Receive-Job $j -Keep
-        # The job returns the tool's exit code as the last object
-        $rc = $output | Where-Object { ($_ -is [int]) -or ($_ -match '^[0-9]+$') } | Select-Object -Last 1
-        if ($rc -eq $null) { $rc = 0 }
-        Write-Host "[Remote] Process (job) exited with code $rc"
-        if ($rc -ne 0) { throw "Remote $Tool.exe exited with code $rc" }
-      }
-      else {
-        Write-Host "[Remote] Running tool in foreground (no timeout)..."
-        if ($argList -is [System.Array]) { & $Tool @argList } elseif (-not [string]::IsNullOrEmpty($argList)) { & $Tool $argList } else { & $Tool }
-        Write-Host "[Remote] Process exited with code $LASTEXITCODE"
-        if ($LASTEXITCODE -ne 0) { throw "Remote $Tool.exe exited with code $LASTEXITCODE" }
-      }
-    }
-    catch {
-      throw "Failed to launch or monitor process $Tool $($_.Exception.Message)"
-    }
-  } -ArgumentList $RemoteDir, $Name, $Options, $WaitSeconds -AsJob -ErrorAction Stop
-
-  return $Job
+  return Invoke-ToolInSession -Session $Session -RemoteDir $RemoteDir -ToolDir 'echo' -ToolName $Name -Options $Options -WaitSeconds $WaitSeconds
 }
 
 function Copy-EchoToRemote {
