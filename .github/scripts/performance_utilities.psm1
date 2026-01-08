@@ -29,6 +29,33 @@ function Convert-ArgStringToArray {
   return $out
 }
 
+# Normalize tokens: prefix '-' only for standalone tokens that don't look like values
+function Normalize-Args {
+  param([Parameter(Mandatory=$true)][object[]]$Tokens)
+  if ($null -eq $Tokens) { return @() }
+  $out = @()
+  for ($i = 0; $i -lt $Tokens.Count; $i++) {
+    $t = $Tokens[$i]
+    if ([string]::IsNullOrEmpty($t)) { continue }
+
+    # Keep tokens that already start with '-' or contain '=' as-is
+    if ($t -like '-*' -or $t -match '=') {
+      $out += $t
+      continue
+    }
+
+    # If previous token exists and starts with '-', treat this token as that option's value
+    if ($i -gt 0 -and ($Tokens[$i-1] -is [string]) -and ($Tokens[$i-1] -like '-*')) {
+      $out += $t
+      continue
+    }
+
+    # Otherwise prefix a single '-'
+    $out += ('-' + $t)
+  }
+  return $out
+}
+
 # Print detailed information for an ErrorRecord or Exception. Supports pipeline input.
 function Write-DetailedError {
   param(
