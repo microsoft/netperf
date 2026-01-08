@@ -84,9 +84,10 @@ jobs:
         path: ${{ github.workspace }}/echo
 
     - name: Download run-echo-test script
+      working-directory: ${{ github.workspace }}/echo/build
       shell: pwsh
       run: |
-        Copy-Item -Path "${{ github.workspace }}/.github/scripts/run-echo-test-linux.ps1" -Destination "${{ github.workspace }}/echo/build/run-echo-test-linux.ps1"
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/scripts/run-echo-test-linux.ps1" -OutFile "./run-echo-test-linux.ps1"
 
     - name: Log input parameters
       shell: pwsh

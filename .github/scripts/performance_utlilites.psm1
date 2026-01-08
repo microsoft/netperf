@@ -164,19 +164,63 @@ function Create-Session {
   $Creds = New-Object System.Management.Automation.PSCredential ($Username, $Password)
 
   try {
-    Write-Host "Creating PSSession to $PeerName using configuration '$RemotePSConfiguration'..."
-    $s = New-PSSession -ComputerName $PeerName -Credential $Creds -ConfigurationName $RemotePSConfiguration -ErrorAction Stop
-    Write-Host "Session created using configuration '$RemotePSConfiguration'."
+    Write-Host "[$(Get-Date -Format o)] Creating PSSession to $PeerName using configuration '$RemotePSConfiguration' (connectivity probe)..."
+    # Run New-PSSession inside a background job as a quick connectivity probe with timeout.
+    $psJob = Start-Job -ScriptBlock { param($pn,$rcfg,$c) try { New-PSSession -ComputerName $pn -Credential $c -ConfigurationName $rcfg -ErrorAction Stop } catch { throw } } -ArgumentList $PeerName,$RemotePSConfiguration,$Creds -ErrorAction Stop
+    $waited = $psJob | Wait-Job -Timeout 60
+    if (-not $waited) {
+      Write-Host "[$(Get-Date -Format o)] Timeout waiting for New-PSSession probe to $PeerName (60s). Attempting to stop job and throw."
+      try { Stop-Job $psJob -Force -ErrorAction SilentlyContinue } catch { }
+      Receive-Job $psJob -ErrorAction SilentlyContinue | Out-Null
+      throw "Timeout creating PSSession probe to $PeerName"
+    }
+
+    # The job completed; discard the deserialized PSSession object and create a real live session
+    Receive-Job $psJob -ErrorAction SilentlyContinue | Out-Null
+    Remove-Job $psJob -Force -ErrorAction SilentlyContinue
+
+    # Quick connectivity check to WinRM port before creating a live session
+    $tnc = $null
+    try {
+      $tnc = Test-NetConnection -ComputerName $PeerName -Port 5985 -WarningAction SilentlyContinue
+    } catch { }
+
+    if ($tnc -and $tnc.TcpTestSucceeded) {
+      Write-Host "[$(Get-Date -Format o)] Connectivity to WinRM port on $PeerName OK; creating live PSSession..."
+      $s = New-PSSession -ComputerName $PeerName -Credential $Creds -ConfigurationName $RemotePSConfiguration -ErrorAction Stop
+      Write-Host "[$(Get-Date -Format o)] Live session created using configuration '$RemotePSConfiguration'."
+    }
+    else {
+      Write-Host "[$(Get-Date -Format o)] Connectivity check to $PeerName failed or inconclusive; attempting direct New-PSSession..."
+      $s = New-PSSession -ComputerName $PeerName -Credential $Creds -ConfigurationName $RemotePSConfiguration -ErrorAction Stop
+      Write-Host "[$(Get-Date -Format o)] Live session created using configuration '$RemotePSConfiguration' (direct)."
+    }
   }
   catch {
-    Write-Host "Failed to create session using configuration '$RemotePSConfiguration': $($_.Exception.Message)"
-    Write-Host "Attempting fallback: creating session without ConfigurationName..."
+    Write-Host "[$(Get-Date -Format o)] Failed to create session using configuration '$RemotePSConfiguration': $($_.Exception.Message)"
+    Write-Host "[$(Get-Date -Format o)] Attempting fallback: creating session without ConfigurationName (probe + live create)..."
     try {
-      $s = New-PSSession -ComputerName $PeerName -Credential $Creds -ErrorAction Stop
-      Write-Host "Session created using default configuration."
+      $psJob2 = Start-Job -ScriptBlock { param($pn,$c) try { New-PSSession -ComputerName $pn -Credential $c -ErrorAction Stop } catch { throw } } -ArgumentList $PeerName,$Creds -ErrorAction Stop
+      $waited2 = $psJob2 | Wait-Job -Timeout 30
+      if (-not $waited2) { Stop-Job $psJob2 -Force -ErrorAction SilentlyContinue; Receive-Job $psJob2 -ErrorAction SilentlyContinue | Out-Null; throw "Timeout creating fallback PSSession probe to $PeerName" }
+      Receive-Job $psJob2 -ErrorAction SilentlyContinue | Out-Null
+      Remove-Job $psJob2 -Force -ErrorAction SilentlyContinue
+
+      $tnc2 = $null
+      try { $tnc2 = Test-NetConnection -ComputerName $PeerName -Port 5985 -WarningAction SilentlyContinue } catch { }
+      if ($tnc2 -and $tnc2.TcpTestSucceeded) {
+        Write-Host "[$(Get-Date -Format o)] Connectivity to WinRM port on $PeerName OK; creating live fallback PSSession..."
+        $s = New-PSSession -ComputerName $PeerName -Credential $Creds -ErrorAction Stop
+        Write-Host "[$(Get-Date -Format o)] Live session created using default configuration."
+      }
+      else {
+        Write-Host "[$(Get-Date -Format o)] Connectivity check failed for fallback; attempting direct New-PSSession without probe..."
+        $s = New-PSSession -ComputerName $PeerName -Credential $Creds -ErrorAction Stop
+        Write-Host "[$(Get-Date -Format o)] Live session created using default configuration (direct)."
+      }
     }
     catch {
-      Write-Host "Fallback session creation failed: $($_.Exception.Message)"
+      Write-Host "[$(Get-Date -Format o)] Fallback session creation failed: $($_.Exception.Message)"
       throw "Failed to create remote session to $PeerName"
     }
   }
@@ -269,8 +313,14 @@ function CaptureIndividualCpuUsagePerformanceMonitorAsJob {
         $avg = ($vals | Measure-Object -Average).Average
         $results += [PSCustomObject]@{ Processor = $g.Name; Average = $avg }
       }
-      # Sort by processor name to have consistent ordering (e.g., _Total last or first)
-      $sorted = $results | Sort-Object @{Expression={$_.Processor -replace '^CPU',''}},Processor
+      # Sort by numeric ordering where possible, otherwise by name for consistent output
+      $sorted = $results | Sort-Object @{Expression={
+          $n = $_.Processor -replace '[^0-9,]',''
+          # If the processor string contains a comma (group,index), split and compute a sortable key
+          if ($n -match ',') { $parts = $n -split ','; return ([int]$parts[0]*1000 + [int]$parts[1]) }
+          if ($n -match '^[0-9]+$') { return [int]$n }
+          return $_.Processor
+        }},Processor
       # Emit numeric array (only per-CPU numeric averages, excluding the _Total instance)
       $numeric = $sorted | Where-Object { $_.Processor -ne '_Total' } | ForEach-Object { [double]$_.Average }
     }
