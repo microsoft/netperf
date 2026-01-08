@@ -8,6 +8,10 @@ param(
 
 Set-StrictMode -Version Latest
 
+# Import shared utilities module
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+Import-Module (Join-Path $scriptDir 'performance_utlilites.psm1') -Force
+
 # Write out the parameters for logging
 Write-Host "Parameters:"
 Write-Host "  CpuProfile: $CpuProfile"
@@ -21,12 +25,15 @@ if ($SenderOptions -notmatch '--server') {
 }
 
 # Add duration option if specified and not already present to both sender and receiver
-if ($Duration -and $Duration -gt 0 -and $SenderOptions -notmatch '--duration') {
-  $SenderOptions += " --duration $Duration"
-}
-
-if ($Duration -and $Duration -gt 0 -and $ReceiverOptions -notmatch '--duration') {
-  $ReceiverOptions += " --duration $Duration"
+# Convert string to int for proper numeric comparison
+$durationInt = 0
+if ($Duration -and [int]::TryParse($Duration, [ref]$durationInt) -and $durationInt -gt 0) {
+  if ($SenderOptions -notmatch '--duration') {
+    $SenderOptions += " --duration $Duration"
+  }
+  if ($ReceiverOptions -notmatch '--duration') {
+    $ReceiverOptions += " --duration $Duration"
+  }
 }
 
 # Make errors terminate so catch can handle them
@@ -40,9 +47,9 @@ $localFwState = $null
 # Helper to parse quoted command-line option strings into an array
 function Convert-ArgStringToArray($s) {
   if ([string]::IsNullOrEmpty($s)) { return @() }
-  # Pattern allows quoted strings with backslash-escaped characters, or unquoted tokens
-    # Matches either: "( (?: \\. | [^"\\] )* )"  or  [^"\s]+
-    $pattern = '("((?:\\.|[^"\\])*)"|[^"\s]+)'
+  # Pattern: either a double-quoted string with backslash-escaped characters (group 2 = inner text),
+  # or an unquoted token consisting of non-space, non-quote characters.
+  $pattern = '("((?:\\.|[^"\\])*)"|[^"\s]+)'
   $regexMatches = [regex]::Matches($s, $pattern)
   $out = @()
   foreach ($m in $regexMatches) {
@@ -89,33 +96,7 @@ function Normalize-Args {
   return $out
 }
 
-# Print detailed information for an ErrorRecord or Exception. Supports pipeline input.
-function Write-DetailedError {
-  param(
-    [Parameter(ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)] $InputObject
-  )
-
-  process {
-    $er = $InputObject
-    if ($null -eq $er) { return }
-    if ($er -is [System.Management.Automation.ErrorRecord]) {
-      Write-Host "ERROR: $($er.Exception.Message)"
-      if ($er.Exception.StackTrace) { Write-Host "StackTrace: $($er.Exception.StackTrace)" }
-      if ($er.InvocationInfo) { Write-Host "Invocation: $($er.InvocationInfo.PositionMessage)" }
-      Write-Host "ErrorRecord: $er"
-    }
-    elseif ($er -is [System.Exception]) {
-      Write-Host "EXCEPTION: $($er.Message)"
-      if ($er.StackTrace) { Write-Host "StackTrace: $($er.StackTrace)" }
-    }
-    else {
-      Write-Host $er
-    }
-  }
-}
-
-# WPR CPU profiling helpers
-$script:WprProfiles = @{}
+# Note: WPR profiling, error handling, and monitoring functions are imported from performance_utlilites.psm1
 
 function Start-WprCpuProfile {
   param([Parameter(Mandatory=$true)][string]$Which)
@@ -197,7 +178,6 @@ function Stop-WprCpuProfile {
   }
 }
 
-
 # =========================
 # Remote job helpers
 # =========================
@@ -268,153 +248,6 @@ function Invoke-EchoInSession {
   } -ArgumentList $RemoteDir, $Name, $Options, $WaitSeconds -AsJob -ErrorAction Stop
 
   return $Job
-}
-
-function Receive-JobOrThrow {
-  param([Parameter(Mandatory)] $Job)
-
-  Wait-Job $Job | Out-Null
-
-  # Drain output (keep so we can inspect again if needed)
-  $null = Receive-Job $Job -Keep
-
-  $errs = @()
-  foreach ($cj in $Job.ChildJobs) {
-    if ($cj.Error -and $cj.Error.Count -gt 0) {
-      $errs += $cj.Error
-    }
-    if ($cj.JobStateInfo.State -eq 'Failed' -and $cj.JobStateInfo.Reason) {
-      $errs += $cj.JobStateInfo.Reason
-    }
-  }
-
-  if ($errs.Count -gt 0) {
-    foreach ($er in $errs) {
-      if ($er -is [System.Management.Automation.ErrorRecord]) {
-        $er | Write-DetailedError
-      }
-      else {
-        Write-Host  $er
-      }
-    }
-    throw "One or more remote errors occurred (job id: $($Job.Id))."
-  }
-
-  if ($Job.State -eq 'Failed') {
-    throw "Remote job failed (job id: $($Job.Id)): $($Job.JobStateInfo.Reason)"
-  }
-}
-
-# -------------------------
-# Refactored workflow functions
-# -------------------------
-
-function Create-Session {
-  param(
-    [Parameter(Mandatory=$true)][string]$PeerName,
-    [string]$RemotePSConfiguration = 'PowerShell.7'
-  )
-
-  $script:RemotePSConfiguration = $RemotePSConfiguration
-  $script:RemoteDir = 'C:\_work'
-
-  # WARNING: This retrieves credentials from Windows registry (auto-logon). This is intended for controlled lab environments only.
-  # Do not use these credentials for production systems or reuse them elsewhere.
-  $Username = (Get-ItemProperty 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon').DefaultUserName
-  $Password = (Get-ItemProperty 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon').DefaultPassword | ConvertTo-SecureString -AsPlainText -Force
-  $Creds = New-Object System.Management.Automation.PSCredential ($Username, $Password)
-
-  try {
-    Write-Host "[$(Get-Date -Format o)] Creating PSSession to $PeerName using configuration '$RemotePSConfiguration' (connectivity probe)..."
-    # Run New-PSSession inside a background job as a quick connectivity probe with timeout.
-    $psJob = Start-Job -ScriptBlock { param($pn,$rcfg,$c) try { New-PSSession -ComputerName $pn -Credential $c -ConfigurationName $rcfg -ErrorAction Stop } catch { throw } } -ArgumentList $PeerName,$RemotePSConfiguration,$Creds -ErrorAction Stop
-    $waited = $psJob | Wait-Job -Timeout 60
-    if (-not $waited) {
-      Write-Host "[$(Get-Date -Format o)] Timeout waiting for New-PSSession probe to $PeerName (60s). Attempting to stop job and throw."
-      try { Stop-Job $psJob -Force -ErrorAction SilentlyContinue } catch { }
-      Receive-Job $psJob -ErrorAction SilentlyContinue | Out-Null
-      throw "Timeout creating PSSession probe to $PeerName"
-    }
-
-    # The job completed; discard the deserialized PSSession object and create a real live session
-    Receive-Job $psJob -ErrorAction SilentlyContinue | Out-Null
-    Remove-Job $psJob -Force -ErrorAction SilentlyContinue
-
-    # Quick connectivity check to WinRM port before creating a live session
-    $tnc = $null
-    try {
-      $tnc = Test-NetConnection -ComputerName $PeerName -Port 5985 -WarningAction SilentlyContinue
-    } catch { }
-
-    if ($tnc -and $tnc.TcpTestSucceeded) {
-      Write-Host "[$(Get-Date -Format o)] Connectivity to WinRM port on $PeerName OK; creating live PSSession..."
-      $s = New-PSSession -ComputerName $PeerName -Credential $Creds -ConfigurationName $RemotePSConfiguration -ErrorAction Stop
-      Write-Host "[$(Get-Date -Format o)] Live session created using configuration '$RemotePSConfiguration'."
-    }
-    else {
-      Write-Host "[$(Get-Date -Format o)] Connectivity check to $PeerName failed or inconclusive; attempting direct New-PSSession..."
-      $s = New-PSSession -ComputerName $PeerName -Credential $Creds -ConfigurationName $RemotePSConfiguration -ErrorAction Stop
-      Write-Host "[$(Get-Date -Format o)] Live session created using configuration '$RemotePSConfiguration' (direct)."
-    }
-  }
-  catch {
-    Write-Host "[$(Get-Date -Format o)] Failed to create session using configuration '$RemotePSConfiguration': $($_.Exception.Message)"
-    Write-Host "[$(Get-Date -Format o)] Attempting fallback: creating session without ConfigurationName (probe + live create)..."
-    try {
-      $psJob2 = Start-Job -ScriptBlock { param($pn,$c) try { New-PSSession -ComputerName $pn -Credential $c -ErrorAction Stop } catch { throw } } -ArgumentList $PeerName,$Creds -ErrorAction Stop
-      $waited2 = $psJob2 | Wait-Job -Timeout 30
-      if (-not $waited2) { Stop-Job $psJob2 -Force -ErrorAction SilentlyContinue; Receive-Job $psJob2 -ErrorAction SilentlyContinue | Out-Null; throw "Timeout creating fallback PSSession probe to $PeerName" }
-      Receive-Job $psJob2 -ErrorAction SilentlyContinue | Out-Null
-      Remove-Job $psJob2 -Force -ErrorAction SilentlyContinue
-
-      $tnc2 = $null
-      try { $tnc2 = Test-NetConnection -ComputerName $PeerName -Port 5985 -WarningAction SilentlyContinue } catch { }
-      if ($tnc2 -and $tnc2.TcpTestSucceeded) {
-        Write-Host "[$(Get-Date -Format o)] Connectivity to WinRM port on $PeerName OK; creating live fallback PSSession..."
-        $s = New-PSSession -ComputerName $PeerName -Credential $Creds -ErrorAction Stop
-        Write-Host "[$(Get-Date -Format o)] Live session created using default configuration."
-      }
-      else {
-        Write-Host "[$(Get-Date -Format o)] Connectivity check failed for fallback; attempting direct New-PSSession without probe..."
-        $s = New-PSSession -ComputerName $PeerName -Credential $Creds -ErrorAction Stop
-        Write-Host "[$(Get-Date -Format o)] Live session created using default configuration (direct)."
-      }
-    }
-    catch {
-      Write-Host "[$(Get-Date -Format o)] Fallback session creation failed: $($_.Exception.Message)"
-      throw "Failed to create remote session to $PeerName"
-    }
-  }
-
-  $script:Session = $s
-  return $s
-}
-
-function Save-And-Disable-Firewalls {
-  param([Parameter(Mandatory=$true)]$Session)
-
-  # Coerce possible multi-output (array) from Create-Session into the actual PSSession object.
-  if ($Session -is [System.Array]) {
-    $found = $Session | Where-Object { $_ -is [System.Management.Automation.Runspaces.PSSession] }
-    if ($found -and $found.Count -gt 0) { $Session = $found[0] }
-    else { $Session = $Session[0] }
-  }
-
-  if (-not ($Session -is [System.Management.Automation.Runspaces.PSSession])) {
-    throw "Save-And-Disable-Firewalls requires a PSSession object. Got: $($Session.GetType().FullName) - $Session"
-  }
-
-  Write-Host "Saving and disabling local firewall profiles..."
-  $script:localFwState = Get-NetFirewallProfile -Profile Domain, Public, Private | Select-Object Name, Enabled
-  Set-NetFirewallProfile -Profile Domain, Public, Private -Enabled False
-
-  Write-Host "Disabling firewall on remote machine..."
-  Invoke-Command -Session $Session -ScriptBlock {
-    param()
-    $fw = Get-NetFirewallProfile -Profile Domain, Public, Private | Select-Object Name, Enabled
-    Set-Variable -Name __SavedFirewallState -Value $fw -Scope Global -Force
-    Set-NetFirewallProfile -Profile Domain, Public, Private -Enabled False
-  } -ErrorAction Stop
 }
 
 function Copy-EchoToRemote {
@@ -526,181 +359,6 @@ function Run-RecvTest {
   Receive-JobOrThrow -Job $Job
 }
 
-function CaptureIndividualCpuUsagePerformanceMonitorAsJob {
-  param(
-    [Parameter(Mandatory=$true)][string]$DurationSeconds
-  )
-
-  # Ensure we pass a numeric duration into the job and use that value inside
-  $intDuration = [int]::Parse($DurationSeconds)
-
-  $cpuMonitorJob = Start-Job -ScriptBlock {
-    param($duration)
-
-    # Use the Processor Information counter which contains CPU instances across all groups
-    # (e.g., "0,0", "0,1", "1,0" etc.) so we capture CPUs from every group, not just group 0.
-    $counter = '\Processor Information(*)\% Processor Time'
-    $d = [int]$duration
-
-    try {
-      $samples = Get-Counter -Counter $counter -SampleInterval 1 -MaxSamples $d -ErrorAction Stop
-      # Group samples by instance (processor information name) and compute average per instance.
-      # InstanceName for Processor Information uses formats like "0,0" (group,index) or descriptive names.
-      $grouped = $samples.CounterSamples | Group-Object -Property InstanceName
-      $results = @()
-      foreach ($g in $grouped) {
-        $instName = $g.Name
-        # Normalize instance names: skip the _Total instance and any empty names
-        if ([string]::IsNullOrEmpty($instName) -or $instName -eq '_Total') { continue }
-        $vals = $g.Group | ForEach-Object { [double]$_.CookedValue }
-        $avg = ($vals | Measure-Object -Average).Average
-        $results += [PSCustomObject]@{ Processor = $instName; Average = $avg }
-      }
-      # Sort by numeric ordering where possible, otherwise by name for consistent output
-      $sorted = $results | Sort-Object @{Expression={
-          $n = $_.Processor -replace '[^0-9,]',''
-          # If the processor string contains a comma (group,index), split and compute a sortable key
-          if ($n -match ',') { $parts = $n -split ','; return ([int]$parts[0]*1000 + [int]$parts[1]) }
-          if ($n -match '^[0-9]+$') { return [int]$n }
-          return $_.Processor
-        }},Processor
-      # Emit numeric array of per-CPU numeric averages
-      $numeric = $sorted | ForEach-Object { [double]$_.Average }
-    }
-    catch {
-      $numeric = @(0)
-    }
-
-    # Emit the numeric array so the caller receives per-CPU averages
-    Write-Output $numeric
-  } -ArgumentList $intDuration
-
-  return $cpuMonitorJob
-}
-
-
-function CapturePerformanceMonitorAsJob {
-  param(
-    [Parameter(Mandatory=$true)][string]$DurationSeconds,
-    [Parameter(Mandatory=$false)][string[]]$Counters = @('\Processor Information(*)\% Processor Time')
-  )
-
-  # Ensure numeric duration
-  $intDuration = [int]::Parse($DurationSeconds)
-
-  $perfJob = Start-Job -ScriptBlock {
-    param($duration, $counters)
-
-    $d = [int]$duration
-    if (-not $counters -or $counters.Count -eq 0) {
-      $counters = @('\Processor Information(*)\% Processor Time')
-    }
-
-    # Sample once per second for the requested duration and accumulate per-counter values.
-    $store = @{}
-
-    for ($i = 0; $i -lt $d; $i++) {
-      $samples = $null
-      try {
-        # Try to collect all counters in a single quick sample (returns immediately)
-        $samples = Get-Counter -Counter $counters -MaxSamples 1 -ErrorAction Stop
-      }
-      catch {
-        # If that fails, collect available counters individually (quick single-sample calls)
-        $samples = New-Object System.Collections.Generic.List[object]
-        foreach ($c in $counters) {
-          try {
-            $s = Get-Counter -Counter $c -MaxSamples 1 -ErrorAction Stop
-            if ($s.CounterSamples) { $s.CounterSamples | ForEach-Object { [void]$samples.Add($_) } }
-          }
-          catch {
-            # skip bad counter
-            continue
-          }
-        }
-      }
-
-      if ($samples -ne $null) {
-        $csamples = $samples.CounterSamples
-        if (-not $csamples -and ($samples -is [System.Collections.IEnumerable])) { $csamples = $samples }
-        foreach ($cs in $csamples) {
-          $path = $cs.Path
-          $inst = $cs.InstanceName
-          if ([string]::IsNullOrEmpty($inst) -or $inst -eq '_Total') { continue }
-          if ($cs.Status -ne 'Success') { continue }
-          $key = "$path`|$inst"
-          if (-not $store.ContainsKey($key)) { $store[$key] = New-Object System.Collections.ArrayList }
-          [void]$store[$key].Add([double]$cs.CookedValue)
-        }
-      }
-
-      Start-Sleep -Seconds 1
-    }
-
-    $results = @()
-    foreach ($k in $store.Keys) {
-      $parts = $k -split '\|',2
-      $path = $parts[0]
-      $inst = $parts[1]
-      $avg = ($store[$k] | Measure-Object -Average).Average
-      $results += [PSCustomObject]@{ Counter = $path; Instance = $inst; Average = $avg }
-    }
-
-    # Emit structured results: an array of PSObjects with Counter, Instance, Average
-    $results
-  } -ArgumentList $intDuration, $Counters
-
-  return $perfJob
-}
-
-
-function Restore-FirewallAndCleanup {
-  param([object]$Session)
-
-  try {
-    if ($null -ne $Session) {
-      try {
-        Write-Host "Restoring firewall state on remote machine..."
-        Invoke-Command -Session $Session -ScriptBlock {
-          if (Get-Variable -Name __SavedFirewallState -Scope Global -ErrorAction SilentlyContinue) {
-            $saved = Get-Variable -Name __SavedFirewallState -Scope Global -ValueOnly
-            foreach ($p in $saved) {
-              Set-NetFirewallProfile -Profile $p.Name -Enabled $p.Enabled
-            }
-            Remove-Variable -Name __SavedFirewallState -Scope Global -ErrorAction SilentlyContinue
-          }
-          else {
-            Set-NetFirewallProfile -Profile Domain, Public, Private -Enabled True
-          }
-        } -ErrorAction SilentlyContinue
-      }
-      catch {
-        $_ | Write-DetailedError
-      }
-
-      try {
-        Remove-PSSession $Session -ErrorAction SilentlyContinue
-      }
-      catch {
-        $_ | Write-DetailedError
-      }
-    }
-
-    Write-Host "Restoring local firewall state..."
-    if ($localFwState) {
-      foreach ($p in $localFwState) {
-        Set-NetFirewallProfile -Profile $p.Name -Enabled $p.Enabled
-      }
-    }
-    else {
-      Set-NetFirewallProfile -Profile Domain, Public, Private -Enabled True
-    }
-  }
-  catch {
-    $_ | Write-DetailedError
-  }
-}
-
 $PerformanceCounters = 
 @(
   '\UDPv4\Datagrams Received Errors',
@@ -738,6 +396,10 @@ try {
 
   # Create remote session
   $Session = Create-Session -PeerName $PeerName -RemotePSConfiguration 'PowerShell.7'
+
+  # Initialize script-level variables used by helper functions
+  $script:RemoteDir = 'C:\_work'
+  $script:RemotePSConfiguration = 'PowerShell.7'
 
   # Save and disable firewalls
   Save-And-Disable-Firewalls -Session $Session
