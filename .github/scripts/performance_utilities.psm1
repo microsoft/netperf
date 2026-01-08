@@ -300,6 +300,32 @@ function Invoke-ToolInSession {
   return $Job
 }
 
+# Copy a tool directory from the current working directory to a remote session.
+# Creates both the base remote directory and subdirectory if they don't exist.
+# Parameters:
+#   -Session: PSSession to copy to
+#   -RemoteDir: Base directory path on remote
+#   -ToolDir: Subdirectory name (e.g., 'echo')
+function Copy-ToolDirToRemote {
+  param(
+    [Parameter(Mandatory=$true)]$Session,
+    [Parameter(Mandatory=$true)][string]$RemoteDir,
+    [Parameter(Mandatory=$true)][string]$ToolDir
+  )
+  
+  # Ensure the remote base directory and subdirectory both exist
+  Invoke-Command -Session $Session -ScriptBlock {
+    param($base, $sub)
+    if (-not (Test-Path $base)) { New-Item -ItemType Directory -Path $base | Out-Null }
+    $full = Join-Path $base $sub
+    if (-not (Test-Path $full)) { New-Item -ItemType Directory -Path $full | Out-Null }
+  } -ArgumentList $RemoteDir, $ToolDir -ErrorAction Stop
+
+  # Copy all contents of local tool directory to remote subdirectory
+  $localPath = (Resolve-Path .).Path
+  Copy-Item -ToSession $Session -Path (Join-Path $localPath '*') -Destination (Join-Path $RemoteDir $ToolDir) -Recurse -Force
+}
+
 function Create-Session {
   param(
     [Parameter(Mandatory=$true)][string]$PeerName,

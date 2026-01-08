@@ -47,23 +47,8 @@ $localFwState = $null
 # Note: WPR profiling, error handling, and monitoring functions are imported from performance_utilities.psm1
 
 # =========================
-# Remote job helpers
+# Fetch-RemoteFile helper
 # =========================
-function Copy-EchoToRemote {
-  param([Parameter(Mandatory=$true)]$Session)
-  # Ensure the remote base directory and the 'echo' subdirectory both exist,
-  # then copy the *contents* of the local directory into the remote folder.
-  Invoke-Command -Session $Session -ScriptBlock {
-    param($base, $sub)
-    if (-not (Test-Path $base)) { New-Item -ItemType Directory -Path $base | Out-Null }
-    $full = Join-Path $base $sub
-    if (-not (Test-Path $full)) { New-Item -ItemType Directory -Path $full | Out-Null }
-  } -ArgumentList $script:RemoteDir, 'echo' -ErrorAction Stop
-
-  $localPath = (Resolve-Path .).Path
-  Copy-Item -ToSession $Session -Path (Join-Path $localPath '*') -Destination "$script:RemoteDir\echo" -Recurse -Force
-}
-
 # Robust remote file fetch: try Copy-Item -FromSession, fall back to Invoke-Command/Get-Content
 function Fetch-RemoteFile {
   param(
@@ -204,7 +189,7 @@ try {
   Save-And-Disable-Firewalls -Session $Session
 
   # Copy tool to remote
-  Copy-EchoToRemote -Session $Session
+  Copy-ToolDirToRemote -Session $Session -RemoteDir $script:RemoteDir -ToolDir 'echo'
 
   # Launch per-CPU usage monitor as a background job (returns array of per-CPU averages)
   $cpuMonitorJob = CaptureIndividualCpuUsagePerformanceMonitorAsJob -DurationSeconds $Duration
