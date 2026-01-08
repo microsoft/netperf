@@ -61,8 +61,15 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633
 
-    - name: Setup PowerShell
-      uses: PowerShell/setup-powershell@v2
+    - name: Verify PowerShell (pwsh) is installed
+      shell: bash
+      run: |
+        set -euo pipefail
+        if ! command -v pwsh >/dev/null 2>&1; then
+          echo "pwsh not found on runner; install PowerShell 7+ on this self-hosted machine." >&2
+          exit 1
+        fi
+        pwsh -Version
 
     - name: Setup workspace (Linux)
       shell: pwsh
