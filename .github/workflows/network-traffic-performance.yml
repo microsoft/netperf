@@ -89,6 +89,14 @@ jobs:
 
     - name: Setup workspace
       run: |-
+        # Safety check: verify we're in the correct workspace directory before cleanup
+        $currentDir = (Get-Location).Path
+        $expectedDir = "${{ github.workspace }}"
+        if ($currentDir -ne $expectedDir) {
+          Write-Error "Safety check failed: Current directory '$currentDir' does not match expected workspace '$expectedDir'. Aborting cleanup."
+          exit 1
+        }
+        
         Get-ChildItem  | % { Remove-Item -Recurse $_ -Force -ErrorAction SilentlyContinue }
         if (Test-Path ${{ github.workspace }}\cts-traffic) { Remove-Item -Recurse -Force ${{ github.workspace }}\cts-traffic }
         if (Test-Path ${{ github.workspace }}\ETL) { Remove-Item -Recurse -Force ${{ github.workspace }}\ETL }
@@ -213,6 +221,14 @@ jobs:
 
     - name: Setup workspace
       run: |-
+        # Safety check: verify we're in the correct workspace directory before cleanup
+        $currentDir = (Get-Location).Path
+        $expectedDir = "${{ github.workspace }}"
+        if ($currentDir -ne $expectedDir) {
+          Write-Error "Safety check failed: Current directory '$currentDir' does not match expected workspace '$expectedDir'. Aborting cleanup."
+          exit 1
+        }
+        
         Get-ChildItem  | % { Remove-Item -Recurse $_ -Force -ErrorAction SilentlyContinue }
         if (Test-Path ${{ github.workspace }}\echo) { Remove-Item -Recurse -Force ${{ github.workspace }}\echo }
         if (Test-Path ${{ github.workspace }}\ETL) { Remove-Item -Recurse -Force ${{ github.workspace }}\ETL }
