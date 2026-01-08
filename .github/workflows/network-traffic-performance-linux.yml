@@ -62,9 +62,7 @@ jobs:
       uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633
 
     - name: Setup PowerShell
-      uses: aochmann/setup-powershell@v1
-      with:
-        powershell-version: latest
+      uses: PowerShell/setup-powershell@v2
 
     - name: Setup workspace (Linux)
       shell: pwsh
