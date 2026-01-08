@@ -226,7 +226,7 @@ jobs:
       with:
         name: "cts-traffic Release"
         path: ${{ github.workspace }}\cts-traffic
-    
+
     - name: Start TCPIP tracing - Baseline
       if: ${{ github.event.inputs.tcp_ip_tracing }}
       run: |
@@ -234,7 +234,6 @@ jobs:
         if (Test-Path "tcpip.wprp") { Remove-Item -Force "tcpip.wprp" }
         Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/main/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
         wpr -start tcpip.wprp -filemode
-
 
     # Run CTS traffic without XDP installed to establish a baseline.
     - name: Run CTS cts-traffic baseline
