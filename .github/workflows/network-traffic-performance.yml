@@ -265,6 +265,7 @@ jobs:
       working-directory: ${{ github.workspace }}\echo\RelWithDebInfo
       run: |
         Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/scripts/run-echo-test.ps1" -OutFile ".\run-echo-test.ps1"
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/scripts/performance_utilities.psm1" -OutFile ".\performance_utilities.psm1"
 
     - name: Log all input parameters for this workflow
       run: |
