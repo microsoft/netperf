@@ -14,6 +14,25 @@ function Ensure-Executable($path) {
   try { chmod +x $path } catch { Write-Host "chmod failed (may already be executable): $path" }
 }
 
+function Convert-ArgStringToArray([string]$s) {
+  if ([string]::IsNullOrEmpty($s)) { return @() }
+  $pattern = '("((?:\\.|[^"\\])*)"|[^"\s]+)'
+  $regexMatches = [regex]::Matches($s, $pattern)
+  $out = @()
+  foreach ($m in $regexMatches) {
+    if ($m.Groups[2].Success) {
+      $val = $m.Groups[2].Value
+      $val = $val -replace '\\\\', '\\'
+      $val = $val -replace '\\"', '"'
+    }
+    else {
+      $val = $m.Groups[1].Value
+    }
+    $out += $val.Trim()
+  }
+  return $out
+}
+
 # Resolve local echo binaries in current working directory
 $cwd = Get-Location
 $serverPath = Join-Path $cwd 'echo_server'
@@ -65,7 +84,8 @@ $serverPid = Invoke-Command -Session $session -ScriptBlock {
   $args = Convert-ArgStringToArray $Options
   
   # Start the server in the background using Start-Process
-  $process = Start-Process -FilePath $Path -ArgumentList $args -RedirectStandardOutput $LogPath -RedirectStandardError $LogPath -PassThru
+  $stderrPath = "$LogPath.err"
+  $process = Start-Process -FilePath $Path -ArgumentList $args -RedirectStandardOutput $LogPath -RedirectStandardError $stderrPath -PassThru
   return $process.Id
 } -ArgumentList $RemoteServerPath, $ReceiverOptions, $RemoteServerLogPath
 Write-Host "Server PID on peer: $serverPid"
@@ -116,6 +136,13 @@ try {
   Copy-Item -FromSession $session -Path $RemoteServerLogPath -Destination 'server.log'
 } catch {
   Write-Host "Failed to copy server.log: $_"
+}
+
+Write-Host "Fetching server stderr log from peer"
+try {
+  Copy-Item -FromSession $session -Path "$RemoteServerLogPath.err" -Destination 'server.err.log'
+} catch {
+  Write-Host "Failed to copy server.err.log: $_"
 }
 
 # Close session
