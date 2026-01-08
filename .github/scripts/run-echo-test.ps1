@@ -98,86 +98,6 @@ function Normalize-Args {
 
 # Note: WPR profiling, error handling, and monitoring functions are imported from performance_utilities.psm1
 
-function Start-WprCpuProfile {
-  param([Parameter(Mandatory=$true)][string]$Which)
-
-  if (-not $CpuProfile) { return }
-
-  $Workspace = $env:GITHUB_WORKSPACE
-  $etlDir = Join-Path $Workspace 'ETL'
-  if (-not (Test-Path $etlDir)) { New-Item -ItemType Directory -Path $etlDir | Out-Null }
-
-  $WprProfile = Join-Path $etlDir 'cpu.wprp'
-
-  $outFile = Join-Path $etlDir ("cpu_profile-$Which.etl")
-  if (Test-Path $outFile) { Remove-Item $outFile -Force -ErrorAction SilentlyContinue }
-
-  Write-Host "Starting WPR CPU profiling -> $outFile"
-  try {
-    # Check if WPR is already running to avoid the "profiles are already running" error
-    $status = $null
-    try {
-      $status = & wpr -status 2>&1
-    } catch {
-      $status = $_.ToString()
-    }
-
-    if ($status -and $status -match 'profile(s)?\s+are\s+already\s+running|Profiles are already running|The profiles are already running') {
-      Write-Host "WPR already running. Cancelling any existing profiles so we can start a fresh one..."
-      try {
-        & wpr -cancel 2>&1 | Out-Null
-        Start-Sleep -Seconds 1
-      }
-      catch {
-        Write-Host "Failed to cancel existing WPR session: $($_.Exception.Message). Proceeding to start a new profile anyway."
-      }
-    }
-
-    try {
-      & wpr -start $WprProfile -filemode | Out-Null
-    }
-    catch {
-      Write-Host "wpr -start with custom profile failed: $($_.Exception.Message). Falling back to built-in CPU profile."
-      try { & wpr -start CPU -filemode | Out-Null } catch { Write-Host "Fallback CPU start also failed: $($_.Exception.Message)" }
-    }
-    $script:WprProfiles[$Which] = $outFile
-  }
-  catch {
-    Write-Host "Failed to start WPR: $($_.Exception.Message)"
-  }
-}
-
-function Stop-WprCpuProfile {
-  param([Parameter(Mandatory=$true)][string]$Which)
-
-  if (-not $CpuProfile) { return }
-
-  if (-not $script:WprProfiles.ContainsKey($Which)) {
-    Write-Host "No WPR profile active for '$Which'"
-    return
-  }
-
-  $outFile = $script:WprProfiles[$Which]
-  Write-Host "Stopping WPR CPU profiling, saving to $outFile"
-  try {
-    # Attempt to stop WPR and save to the given file. If no profile is running, log and continue.
-    try {
-      & wpr -stop $outFile | Out-Null
-    }
-    catch {
-      Write-Host "wpr -stop failed: $($_.Exception.Message). Attempting to query status..."
-      try {
-        $s = & wpr -status 2>&1
-        Write-Host "WPR status: $s"
-      } catch { }
-    }
-    $script:WprProfiles.Remove($Which) | Out-Null
-  }
-  catch {
-    Write-Host "Failed to stop WPR: $($_.Exception.Message)"
-  }
-}
-
 # =========================
 # Remote job helpers
 # =========================
@@ -323,10 +243,10 @@ function Run-SendTest {
   Write-Host "[Local] Running: .\echo_client.exe"
   Write-Host "[Local] Arguments:"
   foreach ($a in $clientArgs) { Write-Host "  $a" }
-  Start-WprCpuProfile -Which 'send'
+  Start-WprCpuProfile -Which 'send' -CpuProfile:$CpuProfile
   & .\echo_client.exe @clientArgs
   $script:localExit = $LASTEXITCODE
-  Stop-WprCpuProfile -Which 'send'
+  Stop-WprCpuProfile -Which 'send' -CpuProfile:$CpuProfile
 
   Receive-JobOrThrow -Job $Job
 }
@@ -351,10 +271,10 @@ function Run-RecvTest {
   Write-Host "[Local] Running: .\echo_server.exe"
   Write-Host "[Local] Arguments:"
   foreach ($a in $clientArgs) { Write-Host "  $a" }
-  Start-WprCpuProfile -Which 'recv'
+  Start-WprCpuProfile -Which 'recv' -CpuProfile:$CpuProfile
   & .\echo_server.exe @clientArgs
   $script:localExit = $LASTEXITCODE
-  Stop-WprCpuProfile -Which 'recv'
+  Stop-WprCpuProfile -Which 'recv' -CpuProfile:$CpuProfile
 
   Receive-JobOrThrow -Job $Job
 }
