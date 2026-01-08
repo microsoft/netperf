@@ -87,6 +87,32 @@ $localFwState = $null
 
 # Note: WPR profiling, error handling, and monitoring functions are imported from performance_utilities.psm1
 
+function Write-Phase {
+  param([Parameter(Mandatory=$true)][string]$Message)
+  Write-Host "[$(Get-Date -Format o)] $Message"
+}
+
+function Wait-JobWithProgress {
+  param(
+    [Parameter(Mandatory=$true)]$Job,
+    [Parameter(Mandatory=$true)][string]$Name,
+    [int]$PollSeconds = 15
+  )
+
+  $sw = [System.Diagnostics.Stopwatch]::StartNew()
+  while ($true) {
+    $completed = Wait-Job -Job $Job -Timeout $PollSeconds
+    if ($completed) { break }
+
+    $state = $Job.JobStateInfo.State
+    Write-Phase "Still waiting on $Name (JobId=$($Job.Id), State=$state, Elapsed=$([Math]::Round($sw.Elapsed.TotalSeconds, 0))s)"
+  }
+
+  $sw.Stop()
+  $state = $Job.JobStateInfo.State
+  Write-Phase "$Name completed (JobId=$($Job.Id), State=$state, Elapsed=$([Math]::Round($sw.Elapsed.TotalSeconds, 2))s)"
+}
+
 function Run-SendTest {
   param(
     [Parameter(Mandatory=$true)][string]$PeerName,
@@ -195,13 +221,18 @@ try {
   Copy-ToolDirToRemote -Session $Session -RemoteDir $script:RemoteDir -ToolDir 'echo'
 
   # Launch per-CPU usage monitor as a background job (returns array of per-CPU averages)
+  Write-Phase "Starting CPU/perf counter jobs (send phase)"
   $cpuMonitorJob = CaptureIndividualCpuUsagePerformanceMonitorAsJob -DurationSeconds $Duration
   $perfCounterJob = CapturePerformanceMonitorAsJob -DurationSeconds $Duration -Counters $PerformanceCounters
 
   # Run tests
+  Write-Phase "Starting send test"
   Run-SendTest -PeerName $PeerName -Session $Session -SenderOptions $SenderOptions -ReceiverOptions $ReceiverOptions
+  Write-Phase "Send test finished"
 
   # Recover CPU usage data (monitor returns per-CPU averages). Print per-CPU values.
+  Write-Phase "Waiting for CPU monitor job (send phase)"
+  Wait-JobWithProgress -Job $cpuMonitorJob -Name 'CPU monitor (send)'
   $cpuUsagePerCpu = Receive-Job -Job $cpuMonitorJob -Wait -AutoRemoveJob
   if ($cpuUsagePerCpu -is [System.Array]) {
     $i = 0
@@ -218,17 +249,25 @@ try {
   }
 
   # Write the performance counter results as a JSON file
+  Write-Phase "Waiting for perf counter job (send phase)"
+  Wait-JobWithProgress -Job $perfCounterJob -Name 'Perf counters (send)'
   $perfResults = Receive-Job -Job $perfCounterJob -Wait -AutoRemoveJob
   $perfJsonPath = Join-Path $cwd 'echo_client_perf_counters.json'
   $perfResults | ConvertTo-Json | Out-File -FilePath $perfJsonPath -Encoding utf8 -Force
+  Write-Phase "Perf counter JSON written (send phase): $perfJsonPath"
 
   # Launch another per-CPU usage monitor for the recv test
+  Write-Phase "Starting CPU/perf counter jobs (recv phase)"
   $cpuMonitorJob = CaptureIndividualCpuUsagePerformanceMonitorAsJob -DurationSeconds $Duration
   $perfCounterJob = CapturePerformanceMonitorAsJob -DurationSeconds $Duration -Counters $PerformanceCounters
 
+  Write-Phase "Starting recv test"
   Run-RecvTest -PeerName $PeerName -Session $Session -SenderOptions $SenderOptions -ReceiverOptions $ReceiverOptions
+  Write-Phase "Recv test finished"
 
   # Recover CPU usage data (monitor returns per-CPU averages). Print per-CPU values.
+  Write-Phase "Waiting for CPU monitor job (recv phase)"
+  Wait-JobWithProgress -Job $cpuMonitorJob -Name 'CPU monitor (recv)'
   $cpuUsagePerCpu = Receive-Job -Job $cpuMonitorJob -Wait -AutoRemoveJob
   if ($cpuUsagePerCpu -is [System.Array]) {
     $i = 0
@@ -245,9 +284,12 @@ try {
   }
 
   # Write the performance counter results as a JSON file
+  Write-Phase "Waiting for perf counter job (recv phase)"
+  Wait-JobWithProgress -Job $perfCounterJob -Name 'Perf counters (recv)'
   $perfResults = Receive-Job -Job $perfCounterJob -Wait -AutoRemoveJob
   $perfJsonPath = Join-Path $cwd 'echo_server_perf_counters.json'
   $perfResults | ConvertTo-Json | Out-File -FilePath $perfJsonPath -Encoding utf8 -Force
+  Write-Phase "Perf counter JSON written (recv phase): $perfJsonPath"
  
   # List json files in cwd
   Write-Host "JSON files in $cwd"
