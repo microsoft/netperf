@@ -219,7 +219,12 @@ try {
   }
 
   # Copy the stats file to the parent folder for GitHub Actions artifact upload
-  Copy-Item -Path *.json -Destination $cwd\.. -Force
+  if (Test-Path *.json) {
+    Copy-Item -Path *.json -Destination $cwd\.. -Force
+  }
+  else {
+    Write-Host "No JSON files found to copy."
+  }
 
   Write-Host "echo tests completed successfully."
 }
