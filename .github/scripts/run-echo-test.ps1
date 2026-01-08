@@ -9,8 +9,49 @@ param(
 Set-StrictMode -Version Latest
 
 # Import shared utilities module
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-Import-Module (Join-Path $scriptDir 'performance_utilities.psm1') -Force
+function Find-RepoRoot {
+  param(
+    [Parameter(Mandatory = $true)][string]$StartDir
+  )
+
+  $dir = (Resolve-Path -LiteralPath $StartDir).Path
+  while ($true) {
+    if (Test-Path -LiteralPath (Join-Path $dir '.git')) {
+      return $dir
+    }
+
+    $parent = Split-Path -Parent $dir
+    if (-not $parent -or $parent -eq $dir) {
+      return $null
+    }
+    $dir = $parent
+  }
+}
+
+$scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
+$moduleName = 'performance_utilities.psm1'
+$moduleCandidates = @(
+  (Join-Path $scriptDir $moduleName),
+  (Join-Path $scriptDir (Join-Path '..' $moduleName)),
+  (Join-Path $scriptDir (Join-Path '..\..' $moduleName))
+)
+
+if ($env:GITHUB_WORKSPACE) {
+  $moduleCandidates += (Join-Path $env:GITHUB_WORKSPACE (Join-Path '.github\scripts' $moduleName))
+}
+
+$repoRoot = Find-RepoRoot -StartDir $scriptDir
+if ($repoRoot) {
+  $moduleCandidates += (Join-Path $repoRoot (Join-Path '.github\scripts' $moduleName))
+}
+
+$modulePath = $moduleCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+if (-not $modulePath) {
+  $moduleCandidatesString = ($moduleCandidates | ForEach-Object { "  $_" }) -join [Environment]::NewLine
+  throw "Could not find required module '$moduleName'. Tried:${([Environment]::NewLine)}$moduleCandidatesString"
+}
+
+Import-Module $modulePath -Force
 
 # Write out the parameters for logging
 Write-Host "Parameters:"
