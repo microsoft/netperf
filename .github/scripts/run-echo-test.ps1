@@ -46,44 +46,6 @@ $localFwState = $null
 
 # Note: WPR profiling, error handling, and monitoring functions are imported from performance_utilities.psm1
 
-# =========================
-# Fetch-RemoteFile helper
-# =========================
-# Robust remote file fetch: try Copy-Item -FromSession, fall back to Invoke-Command/Get-Content
-function Fetch-RemoteFile {
-  param(
-    [Parameter(Mandatory=$true)]$Session,
-    [Parameter(Mandatory=$true)][string]$RemotePath,
-    [Parameter(Mandatory=$true)][string]$LocalDestination
-  )
-
-  Write-Host "Fetching remote file '$RemotePath' to local '$LocalDestination'..."
-
-  try {
-    Copy-Item -FromSession $Session -Path $RemotePath -Destination $LocalDestination -ErrorAction Stop
-    Write-Host "Successfully fetched remote file '$RemotePath' to '$LocalDestination' via Copy-Item -FromSession."
-    return $true
-  }
-  catch {
-    Write-Host "Copy-Item -FromSession failed for '$RemotePath': $($_.Exception.Message). Attempting Invoke-Command fallback..."
-    try {
-      $content = Invoke-Command -Session $Session -ScriptBlock { param($p) Get-Content -Path $p -Raw -ErrorAction Stop } -ArgumentList $RemotePath -ErrorAction Stop
-      if ($null -ne $content) {
-        $content | Out-File -FilePath $LocalDestination -Encoding utf8 -Force
-        return $true
-      }
-      else {
-        Write-Host "Invoke-Command returned no content for '$RemotePath'"
-        return $false
-      }
-    }
-    catch {
-      Write-Host "Failed to fetch remote file '$RemotePath' via Invoke-Command: $($_.Exception.Message)"
-      return $false
-    }
-  }
-}
-
 function Run-SendTest {
   param(
     [Parameter(Mandatory=$true)][string]$PeerName,
