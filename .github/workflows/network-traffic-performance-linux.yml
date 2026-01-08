@@ -61,12 +61,10 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633
 
-    - name: Ensure PowerShell 7 is installed (Linux)
-      shell: bash
-      run: |
-        if ! command -v pwsh >/dev/null 2>&1; then
-          sudo bash ./install-pwsh.sh
-        fi
+    - name: Setup PowerShell
+      uses: aochmann/setup-powershell@v1
+      with:
+        powershell-version: latest
 
     - name: Setup workspace (Linux)
       shell: pwsh
