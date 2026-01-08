@@ -10,7 +10,7 @@ Set-StrictMode -Version Latest
 
 # Import shared utilities module
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-Import-Module (Join-Path $scriptDir 'performance_utlilites.psm1') -Force
+Import-Module (Join-Path $scriptDir 'performance_utilities.psm1') -Force
 
 # Write out the parameters for logging
 Write-Host "Parameters:"
@@ -96,7 +96,7 @@ function Normalize-Args {
   return $out
 }
 
-# Note: WPR profiling, error handling, and monitoring functions are imported from performance_utlilites.psm1
+# Note: WPR profiling, error handling, and monitoring functions are imported from performance_utilities.psm1
 
 function Start-WprCpuProfile {
   param([Parameter(Mandatory=$true)][string]$Which)
