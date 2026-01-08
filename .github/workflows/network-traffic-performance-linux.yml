@@ -131,10 +131,8 @@ jobs:
         path: |
           ${{ github.workspace }}/echo/*.csv
           ${{ github.workspace }}/echo/*.log
+          ${{ github.workspace }}/echo/*.txt
           ${{ github.workspace }}/echo/*.json
-          ${{ github.workspace }}/echo/build/echo_summary.csv
-          ${{ github.workspace }}/echo/build/echo_client_output.txt
-          ${{ github.workspace }}/echo/build/server.log
 
   attempt-reset-lab-linux:
     name: Attempting to reset lab (Linux). Status of this job does not indicate result of lab reset. Look at job details.
