@@ -178,6 +178,10 @@ jobs:
   build_echo_test:
     if: ${{ inputs.test_tool == 'echo' }}
     name: Build echo server
+    # WARNING: This uses a personal GitHub account (alan-jowett) instead of an organization repo.
+    # Consider migrating to an organization-owned repository to avoid maintenance risks if the
+    # personal account becomes unavailable. For now, this is the authoritative source for the
+    # WinUDPShardedEcho tool.
     uses: alan-jowett/WinUDPShardedEcho/.github/workflows/reusable-build.yml@main
     with:
       artifact_name: echo_test
