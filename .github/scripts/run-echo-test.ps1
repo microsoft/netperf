@@ -189,8 +189,6 @@ $PerformanceCounters =
   '\IPv6\Datagrams Received Header Errors',
   '\IPv6\Datagrams Received Address Errors',
 
-  '\WFPv4\Packets Discarded/sec',
-  '\WFPv6\Packets Discarded/sec',
   '\Processor Information(*)\% Processor Time'
 )
 

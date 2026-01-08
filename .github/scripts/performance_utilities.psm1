@@ -775,54 +775,32 @@ function CapturePerformanceMonitorAsJob {
       $counters = @('\Processor Information(*)\% Processor Time')
     }
 
-    # Sample once per second for the requested duration and accumulate per-counter values.
+    # Defensively drop counters that are known to be flaky/slow on some runners.
+    $counters = @($counters | Where-Object {
+      $_ -and $_ -notmatch '^\\WFPv[46]\\Packets Discarded/sec$'
+    })
+
+    # Sample roughly once per second until the deadline. This keeps capture bounded to the
+    # requested duration even if individual Get-Counter calls are intermittently slow.
     $store = @{}
+    $deadline = (Get-Date).AddSeconds($d)
+    $iteration = 0
 
-    for ($i = 0; $i -lt $d; $i++) {
-      if (($i % 10) -eq 0) {
-        $ts = Get-Date -Format o
-        Write-Output "[$ts] [PerfMon] Sample $i/$d starting"
-      }
-
+    while ((Get-Date) -lt $deadline) {
+      $iteration++
       $samples = $null
+      $sw = [System.Diagnostics.Stopwatch]::StartNew()
       try {
-        $sw = [System.Diagnostics.Stopwatch]::StartNew()
-        # Try to collect all counters in a single quick sample (returns immediately)
         $samples = Get-Counter -Counter $counters -MaxSamples 1 -ErrorAction Stop
-        $sw.Stop()
-        if ($sw.Elapsed.TotalSeconds -gt 2) {
-          $ts = Get-Date -Format o
-          Write-Output "[$ts] [PerfMon] Get-Counter(all) took $([Math]::Round($sw.Elapsed.TotalSeconds, 2))s"
-        }
       }
       catch {
-        $ts = Get-Date -Format o
-        Write-Output "[$ts] [PerfMon] Get-Counter(all) failed: $($_.Exception.Message)"
-        # If that fails, collect available counters individually (quick single-sample calls)
-        $samples = New-Object System.Collections.Generic.List[object]
-        foreach ($c in $counters) {
-          try {
-            $sw = [System.Diagnostics.Stopwatch]::StartNew()
-            $s = Get-Counter -Counter $c -MaxSamples 1 -ErrorAction Stop
-            $sw.Stop()
-            if ($sw.Elapsed.TotalSeconds -gt 2) {
-              $ts = Get-Date -Format o
-              Write-Output "[$ts] [PerfMon] Get-Counter(single) took $([Math]::Round($sw.Elapsed.TotalSeconds, 2))s for: $c"
-            }
-            if ($s.CounterSamples) { $s.CounterSamples | ForEach-Object { [void]$samples.Add($_) } }
-          }
-          catch {
-            $ts = Get-Date -Format o
-            Write-Output "[$ts] [PerfMon] Counter failed: $c ($($_.Exception.Message))"
-            # skip bad counter
-            continue
-          }
-        }
+        # Skip this sample on errors; do not fall back to per-counter calls (those can be very slow).
+        $samples = $null
       }
+      $sw.Stop()
 
       if ($samples -ne $null) {
         $csamples = $samples.CounterSamples
-        if (-not $csamples -and ($samples -is [System.Collections.IEnumerable])) { $csamples = $samples }
         foreach ($cs in $csamples) {
           $path = $cs.Path
           $inst = $cs.InstanceName
@@ -834,7 +812,11 @@ function CapturePerformanceMonitorAsJob {
         }
       }
 
-      Start-Sleep -Seconds 1
+      # Aim for ~1Hz sampling without extending past the deadline.
+      $sleepMs = [Math]::Max(0, 1000 - [int]$sw.ElapsedMilliseconds)
+      if ($sleepMs -gt 0) {
+        Start-Sleep -Milliseconds $sleepMs
+      }
     }
 
     $results = @()
