@@ -1,0 +1,142 @@
+name: network-traffic-performance-linux
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Test Branch or Commit'
+        required: false
+        default: 'main'
+        type: string
+      sender_options:
+        description: 'Command-line options for the sender (quoted string)'
+        required: true
+        type: string
+      receiver_options:
+        description: 'Command-line options for the receiver (quoted string)'
+        required: true
+        type: string
+      test_tool_ref:
+        description: 'Branch or ref to build the test tool from'
+        required: false
+        default: 'main'
+        type: string
+      duration:
+        description: 'Duration of the test in seconds'
+        required: false
+        default: '60'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build_echo_test_linux:
+    name: Build echo server/client (Linux)
+    uses: alan-jowett/LinuxUDPShardedEcho/.github/workflows/reusable-build.yml@main
+    with:
+      artifact_name: echo_test
+      repository: 'alan-jowett/LinuxUDPShardedEcho'
+      config: 'RelWithDebInfo'
+      ref: ${{ inputs.test_tool_ref }}
+
+  test_echo_server_linux:
+    name: Network Traffic Test (echo, Linux)
+    needs: [build_echo_test_linux]
+    strategy:
+      fail-fast: false
+      matrix:
+        vec:
+          - env: lab
+            os: "ubuntu-24.04"
+            arch: x64
+    runs-on:
+      - self-hosted
+      - ${{ matrix.vec.env }}
+      - Linux
+      - ${{ matrix.vec.arch }}
+      - os-${{ matrix.vec.os }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633
+
+    - name: Setup PowerShell
+      uses: aochmann/setup-powershell@v1
+      with:
+        powershell-version: latest
+
+    - name: Setup workspace (Linux)
+      shell: pwsh
+      run: |
+        Get-ChildItem | % { Remove-Item -Recurse $_ -Force -ErrorAction SilentlyContinue }
+        if (Test-Path "$env:GITHUB_WORKSPACE/echo") { Remove-Item -Recurse -Force "$env:GITHUB_WORKSPACE/echo" }
+        if (Test-Path "$env:GITHUB_WORKSPACE/ETL") { Remove-Item -Recurse -Force "$env:GITHUB_WORKSPACE/ETL" }
+        New-Item -ItemType Directory -Path "$env:GITHUB_WORKSPACE/echo/build" | Out-Null
+        New-Item -ItemType Directory -Path "$env:GITHUB_WORKSPACE/ETL" | Out-Null
+
+    - name: Download echo test tool
+      uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+      with:
+        name: "echo_test"
+        path: ${{ github.workspace }}/echo
+
+    - name: Download run-echo-test script
+      working-directory: ${{ github.workspace }}/echo/build
+      shell: pwsh
+      run: |
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/scripts/run-echo-test-linux.ps1" -OutFile "./run-echo-test-linux.ps1"
+
+    - name: Log input parameters
+      shell: pwsh
+      run: |
+        Write-Output "Input parameters:"
+        Write-Output "  SenderOptions: ${{ inputs.sender_options }}"
+        Write-Output "  ReceiverOptions: ${{ inputs.receiver_options }}"
+        Write-Output "  ref: ${{ inputs.ref }}"
+        Write-Output "  Duration: ${{ inputs.duration }}"
+
+    - name: Diagnostic - List files in echo build directory
+      shell: pwsh
+      run: |
+        Write-Output "Files in echo build directory:"
+        Get-ChildItem -Path "$env:GITHUB_WORKSPACE/echo/build" -Recurse
+
+    - name: Run echo traffic tests (Linux)
+      working-directory: ${{ github.workspace }}/echo/build
+      env:
+        SENDER_OPTIONS: ${{ inputs.sender_options }}
+        RECEIVER_OPTIONS: ${{ inputs.receiver_options }}
+      shell: pwsh
+      run: |
+        $cmd = @(
+          './run-echo-test-linux.ps1',
+          '-PeerName', '"netperf-peer"',
+          '-SenderOptions', '"' + $env:SENDER_OPTIONS + '"',
+          '-ReceiverOptions', '"' + $env:RECEIVER_OPTIONS + '"',
+          '-Duration', '"${{ inputs.duration }}"'
+        ) -join ' '
+
+        Write-Output "Running: $cmd"
+        Invoke-Expression $cmd
+
+    - name: Upload echo results (Linux)
+      if: always()
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      with:
+        name: echo_test_linux_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        path: |
+          ${{ github.workspace }}/echo/*.csv
+          ${{ github.workspace }}/echo/*.log
+          ${{ github.workspace }}/echo/*.json
+          ${{ github.workspace }}/echo/build/echo_summary.csv
+          ${{ github.workspace }}/echo/build/echo_client_output.txt
+          ${{ github.workspace }}/echo/build/server.log
+
+  attempt-reset-lab-linux:
+    name: Attempting to reset lab (Linux). Status of this job does not indicate result of lab reset. Look at job details.
+    needs: [test_echo_server_linux]
+    if: ${{ always() }}
+    uses: microsoft/netperf/.github/workflows/schedule-lab-reset.yml@main
+    with:
+      workflowId: ${{ github.run_id }}

@@ -27,6 +27,27 @@ on:
         description: 'Command-line options for the receiver (quoted string)'
         required: true
         type: string
+      test_tool_ref:
+        description: 'Branch or ref to build the test tool from'
+        required: false
+        default: 'main'
+        type: string
+      test_tool:
+        description: 'The network test tool to use'
+        required: false
+        default: 'ctsTraffic'
+        type: choice
+        options:
+          - ctsTraffic
+          - echo
+      duration:
+        description: 'Duration of the test in seconds'
+        required: false
+        default: '60'
+        type: string
+
+permissions:
+  contents: read
 
 concurrency:
   group: >-
@@ -35,15 +56,18 @@ concurrency:
 
 jobs:
   build_cts_traffic:
+    if: ${{ inputs.test_tool == 'ctsTraffic' }}
     name: Build cts-traffic
     uses: microsoft/ctsTraffic/.github/workflows/reusable-build.yml@master
     with:
       build_artifact: cts-traffic
       repository: 'microsoft/ctsTraffic'
       configurations: '["Release"]'
-      ref: 'master'
+      # Need to translate main to master for ctsTraffic repo
+      ref: ${{ inputs.test_tool_ref == 'main' && 'master' || inputs.test_tool_ref }}
 
-  test:
+  test_cts_traffic:
+    if: ${{ inputs.test_tool == 'ctsTraffic' }}
     name: Network Traffic Test
     needs: [build_cts_traffic]
     strategy:
@@ -65,6 +89,14 @@ jobs:
 
     - name: Setup workspace
       run: |-
+        # Safety check: verify we're in the correct workspace directory before cleanup
+        $currentDir = (Get-Location).Path
+        $expectedDir = "${{ github.workspace }}"
+        if ($currentDir -ne $expectedDir) {
+          Write-Error "Safety check failed: Current directory '$currentDir' does not match expected workspace '$expectedDir'. Aborting cleanup."
+          exit 1
+        }
+        
         Get-ChildItem  | % { Remove-Item -Recurse $_ -Force -ErrorAction SilentlyContinue }
         if (Test-Path ${{ github.workspace }}\cts-traffic) { Remove-Item -Recurse -Force ${{ github.workspace }}\cts-traffic }
         if (Test-Path ${{ github.workspace }}\ETL) { Remove-Item -Recurse -Force ${{ github.workspace }}\ETL }
@@ -106,22 +138,22 @@ jobs:
         RECEIVER_OPTIONS: ${{ inputs.receiver_options }}
       shell: pwsh
       run: |
-        # Build the command and only include -CpuProfile when PROFILE is truthy ('true' or true)
-        $cpuSwitch = ''
+        # Build argument array safely without string concatenation or Invoke-Expression
+        $scriptPath = '.\run-traffic-test.ps1'
+        $arguments = @()
+        
+        # Conditionally add -CpuProfile flag
         if ($env:PROFILE -eq 'true' -or $env:PROFILE -eq 'True' -or $env:PROFILE -eq 'TRUE' -or $env:PROFILE -eq $true) {
-          $cpuSwitch = '-CpuProfile'
+          $arguments += '-CpuProfile'
         }
-
-        $cmd = @(
-          '.\\run-traffic-test.ps1',
-          $cpuSwitch,
-          '-PeerName', '"netperf-peer"',
-          '-SenderOptions', '"' + $env:SENDER_OPTIONS + '"',
-          '-ReceiverOptions', '"' + $env:RECEIVER_OPTIONS + '"'
-        ) -join ' '
-
-        Write-Output "Running: $cmd"
-        Invoke-Expression $cmd
+        
+        # Add remaining parameters
+        $arguments += '-PeerName', 'netperf-peer'
+        $arguments += '-SenderOptions', $env:SENDER_OPTIONS
+        $arguments += '-ReceiverOptions', $env:RECEIVER_OPTIONS
+        
+        Write-Output "Running: $scriptPath $($arguments -join ' ')"
+        & $scriptPath @arguments
 
     - name: Optional - Stop TCPIP tracing
       if: ${{ github.event.inputs.tcp_ip_tracing == 'true' }}
@@ -150,3 +182,200 @@ jobs:
       with:
         name: cpu_profile_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: ${{ github.workspace }}\ETL\cpu_profile-*.etl
+
+  build_echo_test:
+    if: ${{ inputs.test_tool == 'echo' }}
+    name: Build echo server
+    # WARNING: This uses a personal GitHub account (alan-jowett) instead of an organization repo.
+    # Consider migrating to an organization-owned repository to avoid maintenance risks if the
+    # personal account becomes unavailable. For now, this is the authoritative source for the
+    # WinUDPShardedEcho tool.
+    uses: alan-jowett/WinUDPShardedEcho/.github/workflows/reusable-build.yml@main
+    with:
+      artifact_name: echo_test
+      repository: 'alan-jowett/WinUDPShardedEcho'
+      config: 'RelWithDebInfo'
+      ref: ${{ inputs.test_tool_ref }}
+
+  test_echo_server:
+    if: ${{ inputs.test_tool == 'echo' }}
+    name: Network Traffic Test (echo)
+    needs: [build_echo_test]
+    strategy:
+      fail-fast: false
+      matrix:
+        vec:
+          - env: lab
+            os: "2022"
+            arch: x64
+    runs-on:
+      - self-hosted
+      - ${{ matrix.vec.env }}
+      - os-windows-${{ matrix.vec.os }}
+      - ${{ matrix.vec.arch }}
+      - ebpf
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633
+
+    - name: Setup workspace
+      run: |-
+        # Safety check: verify we're in the correct workspace directory before cleanup
+        $currentDir = (Get-Location).Path
+        $expectedDir = "${{ github.workspace }}"
+        if ($currentDir -ne $expectedDir) {
+          Write-Error "Safety check failed: Current directory '$currentDir' does not match expected workspace '$expectedDir'. Aborting cleanup."
+          exit 1
+        }
+        
+        Get-ChildItem  | % { Remove-Item -Recurse $_ -Force -ErrorAction SilentlyContinue }
+        if (Test-Path ${{ github.workspace }}\echo) { Remove-Item -Recurse -Force ${{ github.workspace }}\echo }
+        if (Test-Path ${{ github.workspace }}\ETL) { Remove-Item -Recurse -Force ${{ github.workspace }}\ETL }
+        New-Item -ItemType Directory -Path ${{ github.workspace }}\echo\RelWithDebInfo
+        New-Item -ItemType Directory -Path ${{ github.workspace }}\ETL
+
+    - name: Configure Windows Error Reporting to make a local copy of any crashes that occur.
+      id: configure_windows_error_reporting
+      run: |
+        $DumpFolder = "${{ github.workspace }}\echo\RelWithDebInfo"
+        New-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps" -ErrorAction SilentlyContinue
+        New-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps" -Name "DumpType" -Value 2 -PropertyType DWord -ErrorAction SilentlyContinue
+        New-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps" -Name "DumpFolder" -Value "$DumpFolder" -PropertyType ExpandString -ErrorAction SilentlyContinue
+
+    - name: Download echo test tool
+      uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+      with:
+        name: "echo_test"
+        path: ${{ github.workspace }}\echo
+
+    - name: Optional - Start TCPIP tracing
+      if: ${{ github.event.inputs.tcp_ip_tracing == 'true' }}
+      run: |-
+        if (Test-Path "tcpip.wprp") { Remove-Item -Force "tcpip.wprp" }
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
+        wpr -start tcpip.wprp -filemode
+
+    - name: Download modified CPU profile script
+      working-directory: ${{ github.workspace }}\ETL
+      run: |
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/scripts/cpu.wprp" -OutFile "${{ github.workspace }}\ETL\cpu.wprp" 
+
+    - name: Download run-echo-test script
+      working-directory: ${{ github.workspace }}\echo\RelWithDebInfo
+      run: |
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/scripts/run-echo-test.ps1" -OutFile ".\run-echo-test.ps1"
+
+    - name: Log all input parameters for this workflow
+      run: |
+        Write-Output "Input parameters:"
+        Write-Output "  Profile: ${{ inputs.profile }}"
+        Write-Output "  SenderOptions: ${{ inputs.sender_options }}"
+        Write-Output "  ReceiverOptions: ${{ inputs.receiver_options }}"
+        Write-Output "  TCP IP Tracing: ${{ inputs.tcp_ip_tracing }}"
+        Write-Output "  ref: ${{ inputs.ref }}"
+        Write-Output "  Duration: ${{ inputs.duration }}"
+
+    - name: Diagnostic - List files in echo RelWithDebInfo directory
+      run: |
+        Write-Output "Files in echo RelWithDebInfo directory:"
+        Get-ChildItem -Path ${{ github.workspace }}\echo\RelWithDebInfo -Recurse
+
+    - name: Log pktmon drop counters before test
+      run: |
+        pktmon comp counters --type drop
+
+    - name: Start PktMon drop Capture
+      run: |
+        pktmon filter add -p 7
+        pktmon filter list
+        pktmon start --etw -c
+
+    - name: Run traffic tests
+      working-directory: ${{ github.workspace }}\echo\RelWithDebInfo
+      env:
+        PROFILE: ${{ inputs.profile }}
+        SENDER_OPTIONS: ${{ inputs.sender_options }}
+        RECEIVER_OPTIONS: ${{ inputs.receiver_options }}
+      shell: pwsh
+      run: |
+        # Build argument array safely without string concatenation or Invoke-Expression
+        $scriptPath = '.\run-echo-test.ps1'
+        $arguments = @()
+        
+        # Conditionally add -CpuProfile flag
+        if ($env:PROFILE -eq 'true' -or $env:PROFILE -eq 'True' -or $env:PROFILE -eq 'TRUE' -or $env:PROFILE -eq $true) {
+          $arguments += '-CpuProfile'
+        }
+        
+        # Add remaining parameters
+        $arguments += '-PeerName', 'netperf-peer'
+        $arguments += '-SenderOptions', $env:SENDER_OPTIONS
+        $arguments += '-ReceiverOptions', $env:RECEIVER_OPTIONS
+        $arguments += '-Duration', '${{ inputs.duration }}'
+        
+        Write-Output "Running: $scriptPath $($arguments -join ' ')"
+        & $scriptPath @arguments
+
+    - name: Stop PktMon drop Capture
+      run: |
+        pktmon stop
+        copy pktmon.etl ${{ github.workspace }}\ETL\pktmon_drop_trace.etl
+        pktmon reset
+        pktmon filter remove all
+
+    - name: Log pktmon drop counters after test
+      run: |
+        pktmon comp counters --type drop
+
+    - name: Optional - Stop TCPIP tracing
+      if: ${{ github.event.inputs.tcp_ip_tracing == 'true' }}
+      run: |
+        wpr -stop ${{ github.workspace }}\ETL\tcpip_trace.etl
+
+    - name: Upload echo results
+      if: always()
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      with:
+        name: echo_test_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        path: |
+          ${{ github.workspace }}\echo\*.csv
+          ${{ github.workspace }}\echo\*.log
+          ${{ github.workspace }}\echo\*.json
+
+    - name: Upload TCPIP ETL
+      if: always()
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      with:
+        name: tcpip_trace_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        path: ${{ github.workspace }}\ETL\tcpip_trace.etl
+
+    - name: Upload CPU Profile
+      if:  always()
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      with:
+        name: cpu_profile_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        path: ${{ github.workspace }}\ETL\cpu_profile-*.etl
+
+    - name: Upload PktMon Drop ETL
+      if:  always()
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      with:
+        name: pktmon_drop_trace_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        path: ${{ github.workspace }}\ETL\pktmon_drop_trace.etl
+
+    - name: Upload Crash Dumps
+      if:  always()
+      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      with:
+        name: crash_dumps_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        path: |
+          ${{ github.workspace }}\echo\RelWithDebInfo
+
+  attempt-reset-lab-cts:
+    name: Attempting to reset lab (ctsTraffic). Status of this job does not indicate result of lab reset. Look at job details.
+    needs: [test_cts_traffic]
+    if: ${{ always() && inputs.test_tool == 'ctsTraffic' }}
+    uses: microsoft/netperf/.github/workflows/schedule-lab-reset.yml@main
+    with:
+      workflowId: ${{ github.run_id }}
