@@ -49,12 +49,6 @@ $localFwState = $null
 # =========================
 # Remote job helpers
 # =========================
-# Backward-compatible wrapper for Invoke-EchoInSession -> Invoke-ToolInSession
-function Invoke-EchoInSession {
-  param($Session, $RemoteDir, $Name, $Options, $WaitSeconds = 0)
-  return Invoke-ToolInSession -Session $Session -RemoteDir $RemoteDir -ToolDir 'echo' -ToolName $Name -Options $Options -WaitSeconds $WaitSeconds
-}
-
 function Copy-EchoToRemote {
   param([Parameter(Mandatory=$true)]$Session)
   # Ensure the remote base directory and the 'echo' subdirectory both exist,
@@ -118,7 +112,7 @@ function Run-SendTest {
   $serverArgs = Normalize-Args -Tokens $serverArgs
   Write-Host "[Local->Remote] Invoking remote job with arguments:"
   if ($serverArgs -is [System.Array]) { foreach ($arg in $serverArgs) { Write-Host "  $arg" } } else { Write-Host "  $serverArgs" }
-  $Job = Invoke-EchoInSession -Session $Session -RemoteDir $script:RemoteDir -Name "echo_server" -Options $serverArgs -WaitSeconds 0
+  $Job = Invoke-ToolInSession -Session $Session -RemoteDir $script:RemoteDir -ToolDir 'echo' -ToolName "echo_server" -Options $serverArgs -WaitSeconds 0
 
   $clientArgs = Convert-ArgStringToArray $SenderOptions
   $clientArgs = Normalize-Args -Tokens $clientArgs
@@ -148,7 +142,7 @@ function Run-RecvTest {
   $serverArgs = Normalize-Args -Tokens $serverArgs
   Write-Host "[Local->Remote] Invoking remote job with arguments:"
   if ($serverArgs -is [System.Array]) { foreach ($arg in $serverArgs) { Write-Host "  $arg" } } else { Write-Host "  $serverArgs" }
-  $Job = Invoke-EchoInSession -Session $Session -RemoteDir $script:RemoteDir -Name "echo_client" -Options $serverArgs -WaitSeconds 0
+  $Job = Invoke-ToolInSession -Session $Session -RemoteDir $script:RemoteDir -ToolDir 'echo' -ToolName "echo_client" -Options $serverArgs -WaitSeconds 0
 
   $clientArgs = Convert-ArgStringToArray $ReceiverOptions
   $clientArgs = Normalize-Args -Tokens $clientArgs
