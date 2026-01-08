@@ -9,31 +9,6 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# Helper to parse quoted command-line option strings into an array
-function Convert-ArgStringToArray($s) {
-  if ([string]::IsNullOrEmpty($s)) { return @() }
-  # Pattern: either a double-quoted string with backslash-escaped characters (group 2 = inner text),
-  # or an unquoted token consisting of non-space, non-quote characters.
-  $pattern = '("((?:\\.|[^"\\])*)"|[^"\s]+)'
-  $regexMatches = [regex]::Matches($s, $pattern)
-  $out = @()
-  foreach ($m in $regexMatches) {
-    if ($m.Groups[2].Success) {
-      # Quoted token; Group 2 contains inner text with possible escapes
-      $val = $m.Groups[2].Value
-      # Unescape backslash-escaped sequences commonly used in CLI args
-      $val = $val -replace '\\\\', '\'
-      $val = $val -replace '\\"', '"'
-    }
-    else {
-      # Unquoted token in Group 1
-      $val = $m.Groups[1].Value
-    }
-    $out += $val.Trim()
-  }
-  return $out
-}
-
 function Ensure-Executable($path) {
   if (-not (Test-Path $path)) { throw "Missing binary: $path" }
   try { chmod +x $path } catch { Write-Host "chmod failed (may already be executable): $path" }
