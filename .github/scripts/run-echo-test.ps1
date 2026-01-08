@@ -89,26 +89,6 @@ function Normalize-Args {
   return $out
 }
 
-# Rename a local file if it exists; ignore if not present
-function Rename-LocalIfExists {
-  param(
-    [Parameter(Mandatory=$true)][string]$Path,
-    [Parameter(Mandatory=$true)][string]$NewName
-  )
-  try {
-    if (Test-Path $Path) {
-      # If the desired new name already exists, remove it first so Rename-Item succeeds
-      if (Test-Path $NewName) {
-        try { Remove-Item -Path $NewName -Force -ErrorAction Stop } catch { Write-Host "Warning: failed to remove existing '$NewName': $($_.Exception.Message)" }
-      }
-      Rename-Item -Path $Path -NewName $NewName -ErrorAction Stop
-    }
-  }
-  catch {
-    Write-Host "Failed to rename $Path -> $NewName $($_.Exception.Message)"
-  }
-}
-
 # Print detailed information for an ErrorRecord or Exception. Supports pipeline input.
 function Write-DetailedError {
   param(
@@ -338,6 +318,8 @@ function Create-Session {
   $script:RemotePSConfiguration = $RemotePSConfiguration
   $script:RemoteDir = 'C:\_work'
 
+  # WARNING: This retrieves credentials from Windows registry (auto-logon). This is intended for controlled lab environments only.
+  # Do not use these credentials for production systems or reuse them elsewhere.
   $Username = (Get-ItemProperty 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon').DefaultUserName
   $Password = (Get-ItemProperty 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon').DefaultPassword | ConvertTo-SecureString -AsPlainText -Force
   $Creds = New-Object System.Management.Automation.PSCredential ($Username, $Password)

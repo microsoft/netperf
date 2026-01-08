@@ -157,6 +157,8 @@ function Create-Session {
   $script:RemotePSConfiguration = $RemotePSConfiguration
   $script:RemoteDir = 'C:\_work'
 
+  # WARNING: This retrieves credentials from Windows registry (auto-logon). This is intended for controlled lab environments only.
+  # Do not use these credentials for production systems or reuse them elsewhere.
   $Username = (Get-ItemProperty 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon').DefaultUserName
   $Password = (Get-ItemProperty 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon').DefaultPassword | ConvertTo-SecureString -AsPlainText -Force
   $Creds = New-Object System.Management.Automation.PSCredential ($Username, $Password)
@@ -253,7 +255,8 @@ function CaptureIndividualCpuUsagePerformanceMonitorAsJob {
   $cpuMonitorJob = Start-Job -ScriptBlock {
     param($duration)
 
-    $counter = '\Processor(*)\% Processor Time'
+    # Use Processor Information counter which supports systems with multiple processor groups (>64 CPUs)
+    $counter = '\\Processor Information(*)\\% Processor Time'
     $d = [int]$duration
 
     try {
@@ -425,12 +428,11 @@ function Set-RssSettings {
         return
     }
 
+    # Currently only processor group 0 is used, regardless of MaxProcessorGroup.
     if ($maxGroup -lt 1) {
         Write-Host "No processor groups reported. Assuming group 0."
-        $useGroup = 0
-    } else {
-        $useGroup = 0
     }
+    $useGroup = 0
     if ($maxCPU -lt 0) {
         Write-Host "Invalid MaxProcessorNumber ($maxCPU). Returning."
         return
@@ -565,3 +567,6 @@ function CapturePerformanceMonitorAsJob {
 
   return $perfJob
 }
+
+# Export all public functions
+Export-ModuleMember -Function *

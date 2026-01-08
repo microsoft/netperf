@@ -38,24 +38,34 @@ Invoke-Command -Session $session -ScriptBlock { chmod +x $using:RemoteServerPath
 
 # Start server in background on peer, capture PID
 Write-Host "Starting server on peer"
-# Properly escape ReceiverOptions for safe shell execution
-$escapedReceiverOptions = $ReceiverOptions -replace "'", "'\"'\"'" # escape single quotes
-$startServer = @"
-  bash -lc "nohup '$using:RemoteServerPath' $using:escapedReceiverOptions > '$using:RemoteServerLogPath' 2>&1 & echo \`$!"
-"@
-$serverPid = Invoke-Command -Session $session -ScriptBlock ([ScriptBlock]::Create($startServer))
+$serverPid = Invoke-Command -Session $session -ScriptBlock {
+  param([string]$Path, [string]$Options, [string]$LogPath)
+  
+  # Parse options string into argument array to avoid shell injection
+  $args = @()
+  if ($Options) {
+    $args = $Options -split '\s+' | Where-Object { $_ -ne '' }
+  }
+  
+  # Start the server in the background using Start-Process
+  $process = Start-Process -FilePath $Path -ArgumentList $args -RedirectStandardOutput $LogPath -RedirectStandardError $LogPath -PassThru
+  return $process.Id
+} -ArgumentList $RemoteServerPath, $ReceiverOptions, $RemoteServerLogPath
 Write-Host "Server PID on peer: $serverPid"
 Start-Sleep -Seconds 2
 
 # Run client locally and capture output
 Write-Host "Running echo client locally"
-# Properly escape arguments for safe shell execution
-$escapedSenderOptions = $SenderOptions -replace "'", "'\"'\"'" # escape single quotes
-$escapedDuration = $Duration -replace "[^0-9]", "" # only allow digits
-$clientCmd = @"
-bash -lc ''$clientPath' $escapedSenderOptions --duration $escapedDuration'
-"@
-$clientOutput = & pwsh -NoProfile -Command $clientCmd 2>&1
+# Parse sender options into argument array to avoid shell injection
+$clientArgs = @()
+if ($SenderOptions) {
+  $clientArgs = $SenderOptions -split '\s+' | Where-Object { $_ -ne '' }
+}
+$clientArgs += '--duration'
+$clientArgs += $Duration
+
+# Execute client binary directly without intermediate shell
+$clientOutput = & $clientPath @clientArgs 2>&1
 $clientExit = $LASTEXITCODE
 
 # Save client output

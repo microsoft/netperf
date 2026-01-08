@@ -63,7 +63,7 @@ jobs:
       build_artifact: cts-traffic
       repository: 'microsoft/ctsTraffic'
       configurations: '["Release"]'
-      # Need to translate main to master for ctsTraffic repo 
+      # Need to translate main to master for ctsTraffic repo
       ref: ${{ inputs.test_tool_ref == 'main' && 'master' || inputs.test_tool_ref }}
 
   test_cts_traffic:
@@ -365,10 +365,18 @@ jobs:
         path: |
           ${{ github.workspace }}\echo\RelWithDebInfo
 
-  attempt-reset-lab:
-    name: Attempting to reset lab. Status of this job does not indicate result of lab reset. Look at job details.
-    needs: [test_cts_traffic, test_echo_server]
-    if: ${{ always() }}
+  attempt-reset-lab-cts:
+    name: Attempting to reset lab (ctsTraffic). Status of this job does not indicate result of lab reset. Look at job details.
+    needs: [test_cts_traffic]
+    if: ${{ always() && inputs.test_tool == 'ctsTraffic' }}
+    uses: microsoft/netperf/.github/workflows/schedule-lab-reset.yml@main
+    with:
+      workflowId: ${{ github.run_id }}
+
+  attempt-reset-lab-echo:
+    name: Attempting to reset lab (echo). Status of this job does not indicate result of lab reset. Look at job details.
+    needs: [test_echo_server]
+    if: ${{ always() && inputs.test_tool == 'echo' }}
     uses: microsoft/netperf/.github/workflows/schedule-lab-reset.yml@main
     with:
       workflowId: ${{ github.run_id }}
