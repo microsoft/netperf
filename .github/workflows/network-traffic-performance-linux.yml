@@ -140,6 +140,6 @@ jobs:
     if: ${{ always() }}
     permissions:
       actions: write
-    uses: microsoft/netperf/.github/workflows/schedule-lab-reset.yml@main
+    uses: ./.github/workflows/schedule-lab-reset.yml
     with:
       workflowId: ${{ github.run_id }}
