@@ -226,20 +226,14 @@ jobs:
         try { pktmon reset | Out-Null } catch { }
         Start-Sleep -Seconds 2
 
-        $candidates = @(
-          (Join-Path $workspace 'PktMon.etl'),
-          (Join-Path $workspace 'pktmon.etl')
-        )
-
-        foreach ($p in $candidates) {
-          try {
-            if (Test-Path -LiteralPath $p) {
-              Remove-Item -LiteralPath $p -Force -ErrorAction Stop
-              Write-Host "Removed leftover file: $p"
-            }
-          } catch {
-            Write-Warning "Failed to remove leftover file '$p': $($_.Exception.Message)"
+        try {
+          $p = Join-Path $workspace 'pktmon.etl'
+          if (Test-Path -LiteralPath $p) {
+            Remove-Item -LiteralPath $p -Force -ErrorAction Stop
+            Write-Host "Removed leftover file: $p"
           }
+        } catch {
+          Write-Warning "Failed to remove leftover file '$p': $($_.Exception.Message)"
         }
 
     - name: Checkout repository
@@ -349,11 +343,6 @@ jobs:
       run: |
         pktmon stop
         copy pktmon.etl ${{ github.workspace }}\ETL\pktmon_drop_trace.etl
-        try {
-          Remove-Item -LiteralPath "${{ github.workspace }}\PktMon.etl" -Force -ErrorAction Stop
-        } catch {
-          Write-Warning "Failed to remove PktMon.etl at '${{ github.workspace }}\PktMon.etl': $($_.Exception.Message)"
-        }
         try {
           Remove-Item -LiteralPath "${{ github.workspace }}\pktmon.etl" -Force -ErrorAction Stop
         } catch {
