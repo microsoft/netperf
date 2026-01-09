@@ -128,27 +128,30 @@ Ensure-Executable $clientPath
 # Pick a non-privileged default port (override if caller provided one)
 $defaultPort = 5001
 
+function Parse-PortOrNull([string]$value) {
+  if ([string]::IsNullOrWhiteSpace($value)) { return $null }
+  $p = 0
+  if (-not [int]::TryParse($value, [ref]$p)) { return $null }
+  if ($p -lt 1 -or $p -gt 65535) {
+    throw "Invalid port '$value'. Expected an integer in range 1-65535."
+  }
+  return $p
+}
+
 $receiverArgs = Convert-ArgStringToArray $ReceiverOptions
 $senderArgs = Convert-ArgStringToArray $SenderOptions
 
 $receiverPort = Get-OptionValueOrNull -args $receiverArgs -names @('--port','-p')
 $senderPort = Get-OptionValueOrNull -args $senderArgs -names @('--port','-p')
 
-if ($receiverPort -and $senderPort) {
-  $rp = 0
-  $sp = 0
-  if ([int]::TryParse($receiverPort, [ref]$rp) -and [int]::TryParse($senderPort, [ref]$sp) -and $rp -ne $sp) {
-    throw "SenderOptions and ReceiverOptions specify different ports ($sp vs $rp). Use a single port for both client and server, or omit one and let the script apply a consistent port."
-  }
+$receiverPortInt = Parse-PortOrNull $receiverPort
+$senderPortInt = Parse-PortOrNull $senderPort
+
+if ($receiverPortInt -ne $null -and $senderPortInt -ne $null -and $receiverPortInt -ne $senderPortInt) {
+  throw "SenderOptions and ReceiverOptions specify different ports ($senderPortInt vs $receiverPortInt). Use a single port for both client and server, or omit one and let the script apply a consistent port."
 }
 
-$port = $defaultPort
-foreach ($p in @($receiverPort, $senderPort)) {
-  if ($p -and ($p -as [int])) {
-    $port = [int]$p
-    break
-  }
-}
+$port = if ($receiverPortInt -ne $null) { $receiverPortInt } elseif ($senderPortInt -ne $null) { $senderPortInt } else { $defaultPort }
 
 if (-not (Has-AnyOption -args $receiverArgs -names @('--port','-p'))) {
   $receiverArgs += @('--port', $port)
