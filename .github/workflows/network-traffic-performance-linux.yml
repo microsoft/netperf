@@ -138,6 +138,7 @@ jobs:
     name: Attempting to reset lab (Linux). Status of this job does not indicate result of lab reset. Look at job details.
     needs: [test_echo_server_linux]
     if: ${{ always() }}
+    continue-on-error: true
     permissions:
       contents: read
       actions: write
