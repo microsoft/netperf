@@ -26,7 +26,9 @@ function Convert-ArgStringToArray([string]$s) {
   $inDouble = $false
   $escapeNext = $false
 
-  foreach ($ch in $s.ToCharArray()) {
+  $chars = $s.ToCharArray()
+  for ($i = 0; $i -lt $chars.Length; $i++) {
+    $ch = $chars[$i]
     if ($escapeNext) {
       [void]$current.Append($ch)
       $escapeNext = $false
@@ -34,7 +36,21 @@ function Convert-ArgStringToArray([string]$s) {
     }
 
     if (-not $inSingle -and $ch -eq '\\') {
-      $escapeNext = $true
+      # Outside single quotes, treat backslash as an escape.
+      # Inside double quotes, only escape a limited set of characters.
+      if (-not $inDouble) {
+        $escapeNext = $true
+        continue
+      }
+
+      $next = if (($i + 1) -lt $chars.Length) { $chars[$i + 1] } else { [char]0 }
+      if ($next -eq '"' -or $next -eq '\\' -or $next -eq '$' -or $next -eq '`') {
+        $escapeNext = $true
+        continue
+      }
+
+      # Otherwise, keep the backslash literal inside double quotes.
+      [void]$current.Append($ch)
       continue
     }
 
@@ -147,11 +163,11 @@ $senderPort = Get-OptionValueOrNull -args $senderArgs -names @('--port','-p')
 $receiverPortInt = Parse-PortOrNull $receiverPort
 $senderPortInt = Parse-PortOrNull $senderPort
 
-if ($receiverPortInt -ne $null -and $senderPortInt -ne $null -and $receiverPortInt -ne $senderPortInt) {
+if ($null -ne $receiverPortInt -and $null -ne $senderPortInt -and $receiverPortInt -ne $senderPortInt) {
   throw "SenderOptions and ReceiverOptions specify different ports ($senderPortInt vs $receiverPortInt). Use a single port for both client and server, or omit one and let the script apply a consistent port."
 }
 
-$port = if ($receiverPortInt -ne $null) { $receiverPortInt } elseif ($senderPortInt -ne $null) { $senderPortInt } else { $defaultPort }
+$port = if ($null -ne $receiverPortInt) { $receiverPortInt } elseif ($null -ne $senderPortInt) { $senderPortInt } else { $defaultPort }
 
 if (-not (Has-AnyOption -args $receiverArgs -names @('--port','-p'))) {
   $receiverArgs += @('--port', $port)

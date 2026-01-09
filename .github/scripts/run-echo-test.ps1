@@ -108,7 +108,7 @@ function Wait-JobWithProgress {
   param(
     [Parameter(Mandatory=$true)]$Job,
     [Parameter(Mandatory=$true)][string]$Name,
-    [Alias('PollSeconds')][int]$TimeoutSeconds = 15
+    [int]$TimeoutSeconds = 15
   )
 
   $sw = [System.Diagnostics.Stopwatch]::StartNew()
