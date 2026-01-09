@@ -9,8 +9,64 @@ param(
 Set-StrictMode -Version Latest
 
 # Import shared utilities module
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-Import-Module (Join-Path $scriptDir 'performance_utilities.psm1') -Force
+function Find-RepoRoot {
+  param(
+    [Parameter(Mandatory = $true)][string]$StartDir
+  )
+
+  # Initialize starting directory without resolving symbolic links.
+  if (Test-Path -LiteralPath $StartDir) {
+    $item = Get-Item -LiteralPath $StartDir
+    if ($item.PSIsContainer) {
+      $dir = $item.FullName
+    }
+    else {
+      $dir = $item.DirectoryName
+    }
+  }
+  else {
+    $dir = $StartDir
+  }
+  while ($true) {
+    if (Test-Path -LiteralPath (Join-Path $dir '.git')) {
+      return $dir
+    }
+
+    $parent = Split-Path -Parent $dir
+    if (-not $parent -or $parent -eq $dir) {
+      return $null
+    }
+    $dir = $parent
+  }
+}
+
+$scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
+$moduleName = 'performance_utilities.psm1'
+$twoLevelsUp = Join-Path $scriptDir '..\..'
+$moduleCandidates = @(
+  (Join-Path $scriptDir $moduleName),
+  (Join-Path $scriptDir '..' $moduleName),
+  (Join-Path $twoLevelsUp $moduleName)
+)
+
+if ($env:GITHUB_WORKSPACE) {
+  $githubScriptsDir = Join-Path $env:GITHUB_WORKSPACE '.github\scripts'
+  $moduleCandidates += (Join-Path $githubScriptsDir $moduleName)
+}
+
+$repoRoot = Find-RepoRoot -StartDir $scriptDir
+if ($repoRoot) {
+  $repoScriptsDir = Join-Path $repoRoot '.github\scripts'
+  $moduleCandidates += (Join-Path $repoScriptsDir $moduleName)
+}
+
+$modulePath = $moduleCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+if (-not $modulePath) {
+  $moduleCandidatesString = ($moduleCandidates | ForEach-Object { "  $_" }) -join [Environment]::NewLine
+  Write-Error -ErrorAction Stop -Message ("Could not find required module '{0}'. Tried:{1}{2}" -f $moduleName, [Environment]::NewLine, $moduleCandidatesString)
+}
+
+Import-Module $modulePath -Force
 
 # Write out the parameters for logging
 Write-Host "Parameters:"
@@ -45,6 +101,32 @@ $exitCode = 0
 $localFwState = $null
 
 # Note: WPR profiling, error handling, and monitoring functions are imported from performance_utilities.psm1
+
+function Write-Phase {
+  param([Parameter(Mandatory=$true)][string]$Message)
+  Write-Host "[$(Get-Date -Format o)] $Message"
+}
+
+function Wait-JobWithProgress {
+  param(
+    [Parameter(Mandatory=$true)]$Job,
+    [Parameter(Mandatory=$true)][string]$Name,
+    [int]$TimeoutSeconds = 15
+  )
+
+  $sw = [System.Diagnostics.Stopwatch]::StartNew()
+  while ($true) {
+    $completed = Wait-Job -Job $Job -Timeout $TimeoutSeconds
+    if ($completed) { break }
+
+    $state = $Job.JobStateInfo.State
+    Write-Phase "Still waiting on $Name (JobId=$($Job.Id), State=$state, Elapsed=$([Math]::Round($sw.Elapsed.TotalSeconds, 0))s)"
+  }
+
+  $sw.Stop()
+  $state = $Job.JobStateInfo.State
+  Write-Phase "$Name completed (JobId=$($Job.Id), State=$state, Elapsed=$([Math]::Round($sw.Elapsed.TotalSeconds, 2))s)"
+}
 
 function Run-SendTest {
   param(
@@ -122,8 +204,6 @@ $PerformanceCounters =
   '\IPv6\Datagrams Received Header Errors',
   '\IPv6\Datagrams Received Address Errors',
 
-  '\WFPv4\Packets Discarded/sec',
-  '\WFPv6\Packets Discarded/sec',
   '\Processor Information(*)\% Processor Time'
 )
 
@@ -154,13 +234,18 @@ try {
   Copy-ToolDirToRemote -Session $Session -RemoteDir $script:RemoteDir -ToolDir 'echo'
 
   # Launch per-CPU usage monitor as a background job (returns array of per-CPU averages)
+  Write-Phase "Starting CPU/perf counter jobs (send phase)"
   $cpuMonitorJob = CaptureIndividualCpuUsagePerformanceMonitorAsJob -DurationSeconds $Duration
   $perfCounterJob = CapturePerformanceMonitorAsJob -DurationSeconds $Duration -Counters $PerformanceCounters
 
   # Run tests
+  Write-Phase "Starting send test"
   Run-SendTest -PeerName $PeerName -Session $Session -SenderOptions $SenderOptions -ReceiverOptions $ReceiverOptions
+  Write-Phase "Send test finished"
 
   # Recover CPU usage data (monitor returns per-CPU averages). Print per-CPU values.
+  Write-Phase "Waiting for CPU monitor job (send phase)"
+  Wait-JobWithProgress -Job $cpuMonitorJob -Name 'CPU monitor (send)'
   $cpuUsagePerCpu = Receive-Job -Job $cpuMonitorJob -Wait -AutoRemoveJob
   if ($cpuUsagePerCpu -is [System.Array]) {
     $i = 0
@@ -177,17 +262,25 @@ try {
   }
 
   # Write the performance counter results as a JSON file
+  Write-Phase "Waiting for perf counter job (send phase)"
+  Wait-JobWithProgress -Job $perfCounterJob -Name 'Perf counters (send)'
   $perfResults = Receive-Job -Job $perfCounterJob -Wait -AutoRemoveJob
   $perfJsonPath = Join-Path $cwd 'echo_client_perf_counters.json'
   $perfResults | ConvertTo-Json | Out-File -FilePath $perfJsonPath -Encoding utf8 -Force
+  Write-Phase "Perf counter JSON written (send phase): $perfJsonPath"
 
   # Launch another per-CPU usage monitor for the recv test
+  Write-Phase "Starting CPU/perf counter jobs (recv phase)"
   $cpuMonitorJob = CaptureIndividualCpuUsagePerformanceMonitorAsJob -DurationSeconds $Duration
   $perfCounterJob = CapturePerformanceMonitorAsJob -DurationSeconds $Duration -Counters $PerformanceCounters
 
+  Write-Phase "Starting recv test"
   Run-RecvTest -PeerName $PeerName -Session $Session -SenderOptions $SenderOptions -ReceiverOptions $ReceiverOptions
+  Write-Phase "Recv test finished"
 
   # Recover CPU usage data (monitor returns per-CPU averages). Print per-CPU values.
+  Write-Phase "Waiting for CPU monitor job (recv phase)"
+  Wait-JobWithProgress -Job $cpuMonitorJob -Name 'CPU monitor (recv)'
   $cpuUsagePerCpu = Receive-Job -Job $cpuMonitorJob -Wait -AutoRemoveJob
   if ($cpuUsagePerCpu -is [System.Array]) {
     $i = 0
@@ -204,9 +297,12 @@ try {
   }
 
   # Write the performance counter results as a JSON file
+  Write-Phase "Waiting for perf counter job (recv phase)"
+  Wait-JobWithProgress -Job $perfCounterJob -Name 'Perf counters (recv)'
   $perfResults = Receive-Job -Job $perfCounterJob -Wait -AutoRemoveJob
   $perfJsonPath = Join-Path $cwd 'echo_server_perf_counters.json'
   $perfResults | ConvertTo-Json | Out-File -FilePath $perfJsonPath -Encoding utf8 -Force
+  Write-Phase "Perf counter JSON written (recv phase): $perfJsonPath"
  
   # List json files in cwd
   Write-Host "JSON files in $cwd"

@@ -61,10 +61,15 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633
 
-    - name: Setup PowerShell
-      uses: aochmann/setup-powershell@v1
-      with:
-        powershell-version: latest
+    - name: Verify PowerShell (pwsh) is installed
+      shell: bash
+      run: |
+        set -euo pipefail
+        if ! command -v pwsh >/dev/null 2>&1; then
+          echo "pwsh not found on runner; install PowerShell 7+ on this self-hosted machine." >&2
+          exit 1
+        fi
+        pwsh -Version
 
     - name: Setup workspace (Linux)
       shell: pwsh
@@ -82,7 +87,7 @@ jobs:
         path: ${{ github.workspace }}/echo
 
     - name: Download run-echo-test script
-      working-directory: ${{ github.workspace }}/echo/build
+      working-directory: ${{ github.workspace }}/echo
       shell: pwsh
       run: |
         Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/scripts/run-echo-test-linux.ps1" -OutFile "./run-echo-test-linux.ps1"
@@ -96,29 +101,27 @@ jobs:
         Write-Output "  ref: ${{ inputs.ref }}"
         Write-Output "  Duration: ${{ inputs.duration }}"
 
-    - name: Diagnostic - List files in echo build directory
+    - name: Diagnostic - List files in echo directory
       shell: pwsh
       run: |
-        Write-Output "Files in echo build directory:"
-        Get-ChildItem -Path "$env:GITHUB_WORKSPACE/echo/build" -Recurse
+        Write-Output "Files in echo directory:"
+        Get-ChildItem -Path "$env:GITHUB_WORKSPACE/echo" -Recurse
 
     - name: Run echo traffic tests (Linux)
-      working-directory: ${{ github.workspace }}/echo/build
+      working-directory: ${{ github.workspace }}/echo
       env:
         SENDER_OPTIONS: ${{ inputs.sender_options }}
         RECEIVER_OPTIONS: ${{ inputs.receiver_options }}
       shell: pwsh
       run: |
-        $cmd = @(
-          './run-echo-test-linux.ps1',
-          '-PeerName', '"netperf-peer"',
-          '-SenderOptions', '"' + $env:SENDER_OPTIONS + '"',
-          '-ReceiverOptions', '"' + $env:RECEIVER_OPTIONS + '"',
-          '-Duration', '"${{ inputs.duration }}"'
-        ) -join ' '
-
-        Write-Output "Running: $cmd"
-        Invoke-Expression $cmd
+        $params = @{
+          PeerName = 'netperf-peer'
+          SenderOptions = $env:SENDER_OPTIONS
+          ReceiverOptions = $env:RECEIVER_OPTIONS
+          Duration = '${{ inputs.duration }}'
+        }
+        Write-Output "Running: ./run-echo-test-linux.ps1 with PeerName=$($params.PeerName) Duration=$($params.Duration)"
+        & ./run-echo-test-linux.ps1 @params
 
     - name: Upload echo results (Linux)
       if: always()
@@ -126,17 +129,17 @@ jobs:
       with:
         name: echo_test_linux_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: |
-          ${{ github.workspace }}/echo/*.csv
-          ${{ github.workspace }}/echo/*.log
-          ${{ github.workspace }}/echo/*.json
-          ${{ github.workspace }}/echo/build/echo_summary.csv
-          ${{ github.workspace }}/echo/build/echo_client_output.txt
-          ${{ github.workspace }}/echo/build/server.log
+          ${{ github.workspace }}/echo/**/*.csv
+          ${{ github.workspace }}/echo/**/*.log
+          ${{ github.workspace }}/echo/**/*.txt
+          ${{ github.workspace }}/echo/**/*.json
 
   attempt-reset-lab-linux:
     name: Attempting to reset lab (Linux). Status of this job does not indicate result of lab reset. Look at job details.
     needs: [test_echo_server_linux]
     if: ${{ always() }}
-    uses: microsoft/netperf/.github/workflows/schedule-lab-reset.yml@main
+    permissions:
+      actions: write
+    uses: ./.github/workflows/schedule-lab-reset.yml
     with:
       workflowId: ${{ github.run_id }}

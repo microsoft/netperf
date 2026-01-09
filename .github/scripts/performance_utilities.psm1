@@ -775,33 +775,32 @@ function CapturePerformanceMonitorAsJob {
       $counters = @('\Processor Information(*)\% Processor Time')
     }
 
-    # Sample once per second for the requested duration and accumulate per-counter values.
-    $store = @{}
+    # Defensively drop counters that are known to be flaky/slow on some runners.
+    $counters = @($counters | Where-Object {
+      $_ -and $_ -notmatch '^\\WFPv[46]\\Packets Discarded/sec$'
+    })
 
-    for ($i = 0; $i -lt $d; $i++) {
+    # Sample roughly once per second until the deadline. This keeps capture bounded to the
+    # requested duration even if individual Get-Counter calls are intermittently slow.
+    $store = @{}
+    $deadline = (Get-Date).AddSeconds($d)
+    $iteration = 0
+
+    while ((Get-Date) -lt $deadline) {
+      $iteration++
       $samples = $null
+      $sw = [System.Diagnostics.Stopwatch]::StartNew()
       try {
-        # Try to collect all counters in a single quick sample (returns immediately)
         $samples = Get-Counter -Counter $counters -MaxSamples 1 -ErrorAction Stop
       }
       catch {
-        # If that fails, collect available counters individually (quick single-sample calls)
-        $samples = New-Object System.Collections.Generic.List[object]
-        foreach ($c in $counters) {
-          try {
-            $s = Get-Counter -Counter $c -MaxSamples 1 -ErrorAction Stop
-            if ($s.CounterSamples) { $s.CounterSamples | ForEach-Object { [void]$samples.Add($_) } }
-          }
-          catch {
-            # skip bad counter
-            continue
-          }
-        }
+        # Skip this sample on errors and continue with the next interval; no per-counter retry is attempted.
+        $samples = $null
       }
+      $sw.Stop()
 
       if ($samples -ne $null) {
         $csamples = $samples.CounterSamples
-        if (-not $csamples -and ($samples -is [System.Collections.IEnumerable])) { $csamples = $samples }
         foreach ($cs in $csamples) {
           $path = $cs.Path
           $inst = $cs.InstanceName
@@ -813,7 +812,14 @@ function CapturePerformanceMonitorAsJob {
         }
       }
 
-      Start-Sleep -Seconds 1
+      # Aim for ~1Hz sampling without extending past the deadline.
+      $sleepMs = [Math]::Max(0, 1000 - [int]$sw.ElapsedMilliseconds)
+      if ($sw.ElapsedMilliseconds -gt 1000) {
+        Write-Warning ("Get-Counter sampling iteration {0} took {1} ms; skipping sleep to honor deadline." -f $iteration, [int]$sw.ElapsedMilliseconds)
+      }
+      elseif ($sleepMs -gt 0) {
+        Start-Sleep -Milliseconds $sleepMs
+      }
     }
 
     $results = @()

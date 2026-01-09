@@ -138,22 +138,22 @@ jobs:
         RECEIVER_OPTIONS: ${{ inputs.receiver_options }}
       shell: pwsh
       run: |
-        # Build argument array safely without string concatenation or Invoke-Expression
+        # Build parameter hashtable for proper named parameter binding
         $scriptPath = '.\run-traffic-test.ps1'
-        $arguments = @()
+        $params = @{
+          PeerName = 'netperf-peer'
+          SenderOptions = $env:SENDER_OPTIONS
+          ReceiverOptions = $env:RECEIVER_OPTIONS
+        }
         
         # Conditionally add -CpuProfile flag
         if ($env:PROFILE -eq 'true' -or $env:PROFILE -eq 'True' -or $env:PROFILE -eq 'TRUE' -or $env:PROFILE -eq $true) {
-          $arguments += '-CpuProfile'
+          $params['CpuProfile'] = $true
         }
         
-        # Add remaining parameters
-        $arguments += '-PeerName', 'netperf-peer'
-        $arguments += '-SenderOptions', $env:SENDER_OPTIONS
-        $arguments += '-ReceiverOptions', $env:RECEIVER_OPTIONS
-        
-        Write-Output "Running: $scriptPath $($arguments -join ' ')"
-        & $scriptPath @arguments
+        Write-Output "Running: $scriptPath with parameters:"
+        $params.GetEnumerator() | ForEach-Object { Write-Output "  $($_.Key): $($_.Value)" }
+        & $scriptPath @params
 
     - name: Optional - Stop TCPIP tracing
       if: ${{ github.event.inputs.tcp_ip_tracing == 'true' }}
@@ -216,6 +216,26 @@ jobs:
       - ebpf
 
     steps:
+    - name: Pre-clean leftover PktMon artifacts
+      shell: pwsh
+      run: |
+        $workspace = "${{ github.workspace }}"
+
+        # Best-effort stop/reset in case a previous run left pktmon active.
+        try { pktmon stop | Out-Null } catch { }
+        try { pktmon reset | Out-Null } catch { }
+        Start-Sleep -Seconds 2
+
+        try {
+          $p = Join-Path $workspace 'pktmon.etl'
+          if (Test-Path -LiteralPath $p) {
+            Remove-Item -LiteralPath $p -Force -ErrorAction Stop
+            Write-Host "Removed leftover file: $p"
+          }
+        } catch {
+          Write-Warning "Failed to remove leftover file '$p': $($_.Exception.Message)"
+        }
+
     - name: Checkout repository
       uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633
 
@@ -265,6 +285,7 @@ jobs:
       working-directory: ${{ github.workspace }}\echo\RelWithDebInfo
       run: |
         Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/scripts/run-echo-test.ps1" -OutFile ".\run-echo-test.ps1"
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/scripts/performance_utilities.psm1" -OutFile ".\performance_utilities.psm1"
 
     - name: Log all input parameters for this workflow
       run: |
@@ -299,28 +320,34 @@ jobs:
         RECEIVER_OPTIONS: ${{ inputs.receiver_options }}
       shell: pwsh
       run: |
-        # Build argument array safely without string concatenation or Invoke-Expression
+        # Use hashtable splatting so parameters bind by name (array splatting is positional).
         $scriptPath = '.\run-echo-test.ps1'
-        $arguments = @()
-        
-        # Conditionally add -CpuProfile flag
-        if ($env:PROFILE -eq 'true' -or $env:PROFILE -eq 'True' -or $env:PROFILE -eq 'TRUE' -or $env:PROFILE -eq $true) {
-          $arguments += '-CpuProfile'
+
+        $params = @{
+          PeerName = 'netperf-peer'
+          SenderOptions = $env:SENDER_OPTIONS
+          ReceiverOptions = $env:RECEIVER_OPTIONS
+          Duration = '${{ inputs.duration }}'
         }
-        
-        # Add remaining parameters
-        $arguments += '-PeerName', 'netperf-peer'
-        $arguments += '-SenderOptions', $env:SENDER_OPTIONS
-        $arguments += '-ReceiverOptions', $env:RECEIVER_OPTIONS
-        $arguments += '-Duration', '${{ inputs.duration }}'
-        
-        Write-Output "Running: $scriptPath $($arguments -join ' ')"
-        & $scriptPath @arguments
+
+        if ($env:PROFILE -eq 'true' -or $env:PROFILE -eq 'True' -or $env:PROFILE -eq 'TRUE' -or $env:PROFILE -eq $true) {
+          $params.CpuProfile = $true
+        }
+
+        Write-Output "Running: $scriptPath with parameters:"
+        $params.GetEnumerator() | Sort-Object Name | ForEach-Object { Write-Output "  $($_.Name)=$($_.Value)" }
+
+        & $scriptPath @params
 
     - name: Stop PktMon drop Capture
       run: |
         pktmon stop
         copy pktmon.etl ${{ github.workspace }}\ETL\pktmon_drop_trace.etl
+        try {
+          Remove-Item -LiteralPath "${{ github.workspace }}\pktmon.etl" -Force -ErrorAction Stop
+        } catch {
+          Write-Warning "Failed to remove pktmon.etl at '${{ github.workspace }}\pktmon.etl': $($_.Exception.Message)"
+        }
         pktmon reset
         pktmon filter remove all
 
