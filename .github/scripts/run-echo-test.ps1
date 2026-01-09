@@ -42,19 +42,22 @@ function Find-RepoRoot {
 
 $scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
 $moduleName = 'performance_utilities.psm1'
+$twoLevelsUp = Join-Path $scriptDir '..\..'
 $moduleCandidates = @(
   (Join-Path $scriptDir $moduleName),
-  (Join-Path $scriptDir (Join-Path '..' $moduleName)),
-  (Join-Path (Join-Path (Join-Path $scriptDir '..') '..') $moduleName)
+  (Join-Path $scriptDir '..' $moduleName),
+  (Join-Path $twoLevelsUp $moduleName)
 )
 
 if ($env:GITHUB_WORKSPACE) {
-  $moduleCandidates += (Join-Path $env:GITHUB_WORKSPACE (Join-Path (Join-Path '.github' 'scripts') $moduleName))
+  $githubScriptsDir = Join-Path $env:GITHUB_WORKSPACE '.github\scripts'
+  $moduleCandidates += (Join-Path $githubScriptsDir $moduleName)
 }
 
 $repoRoot = Find-RepoRoot -StartDir $scriptDir
 if ($repoRoot) {
-  $moduleCandidates += (Join-Path $repoRoot (Join-Path (Join-Path '.github' 'scripts') $moduleName))
+  $repoScriptsDir = Join-Path $repoRoot '.github\scripts'
+  $moduleCandidates += (Join-Path $repoScriptsDir $moduleName)
 }
 
 $modulePath = $moduleCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
