@@ -164,13 +164,13 @@ $receiverPortInt = Parse-PortOrNull $receiverPort
 $senderPortInt = Parse-PortOrNull $senderPort
 
 if ($null -ne $receiverPortInt -and $null -ne $senderPortInt -and $receiverPortInt -ne $senderPortInt) {
-  throw "SenderOptions and ReceiverOptions specify different ports ($senderPortInt vs $receiverPortInt). Use a single port for both client and server, or omit one and let the script apply a consistent port."
+  throw "SenderOptions and ReceiverOptions specify different ports ($receiverPortInt vs $senderPortInt). Use a single port for both client and server, or omit one and let the script apply a consistent port."
 }
 
 $port = if ($null -ne $receiverPortInt) { $receiverPortInt } elseif ($null -ne $senderPortInt) { $senderPortInt } else { $defaultPort }
 
 if (-not (Has-AnyOption -args $receiverArgs -names @('--port','-p'))) {
-  $receiverArgs += @('--port', $port)
+  $receiverArgs += @('--port', "$port")
 }
 
 # Establish SSH PowerShell remoting to Linux peer
@@ -211,7 +211,7 @@ if (-not (Has-AnyOption -args $clientArgs -names @('--server','-s'))) {
   $clientArgs += @('--server', $PeerName)
 }
 if (-not (Has-AnyOption -args $clientArgs -names @('--port','-p'))) {
-  $clientArgs += @('--port', $port)
+  $clientArgs += @('--port', "$port")
 }
 if (-not (Has-AnyOption -args $clientArgs -names @('--duration','-d'))) {
   $clientArgs += @('--duration', $Duration)
