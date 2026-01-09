@@ -349,8 +349,16 @@ jobs:
       run: |
         pktmon stop
         copy pktmon.etl ${{ github.workspace }}\ETL\pktmon_drop_trace.etl
-        Remove-Item -LiteralPath "${{ github.workspace }}\PktMon.etl" -Force -ErrorAction SilentlyContinue
-        Remove-Item -LiteralPath "${{ github.workspace }}\pktmon.etl" -Force -ErrorAction SilentlyContinue
+        try {
+          Remove-Item -LiteralPath "${{ github.workspace }}\PktMon.etl" -Force -ErrorAction Stop
+        } catch {
+          Write-Warning "Failed to remove PktMon.etl at '${{ github.workspace }}\PktMon.etl': $($_.Exception.Message)"
+        }
+        try {
+          Remove-Item -LiteralPath "${{ github.workspace }}\pktmon.etl" -Force -ErrorAction Stop
+        } catch {
+          Write-Warning "Failed to remove pktmon.etl at '${{ github.workspace }}\pktmon.etl': $($_.Exception.Message)"
+        }
         pktmon reset
         pktmon filter remove all
 

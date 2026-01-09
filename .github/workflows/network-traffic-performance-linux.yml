@@ -118,7 +118,7 @@ jobs:
           PeerName = 'netperf-peer'
           SenderOptions = $env:SENDER_OPTIONS
           ReceiverOptions = $env:RECEIVER_OPTIONS
-          Duration = [int]'${{ inputs.duration }}'
+          Duration = '${{ inputs.duration }}'
         }
         Write-Output "Running: ./run-echo-test-linux.ps1 with PeerName=$($params.PeerName) Duration=$($params.Duration)"
         & ./run-echo-test-linux.ps1 @params
@@ -129,17 +129,18 @@ jobs:
       with:
         name: echo_test_linux_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
         path: |
-          ${{ github.workspace }}/echo/*.csv
-          ${{ github.workspace }}/echo/*.log
-          ${{ github.workspace }}/echo/*.txt
-          ${{ github.workspace }}/echo/*.json
+          ${{ github.workspace }}/echo/**/*.csv
+          ${{ github.workspace }}/echo/**/*.log
+          ${{ github.workspace }}/echo/**/*.txt
+          ${{ github.workspace }}/echo/**/*.json
 
   attempt-reset-lab-linux:
     name: Attempting to reset lab (Linux). Status of this job does not indicate result of lab reset. Look at job details.
     needs: [test_echo_server_linux]
     if: ${{ always() }}
     permissions:
-      contents: write
+      contents: read
+      actions: write
     uses: microsoft/netperf/.github/workflows/schedule-lab-reset.yml@main
     with:
       workflowId: ${{ github.run_id }}

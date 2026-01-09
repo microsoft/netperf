@@ -16,40 +16,103 @@ function Ensure-Executable($path) {
 
 function Convert-ArgStringToArray([string]$s) {
   if ([string]::IsNullOrEmpty($s)) { return @() }
-  $pattern = '("((?:\\.|[^"\\])*)"|[^"\s]+)'
-  $regexMatches = [regex]::Matches($s, $pattern)
-  $out = @()
-  foreach ($m in $regexMatches) {
-    if ($m.Groups[2].Success) {
-      $val = $m.Groups[2].Value
-      $val = $val -replace '\\\\', '\\'
-      $val = $val -replace '\\"', '"'
+
+  # Parse a simple shell-like argument string into an array.
+  # Supports whitespace splitting, single/double quotes, and backslash escaping
+  # (outside single quotes).
+  $tokens = New-Object System.Collections.Generic.List[string]
+  $current = New-Object System.Text.StringBuilder
+  $inSingle = $false
+  $inDouble = $false
+  $escapeNext = $false
+
+  foreach ($ch in $s.ToCharArray()) {
+    if ($escapeNext) {
+      [void]$current.Append($ch)
+      $escapeNext = $false
+      continue
     }
-    else {
-      $val = $m.Groups[1].Value
+
+    if (-not $inSingle -and $ch -eq '\\') {
+      $escapeNext = $true
+      continue
     }
-    $out += $val.Trim()
+
+    if (-not $inDouble -and $ch -eq "'") {
+      $inSingle = -not $inSingle
+      continue
+    }
+
+    if (-not $inSingle -and $ch -eq '"') {
+      $inDouble = -not $inDouble
+      continue
+    }
+
+    if (-not $inSingle -and -not $inDouble -and [char]::IsWhiteSpace($ch)) {
+      if ($current.Length -gt 0) {
+        $tokens.Add($current.ToString())
+        [void]$current.Clear()
+      }
+      continue
+    }
+
+    [void]$current.Append($ch)
   }
-  return $out
+
+  if ($escapeNext) {
+    [void]$current.Append('\\')
+  }
+
+  if ($current.Length -gt 0) {
+    $tokens.Add($current.ToString())
+  }
+
+  return @($tokens)
 }
 
-function Get-OptionValueOrNull([string[]]$args, [string[]]$names) {
+function Get-OptionValueOrNull(
+  [string[]]$args,
+  [string[]]$names,
+  [string[]]$knownOptionsWithValues = @('--server','-s','--port','-p','--duration','-d')
+) {
   if (-not $args) { return $null }
+  $knownSet = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+  foreach ($n in $knownOptionsWithValues) { [void]$knownSet.Add($n) }
+
   for ($i = 0; $i -lt $args.Count; $i++) {
     if ($names -contains $args[$i]) {
-      if (($i + 1) -lt $args.Count) {
-        return $args[$i + 1]
+      # Avoid treating a token as an option if it's actually the value of a previous option.
+      if ($i -gt 0 -and $knownSet.Contains($args[$i - 1])) {
+        continue
       }
-      return $null
+
+      if (($i + 1) -ge $args.Count) { return $null }
+      $candidate = $args[$i + 1]
+      if ([string]::IsNullOrEmpty($candidate)) { return $null }
+      if ($candidate.StartsWith('-')) { return $null }
+      return $candidate
     }
   }
   return $null
 }
 
-function Has-AnyOption([string[]]$args, [string[]]$names) {
+function Has-AnyOption(
+  [string[]]$args,
+  [string[]]$names,
+  [string[]]$knownOptionsWithValues = @('--server','-s','--port','-p','--duration','-d')
+) {
   if (-not $args) { return $false }
-  foreach ($a in $args) {
-    if ($names -contains $a) { return $true }
+  $knownSet = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+  foreach ($n in $knownOptionsWithValues) { [void]$knownSet.Add($n) }
+
+  for ($i = 0; $i -lt $args.Count; $i++) {
+    if ($names -contains $args[$i]) {
+      # Avoid counting a token as an option if it's the value of a previous known option.
+      if ($i -gt 0 -and $knownSet.Contains($args[$i - 1])) {
+        continue
+      }
+      return $true
+    }
   }
   return $false
 }
@@ -70,6 +133,14 @@ $senderArgs = Convert-ArgStringToArray $SenderOptions
 
 $receiverPort = Get-OptionValueOrNull -args $receiverArgs -names @('--port','-p')
 $senderPort = Get-OptionValueOrNull -args $senderArgs -names @('--port','-p')
+
+if ($receiverPort -and $senderPort) {
+  $rp = 0
+  $sp = 0
+  if ([int]::TryParse($receiverPort, [ref]$rp) -and [int]::TryParse($senderPort, [ref]$sp) -and $rp -ne $sp) {
+    throw "SenderOptions and ReceiverOptions specify different ports ($sp vs $rp). Use a single port for both client and server, or omit one and let the script apply a consistent port."
+  }
+}
 
 $port = $defaultPort
 foreach ($p in @($receiverPort, $senderPort)) {
@@ -97,16 +168,17 @@ Write-Host "Copying server binary to peer at $RemoteServerPath"
 Copy-Item -Path $serverPath -Destination $RemoteServerPath -ToSession $session
 Invoke-Command -Session $session -ScriptBlock { chmod +x $using:RemoteServerPath }
 
+$RemoteServerErrLogPath = [System.IO.Path]::ChangeExtension($RemoteServerLogPath, 'err.log')
+
 # Start server in background on peer, capture PID
 Write-Host "Starting server on peer"
 $serverPid = Invoke-Command -Session $session -ScriptBlock {
-  param([string]$Path, [string[]]$Args, [string]$LogPath)
+  param([string]$Path, [string[]]$Args, [string]$StdoutPath, [string]$StderrPath)
   
   # Start the server in the background using Start-Process
-  $stderrPath = "$LogPath.err"
-  $process = Start-Process -FilePath $Path -ArgumentList $Args -RedirectStandardOutput $LogPath -RedirectStandardError $stderrPath -PassThru
+  $process = Start-Process -FilePath $Path -ArgumentList $Args -RedirectStandardOutput $StdoutPath -RedirectStandardError $StderrPath -PassThru
   return $process.Id
-} -ArgumentList $RemoteServerPath, $receiverArgs, $RemoteServerLogPath
+} -ArgumentList $RemoteServerPath, $receiverArgs, $RemoteServerLogPath, $RemoteServerErrLogPath
 Write-Host "Server PID on peer: $serverPid"
 Start-Sleep -Seconds 2
 
@@ -153,7 +225,7 @@ $csvLines | Out-File -FilePath "echo_summary.csv" -Encoding utf8
 # Stop server on peer and collect logs
 Write-Host "Stopping server on peer"
 try {
-  Invoke-Command -Session $session -ScriptBlock { kill -TERM $using:serverPid } | Out-Null
+  Invoke-Command -Session $session -ScriptBlock { & /bin/kill -TERM $using:serverPid } | Out-Null
 } catch {
   Write-Host "Kill failed: $_"
 }
@@ -168,7 +240,7 @@ try {
 
 Write-Host "Fetching server stderr log from peer"
 try {
-  Copy-Item -FromSession $session -Path "$RemoteServerLogPath.err" -Destination 'server.err.log'
+  Copy-Item -FromSession $session -Path $RemoteServerErrLogPath -Destination 'server.err.log'
 } catch {
   Write-Host "Failed to copy server.err.log: $_"
 }

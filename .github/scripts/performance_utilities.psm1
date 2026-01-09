@@ -794,7 +794,7 @@ function CapturePerformanceMonitorAsJob {
         $samples = Get-Counter -Counter $counters -MaxSamples 1 -ErrorAction Stop
       }
       catch {
-        # Skip this sample on errors; do not fall back to per-counter calls (those can be very slow).
+        # Skip this sample on errors and continue with the next interval; no per-counter retry is attempted.
         $samples = $null
       }
       $sw.Stop()
@@ -814,7 +814,10 @@ function CapturePerformanceMonitorAsJob {
 
       # Aim for ~1Hz sampling without extending past the deadline.
       $sleepMs = [Math]::Max(0, 1000 - [int]$sw.ElapsedMilliseconds)
-      if ($sleepMs -gt 0) {
+      if ($sw.ElapsedMilliseconds -gt 1000) {
+        Write-Verbose ("Get-Counter sampling iteration {0} took {1} ms; skipping sleep to honor deadline." -f $iteration, [int]$sw.ElapsedMilliseconds)
+      }
+      elseif ($sleepMs -gt 0) {
         Start-Sleep -Milliseconds $sleepMs
       }
     }

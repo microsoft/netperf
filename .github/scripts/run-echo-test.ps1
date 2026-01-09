@@ -14,7 +14,19 @@ function Find-RepoRoot {
     [Parameter(Mandatory = $true)][string]$StartDir
   )
 
-  $dir = (Resolve-Path -LiteralPath $StartDir).Path
+  # Initialize starting directory without resolving symbolic links.
+  if (Test-Path -LiteralPath $StartDir) {
+    $item = Get-Item -LiteralPath $StartDir
+    if ($item.PSIsContainer) {
+      $dir = $item.FullName
+    }
+    else {
+      $dir = $item.DirectoryName
+    }
+  }
+  else {
+    $dir = $StartDir
+  }
   while ($true) {
     if (Test-Path -LiteralPath (Join-Path $dir '.git')) {
       return $dir
@@ -33,22 +45,22 @@ $moduleName = 'performance_utilities.psm1'
 $moduleCandidates = @(
   (Join-Path $scriptDir $moduleName),
   (Join-Path $scriptDir (Join-Path '..' $moduleName)),
-  (Join-Path $scriptDir (Join-Path '..\..' $moduleName))
+  (Join-Path (Join-Path (Join-Path $scriptDir '..') '..') $moduleName)
 )
 
 if ($env:GITHUB_WORKSPACE) {
-  $moduleCandidates += (Join-Path $env:GITHUB_WORKSPACE (Join-Path '.github\scripts' $moduleName))
+  $moduleCandidates += (Join-Path $env:GITHUB_WORKSPACE (Join-Path (Join-Path '.github' 'scripts') $moduleName))
 }
 
 $repoRoot = Find-RepoRoot -StartDir $scriptDir
 if ($repoRoot) {
-  $moduleCandidates += (Join-Path $repoRoot (Join-Path '.github\scripts' $moduleName))
+  $moduleCandidates += (Join-Path $repoRoot (Join-Path (Join-Path '.github' 'scripts') $moduleName))
 }
 
 $modulePath = $moduleCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 if (-not $modulePath) {
   $moduleCandidatesString = ($moduleCandidates | ForEach-Object { "  $_" }) -join [Environment]::NewLine
-  throw "Could not find required module '$moduleName'. Tried:${([Environment]::NewLine)}$moduleCandidatesString"
+  Write-Error -ErrorAction Stop -Message ("Could not find required module '{0}'. Tried:{1}{2}" -f $moduleName, [Environment]::NewLine, $moduleCandidatesString)
 }
 
 Import-Module $modulePath -Force
@@ -96,12 +108,12 @@ function Wait-JobWithProgress {
   param(
     [Parameter(Mandatory=$true)]$Job,
     [Parameter(Mandatory=$true)][string]$Name,
-    [int]$PollSeconds = 15
+    [Alias('PollSeconds')][int]$TimeoutSeconds = 15
   )
 
   $sw = [System.Diagnostics.Stopwatch]::StartNew()
   while ($true) {
-    $completed = Wait-Job -Job $Job -Timeout $PollSeconds
+    $completed = Wait-Job -Job $Job -Timeout $TimeoutSeconds
     if ($completed) { break }
 
     $state = $Job.JobStateInfo.State
