@@ -217,15 +217,25 @@ $serverPid = Invoke-Command -Session $session -ScriptBlock {
     }
   }
 
-  # Emit the argv we intend to use into the same stdout file so it's captured in artifacts.
-  try {
-    $argvLine = "[run-echo-test-linux] Starting server: $Path $($flatArgs -join ' ')"
-    $argvLine | Out-File -FilePath $StdoutPath -Encoding utf8 -Append
-  } catch { }
+  function Quote-Bash {
+    param([Parameter(Mandatory=$true)][string]$s)
+    # Single-quote for bash; escape embedded single-quotes safely.
+    return "'" + ($s -replace "'", "'\"'\"'") + "'"
+  }
 
-  # Start the server in the background using Start-Process
-  $process = Start-Process -FilePath $Path -ArgumentList $flatArgs -RedirectStandardOutput $StdoutPath -RedirectStandardError $StderrPath -PassThru
-  return $process.Id
+  # Use bash+nohup to avoid Start-Process argv quirks over SSH remoting.
+  $cmd = "nohup {0} {1} > {2} 2> {3} < /dev/null & echo $!" -f \
+    (Quote-Bash $Path),
+    (($flatArgs | ForEach-Object { Quote-Bash $_ }) -join ' '),
+    (Quote-Bash $StdoutPath),
+    (Quote-Bash $StderrPath)
+
+  $pidText = & /bin/bash -lc $cmd
+  $pid = 0
+  if (-not [int]::TryParse(($pidText | Select-Object -First 1), [ref]$pid)) {
+    throw "Failed to start server via nohup; unexpected pid output: $pidText"
+  }
+  return $pid
 } -ArgumentList @(
   $RemoteServerPath,
   (,$receiverArgs),
