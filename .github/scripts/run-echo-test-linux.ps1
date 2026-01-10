@@ -82,14 +82,14 @@ function Convert-ArgStringToArray([string]$s) {
   # Check for unclosed quotes
   if ($inSingle -or $inDouble) {
     $quoteType = if ($inSingle) { "'" } else { '"' }
-    throw "Unclosed quote detected in input: $input (missing closing $quoteType)"
+    throw "Unclosed quote detected in input: $s (missing closing $quoteType)"
   }
 
   if ($current.Length -gt 0) {
     $tokens.Add($current.ToString())
   }
 
-  return @($tokens)
+  return [string[]]$tokens.ToArray()
 }
 
 function Get-OptionValueOrNull(

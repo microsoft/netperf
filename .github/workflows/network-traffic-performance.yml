@@ -7,7 +7,7 @@ on:
       ref:
         description: 'Test Branch or Commit'
         required: false
-        default: 'main'
+        default: ''
         type: string
       profile:
         description: 'Capture CPU profile'
@@ -113,13 +113,15 @@ jobs:
       if: ${{ github.event.inputs.tcp_ip_tracing == 'true' }}
       run: |-
         if (Test-Path "tcpip.wprp") { Remove-Item -Force "tcpip.wprp" }
-        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
+        $ref = if ('${{ inputs.ref }}') { '${{ inputs.ref }}' } else { '${{ github.ref_name }}' }
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/$ref/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
         wpr -start tcpip.wprp -filemode
 
     - name: Download run-traffic-test script
       working-directory: ${{ github.workspace }}\cts-traffic
       run: |
-        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/scripts/run-traffic-test.ps1" -OutFile ".\run-traffic-test.ps1"
+        $ref = if ('${{ inputs.ref }}') { '${{ inputs.ref }}' } else { '${{ github.ref_name }}' }
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/$ref/.github/scripts/run-traffic-test.ps1" -OutFile ".\run-traffic-test.ps1"
 
     - name: Log all input parameters for this workflow
       run: |

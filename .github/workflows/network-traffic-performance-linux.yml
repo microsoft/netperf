@@ -6,7 +6,7 @@ on:
       ref:
         description: 'Test Branch or Commit'
         required: false
-        default: 'main'
+        default: ''
         type: string
       sender_options:
         description: 'Command-line options for the sender (quoted string)'
@@ -90,7 +90,8 @@ jobs:
       working-directory: ${{ github.workspace }}/echo
       shell: pwsh
       run: |
-        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/scripts/run-echo-test-linux.ps1" -OutFile "./run-echo-test-linux.ps1"
+        $ref = if ('${{ inputs.ref }}') { '${{ inputs.ref }}' } else { '${{ github.ref_name }}' }
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/$ref/.github/scripts/run-echo-test-linux.ps1" -OutFile "./run-echo-test-linux.ps1"
 
     - name: Log input parameters
       shell: pwsh
