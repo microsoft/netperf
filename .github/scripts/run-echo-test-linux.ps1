@@ -220,7 +220,7 @@ $serverPid = Invoke-Command -Session $session -ScriptBlock {
     $quotedArgs = ($receiverArgs | ForEach-Object { Quote-Bash $_ }) -join ' '
     $quotedStdout = Quote-Bash $RemoteServerLogPath
     $quotedStderr = Quote-Bash $RemoteServerErrLogPath
-    "nohup $quotedServer $quotedArgs > $quotedStdout 2> $quotedStderr < /dev/null & echo $!"
+    "nohup $quotedServer $quotedArgs > $quotedStdout 2> $quotedStderr < /dev/null & echo `$!"
   )
 )
 Write-Host "Server PID on peer: $serverPid"
