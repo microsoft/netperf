@@ -90,8 +90,9 @@ jobs:
       working-directory: ${{ github.workspace }}/echo
       shell: pwsh
       run: |
-        $ref = if ('${{ inputs.ref }}') { '${{ inputs.ref }}' } else { '${{ github.ref_name }}' }
-        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/$ref/.github/scripts/run-echo-test-linux.ps1" -OutFile "./run-echo-test-linux.ps1"
+        $scriptRef = if ('${{ inputs.ref }}') { '${{ inputs.ref }}' } else { '${{ github.sha }}' }
+        $cacheBust = "?v=${{ github.run_id }}"
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/$scriptRef/.github/scripts/run-echo-test-linux.ps1$cacheBust" -OutFile "./run-echo-test-linux.ps1"
 
     - name: Log input parameters
       shell: pwsh

@@ -113,15 +113,17 @@ jobs:
       if: ${{ github.event.inputs.tcp_ip_tracing == 'true' }}
       run: |-
         if (Test-Path "tcpip.wprp") { Remove-Item -Force "tcpip.wprp" }
-        $ref = if ('${{ inputs.ref }}') { '${{ inputs.ref }}' } else { '${{ github.ref_name }}' }
-        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/$ref/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
+        $scriptRef = if ('${{ inputs.ref }}') { '${{ inputs.ref }}' } else { '${{ github.sha }}' }
+        $cacheBust = "?v=${{ github.run_id }}"
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/$scriptRef/.github/workflows/tcpip.wprp$cacheBust" -OutFile "tcpip.wprp"
         wpr -start tcpip.wprp -filemode
 
     - name: Download run-traffic-test script
       working-directory: ${{ github.workspace }}\cts-traffic
       run: |
-        $ref = if ('${{ inputs.ref }}') { '${{ inputs.ref }}' } else { '${{ github.ref_name }}' }
-        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/$ref/.github/scripts/run-traffic-test.ps1" -OutFile ".\run-traffic-test.ps1"
+        $scriptRef = if ('${{ inputs.ref }}') { '${{ inputs.ref }}' } else { '${{ github.sha }}' }
+        $cacheBust = "?v=${{ github.run_id }}"
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/$scriptRef/.github/scripts/run-traffic-test.ps1$cacheBust" -OutFile ".\run-traffic-test.ps1"
 
     - name: Log all input parameters for this workflow
       run: |
