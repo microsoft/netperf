@@ -198,10 +198,33 @@ $RemoteServerErrLogPath = [System.IO.Path]::ChangeExtension($RemoteServerLogPath
 # Start server in background on peer, capture PID
 Write-Host "Starting server on peer"
 $serverPid = Invoke-Command -Session $session -ScriptBlock {
-  param([string]$Path, [string[]]$Args, [string]$StdoutPath, [string]$StderrPath)
-  
+  param([string]$Path, [object]$Args, [string]$StdoutPath, [string]$StderrPath)
+
+  function Flatten-Args {
+    param([object]$Value)
+    if ($null -eq $Value) { return }
+    if ($Value -is [System.Array]) {
+      foreach ($v in $Value) { Flatten-Args $v }
+      return
+    }
+    [string]$Value
+  }
+
+  $flatArgs = @()
+  foreach ($a in (Flatten-Args $Args)) {
+    if (-not [string]::IsNullOrWhiteSpace($a)) {
+      $flatArgs += $a
+    }
+  }
+
+  # Emit the argv we intend to use into the same stdout file so it's captured in artifacts.
+  try {
+    $argvLine = "[run-echo-test-linux] Starting server: $Path $($flatArgs -join ' ')"
+    $argvLine | Out-File -FilePath $StdoutPath -Encoding utf8 -Append
+  } catch { }
+
   # Start the server in the background using Start-Process
-  $process = Start-Process -FilePath $Path -ArgumentList $Args -RedirectStandardOutput $StdoutPath -RedirectStandardError $StderrPath -PassThru
+  $process = Start-Process -FilePath $Path -ArgumentList $flatArgs -RedirectStandardOutput $StdoutPath -RedirectStandardError $StderrPath -PassThru
   return $process.Id
 } -ArgumentList @(
   $RemoteServerPath,
