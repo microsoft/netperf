@@ -203,7 +203,12 @@ $serverPid = Invoke-Command -Session $session -ScriptBlock {
   # Start the server in the background using Start-Process
   $process = Start-Process -FilePath $Path -ArgumentList $Args -RedirectStandardOutput $StdoutPath -RedirectStandardError $StderrPath -PassThru
   return $process.Id
-} -ArgumentList $RemoteServerPath, $receiverArgs, $RemoteServerLogPath, $RemoteServerErrLogPath
+} -ArgumentList @(
+  $RemoteServerPath,
+  (,$receiverArgs),
+  $RemoteServerLogPath,
+  $RemoteServerErrLogPath
+)
 Write-Host "Server PID on peer: $serverPid"
 Start-Sleep -Seconds 2
 
