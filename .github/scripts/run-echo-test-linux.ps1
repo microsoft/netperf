@@ -201,11 +201,11 @@ $serverPid = Invoke-Command -Session $session -ScriptBlock {
   param([string]$Cmd)
 
   $pidText = & /bin/bash -lc $Cmd
-  $pid = 0
-  if (-not [int]::TryParse(($pidText | Select-Object -First 1), [ref]$pid)) {
+  $serverPidValue = 0
+  if (-not [int]::TryParse(($pidText | Select-Object -First 1), [ref]$serverPidValue)) {
     throw "Failed to start server via nohup; unexpected pid output: $pidText"
   }
-  return $pid
+  return $serverPidValue
 } -ArgumentList @(
   $(
     function Quote-Bash([Parameter(Mandatory = $true)][string]$s) {
