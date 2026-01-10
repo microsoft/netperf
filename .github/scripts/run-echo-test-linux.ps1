@@ -210,7 +210,8 @@ $serverPid = Invoke-Command -Session $session -ScriptBlock {
   $(
     function Quote-Bash([Parameter(Mandatory = $true)][string]$s) {
       # Single-quote for bash; escape embedded single-quotes safely.
-      return "'" + ($s -replace "'", "'\"'\"'") + "'"
+      $replacement = "'" + '"' + "'" + '"' + "'"
+      return "'" + $s.Replace("'", $replacement) + "'"
     }
 
     # Build the full command locally as a single string to avoid any remoting/serialization
