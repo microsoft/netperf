@@ -198,49 +198,29 @@ $RemoteServerErrLogPath = [System.IO.Path]::ChangeExtension($RemoteServerLogPath
 # Start server in background on peer, capture PID
 Write-Host "Starting server on peer"
 $serverPid = Invoke-Command -Session $session -ScriptBlock {
-  param([string]$Path, [object]$Args, [string]$StdoutPath, [string]$StderrPath)
+  param([string]$Cmd)
 
-  function Flatten-Args {
-    param([object]$Value)
-    if ($null -eq $Value) { return }
-    if ($Value -is [System.Array]) {
-      foreach ($v in $Value) { Flatten-Args $v }
-      return
-    }
-    [string]$Value
-  }
-
-  $flatArgs = @()
-  foreach ($a in (Flatten-Args $Args)) {
-    if (-not [string]::IsNullOrWhiteSpace($a)) {
-      $flatArgs += $a
-    }
-  }
-
-  function Quote-Bash {
-    param([Parameter(Mandatory=$true)][string]$s)
-    # Single-quote for bash; escape embedded single-quotes safely.
-    return "'" + ($s -replace "'", "'\"'\"'") + "'"
-  }
-
-  # Use bash+nohup to avoid Start-Process argv quirks over SSH remoting.
-  $cmd = "nohup {0} {1} > {2} 2> {3} < /dev/null & echo $!" -f \
-    (Quote-Bash $Path),
-    (($flatArgs | ForEach-Object { Quote-Bash $_ }) -join ' '),
-    (Quote-Bash $StdoutPath),
-    (Quote-Bash $StderrPath)
-
-  $pidText = & /bin/bash -lc $cmd
+  $pidText = & /bin/bash -lc $Cmd
   $pid = 0
   if (-not [int]::TryParse(($pidText | Select-Object -First 1), [ref]$pid)) {
     throw "Failed to start server via nohup; unexpected pid output: $pidText"
   }
   return $pid
 } -ArgumentList @(
-  $RemoteServerPath,
-  (,$receiverArgs),
-  $RemoteServerLogPath,
-  $RemoteServerErrLogPath
+  $(
+    function Quote-Bash([Parameter(Mandatory = $true)][string]$s) {
+      # Single-quote for bash; escape embedded single-quotes safely.
+      return "'" + ($s -replace "'", "'\"'\"'") + "'"
+    }
+
+    # Build the full command locally as a single string to avoid any remoting/serialization
+    # oddities that can cause array arguments to be dropped.
+    $quotedServer = Quote-Bash $RemoteServerPath
+    $quotedArgs = ($receiverArgs | ForEach-Object { Quote-Bash $_ }) -join ' '
+    $quotedStdout = Quote-Bash $RemoteServerLogPath
+    $quotedStderr = Quote-Bash $RemoteServerErrLogPath
+    "nohup $quotedServer $quotedArgs > $quotedStdout 2> $quotedStderr < /dev/null & echo $!"
+  )
 )
 Write-Host "Server PID on peer: $serverPid"
 Start-Sleep -Seconds 2
