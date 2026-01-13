@@ -188,6 +188,22 @@ try {
   throw "Failed to create SSH PSSession to $PeerName. Ensure SSH keys/config are set. Error: $_"
 }
 
+# Collect system information from the peer
+Write-Host "Collecting system information from peer"
+try {
+  Invoke-Command -Session $session -ScriptBlock {
+    & /bin/bash -lc "uname -a > /tmp/system_info.txt 2>&1"
+    & /bin/bash -lc "lscpu >> /tmp/system_info.txt 2>&1"
+    & /bin/bash -lc "cat /proc/cpuinfo | grep 'model name' | head -1 >> /tmp/system_info.txt 2>&1"
+    & /bin/bash -lc "free -h >> /tmp/system_info.txt 2>&1"
+    & /bin/bash -lc "cat /proc/sys/net/core/rmem_max >> /tmp/system_info.txt 2>&1"
+    & /bin/bash -lc "cat /proc/sys/net/core/wmem_max >> /tmp/system_info.txt 2>&1"
+    & /bin/bash -lc "ethtool -g eth0 >> /tmp/system_info.txt 2>&1 || echo 'ethtool not available or eth0 not found' >> /tmp/system_info.txt"
+  }
+} catch {
+  Write-Host "Warning: Failed to collect system info: $_"
+}
+
 # Copy server binary to peer and ensure executable
 Write-Host "Copying server binary to peer at $RemoteServerPath"
 Copy-Item -Path $serverPath -Destination $RemoteServerPath -ToSession $session
@@ -196,7 +212,7 @@ Invoke-Command -Session $session -ScriptBlock { chmod +x $using:RemoteServerPath
 $RemoteServerErrLogPath = [System.IO.Path]::ChangeExtension($RemoteServerLogPath, 'err.log')
 
 # Start server in background on peer, capture PID
-Write-Host "Starting server on peer"
+Write-Host "Starting server on peer with CPU profiling"
 $serverPid = Invoke-Command -Session $session -ScriptBlock {
   param([string]$Cmd)
 
@@ -224,6 +240,51 @@ $serverPid = Invoke-Command -Session $session -ScriptBlock {
   )
 )
 Write-Host "Server PID on peer: $serverPid"
+
+# Start perf profiling on the server process
+Write-Host "Starting perf record on server process"
+$perfPid = Invoke-Command -Session $session -ScriptBlock {
+  param([int]$TargetPid)
+  $perfCmd = "nohup perf record -F 99 -g -p $TargetPid -o /tmp/server_perf.data > /tmp/perf.log 2>&1 < /dev/null & echo `$!"
+  $perfPidText = & /bin/bash -lc $perfCmd
+  $perfPidValue = 0
+  if (-not [int]::TryParse(($perfPidText | Select-Object -First 1), [ref]$perfPidValue)) {
+    Write-Host "Warning: Failed to start perf; output: $perfPidText"
+    return 0
+  }
+  return $perfPidValue
+} -ArgumentList $serverPid
+Write-Host "Perf PID on peer: $perfPid"
+
+# Start mpstat monitoring
+Write-Host "Starting mpstat monitoring on peer"
+$mpstatPid = Invoke-Command -Session $session -ScriptBlock {
+  $mpstatCmd = "nohup mpstat 1 > /tmp/mpstat.log 2>&1 < /dev/null & echo `$!"
+  $mpstatPidText = & /bin/bash -lc $mpstatCmd
+  $mpstatPidValue = 0
+  if (-not [int]::TryParse(($mpstatPidText | Select-Object -First 1), [ref]$mpstatPidValue)) {
+    Write-Host "Warning: Failed to start mpstat; output: $mpstatPidText"
+    return 0
+  }
+  return $mpstatPidValue
+}
+Write-Host "Mpstat PID on peer: $mpstatPid"
+
+# Start top monitoring for the server process
+Write-Host "Starting top monitoring on peer"
+$topPid = Invoke-Command -Session $session -ScriptBlock {
+  param([int]$TargetPid)
+  $topCmd = "nohup top -b -d 1 -p $TargetPid > /tmp/top.log 2>&1 < /dev/null & echo `$!"
+  $topPidText = & /bin/bash -lc $topCmd
+  $topPidValue = 0
+  if (-not [int]::TryParse(($topPidText | Select-Object -First 1), [ref]$topPidValue)) {
+    Write-Host "Warning: Failed to start top; output: $topPidText"
+    return 0
+  }
+  return $topPidValue
+} -ArgumentList $serverPid
+Write-Host "Top PID on peer: $topPid"
+
 Start-Sleep -Seconds 2
 
 # Run client locally and capture output
@@ -267,6 +328,33 @@ $csvLines += "LinuxEcho,$sent,$received,$Duration"
 $csvLines | Out-File -FilePath "echo_summary.csv" -Encoding utf8
 
 # Stop server on peer and collect logs
+Write-Host "Stopping monitoring tools on peer"
+if ($mpstatPid -gt 0) {
+  try {
+    Invoke-Command -Session $session -ScriptBlock { & /bin/kill -TERM $using:mpstatPid } | Out-Null
+  } catch {
+    Write-Host "Kill mpstat failed: $_"
+  }
+}
+
+if ($topPid -gt 0) {
+  try {
+    Invoke-Command -Session $session -ScriptBlock { & /bin/kill -TERM $using:topPid } | Out-Null
+  } catch {
+    Write-Host "Kill top failed: $_"
+  }
+}
+
+Write-Host "Stopping perf profiler on peer"
+if ($perfPid -gt 0) {
+  try {
+    Invoke-Command -Session $session -ScriptBlock { & /bin/kill -INT $using:perfPid } | Out-Null
+    Start-Sleep -Seconds 2
+  } catch {
+    Write-Host "Kill perf failed: $_"
+  }
+}
+
 Write-Host "Stopping server on peer"
 try {
   Invoke-Command -Session $session -ScriptBlock { & /bin/kill -TERM $using:serverPid } | Out-Null
@@ -287,6 +375,26 @@ try {
   Copy-Item -FromSession $session -Path $RemoteServerErrLogPath -Destination 'server.err.log'
 } catch {
   Write-Host "Failed to copy server.err.log: $_"
+}
+
+Write-Host "Generating perf report and fetching profiling data"
+try {
+  # Generate perf report on the remote machine
+  Invoke-Command -Session $session -ScriptBlock {
+    & /bin/bash -lc "perf report -i /tmp/server_perf.data --stdio > /tmp/server_perf_report.txt 2>&1"
+    & /bin/bash -lc "perf script -i /tmp/server_perf.data > /tmp/server_perf_script.txt 2>&1"
+  }
+  
+  Copy-Item -FromSession $session -Path '/tmp/server_perf.data' -Destination 'server_perf.data'
+  Copy-Item -FromSession $session -Path '/tmp/server_perf_report.txt' -Destination 'server_perf_report.txt'
+  Copy-Item -FromSession $session -Path '/tmp/server_perf_script.txt' -Destination 'server_perf_script.txt'
+  Copy-Item -FromSession $session -Path '/tmp/perf.log' -Destination 'perf.log'
+  Copy-Item -FromSession $session -Path '/tmp/system_info.txt' -Destination 'system_info.txt'
+  Copy-Item -FromSession $session -Path '/tmp/mpstat.log' -Destination 'mpstat.log'
+  Copy-Item -FromSession $session -Path '/tmp/top.log' -Destination 'top.log'
+  Write-Host "Successfully fetched perf profiling data"
+} catch {
+  Write-Host "Failed to fetch perf data: $_"
 }
 
 # Close session
