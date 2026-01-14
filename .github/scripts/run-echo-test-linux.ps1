@@ -396,21 +396,25 @@ try {
   Copy-Item -FromSession $session -Path '/tmp/server_perf.data' -Destination 'server_perf.data'
   Copy-Item -FromSession $session -Path '/tmp/server_perf_report.txt' -Destination 'server_perf_report.txt'
   Copy-Item -FromSession $session -Path '/tmp/server_perf_script.txt' -Destination 'server_perf_script.txt'
-  Copy-Item -FromSession $session -Path '/tmp/perf.log' -Destination 'perf.log'
-  Copy-Item -FromSession $session -Path '/tmp/system_info.txt' -Destination 'system_info.txt'
-  Copy-Item -FromSession $session -Path '/tmp/mpstat.log' -Destination 'mpstat.log'
-  Copy-Item -FromSession $session -Path '/tmp/top.log' -Destination 'top.log'
+  Copy-Item -FromSession $session -Path '/tmp/perf.log' -Destination 'perf.log' -ErrorAction SilentlyContinue
+  Copy-Item -FromSession $session -Path '/tmp/system_info.txt' -Destination 'system_info.txt' -ErrorAction SilentlyContinue
+  Copy-Item -FromSession $session -Path '/tmp/mpstat.log' -Destination 'mpstat.log' -ErrorAction SilentlyContinue
+  Copy-Item -FromSession $session -Path '/tmp/top.log' -Destination 'top.log' -ErrorAction SilentlyContinue
   
-  # Collect network statistics before and after
+  # Collect post-test diagnostics
+  Write-Host "Collecting post-test network diagnostics"
   Invoke-Command -Session $session -ScriptBlock {
-    & /bin/bash -lc "echo '=== Network Statistics ===' > /tmp/network_stats.txt"
-    & /bin/bash -lc "cat /proc/net/dev >> /tmp/network_stats.txt 2>&1"
-    & /bin/bash -lc "echo '=== Netstat Stats ===' >> /tmp/network_stats.txt"
-    & /bin/bash -lc "netstat -s 2>/dev/null >> /tmp/network_stats.txt 2>&1 || ss -s >> /tmp/network_stats.txt 2>&1"
-    & /bin/bash -lc "echo '=== Ethtool Stats ===' >> /tmp/network_stats.txt"
-    & /bin/bash -lc "ethtool -S eth0 2>/dev/null | head -50 >> /tmp/network_stats.txt 2>&1 || ethtool -S ens1 2>/dev/null | head -50 >> /tmp/network_stats.txt 2>&1"
+    & /bin/bash -lc "ip addr show > /tmp/ip_addr.txt 2>&1"
+    & /bin/bash -lc "ip route show > /tmp/ip_route.txt 2>&1"
+    & /bin/bash -lc "cat /proc/net/dev > /tmp/proc_net_dev.txt 2>&1"
+    & /bin/bash -lc "ethtool -S eth0 2>/dev/null > /tmp/ethtool_stats.txt || ethtool -S ens1 2>/dev/null > /tmp/ethtool_stats.txt || echo 'No NIC found' > /tmp/ethtool_stats.txt"
+    & /bin/bash -lc "lscpu > /tmp/lscpu.txt 2>&1"
   }
-  Copy-Item -FromSession $session -Path '/tmp/network_stats.txt' -Destination 'network_stats.txt'
+  Copy-Item -FromSession $session -Path '/tmp/ip_addr.txt' -Destination 'ip_addr.txt' -ErrorAction SilentlyContinue
+  Copy-Item -FromSession $session -Path '/tmp/ip_route.txt' -Destination 'ip_route.txt' -ErrorAction SilentlyContinue
+  Copy-Item -FromSession $session -Path '/tmp/proc_net_dev.txt' -Destination 'proc_net_dev.txt' -ErrorAction SilentlyContinue
+  Copy-Item -FromSession $session -Path '/tmp/ethtool_stats.txt' -Destination 'ethtool_stats.txt' -ErrorAction SilentlyContinue
+  Copy-Item -FromSession $session -Path '/tmp/lscpu.txt' -Destination 'lscpu.txt' -ErrorAction SilentlyContinue
   
   Write-Host "Successfully fetched profiling and network data"
 } catch {
