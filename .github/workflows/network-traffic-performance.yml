@@ -306,6 +306,66 @@ jobs:
         Write-Output "Files in echo RelWithDebInfo directory:"
         Get-ChildItem -Path ${{ github.workspace }}\echo\RelWithDebInfo -Recurse
 
+    - name: Configure Network Queues (local + peer)
+      shell: pwsh
+      run: |
+        function Set-RssConfig {
+          param(
+            [string]$ComputerName = $null
+          )
+
+          $session = $null
+          try {
+            if ($ComputerName) {
+              $session = New-PSSession -ComputerName $ComputerName -ErrorAction Stop
+              Write-Output "Connected to $ComputerName"
+            }
+
+            $invokeParams = @{
+              ScriptBlock = {
+                $targetDesc = '*ConnectX Family mlx5Gen Virtual Function*'
+                $adapter = Get-NetAdapter | Where-Object { $_.Status -eq 'Up' -and $_.InterfaceDescription -like $targetDesc } | Select-Object -First 1
+                if (-not $adapter) {
+                  Write-Warning "No active adapter matching '$targetDesc' found"
+                  return
+                }
+
+                Write-Output "Configuring adapter: $($adapter.Name) | $($adapter.InterfaceDescription)"
+
+                $actions = @(
+                  @{ Name = 'NumRssCores';   Keyword = 'NumRssCores';    Value = 0;    Note = 'Use all cores' },
+                  @{ Name = 'Enable RSS';    Keyword = '*RSS';           Value = 1;    Note = 'RSS on' },
+                  @{ Name = 'ReceiveBuffers';Keyword = '*ReceiveBuffers';Value = 2048; Note = 'RX buffers' },
+                  @{ Name = 'TransmitBuffers';Keyword = '*TransmitBuffers';Value = 2048; Note = 'TX buffers' }
+                )
+
+                foreach ($a in $actions) {
+                  try {
+                    Set-NetAdapterAdvancedProperty -Name $adapter.Name -RegistryKeyword $a.Keyword -RegistryValue $a.Value -ErrorAction Stop
+                    Write-Output "Set $($a.Name) -> $($a.Value) ($($a.Note))"
+                  } catch {
+                    Write-Warning "Could not set $($a.Name): $($_.Exception.Message)"
+                  }
+                }
+
+                Write-Output "Current RSS/Buffer settings:"
+                Get-NetAdapterAdvancedProperty -Name $adapter.Name | Where-Object { $_.DisplayName -match 'RSS|Buffer' } | Format-Table DisplayName, DisplayValue -AutoSize
+              }
+            }
+
+            if ($session) { $invokeParams.Session = $session }
+            Invoke-Command @invokeParams
+          } finally {
+            if ($session) { Remove-PSSession $session -ErrorAction SilentlyContinue }
+          }
+        }
+
+        Write-Output "Configuring local machine..."
+        Set-RssConfig
+
+        Write-Output "Configuring netperf-peer..."
+        Set-RssConfig -ComputerName 'netperf-peer'
+
     - name: Log pktmon drop counters before test
       run: |
         pktmon comp counters --type drop
