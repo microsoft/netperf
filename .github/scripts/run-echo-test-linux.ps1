@@ -322,18 +322,43 @@ Write-Host "Client exit: $clientExit"
 # Attempt to parse simple metrics from client output
 $sent = 0
 $received = 0
+$duration = 0
+$sendRate = 0
+$recvRate = 0
 try {
-  $sentMatch = ($clientOutput | Select-String -Pattern "Packets sent: (\d+)")
-  $recvMatch = ($clientOutput | Select-String -Pattern "Packets received: (\d+)")
-  if ($sentMatch) { $sent = [int]($sentMatch.Matches[0].Groups[1].Value) }
-  if ($recvMatch) { $received = [int]($recvMatch.Matches[0].Groups[1].Value) }
+  $sentMatch = ($clientOutput | Select-String -Pattern "Packets sent: (\d+) \((\d+) pps\)")
+  $recvMatch = ($clientOutput | Select-String -Pattern "Packets received: (\d+) \((\d+) pps\)")
+  $durationMatch = ($clientOutput | Select-String -Pattern "Duration: ([\d.]+) seconds")
+  
+  if ($sentMatch) { 
+    $sent = [int]($sentMatch.Matches[0].Groups[1].Value)
+    $sendRate = [int]($sentMatch.Matches[0].Groups[2].Value)
+  }
+  if ($recvMatch) { 
+    $received = [int]($recvMatch.Matches[0].Groups[1].Value)
+    $recvRate = [int]($recvMatch.Matches[0].Groups[2].Value)
+  }
+  if ($durationMatch) {
+    $duration = [double]($durationMatch.Matches[0].Groups[1].Value)
+  } else {
+    $duration = [int]$Duration
+  }
 } catch { }
 
-# Write a minimal CSV summary
+# Write a CSV summary with client-measured throughput
+# Note: Client receive rate represents actual server throughput (server must send replies for client to receive them)
 $csvLines = @()
-$csvLines += "Test,Sent,Received,Duration"
-$csvLines += "LinuxEcho,$sent,$received,$Duration"
+$csvLines += "Test,Sent,Received,SendRate_pps,RecvRate_pps,Duration_sec,Note"
+$csvLines += "LinuxEcho,$sent,$received,$sendRate,$recvRate,$duration,Client-measured (recv rate = server throughput)"
 $csvLines | Out-File -FilePath "echo_summary.csv" -Encoding utf8
+
+Write-Host "`n===== Performance Summary ====="
+Write-Host "Client sent: $sent packets at $sendRate pps"
+Write-Host "Client received: $received packets at $recvRate pps"
+Write-Host "Server throughput (based on client receive rate): $recvRate RPS"
+Write-Host "Drop rate: $(if ($sent -gt 0) { [math]::Round((1 - $received / $sent) * 100, 2) } else { 0 })%"
+Write-Host "Duration: $duration seconds"
+Write-Host "================================`n"
 
 # Stop server on peer and collect logs
 Write-Host "Stopping monitoring tools on peer"
