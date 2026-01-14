@@ -277,20 +277,20 @@ jobs:
       if: ${{ github.event.inputs.tcp_ip_tracing == 'true' }}
       run: |-
         if (Test-Path "tcpip.wprp") { Remove-Item -Force "tcpip.wprp" }
-        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{ github.ref_name }}/.github/workflows/tcpip.wprp" -OutFile "tcpip.wprp"
         wpr -start tcpip.wprp -filemode
 
     - name: Download modified CPU profile script
       if: ${{ github.event.inputs.profile == 'true' }}
       working-directory: ${{ github.workspace }}\ETL
       run: |
-        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/scripts/cpu.wprp" -OutFile "${{ github.workspace }}\ETL\cpu.wprp" 
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{ github.ref_name }}/.github/scripts/cpu.wprp" -OutFile "${{ github.workspace }}\ETL\cpu.wprp" 
 
     - name: Download run-echo-test script
       working-directory: ${{ github.workspace }}\echo\RelWithDebInfo
       run: |
-        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/scripts/run-echo-test.ps1" -OutFile ".\run-echo-test.ps1"
-        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/scripts/performance_utilities.psm1" -OutFile ".\performance_utilities.psm1"
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{ github.ref_name }}/.github/scripts/run-echo-test.ps1" -OutFile ".\run-echo-test.ps1"
+        Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{ github.ref_name }}/.github/scripts/performance_utilities.psm1" -OutFile ".\performance_utilities.psm1"
 
     - name: Log all input parameters for this workflow
       run: |
