@@ -137,6 +137,8 @@ jobs:
           ${{ github.workspace }}/echo/**/*.json
           ${{ github.workspace }}/echo/**/*.data
           ${{ github.workspace }}/echo/**/server_perf*
+          ${{ github.workspace }}/echo/**/network_stats*
+          ${{ github.workspace }}/echo/**/system_info*
 
   attempt-reset-lab-linux:
     name: Attempting to reset lab (Linux). Status of this job does not indicate result of lab reset. Look at job details.

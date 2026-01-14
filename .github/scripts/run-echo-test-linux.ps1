@@ -189,7 +189,7 @@ try {
 }
 
 # Collect system information from the peer
-Write-Host "Collecting system information from peer"
+Write-Host "Collecting system and network diagnostics from peer"
 try {
   Invoke-Command -Session $session -ScriptBlock {
     & /bin/bash -lc "uname -a > /tmp/system_info.txt 2>&1"
@@ -198,7 +198,15 @@ try {
     & /bin/bash -lc "free -h >> /tmp/system_info.txt 2>&1"
     & /bin/bash -lc "cat /proc/sys/net/core/rmem_max >> /tmp/system_info.txt 2>&1"
     & /bin/bash -lc "cat /proc/sys/net/core/wmem_max >> /tmp/system_info.txt 2>&1"
-    & /bin/bash -lc "ethtool -g eth0 >> /tmp/system_info.txt 2>&1 || echo 'ethtool not available or eth0 not found' >> /tmp/system_info.txt"
+    & /bin/bash -lc "ethtool -g eth0 >> /tmp/system_info.txt 2>&1 || ethtool -g ens1 >> /tmp/system_info.txt 2>&1 || echo 'ethtool not available' >> /tmp/system_info.txt"
+    & /bin/bash -lc "echo '=== Network Interfaces ===' >> /tmp/system_info.txt"
+    & /bin/bash -lc "ip link show >> /tmp/system_info.txt 2>&1"
+    & /bin/bash -lc "echo '=== RSS Configuration ===' >> /tmp/system_info.txt"
+    & /bin/bash -lc "ethtool -x eth0 2>/dev/null | head -20 >> /tmp/system_info.txt 2>&1 || ethtool -x ens1 2>/dev/null | head -20 >> /tmp/system_info.txt 2>&1 || echo 'ethtool -x not available' >> /tmp/system_info.txt"
+    & /bin/bash -lc "echo '=== RX/TX Ring Parameters ===' >> /tmp/system_info.txt"
+    & /bin/bash -lc "ethtool -g eth0 2>/dev/null >> /tmp/system_info.txt 2>&1 || ethtool -g ens1 2>/dev/null >> /tmp/system_info.txt 2>&1"
+    & /bin/bash -lc "echo '=== Interrupt Configuration ===' >> /tmp/system_info.txt"
+    & /bin/bash -lc "cat /proc/interrupts | head -20 >> /tmp/system_info.txt 2>&1"
   }
 } catch {
   Write-Host "Warning: Failed to collect system info: $_"
@@ -392,9 +400,21 @@ try {
   Copy-Item -FromSession $session -Path '/tmp/system_info.txt' -Destination 'system_info.txt'
   Copy-Item -FromSession $session -Path '/tmp/mpstat.log' -Destination 'mpstat.log'
   Copy-Item -FromSession $session -Path '/tmp/top.log' -Destination 'top.log'
-  Write-Host "Successfully fetched perf profiling data"
+  
+  # Collect network statistics before and after
+  Invoke-Command -Session $session -ScriptBlock {
+    & /bin/bash -lc "echo '=== Network Statistics ===' > /tmp/network_stats.txt"
+    & /bin/bash -lc "cat /proc/net/dev >> /tmp/network_stats.txt 2>&1"
+    & /bin/bash -lc "echo '=== Netstat Stats ===' >> /tmp/network_stats.txt"
+    & /bin/bash -lc "netstat -s 2>/dev/null >> /tmp/network_stats.txt 2>&1 || ss -s >> /tmp/network_stats.txt 2>&1"
+    & /bin/bash -lc "echo '=== Ethtool Stats ===' >> /tmp/network_stats.txt"
+    & /bin/bash -lc "ethtool -S eth0 2>/dev/null | head -50 >> /tmp/network_stats.txt 2>&1 || ethtool -S ens1 2>/dev/null | head -50 >> /tmp/network_stats.txt 2>&1"
+  }
+  Copy-Item -FromSession $session -Path '/tmp/network_stats.txt' -Destination 'network_stats.txt'
+  
+  Write-Host "Successfully fetched profiling and network data"
 } catch {
-  Write-Host "Failed to fetch perf data: $_"
+  Write-Host "Failed to fetch data: $_"
 }
 
 # Close session
