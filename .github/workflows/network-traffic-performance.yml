@@ -281,6 +281,7 @@ jobs:
         wpr -start tcpip.wprp -filemode
 
     - name: Download modified CPU profile script
+      if: ${{ github.event.inputs.profile == 'true' }}
       working-directory: ${{ github.workspace }}\ETL
       run: |
         Invoke-WebRequest -uri "https://raw.githubusercontent.com/microsoft/netperf/${{inputs.ref}}/.github/scripts/cpu.wprp" -OutFile "${{ github.workspace }}\ETL\cpu.wprp" 
@@ -332,14 +333,20 @@ jobs:
 
                 Write-Output "Configuring adapter: $($adapter.Name) | $($adapter.InterfaceDescription)"
 
-                $actions = @(
-                  @{ Name = 'NumRssCores';   Keyword = 'NumRssCores';    Value = 0;    Note = 'Use all cores' },
-                  @{ Name = 'Enable RSS';    Keyword = '*RSS';           Value = 1;    Note = 'RSS on' },
+                try {
+                  # Try to expand RSS: set queues, profile, and processor span. Falls back if NIC limits are lower.
+                  Set-NetAdapterRss -Name $adapter.Name -Enabled $true -NumberOfReceiveQueues 16 -Profile NUMAStatic -BaseProcessorNumber 0 -MaxProcessorNumber 63 -ErrorAction Stop
+                  Write-Output "Set-NetAdapterRss applied (queues=16, profile=NUMAStatic, base=0, max=63)"
+                } catch {
+                  Write-Warning "Set-NetAdapterRss failed: $($_.Exception.Message)"
+                }
+
+                $bufferActions = @(
                   @{ Name = 'ReceiveBuffers';Keyword = '*ReceiveBuffers';Value = 2048; Note = 'RX buffers' },
                   @{ Name = 'TransmitBuffers';Keyword = '*TransmitBuffers';Value = 2048; Note = 'TX buffers' }
                 )
 
-                foreach ($a in $actions) {
+                foreach ($a in $bufferActions) {
                   try {
                     Set-NetAdapterAdvancedProperty -Name $adapter.Name -RegistryKeyword $a.Keyword -RegistryValue $a.Value -ErrorAction Stop
                     Write-Output "Set $($a.Name) -> $($a.Value) ($($a.Note))"
