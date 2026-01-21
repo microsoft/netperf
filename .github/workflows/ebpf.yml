@@ -137,52 +137,44 @@ jobs:
     - name: Download latest anti-malware signatures for Windows Defender
       run: |
         # Best-effort update of Windows Defender signatures with retry logic
-        $maxRetries = 3
-        $retryDelay = 5
+        # Define reusable retry function
+        function Invoke-WithRetry {
+          param(
+            [ScriptBlock]$ScriptBlock,
+            [string]$OperationName,
+            [int]$MaxRetries = 3,
+            [int]$RetryDelay = 5
+          )
+          
+          $success = $false
+          for ($i = 1; $i -le $MaxRetries; $i++) {
+            try {
+              Write-Host "Attempting to $OperationName (attempt $i of $MaxRetries)..."
+              & $ScriptBlock
+              Write-Host "Successfully completed: $OperationName"
+              $success = $true
+              break
+            } catch {
+              Write-Warning "Failed to ${OperationName} (attempt $i of $MaxRetries): $_"
+              if ($i -lt $MaxRetries) {
+                Write-Host "Retrying in $RetryDelay seconds..."
+                Start-Sleep -Seconds $RetryDelay
+              }
+            }
+          }
+          
+          if (-not $success) {
+            Write-Warning "Could not complete '$OperationName' after $MaxRetries attempts. Continuing anyway..."
+          }
+          
+          return $success
+        }
         
         # Try to update signatures
-        $signatureUpdated = $false
-        for ($i = 1; $i -le $maxRetries; $i++) {
-          try {
-            Write-Host "Attempting to update Windows Defender signatures (attempt $i of $maxRetries)..."
-            Update-MpSignature -Verbose
-            Write-Host "Successfully updated Windows Defender signatures"
-            $signatureUpdated = $true
-            break
-          } catch {
-            Write-Warning "Failed to update Windows Defender signatures (attempt $i of $maxRetries): $_"
-            if ($i -lt $maxRetries) {
-              Write-Host "Retrying in $retryDelay seconds..."
-              Start-Sleep -Seconds $retryDelay
-            }
-          }
-        }
-        
-        if (-not $signatureUpdated) {
-          Write-Warning "Could not update Windows Defender signatures after $maxRetries attempts. Continuing anyway..."
-        }
+        Invoke-WithRetry -ScriptBlock { Update-MpSignature -Verbose } -OperationName "update Windows Defender signatures"
         
         # Try to run a quick scan
-        $scanCompleted = $false
-        for ($i = 1; $i -le $maxRetries; $i++) {
-          try {
-            Write-Host "Attempting to run Windows Defender quick scan (attempt $i of $maxRetries)..."
-            Start-MpScan -ScanType QuickScan
-            Write-Host "Successfully completed Windows Defender quick scan"
-            $scanCompleted = $true
-            break
-          } catch {
-            Write-Warning "Failed to run Windows Defender quick scan (attempt $i of $maxRetries): $_"
-            if ($i -lt $maxRetries) {
-              Write-Host "Retrying in $retryDelay seconds..."
-              Start-Sleep -Seconds $retryDelay
-            }
-          }
-        }
-        
-        if (-not $scanCompleted) {
-          Write-Warning "Could not run Windows Defender quick scan after $maxRetries attempts. Continuing anyway..."
-        }
+        Invoke-WithRetry -ScriptBlock { Start-MpScan -ScanType QuickScan } -OperationName "run Windows Defender quick scan"
         
         # Try to add workspace exclusion
         try {
@@ -468,8 +460,38 @@ jobs:
       if: always()
       run: |
         # Best-effort cleanup with retry logic
-        $maxRetries = 3
-        $retryDelay = 5
+        # Define reusable retry function
+        function Invoke-WithRetry {
+          param(
+            [ScriptBlock]$ScriptBlock,
+            [string]$OperationName,
+            [int]$MaxRetries = 3,
+            [int]$RetryDelay = 5
+          )
+          
+          $success = $false
+          for ($i = 1; $i -le $MaxRetries; $i++) {
+            try {
+              Write-Host "Attempting to $OperationName (attempt $i of $MaxRetries)..."
+              & $ScriptBlock
+              Write-Host "Successfully completed: $OperationName"
+              $success = $true
+              break
+            } catch {
+              Write-Warning "Failed to ${OperationName} (attempt $i of $MaxRetries): $_"
+              if ($i -lt $MaxRetries) {
+                Write-Host "Retrying in $RetryDelay seconds..."
+                Start-Sleep -Seconds $RetryDelay
+              }
+            }
+          }
+          
+          if (-not $success) {
+            Write-Warning "Could not complete '$OperationName' after $MaxRetries attempts. Continuing anyway..."
+          }
+          
+          return $success
+        }
         
         # Try to remove workspace exclusion
         try {
@@ -481,48 +503,10 @@ jobs:
         }
         
         # Try to update signatures with retry logic
-        $signatureUpdated = $false
-        for ($i = 1; $i -le $maxRetries; $i++) {
-          try {
-            Write-Host "Attempting to update Windows Defender signatures (attempt $i of $maxRetries)..."
-            Update-MpSignature -Verbose
-            Write-Host "Successfully updated Windows Defender signatures"
-            $signatureUpdated = $true
-            break
-          } catch {
-            Write-Warning "Failed to update Windows Defender signatures (attempt $i of $maxRetries): $_"
-            if ($i -lt $maxRetries) {
-              Write-Host "Retrying in $retryDelay seconds..."
-              Start-Sleep -Seconds $retryDelay
-            }
-          }
-        }
-        
-        if (-not $signatureUpdated) {
-          Write-Warning "Could not update Windows Defender signatures after $maxRetries attempts. Continuing anyway..."
-        }
+        Invoke-WithRetry -ScriptBlock { Update-MpSignature -Verbose } -OperationName "update Windows Defender signatures"
         
         # Try to run a quick scan with retry logic
-        $scanCompleted = $false
-        for ($i = 1; $i -le $maxRetries; $i++) {
-          try {
-            Write-Host "Attempting to run Windows Defender quick scan (attempt $i of $maxRetries)..."
-            Start-MpScan -ScanType QuickScan
-            Write-Host "Successfully completed Windows Defender quick scan"
-            $scanCompleted = $true
-            break
-          } catch {
-            Write-Warning "Failed to run Windows Defender quick scan (attempt $i of $maxRetries): $_"
-            if ($i -lt $maxRetries) {
-              Write-Host "Retrying in $retryDelay seconds..."
-              Start-Sleep -Seconds $retryDelay
-            }
-          }
-        }
-        
-        if (-not $scanCompleted) {
-          Write-Warning "Could not run Windows Defender quick scan after $maxRetries attempts. Continuing anyway..."
-        }
+        Invoke-WithRetry -ScriptBlock { Start-MpScan -ScanType QuickScan } -OperationName "run Windows Defender quick scan"
 
   attempt-reset-lab:
     name: Attempting to reset lab. Status of this job does not indicate result of lab reset. Look at job details.
