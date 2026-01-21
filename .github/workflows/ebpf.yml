@@ -132,11 +132,61 @@ jobs:
 
     # Install the latest anti-malware signatures for Windows Defender to prevent false positives.
     # Windows Defender incorrectly flags some of the test binaries as malware.
+    # This step is best-effort: Defender updates can fail due to RPC/service/policy issues on self-hosted runners.
+    # We retry and log failures but don't fail the workflow to avoid blocking performance tests.
     - name: Download latest anti-malware signatures for Windows Defender
       run: |
-        Update-MpSignature -Verbose
-        Start-MpScan -ScanType QuickScan
-        Add-MpPreference -ExclusionPath ${{ github.workspace }}
+        # Best-effort update of Windows Defender signatures with retry logic
+        # NOTE: The Invoke-WithRetry function is intentionally duplicated in both setup and cleanup steps
+        # because GitHub Actions runs each step in a separate PowerShell session. This duplication ensures
+        # the cleanup step (which runs with 'if: always()') remains self-contained and can succeed even
+        # if the setup step fails entirely. This trade-off prioritizes robustness over DRY principles.
+        function Invoke-WithRetry {
+          param(
+            [ScriptBlock]$ScriptBlock,
+            [string]$OperationName,
+            [int]$MaxRetries = 3,
+            [int]$RetryDelay = 5
+          )
+          
+          $success = $false
+          for ($i = 1; $i -le $MaxRetries; $i++) {
+            try {
+              Write-Host "Attempting to $OperationName (attempt $i of $MaxRetries)..."
+              & $ScriptBlock
+              Write-Host "Successfully completed: $OperationName"
+              $success = $true
+              break
+            } catch {
+              Write-Warning "Failed to ${OperationName} (attempt $i of $MaxRetries): $_"
+              if ($i -lt $MaxRetries) {
+                Write-Host "Retrying in $RetryDelay seconds..."
+                Start-Sleep -Seconds $RetryDelay
+              }
+            }
+          }
+          
+          if (-not $success) {
+            Write-Warning "Could not complete '$OperationName' after $MaxRetries attempts. Continuing anyway..."
+          }
+          
+          return $success
+        }
+        
+        # Try to update signatures
+        Invoke-WithRetry -ScriptBlock { Update-MpSignature -Verbose } -OperationName "update Windows Defender signatures"
+        
+        # Try to run a quick scan
+        Invoke-WithRetry -ScriptBlock { Start-MpScan -ScanType QuickScan } -OperationName "run Windows Defender quick scan"
+        
+        # Try to add workspace exclusion
+        try {
+          Write-Host "Adding Windows Defender exclusion for workspace..."
+          Add-MpPreference -ExclusionPath ${{ github.workspace }}
+          Write-Host "Successfully added Windows Defender exclusion"
+        } catch {
+          Write-Warning "Failed to add Windows Defender exclusion: $_. Continuing anyway..."
+        }
 
     - name: Install latest MSVC redistirbutables
       run: |
@@ -407,12 +457,62 @@ jobs:
         if (Test-Path ${{ github.workspace }}\cts-traffic) { Remove-Item -Recurse -Force ${{ github.workspace }}\cts-traffic }
         if (Test-Path ${{ github.workspace }}\ETL) { Remove-Item -Recurse -Force ${{ github.workspace }}\ETL }
 
+    # Best-effort cleanup: restore Windows Defender to its original state
+    # This step is allowed to fail without blocking the workflow
     - name: Restore Windows Defender exclusions
       if: always()
       run: |
-        Remove-MpPreference -ExclusionPath ${{ github.workspace }}
-        Update-MpSignature -Verbose
-        Start-MpScan -ScanType QuickScan
+        # Best-effort cleanup with retry logic
+        # NOTE: The Invoke-WithRetry function is intentionally duplicated in both setup and cleanup steps
+        # because GitHub Actions runs each step in a separate PowerShell session. This duplication ensures
+        # the cleanup step (which runs with 'if: always()') remains self-contained and can succeed even
+        # if the setup step fails entirely. This trade-off prioritizes robustness over DRY principles.
+        function Invoke-WithRetry {
+          param(
+            [ScriptBlock]$ScriptBlock,
+            [string]$OperationName,
+            [int]$MaxRetries = 3,
+            [int]$RetryDelay = 5
+          )
+          
+          $success = $false
+          for ($i = 1; $i -le $MaxRetries; $i++) {
+            try {
+              Write-Host "Attempting to $OperationName (attempt $i of $MaxRetries)..."
+              & $ScriptBlock
+              Write-Host "Successfully completed: $OperationName"
+              $success = $true
+              break
+            } catch {
+              Write-Warning "Failed to ${OperationName} (attempt $i of $MaxRetries): $_"
+              if ($i -lt $MaxRetries) {
+                Write-Host "Retrying in $RetryDelay seconds..."
+                Start-Sleep -Seconds $RetryDelay
+              }
+            }
+          }
+          
+          if (-not $success) {
+            Write-Warning "Could not complete '$OperationName' after $MaxRetries attempts. Continuing anyway..."
+          }
+          
+          return $success
+        }
+        
+        # Try to remove workspace exclusion
+        try {
+          Write-Host "Removing Windows Defender exclusion for workspace..."
+          Remove-MpPreference -ExclusionPath ${{ github.workspace }}
+          Write-Host "Successfully removed Windows Defender exclusion"
+        } catch {
+          Write-Warning "Failed to remove Windows Defender exclusion: $_. Continuing anyway..."
+        }
+        
+        # Try to update signatures with retry logic
+        Invoke-WithRetry -ScriptBlock { Update-MpSignature -Verbose } -OperationName "update Windows Defender signatures"
+        
+        # Try to run a quick scan with retry logic
+        Invoke-WithRetry -ScriptBlock { Start-MpScan -ScanType QuickScan } -OperationName "run Windows Defender quick scan"
 
   attempt-reset-lab:
     name: Attempting to reset lab. Status of this job does not indicate result of lab reset. Look at job details.
