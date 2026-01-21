@@ -467,6 +467,10 @@ jobs:
     - name: Restore Windows Defender exclusions
       if: always()
       run: |
+        # Best-effort cleanup with retry logic
+        $maxRetries = 3
+        $retryDelay = 5
+        
         # Try to remove workspace exclusion
         try {
           Write-Host "Removing Windows Defender exclusion for workspace..."
@@ -476,22 +480,48 @@ jobs:
           Write-Warning "Failed to remove Windows Defender exclusion: $_. Continuing anyway..."
         }
         
-        # Try to update signatures
-        try {
-          Write-Host "Updating Windows Defender signatures..."
-          Update-MpSignature -Verbose
-          Write-Host "Successfully updated Windows Defender signatures"
-        } catch {
-          Write-Warning "Failed to update Windows Defender signatures: $_. Continuing anyway..."
+        # Try to update signatures with retry logic
+        $signatureUpdated = $false
+        for ($i = 1; $i -le $maxRetries; $i++) {
+          try {
+            Write-Host "Attempting to update Windows Defender signatures (attempt $i of $maxRetries)..."
+            Update-MpSignature -Verbose
+            Write-Host "Successfully updated Windows Defender signatures"
+            $signatureUpdated = $true
+            break
+          } catch {
+            Write-Warning "Failed to update Windows Defender signatures (attempt $i of $maxRetries): $_"
+            if ($i -lt $maxRetries) {
+              Write-Host "Retrying in $retryDelay seconds..."
+              Start-Sleep -Seconds $retryDelay
+            }
+          }
         }
         
-        # Try to run a quick scan
-        try {
-          Write-Host "Running Windows Defender quick scan..."
-          Start-MpScan -ScanType QuickScan
-          Write-Host "Successfully completed Windows Defender quick scan"
-        } catch {
-          Write-Warning "Failed to run Windows Defender quick scan: $_. Continuing anyway..."
+        if (-not $signatureUpdated) {
+          Write-Warning "Could not update Windows Defender signatures after $maxRetries attempts. Continuing anyway..."
+        }
+        
+        # Try to run a quick scan with retry logic
+        $scanCompleted = $false
+        for ($i = 1; $i -le $maxRetries; $i++) {
+          try {
+            Write-Host "Attempting to run Windows Defender quick scan (attempt $i of $maxRetries)..."
+            Start-MpScan -ScanType QuickScan
+            Write-Host "Successfully completed Windows Defender quick scan"
+            $scanCompleted = $true
+            break
+          } catch {
+            Write-Warning "Failed to run Windows Defender quick scan (attempt $i of $maxRetries): $_"
+            if ($i -lt $maxRetries) {
+              Write-Host "Retrying in $retryDelay seconds..."
+              Start-Sleep -Seconds $retryDelay
+            }
+          }
+        }
+        
+        if (-not $scanCompleted) {
+          Write-Warning "Could not run Windows Defender quick scan after $maxRetries attempts. Continuing anyway..."
         }
 
   attempt-reset-lab:
