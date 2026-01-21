@@ -137,7 +137,10 @@ jobs:
     - name: Download latest anti-malware signatures for Windows Defender
       run: |
         # Best-effort update of Windows Defender signatures with retry logic
-        # Define reusable retry function
+        # NOTE: The Invoke-WithRetry function is intentionally duplicated in both setup and cleanup steps
+        # because GitHub Actions runs each step in a separate PowerShell session. This duplication ensures
+        # the cleanup step (which runs with 'if: always()') remains self-contained and can succeed even
+        # if the setup step fails entirely. This trade-off prioritizes robustness over DRY principles.
         function Invoke-WithRetry {
           param(
             [ScriptBlock]$ScriptBlock,
@@ -460,7 +463,10 @@ jobs:
       if: always()
       run: |
         # Best-effort cleanup with retry logic
-        # Define reusable retry function
+        # NOTE: The Invoke-WithRetry function is intentionally duplicated in both setup and cleanup steps
+        # because GitHub Actions runs each step in a separate PowerShell session. This duplication ensures
+        # the cleanup step (which runs with 'if: always()') remains self-contained and can succeed even
+        # if the setup step fails entirely. This trade-off prioritizes robustness over DRY principles.
         function Invoke-WithRetry {
           param(
             [ScriptBlock]$ScriptBlock,
