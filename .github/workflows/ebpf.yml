@@ -132,11 +132,66 @@ jobs:
 
     # Install the latest anti-malware signatures for Windows Defender to prevent false positives.
     # Windows Defender incorrectly flags some of the test binaries as malware.
+    # This step is best-effort: Defender updates can fail due to RPC/service/policy issues on self-hosted runners.
+    # We retry and log failures but don't fail the workflow to avoid blocking performance tests.
     - name: Download latest anti-malware signatures for Windows Defender
       run: |
-        Update-MpSignature -Verbose
-        Start-MpScan -ScanType QuickScan
-        Add-MpPreference -ExclusionPath ${{ github.workspace }}
+        # Best-effort update of Windows Defender signatures with retry logic
+        $maxRetries = 3
+        $retryDelay = 5
+        
+        # Try to update signatures
+        $signatureUpdated = $false
+        for ($i = 1; $i -le $maxRetries; $i++) {
+          try {
+            Write-Host "Attempting to update Windows Defender signatures (attempt $i of $maxRetries)..."
+            Update-MpSignature -Verbose
+            Write-Host "Successfully updated Windows Defender signatures"
+            $signatureUpdated = $true
+            break
+          } catch {
+            Write-Warning "Failed to update Windows Defender signatures (attempt $i of $maxRetries): $_"
+            if ($i -lt $maxRetries) {
+              Write-Host "Retrying in $retryDelay seconds..."
+              Start-Sleep -Seconds $retryDelay
+            }
+          }
+        }
+        
+        if (-not $signatureUpdated) {
+          Write-Warning "Could not update Windows Defender signatures after $maxRetries attempts. Continuing anyway..."
+        }
+        
+        # Try to run a quick scan
+        $scanCompleted = $false
+        for ($i = 1; $i -le $maxRetries; $i++) {
+          try {
+            Write-Host "Attempting to run Windows Defender quick scan (attempt $i of $maxRetries)..."
+            Start-MpScan -ScanType QuickScan
+            Write-Host "Successfully completed Windows Defender quick scan"
+            $scanCompleted = $true
+            break
+          } catch {
+            Write-Warning "Failed to run Windows Defender quick scan (attempt $i of $maxRetries): $_"
+            if ($i -lt $maxRetries) {
+              Write-Host "Retrying in $retryDelay seconds..."
+              Start-Sleep -Seconds $retryDelay
+            }
+          }
+        }
+        
+        if (-not $scanCompleted) {
+          Write-Warning "Could not run Windows Defender quick scan after $maxRetries attempts. Continuing anyway..."
+        }
+        
+        # Try to add workspace exclusion
+        try {
+          Write-Host "Adding Windows Defender exclusion for workspace..."
+          Add-MpPreference -ExclusionPath ${{ github.workspace }}
+          Write-Host "Successfully added Windows Defender exclusion"
+        } catch {
+          Write-Warning "Failed to add Windows Defender exclusion: $_. Continuing anyway..."
+        }
 
     - name: Install latest MSVC redistirbutables
       run: |
@@ -407,12 +462,37 @@ jobs:
         if (Test-Path ${{ github.workspace }}\cts-traffic) { Remove-Item -Recurse -Force ${{ github.workspace }}\cts-traffic }
         if (Test-Path ${{ github.workspace }}\ETL) { Remove-Item -Recurse -Force ${{ github.workspace }}\ETL }
 
+    # Best-effort cleanup: restore Windows Defender to its original state
+    # This step is allowed to fail without blocking the workflow
     - name: Restore Windows Defender exclusions
       if: always()
       run: |
-        Remove-MpPreference -ExclusionPath ${{ github.workspace }}
-        Update-MpSignature -Verbose
-        Start-MpScan -ScanType QuickScan
+        # Try to remove workspace exclusion
+        try {
+          Write-Host "Removing Windows Defender exclusion for workspace..."
+          Remove-MpPreference -ExclusionPath ${{ github.workspace }}
+          Write-Host "Successfully removed Windows Defender exclusion"
+        } catch {
+          Write-Warning "Failed to remove Windows Defender exclusion: $_. Continuing anyway..."
+        }
+        
+        # Try to update signatures
+        try {
+          Write-Host "Updating Windows Defender signatures..."
+          Update-MpSignature -Verbose
+          Write-Host "Successfully updated Windows Defender signatures"
+        } catch {
+          Write-Warning "Failed to update Windows Defender signatures: $_. Continuing anyway..."
+        }
+        
+        # Try to run a quick scan
+        try {
+          Write-Host "Running Windows Defender quick scan..."
+          Start-MpScan -ScanType QuickScan
+          Write-Host "Successfully completed Windows Defender quick scan"
+        } catch {
+          Write-Warning "Failed to run Windows Defender quick scan: $_. Continuing anyway..."
+        }
 
   attempt-reset-lab:
     name: Attempting to reset lab. Status of this job does not indicate result of lab reset. Look at job details.
