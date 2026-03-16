@@ -221,6 +221,14 @@ function Invoke-ToolInSession {
     [int]$WaitSeconds = 0
   )
 
+  # Parse options into array on the local side to avoid needing
+  # Convert-ArgStringToArray in the remote session (it's not available there).
+  # This also eliminates duplicated parsing logic.
+  if ($Options -and $Options -isnot [System.Array]) {
+    $Options = Convert-ArgStringToArray $Options
+  }
+  if (-not $Options) { $Options = @() }
+
   $Job = Invoke-Command -Session $Session -ScriptBlock {
     param($RemoteDir, $ToolDir, $ToolName, $Options, $WaitSeconds)
 
@@ -242,15 +250,19 @@ function Invoke-ToolInSession {
 
     Write-Host "[Remote] Running: $Tool"
     if ($Options -is [System.Array]) {
-      Write-Host "[Remote] Arguments (array):"
+      Write-Host "[Remote] Arguments (array, $($Options.Count) tokens):"
       foreach ($arg in $Options) { Write-Host "  $arg" }
       $argList = $Options
     }
     else {
-      Write-Host "[Remote] Arguments (string):"
+      # Options should always arrive as an array (parsed on local side).
+      # If PS remoting flattened it to a single string, treat it as one token.
+      Write-Host "[Remote] Arguments (single string token):"
       Write-Host "  $Options"
       $argList = @()
-      if (-not [string]::IsNullOrEmpty($Options)) { $argList = @($Options) }
+      if (-not [string]::IsNullOrEmpty($Options)) {
+        $argList = @($Options)
+      }
     }
     
     try {
