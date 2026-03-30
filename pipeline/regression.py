@@ -120,10 +120,10 @@ def singular_datapoint_method():
 
     watermark_regression_file = {}
     for json_file_path in glob.glob('*.json'):
-        if not os.path.exists(json_file_path):
+        if not os.path.exists(f"{json_file_path}/{json_file_path}"):
             continue
 
-        with open(json_file_path, 'r') as json_file:
+        with open(f"{json_file_path}/{json_file_path}", 'r') as json_file:
             print("Processing file: {}".format(json_file_path))
             # Grab data
             json_content = json_file.read()
