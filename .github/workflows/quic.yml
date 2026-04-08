@@ -81,7 +81,7 @@ jobs:
   name:
     name: For ${{ github.event.client_payload.guid }}
     needs: []
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-25.04
     steps:
     - name: Print Parameters
       if: ${{ github.event_name == 'repository_dispatch' }}
@@ -153,7 +153,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ['ubuntu-24.04']
+        os: ['ubuntu-25.04']
         tls: ['quictls']
         iouring: ['', '-UseIoUring']
     uses: microsoft/msquic/.github/workflows/build-reuse-unix.yml@main
@@ -185,24 +185,24 @@ jobs:
     - 1ES.ImageOverride=${{ matrix.assigned_os }}
     steps:
     - name: Checkout microsoft/msquic
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      uses: actions/checkout@v5
       with:
         repository: microsoft/msquic
         ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
     - name: Checkout code
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      uses: actions/checkout@v5
       with:
         path: netperfrepo
     - name: Prepares 1ES Machine
       if: ${{ matrix.env == 'azure' }}
       uses: ./netperfrepo/.github/actions/prepare-1es-machine
     - name: Download Artifacts
-      uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+      uses: actions/download-artifact@v8
       with:
         name: Release-${{env.OS}}-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}${{ matrix.iouring }}-Perf
         path: artifacts
     - name: Download Kernel Artifacts
-      uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+      uses: actions/download-artifact@v8
       if: ${{ matrix.io == 'wsk' }}
       with:
         name: Release-winkernel-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}
@@ -246,20 +246,20 @@ jobs:
         syncer_secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
     - name: Upload Test Results JSON
       if: ${{ always() }}
-      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      uses: actions/upload-artifact@v4
       with:
         name: json-test-results-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}.json
         path: json-test-results-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}.json
     - name: Upload Logs
       if: ${{ always() }}
-      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      uses: actions/upload-artifact@v4
       with:
         name: logs-${{ matrix.env }}-${{ matrix.role }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
         path: artifacts/logs
         if-no-files-found: ignore
     - name: Upload Full Latency Curves
       if: ${{ always() }}
-      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      uses: actions/upload-artifact@v4
       with:
         name: latency-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
         path: latency.txt
@@ -285,25 +285,25 @@ jobs:
     - ${{ matrix.assigned_lab_vm_runner_tag }}
     steps:
     - name: Checkout microsoft/msquic
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      uses: actions/checkout@v5
       with:
         repository: microsoft/msquic
         ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
     - name: Checkout code
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      uses: actions/checkout@v5
       with:
         path: netperfrepo
     - name: Lowercase runner.os
       shell: pwsh
       run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
     - name: Download Kernel Drivers
-      uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+      uses: actions/download-artifact@v8
       if: ${{ matrix.io == 'wsk' }}
       with:
         name: Release-winkernel-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}
         path: artifacts
     - name: Download Artifacts
-      uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+      uses: actions/download-artifact@v8
       with:
         name: Release-${{env.OS}}-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-Perf
         path: artifacts
@@ -331,20 +331,20 @@ jobs:
           -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
     - name: Upload Test Results JSON
       if: ${{ always() }}
-      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      uses: actions/upload-artifact@v4
       with:
         name: json-test-results-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}.json
         path: json-test-results-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}.json
     - name: Upload Logs
       if: ${{ always() }}
-      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      uses: actions/upload-artifact@v4
       with:
         name: logs-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
         path: artifacts/logs
         if-no-files-found: ignore
     - name: Upload Full Latency Curves
       if: ${{ always() }}
-      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      uses: actions/upload-artifact@v4
       with:
         name: latency-${{ matrix.env }}-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-${{ matrix.io }}
         path: latency.txt
@@ -382,8 +382,8 @@ jobs:
     continue-on-error: true
     steps:
     - name: Checkout repository
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
-    - uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+      uses: actions/checkout@v5
+    - uses: actions/download-artifact@v8
       with:
         path: artifacts/logs
         pattern: json-test-results-*
@@ -398,14 +398,14 @@ jobs:
     needs: [run-secnetperf, run-secnetperf-1es] # TODO: Add 'observe-lab' once we fully transition to a stateless lab.
     strategy:
       fail-fast: false
-    runs-on: 'ubuntu-22.04'
+    runs-on: 'ubuntu-25.04'
     steps:
     - name: Checkout repository
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      uses: actions/checkout@v5
       with:
         repository: microsoft/netperf
         ref: sqlite
-    - uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+    - uses: actions/download-artifact@v8
       with:
         pattern: json-test-results-*
     - name: Remove deprecated python scripts
@@ -422,7 +422,7 @@ jobs:
         mv historical*.json history_pages
     - run: ls
     - name: Upload history pages
-      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
+      uses: actions/upload-artifact@v4
       with:
         name: history_pages
         path: history_pages
@@ -437,15 +437,15 @@ jobs:
     needs: [save-test-results]
     strategy:
       fail-fast: false
-    runs-on: 'ubuntu-22.04'
+    runs-on: 'ubuntu-25.04'
     steps:
     - name: Checkout repository
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      uses: actions/checkout@v5
       with:
         repository: microsoft/netperf
         ref: deploy
     - run: 'rm -rf *.json'
-    - uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+    - uses: actions/download-artifact@v8
       with:
         name: history_pages
         path: history_pages
@@ -454,7 +454,7 @@ jobs:
       run: |
         mv history_pages/*.json .
         rm -rf history_pages
-    - uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+    - uses: actions/download-artifact@v8
       with:
         pattern: "json-test-results-*"
     - run: ls
@@ -469,10 +469,10 @@ jobs:
     continue-on-error: true
     strategy:
       fail-fast: false
-    runs-on: 'ubuntu-22.04'
+    runs-on: 'ubuntu-25.04'
     steps:
     - name: Checkout repository
-      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      uses: actions/checkout@v5
       with:
         repository: microsoft/netperf
         ref: sqlite
