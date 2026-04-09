@@ -102,7 +102,7 @@ if ($GitHubToken -and $Password) {
     Write-Host "Installing GitHub Runner."
     mkdir C:\actions-runner | Out-Null
     Set-Location C:\actions-runner
-    $RunnerVersion = "2.313.0"
+    $RunnerVersion = "2.333.0"
     $RunnerName = "actions-runner-win-x64-$RunnerVersion.zip"
     Invoke-WebRequest -Uri "https://github.com/actions/runner/releases/download/v$RunnerVersion/$RunnerName" -OutFile $RunnerName
     Add-Type -AssemblyName System.IO.Compression.FileSystem ; [System.IO.Compression.ZipFile]::ExtractToDirectory("$PWD/$RunnerName", "$PWD")

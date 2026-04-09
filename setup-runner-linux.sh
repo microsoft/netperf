@@ -107,10 +107,10 @@ else
 
 
   # Download the latest runner package
-  curl -o $HOME/actions-runner/actions-runner-linux-x64-2.312.0.tar.gz -L https://github.com/actions/runner/releases/download/v2.312.0/actions-runner-linux-x64-2.312.0.tar.gz
+  curl -o $HOME/actions-runner/actions-runner-linux-x64-2.333.0.tar.gz -L https://github.com/actions/runner/releases/download/v2.333.0/actions-runner-linux-x64-2.333.0.tar.gz
 
   echo "Attempting to tar the actions runner"
-  tar xzf $HOME/actions-runner/actions-runner-linux-x64-2.312.0.tar.gz -C $HOME/actions-runner
+  tar xzf $HOME/actions-runner/actions-runner-linux-x64-2.333.0.tar.gz -C $HOME/actions-runner
 
   # chown the actions runner
   sudo chown -R $username $HOME/actions-runner
