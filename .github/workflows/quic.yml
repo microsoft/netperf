@@ -1,4 +1,4 @@
-name: quic-regression
+name: QUIC
 
 on:
   workflow_call:
@@ -182,24 +182,24 @@ jobs:
     runs-on: ${{ fromJson(format('[''self-hosted'', ''1ES.Pool={0}'', ''1ES.ImageOverride={1}'', ''JobId=quic-{2}-{3}-{4}-{5}-{6}-{7}-{8}'']', matrix.assigned_pool, matrix.assigned_os, matrix.os, matrix.io, matrix.role, matrix.tls, matrix.arch, github.run_id, github.run_attempt)) }}
     steps:
     - name: Checkout microsoft/msquic
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         repository: microsoft/msquic
         ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         path: netperfrepo
     - name: Prepares 1ES Machine
       if: ${{ matrix.env == 'azure' }}
       uses: ./netperfrepo/.github/actions/prepare-1es-machine
     - name: Download Artifacts
-      uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+      uses: actions/download-artifact@v7
       with:
         name: Release-${{env.OS}}-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}${{ matrix.iouring }}-Perf
         path: artifacts
     - name: Download Kernel Artifacts
-      uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+      uses: actions/download-artifact@v7
       if: ${{ matrix.io == 'wsk' }}
       with:
         name: Release-winkernel-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}
@@ -275,25 +275,25 @@ jobs:
     - ${{ matrix.assigned_lab_vm_runner_tag }}
     steps:
     - name: Checkout microsoft/msquic
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         repository: microsoft/msquic
         ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         path: netperfrepo
     - name: Lowercase runner.os
       shell: pwsh
       run: echo "OS=$('${{runner.os}}'.ToLower())" >> $env:GITHUB_ENV
     - name: Download Kernel Drivers
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v7
       if: ${{ matrix.io == 'wsk' }}
       with:
         name: Release-winkernel-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}
         path: artifacts
     - name: Download Artifacts
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v7
       with:
         name: Release-${{env.OS}}-${{ matrix.os == 'windows-2025' && 'windows-2022' || matrix.os }}-${{ matrix.arch }}-${{ matrix.tls }}-Perf
         path: artifacts
@@ -372,8 +372,8 @@ jobs:
     continue-on-error: true
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
-    - uses: actions/download-artifact@v4
+      uses: actions/checkout@v5
+    - uses: actions/download-artifact@v7
       with:
         path: artifacts/logs
         pattern: json-test-results-*
@@ -391,11 +391,11 @@ jobs:
     runs-on: 'ubuntu-24.04'
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         repository: microsoft/netperf
         ref: sqlite
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v7
       with:
         pattern: json-test-results-*
     - name: Remove deprecated python scripts
@@ -435,7 +435,7 @@ jobs:
         repository: microsoft/netperf
         ref: deploy
     - run: 'rm -rf *.json'
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v7
       with:
         name: history_pages
         path: history_pages
@@ -444,7 +444,7 @@ jobs:
       run: |
         mv history_pages/*.json .
         rm -rf history_pages
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v7
       with:
         pattern: "json-test-results-*"
     - run: ls
@@ -462,7 +462,7 @@ jobs:
     runs-on: 'ubuntu-24.04'
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         repository: microsoft/netperf
         ref: sqlite
