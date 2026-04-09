@@ -182,12 +182,12 @@ jobs:
     runs-on: ${{ fromJson(format('[''self-hosted'', ''1ES.Pool={0}'', ''1ES.ImageOverride={1}'', ''JobId=quic-{2}-{3}-{4}-{5}-{6}-{7}-{8}'']', matrix.assigned_pool, matrix.assigned_os, matrix.os, matrix.io, matrix.role, matrix.tls, matrix.arch, github.run_id, github.run_attempt)) }}
     steps:
     - name: Checkout microsoft/msquic
-      uses: actions/checkout@v5
+      uses: actions/checkout@v4
       with:
         repository: microsoft/msquic
         ref: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
     - name: Checkout code
-      uses: actions/checkout@v5
+      uses: actions/checkout@v4
       with:
         path: netperfrepo
     - name: Prepares 1ES Machine
