@@ -187,6 +187,44 @@ def singular_datapoint_method():
         with open('watermark_regression.json', 'w') as f:
             json.dump(watermark_regression_file, f, indent=4)
 
+def _compute_latency_upper_bound(test_run_results, test, context_label):
+    """Compute latency upper bounds (P0, P50, P99) for RPS tests.
+
+    Returns a dict with upper bounds, or None if computation isn't possible.
+    Prints descriptive diagnostics instead of swallowing errors silently.
+    """
+    num_results = len(test_run_results)
+
+    # Check that rows have the expected 5-tuple shape: (Result, commit, P0, P50, P99)
+    if num_results == 0:
+        return None
+
+    row_len = len(test_run_results[0])
+    if row_len < 5:
+        print(f"[{context_label}] Skipping latency upper bound for '{test}': "
+              f"expected 5 columns (Result, commit, P0, P50, P99) but rows have {row_len} columns.")
+        return None
+
+    p0 = [run_result[2] for run_result in test_run_results]
+    p50 = [run_result[3] for run_result in test_run_results]
+    p99 = [run_result[4] for run_result in test_run_results]
+
+    # Filter out None values from SQL AVG on NULL
+    p0 = [v for v in p0 if v is not None]
+    p50 = [v for v in p50 if v is not None]
+    p99 = [v for v in p99 if v is not None]
+
+    if len(p0) < 2 or len(p50) < 2 or len(p99) < 2:
+        print(f"[{context_label}] Skipping latency upper bound for '{test}': "
+              f"need >= 2 data points for stdev but got P0={len(p0)}, P50={len(p50)}, P99={len(p99)}.")
+        return None
+
+    return {
+        "P0": statistics.mean(p0) + 3 * statistics.stdev(p0),
+        "P50": statistics.mean(p50) + 3 * statistics.stdev(p50),
+        "P99": statistics.mean(p99) + 3 * statistics.stdev(p99),
+    }
+
 def compute_baseline_watermark(test_run_results, test):
     # Use a statistical approach to compute a baseline.
     """
@@ -207,22 +245,7 @@ def compute_baseline_watermark(test_run_results, test):
         "baseline" : None
     }
     if "rps" in test:
-        try:
-            p0 = [run_result[2] for run_result in test_run_results]
-            p50 = [run_result[3] for run_result in test_run_results]
-            p99 = [run_result[4] for run_result in test_run_results]
-
-            p0UpperBound = statistics.mean(p0) + 3 * statistics.stdev(p0)
-            p50UpperBound = statistics.mean(p50) + 3 * statistics.stdev(p50)
-            p99UpperBound = statistics.mean(p99) + 3 * statistics.stdev(p99)
-
-            baseline["latencyUpperBound"] = {
-                "P0": p0UpperBound,
-                "P50": p50UpperBound,
-                "P99": p99UpperBound
-            }
-        except:
-            print("Fatal error, expected P0, P50, P99 columns in test_run_results")
+        baseline["latencyUpperBound"] = _compute_latency_upper_bound(test_run_results, test, "watermark")
 
     max_result = 0
     max_result_commit = None
@@ -262,22 +285,7 @@ def compute_baseline(test_run_results, test):
     }
     if "rps" in test:
         # Compute upper bound for RPS as well.
-        try:
-            p0 = [run_result[2] for run_result in test_run_results]
-            p50 = [run_result[3] for run_result in test_run_results]
-            p99 = [run_result[4] for run_result in test_run_results]
-
-            p0UpperBound = statistics.mean(p0) + 3 * statistics.stdev(p0)
-            p50UpperBound = statistics.mean(p50) + 3 * statistics.stdev(p50)
-            p99UpperBound = statistics.mean(p99) + 3 * statistics.stdev(p99)
-
-            baseline["latencyUpperBound"] = {
-                "P0": p0UpperBound,
-                "P50": p50UpperBound,
-                "P99": p99UpperBound
-            }
-        except:
-            print("Fatal error, expected P0, P50, P99 columns in test_run_results")
+        baseline["latencyUpperBound"] = _compute_latency_upper_bound(test_run_results, test, "baseline")
     mean = statistics.mean(results)
     if len(results) < 2:
         baseline["baseline"] = mean * 0.5
