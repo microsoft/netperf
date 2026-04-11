@@ -471,9 +471,13 @@ jobs:
         repository: microsoft/netperf
         ref: sqlite
     - run: ls
+    - name: Download test result artifacts
+      uses: actions/download-artifact@v7
+      with:
+        pattern: json-test-results-*
     - name: Fetch regression.py from current branch
       run: wget https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/pipeline/regression.py -O regression.py
-    - run: python regression.py --featureint 2
+    - run: python regression.py --featureint 1
     - name: Git commit
       if: ${{ (github.event_name == 'repository_dispatch' && github.event.client_payload.pr == '') || inputs.commit }}
       run: 'git config user.name "QUIC Dev[bot]" && git config user.email "quicdev@microsoft.com" && git add *.json && git commit -m "Update regression metrics" && git push'
