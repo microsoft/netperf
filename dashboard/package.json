@@ -41,7 +41,7 @@
     "react-hook-form": "^7.67.0",
     "react-router-dom": "^7.12.0",
     "simplebar-react": "^3.3.2",
-    "sql.js": "^1.13.0"
+    "sql.js": "^1.14.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react-swc": "^4.2.2",
