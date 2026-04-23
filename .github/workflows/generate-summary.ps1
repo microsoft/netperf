@@ -51,11 +51,10 @@ function Write-ThroughputRow {
         else { $row += " $(($Results[$i] / 1000000).ToString('F2')) |" }
     }
 
-    # TODO: Regression detection is heinously broken. Let's reduce the noise.
-    # $row += " " + $Regression.CumulativeResult + " |"
-    # $row += " " + $Regression.Baseline + " |"
-    # if ($Regression.BestResultCommit -eq "N/A") { $row += "N/A |" }
-    # else { $row += "[" + $Regression.BestResult + "](https://github.com/microsoft/msquic/commit/" + $Regression.BestResultCommit + ") |" }
+    $row += " " + $Regression.CumulativeResult + " |"
+    $row += " " + $Regression.Baseline + " |"
+    if ($Regression.BestResultCommit -eq "N/A") { $row += "N/A |" }
+    else { $row += "[" + $Regression.BestResult + "](https://github.com/microsoft/msquic/commit/" + $Regression.BestResultCommit + ") |" }
 
     $Script:markdown += $row
 }
@@ -79,11 +78,10 @@ function Write-HpsRow {
         else { $row += " $($Results[$i]) |" }
     }
 
-    # TODO: Regression detection is heinously broken. Let's reduce the noise.
-    # $row += " " + $Regression.CumulativeResult + " |"
-    # $row += " " + $Regression.Baseline + " |"
-    # if ($Regression.BestResultCommit -eq "N/A") { $row += "N/A |" }
-    # else { $row += "[" + $Regression.BestResult + "](https://github.com/microsoft/msquic/commit/" + $Regression.BestResultCommit + ") |" }
+    $row += " " + $Regression.CumulativeResult + " |"
+    $row += " " + $Regression.Baseline + " |"
+    if ($Regression.BestResultCommit -eq "N/A") { $row += "N/A |" }
+    else { $row += "[" + $Regression.BestResult + "](https://github.com/microsoft/msquic/commit/" + $Regression.BestResultCommit + ") |" }
 
     $Script:markdown += $row
 }
@@ -108,11 +106,10 @@ function Write-RpsRow {
             $row += " $($Results[$i+$j]) |"
         }
 
-        # TODO: Regression detection is heinously broken. Let's reduce the noise.
-        # $row += " " + $Regression.CumulativeResult + " |"
-        # $row += " " + $Regression.Baseline + " |"
-        # if ($Regression.BestResultCommit -eq "N/A") { $row += "N/A |" }
-        # else { $row += "[" + $Regression.BestResult + "](https://github.com/microsoft/msquic/commit/" + $Regression.BestResultCommit + ") |" }
+        $row += " " + $Regression.CumulativeResult + " |"
+        $row += " " + $Regression.Baseline + " |"
+        if ($Regression.BestResultCommit -eq "N/A") { $row += "N/A |" }
+        else { $row += "[" + $Regression.BestResult + "](https://github.com/microsoft/msquic/commit/" + $Regression.BestResultCommit + ") |" }
 
         $Script:markdown += $row
     }
@@ -131,8 +128,8 @@ $hasRegression = $false
 # Write the Upload table.
 $markdown = @"
 # Upload Throughput (Gbps)
-| Pass/Fail | Env | OS | Version | Arch | TLS | IO | Transport | Result 1 | Result 2 | Result 3 |
-| --------- | --- | -- | ------- | ---- | --- | -- | --------- | -------- | -------- | -------- |
+| Pass/Fail | Env | OS | Version | Arch | TLS | IO | Transport | Result 1 | Result 2 | Result 3 | Avg | Noise | Best Ever |
+| --------- | --- | -- | ------- | ---- | --- | -- | --------- | -------- | -------- | -------- | --- | ----- | --------- |
 "@
 foreach ($file in $files) {
     Write-Host "Upload Tput: Processing $file..."
@@ -180,8 +177,8 @@ foreach ($file in $files) {
 $markdown += @"
 `n
 # Download Throughput (Gbps)
-| Pass/Fail | Env | OS | Version | Arch | TLS | IO | Transport | Result 1 | Result 2 | Result 3 |
-| --------- | --- | -- | ------- | ---- | --- | -- | --------- | -------- | -------- | -------- |
+| Pass/Fail | Env | OS | Version | Arch | TLS | IO | Transport | Result 1 | Result 2 | Result 3 | Avg | Noise | Best Ever |
+| --------- | --- | -- | ------- | ---- | --- | -- | --------- | -------- | -------- | -------- | --- | ----- | --------- |
 "@
 foreach ($file in $files) {
     Write-Host "Download Tput: Processing $file..."
@@ -228,8 +225,8 @@ foreach ($file in $files) {
 $markdown += @"
 `n
 # Handshakes Per Second (HPS)
-| Pass/Fail | Env | OS | Version | Arch | TLS | IO | Transport | Result 1 | Result 2 | Result 3 |
-| --------- | --- | -- | ------- | ---- | --- | -- | --------- | -------- | -------- | -------- |
+| Pass/Fail | Env | OS | Version | Arch | TLS | IO | Transport | Result 1 | Result 2 | Result 3 | Avg | Noise | Best Ever |
+| --------- | --- | -- | ------- | ---- | --- | -- | --------- | -------- | -------- | -------- | --- | ----- | --------- |
 "@
 foreach ($file in $files) {
     Write-Host "HPS: Processing $file..."
@@ -275,8 +272,8 @@ foreach ($file in $files) {
 $markdown += @"
 `n
 # Request Per Second (RPS) and Latency (µs)
-| Pass/Fail | Env | OS | Version | Arch | TLS | IO | Transport | Min | P50 | P90 | P99 | P99.9 | P99.99 | P99.999 | P99.9999 | RPS |
-| --------- | --- | -- | ------- | ---- | --- | -- | --------- | --- | --- | --- | --- | ----- | ------ | ------- | -------- | --- |
+| Pass/Fail | Env | OS | Version | Arch | TLS | IO | Transport | Min | P50 | P90 | P99 | P99.9 | P99.99 | P99.999 | P99.9999 | RPS | Avg | Noise | Best Ever |
+| --------- | --- | -- | ------- | ---- | --- | -- | --------- | --- | --- | --- | --- | ----- | ------ | ------- | -------- | --- | --- | ----- | --------- |
 "@
 foreach ($file in $files) {
     # TODO: Right now, we are not using a watermark based method for regression detection of latency percentile values because we don't know how to determine a "Best Ever" distribution.
