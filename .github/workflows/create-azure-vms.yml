@@ -58,19 +58,19 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v2
     - name: Login to Azure
-      uses: azure/login@v2
+      uses: azure/login@v3
       with:
         client-id: ${{ secrets.AZURE_CLIENT_ID }}
         tenant-id: ${{ secrets.AZURE_TENANT_ID }}
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         enable-AzPSSession: true
     - name: Run manage-azure-vms.ps1
-      uses: azure/powershell@v2
+      uses: azure/powershell@v3
       with:
         inlineScript: ./.github/workflows/manage-azure-vms.ps1 -GithubPatToken ${{ secrets.PERSONAL_ACCESS_TOKEN }} -MatrixFileName ${{ inputs.matrix_filename }}
         azPSVersion: '11.5.0'
     - name: Create Azure VMs
-      uses: azure/powershell@v2
+      uses: azure/powershell@v3
       with:
         inlineScript: |
           ./.github/workflows/create-azure-machines.ps1 -Password ${{ secrets.VM_PASSWORD }} -GithubPatToken ${{ secrets.PERSONAL_ACCESS_TOKEN }} -WorkflowId ${{ inputs.workflowId }}

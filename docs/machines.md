@@ -184,6 +184,18 @@ sudo ip addr add $CLIENTIP dev eth1 # make sure eth1 is indeed the netadapter wi
 
 ```
 
+On Ubuntu, you can use /etc/netplan/50-cloud-init.yaml to configure a startup YAML that will pre-set the IP addresses for you. It looks like:
+
+```yaml
+network:
+  version: 2
+  ethernets:
+    eth1:
+      dhcp4: no
+      addresses:
+        - 192.168.0.13/24
+```
+
 ```Shell
 # Run on peer machine
 curl https://raw.githubusercontent.com/microsoft/netperf/main/setup-runner-linux.sh -o setup-runner-linux.sh

@@ -179,10 +179,7 @@ jobs:
       matrix:
         include: ${{fromJson(needs.prepare-matrix.outputs.azure-matrix)}}
     continue-on-error: ${{ matrix.optional == 'TRUE' }}
-    runs-on:
-    - self-hosted
-    - 1ES.Pool=${{ matrix.assigned_pool }}
-    - 1ES.ImageOverride=${{ matrix.assigned_os }}
+    runs-on: ${{ fromJson(format('[''self-hosted'', ''1ES.Pool={0}'', ''1ES.ImageOverride={1}'', ''JobId=quic-{2}-{3}-{4}-{5}-{6}-{7}-{8}'']', matrix.assigned_pool, matrix.assigned_os, matrix.os, matrix.io, matrix.role, matrix.tls, matrix.arch, github.run_id, github.run_attempt)) }}
     steps:
     - name: Checkout microsoft/msquic
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11

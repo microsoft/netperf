@@ -43,8 +43,8 @@ jobs:
           try {
             Invoke-WebRequest -Uri $url -Headers $headers -Method Post -Body $body
           } catch {
-            Write-Host "[DispatchCallee] Failed to dispatch callee: $_"
-            exit 1
+            Write-Warning "[DispatchCallee] Failed to dispatch callee (best-effort): $($_.Exception.Message)"
+            Write-Warning "[DispatchCallee] Full error: $_"
           }
         }
 

@@ -78,6 +78,7 @@ jobs:
   do-reset-all-active:
     name: Reset all active lab machines
     if: ${{ inputs.reset-all-active == true || github.event_name == 'schedule' || github.event_name == 'repository_dispatch' }}
+    timeout-minutes: 8
     needs: sanity-check
     strategy:
       fail-fast: false
@@ -95,7 +96,7 @@ jobs:
           { parent-or-child: "parent=rr1-netperf-07\\localadminuser",    vm-name: "netperf-windows-2022-client" },
           { parent-or-child: "child=rr1-netperf-08\\localadminuser",     vm-name: "netperf-windows-2022-server" },
           { parent-or-child: "parent=rr1-netperf-09\\localadminuser",    vm-name: "netperf-windows-2022-client" },
-          { parent-or-child: "rr1-netperf-15",                           vm-name: "kernel-bvt-runner" },
+          # { parent-or-child: "rr1-netperf-15",                           vm-name: "kernel-bvt-runner" },
           { parent-or-child: "child=rr1-netperf-11\\localadminuser",     vm-name: "netperf-ubuntu-server" },
           { parent-or-child: "parent=rr1-netperf-12\\localadminuser",    vm-name: "netperf-ubuntu-client" }
         ]
@@ -127,6 +128,7 @@ jobs:
     name: Reset parent or child Machine
     if: ${{ inputs.reset-all-active == false && github.event_name != 'schedule' && github.event_name != 'repository_dispatch' }}
     needs: sanity-check
+    timeout-minutes: 8
     runs-on:
       - self-hosted
       - ${{ inputs.parent-or-child }}
