@@ -126,6 +126,8 @@ $localCertThumbprint = $null
 $remoteCertThumbprint = $null
 $script:localCertStoreLocation = 'CurrentUser'
 $script:remoteCertStoreLocation = 'CurrentUser'
+$script:driverCodeSigningThumbprint = $null
+$script:driverCodeSigningCerPath = $null
 
 function Write-Phase {
   param([Parameter(Mandatory=$true)][string]$Message)
@@ -159,6 +161,76 @@ function Get-QuicEchoKmDriverPath {
   }
 
   return $driverPath
+}
+
+function Test-LocalTestSigningEnabled {
+  $output = (& bcdedit /enum '{current}' 2>$null | Out-String)
+  return $output -match '(?im)^\s*testsigning\s+Yes\s*$'
+}
+
+function Test-RemoteTestSigningEnabled {
+  param([Parameter(Mandatory=$true)]$Session)
+
+  return Invoke-Command -Session $Session -ScriptBlock {
+    $output = (& bcdedit /enum '{current}' 2>$null | Out-String)
+    return ($output -match '(?im)^\s*testsigning\s+Yes\s*$')
+  } -ErrorAction Stop
+}
+
+function Get-SignToolPath {
+  $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter 'signtool.exe' -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -match '\\x64\\signtool\.exe$' } |
+    Sort-Object FullName -Descending |
+    Select-Object -First 1
+
+  if (-not $signtool) {
+    throw 'signtool.exe not found under the Windows Kits installation.'
+  }
+
+  return $signtool.FullName
+}
+
+function Prepare-WinQuicEchoKmDriver {
+  param(
+    [Parameter(Mandatory=$true)]$Session,
+    [Parameter(Mandatory=$true)][string]$DriverSourcePath,
+    [Parameter(Mandatory=$true)][string]$RemoteDir
+  )
+
+  if (-not (Test-LocalTestSigningEnabled)) {
+    throw 'Local machine does not have test signing enabled. Enable it with "bcdedit /set testsigning on" and reboot.'
+  }
+  if (-not (Test-RemoteTestSigningEnabled -Session $Session)) {
+    throw 'Remote machine does not have test signing enabled. Enable it with "bcdedit /set testsigning on" and reboot.'
+  }
+
+  $signtoolPath = Get-SignToolPath
+
+  $codeCert = New-SelfSignedCertificate `
+    -Type CodeSigningCert `
+    -Subject 'CN=WinQuicEcho Netperf Test' `
+    -CertStoreLocation 'Cert:\LocalMachine\My' `
+    -NotAfter (Get-Date).AddHours(2)
+  $script:driverCodeSigningThumbprint = $codeCert.Thumbprint
+  $script:driverCodeSigningCerPath = Join-Path $env:TEMP "winquicecho_netperf_$($codeCert.Thumbprint).cer"
+
+  Export-Certificate -Cert $codeCert -FilePath $script:driverCodeSigningCerPath -Force | Out-Null
+  certutil -addstore Root $script:driverCodeSigningCerPath | Out-Null
+  certutil -addstore TrustedPublisher $script:driverCodeSigningCerPath | Out-Null
+
+  Write-Phase "Signing WinQuicEcho kernel driver with temporary test certificate $script:driverCodeSigningThumbprint"
+  & $signtoolPath sign /v /fd sha256 /sm /s My /sha1 $script:driverCodeSigningThumbprint $DriverSourcePath
+  if ($LASTEXITCODE -ne 0) {
+    throw "signtool failed with exit code $LASTEXITCODE"
+  }
+
+  $remoteCerPath = Join-Path (Join-Path $RemoteDir 'quic_echo') 'km\winquicecho_km.cer'
+  Copy-Item -ToSession $Session -Path $script:driverCodeSigningCerPath -Destination $remoteCerPath -Force
+  Invoke-Command -Session $Session -ArgumentList $remoteCerPath -ScriptBlock {
+    param($cerPath)
+    certutil -addstore Root $cerPath | Out-Null
+    certutil -addstore TrustedPublisher $cerPath | Out-Null
+  } -ErrorAction Stop
 }
 
 function Install-LocalWinQuicEchoKmDriver {
@@ -670,6 +742,7 @@ try {
   if ($receiverBackend -eq 'msquic-km') {
     $kmDriverPath = Get-QuicEchoKmDriverPath
     Write-Phase "Receiver backend is msquic-km; installing WinQuicEcho kernel driver locally and remotely"
+    Prepare-WinQuicEchoKmDriver -Session $Session -DriverSourcePath $kmDriverPath -RemoteDir $script:RemoteDir
     Install-LocalWinQuicEchoKmDriver -DriverSourcePath $kmDriverPath
     Install-RemoteWinQuicEchoKmDriver -Session $Session -DriverSourcePath $kmDriverPath -RemoteDir $script:RemoteDir
   }
@@ -812,6 +885,22 @@ finally {
     Remove-QuicDevCert -Thumbprint $localCertThumbprint -StoreLocation $script:localCertStoreLocation
     if ($Session) {
       Remove-RemoteQuicDevCert -Session $Session -Thumbprint $remoteCertThumbprint -StoreLocation $script:remoteCertStoreLocation
+    }
+
+    if ($script:driverCodeSigningThumbprint) {
+      certutil -delstore Root $script:driverCodeSigningThumbprint 2>$null | Out-Null
+      certutil -delstore TrustedPublisher $script:driverCodeSigningThumbprint 2>$null | Out-Null
+      certutil -delstore My $script:driverCodeSigningThumbprint 2>$null | Out-Null
+      if ($Session) {
+        Invoke-Command -Session $Session -ArgumentList $script:driverCodeSigningThumbprint -ScriptBlock {
+          param($thumbprint)
+          certutil -delstore Root $thumbprint 2>$null | Out-Null
+          certutil -delstore TrustedPublisher $thumbprint 2>$null | Out-Null
+        } -ErrorAction SilentlyContinue
+      }
+    }
+    if ($script:driverCodeSigningCerPath -and (Test-Path -LiteralPath $script:driverCodeSigningCerPath)) {
+      Remove-Item -LiteralPath $script:driverCodeSigningCerPath -Force -ErrorAction SilentlyContinue
     }
 
     Restore-FirewallAndCleanup -Session $Session
