@@ -249,6 +249,10 @@ function Invoke-ToolInSession {
     }
     Write-Host "[Remote] OptionsJson raw: $OptionsJson"
 
+    if ($Options -is [System.Array] -and $Options.Count -eq 1 -and $Options[0] -is [System.Array]) {
+      $Options = $Options[0]
+    }
+
     # Resolve tool path: platform-agnostic using Join-Path
     $toolDir = Join-Path $RemoteDir $ToolDir
     Set-Location $toolDir
@@ -284,16 +288,9 @@ function Invoke-ToolInSession {
         Write-Host "[Remote] Starting tool as background job for timeout control..."
         $jobScript = {
           param($ToolPath, $ArgList)
-          while ($ArgList -is [System.Collections.IEnumerable] -and $ArgList -isnot [string]) {
-            $normalizedArgList = @($ArgList)
-            if ($normalizedArgList.Count -eq 1 -and
-                $normalizedArgList[0] -is [System.Collections.IEnumerable] -and
-                $normalizedArgList[0] -isnot [string]) {
-              $ArgList = $normalizedArgList[0]
-              continue
-            }
-            $ArgList = $normalizedArgList
-            break
+          if ($ArgList -is [System.Array] -and $ArgList.Count -eq 1 -and $ArgList[0] -is [System.Array]) {
+            $ArgList = $ArgList[0]
+          }
           }
           if ($ArgList -is [System.Array]) {
             & $ToolPath @ArgList
