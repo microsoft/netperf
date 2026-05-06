@@ -232,8 +232,16 @@ function Invoke-ToolInSession {
   $Job = Invoke-Command -Session $Session -ScriptBlock {
     param($RemoteDir, $ToolDir, $ToolName, $Options, $WaitSeconds)
 
-    if ($Options -is [System.Array] -and $Options.Count -eq 1 -and $Options[0] -is [System.Array]) {
-      $Options = $Options[0]
+    while ($Options -is [System.Collections.IEnumerable] -and $Options -isnot [string]) {
+      $normalizedOptions = @($Options)
+      if ($normalizedOptions.Count -eq 1 -and
+          $normalizedOptions[0] -is [System.Collections.IEnumerable] -and
+          $normalizedOptions[0] -isnot [string]) {
+        $Options = $normalizedOptions[0]
+        continue
+      }
+      $Options = $normalizedOptions
+      break
     }
 
     # Resolve tool path: platform-agnostic using Join-Path
@@ -277,8 +285,16 @@ function Invoke-ToolInSession {
         Write-Host "[Remote] Starting tool as background job for timeout control..."
         $jobScript = {
           param($ToolPath, $ArgList)
-          if ($ArgList -is [System.Array] -and $ArgList.Count -eq 1 -and $ArgList[0] -is [System.Array]) {
-            $ArgList = $ArgList[0]
+          while ($ArgList -is [System.Collections.IEnumerable] -and $ArgList -isnot [string]) {
+            $normalizedArgList = @($ArgList)
+            if ($normalizedArgList.Count -eq 1 -and
+                $normalizedArgList[0] -is [System.Collections.IEnumerable] -and
+                $normalizedArgList[0] -isnot [string]) {
+              $ArgList = $normalizedArgList[0]
+              continue
+            }
+            $ArgList = $normalizedArgList
+            break
           }
           if ($ArgList -is [System.Array]) {
             & $ToolPath @ArgList
