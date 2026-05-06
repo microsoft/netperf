@@ -189,11 +189,11 @@ function Get-SignToolPath {
     Sort-Object FullName -Descending |
     Select-Object -First 1
 
-  if (-not $signtool) {
-    throw 'signtool.exe not found under the Windows Kits installation.'
+  if ($signtool) {
+    return $signtool.FullName
   }
 
-  return $signtool.FullName
+  return $null
 }
 
 function Prepare-WinQuicEchoKmDriver {
@@ -225,9 +225,18 @@ function Prepare-WinQuicEchoKmDriver {
   certutil -addstore TrustedPublisher $script:driverCodeSigningCerPath | Out-Null
 
   Write-Phase "Signing WinQuicEcho kernel driver with temporary test certificate $script:driverCodeSigningThumbprint"
-  & $signtoolPath sign /v /fd sha256 /sm /s My /sha1 $script:driverCodeSigningThumbprint $DriverSourcePath
-  if ($LASTEXITCODE -ne 0) {
-    throw "signtool failed with exit code $LASTEXITCODE"
+  if ($signtoolPath) {
+    & $signtoolPath sign /v /fd sha256 /sm /s My /sha1 $script:driverCodeSigningThumbprint $DriverSourcePath
+    if ($LASTEXITCODE -ne 0) {
+      throw "signtool failed with exit code $LASTEXITCODE"
+    }
+  }
+  else {
+    Write-Phase 'signtool.exe not found; falling back to Set-AuthenticodeSignature'
+    $signature = Set-AuthenticodeSignature -FilePath $DriverSourcePath -Certificate $codeCert -HashAlgorithm SHA256
+    if ($signature.Status -ne 'Valid') {
+      throw "Set-AuthenticodeSignature failed with status $($signature.Status): $($signature.StatusMessage)"
+    }
   }
 
   $remoteCerPath = Join-Path (Join-Path $RemoteDir 'quic_echo') 'km\winquicecho_km.cer'
