@@ -234,6 +234,12 @@ function Prepare-WinQuicEchoKmDriver {
   }
 
   $remoteCerPath = Join-Path (Join-Path $RemoteDir 'quic_echo') 'km\winquicecho_km.cer'
+  Invoke-Command -Session $Session -ArgumentList (Split-Path -Parent $remoteCerPath) -ScriptBlock {
+    param($remoteKmDir)
+    if (-not (Test-Path -LiteralPath $remoteKmDir)) {
+      New-Item -ItemType Directory -Path $remoteKmDir -Force | Out-Null
+    }
+  } -ErrorAction Stop
   Copy-Item -ToSession $Session -Path $script:driverCodeSigningCerPath -Destination $remoteCerPath -Force
   Invoke-Command -Session $Session -ArgumentList $remoteCerPath -ScriptBlock {
     param($cerPath)
