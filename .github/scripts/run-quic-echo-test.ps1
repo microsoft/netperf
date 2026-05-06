@@ -567,7 +567,7 @@ function Run-SendTest {
   # Server runs on remote — add cert-hash for the remote cert
   $serverArgs = Convert-ArgStringToArray $ReceiverOptions
   $serverArgs = Normalize-Args -Tokens $serverArgs
-  $serverArgs += @('--cert-hash', $RemoteCertThumbprint, '--verbose')
+  $serverArgs += @('--cert-hash', $RemoteCertThumbprint)
   Write-Host "[Local->Remote] Invoking remote echo_server with arguments:"
   if ($serverArgs -is [System.Array]) { foreach ($arg in $serverArgs) { Write-Host "  $arg" } } else { Write-Host "  $serverArgs" }
   $Job = Invoke-ToolInSession -Session $Session -RemoteDir $script:RemoteDir -ToolDir 'quic_echo' -ToolName "echo_server" -Options $serverArgs -WaitSeconds 0
@@ -588,7 +588,7 @@ function Run-SendTest {
     # Client runs locally
     $clientArgs = Convert-ArgStringToArray $SenderOptions
     $clientArgs = Normalize-Args -Tokens $clientArgs
-    $clientArgs += @('--stats-file', 'quic_echo_client_stats.json', '--verbose')
+    $clientArgs += @('--stats-file', 'quic_echo_client_stats.json')
 
     Write-Host "[Local] Running: .\echo_client.exe"
     Write-Host "[Local] Arguments:"
@@ -643,7 +643,7 @@ function Run-RecvTest {
   # Server runs locally — start first so it's listening before the client connects
   $serverArgs = Convert-ArgStringToArray $ReceiverOptions
   $serverArgs = Normalize-Args -Tokens $serverArgs
-  $serverArgs += @('--cert-hash', $LocalCertThumbprint, '--verbose')
+  $serverArgs += @('--cert-hash', $LocalCertThumbprint)
 
   Write-Host "[Local] Running: .\echo_server.exe (background process)"
   Write-Host "[Local] Arguments:"
@@ -660,7 +660,7 @@ function Run-RecvTest {
     # Client runs on remote
     $clientArgs = Convert-ArgStringToArray $SenderOptions
     $clientArgs = Normalize-Args -Tokens $clientArgs
-    $clientArgs += @('--verbose')
+    # No --verbose: it logs per-datagram events, throttling throughput via I/O backpressure
     Write-Host "[Local->Remote] Invoking remote echo_client with arguments:"
     if ($clientArgs -is [System.Array]) { foreach ($arg in $clientArgs) { Write-Host "  $arg" } } else { Write-Host "  $clientArgs" }
     $Job = Invoke-ToolInSession -Session $Session -RemoteDir $script:RemoteDir -ToolDir 'quic_echo' -ToolName "echo_client" -Options $clientArgs -WaitSeconds 0
