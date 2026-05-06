@@ -425,6 +425,7 @@ jobs:
     with:
       artifact_name: quic_echo_test
       config: 'Release'
+      repository: 'Alan-Jowett/WinQuicEcho'
       # Pinned to the same audited commit as the workflow ref to prevent
       # arbitrary code execution via user-controlled inputs.
       ref: '53cd6c01279eb789f6b52218121c248088a0d608'
