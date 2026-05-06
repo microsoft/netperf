@@ -232,6 +232,10 @@ function Invoke-ToolInSession {
   $Job = Invoke-Command -Session $Session -ScriptBlock {
     param($RemoteDir, $ToolDir, $ToolName, $Options, $WaitSeconds)
 
+    if ($Options -is [System.Array] -and $Options.Count -eq 1 -and $Options[0] -is [System.Array]) {
+      $Options = $Options[0]
+    }
+
     # Resolve tool path: platform-agnostic using Join-Path
     $toolDir = Join-Path $RemoteDir $ToolDir
     Set-Location $toolDir
@@ -273,6 +277,9 @@ function Invoke-ToolInSession {
         Write-Host "[Remote] Starting tool as background job for timeout control..."
         $jobScript = {
           param($ToolPath, $ArgList)
+          if ($ArgList -is [System.Array] -and $ArgList.Count -eq 1 -and $ArgList[0] -is [System.Array]) {
+            $ArgList = $ArgList[0]
+          }
           if ($ArgList -is [System.Array]) {
             & $ToolPath @ArgList
           }
@@ -285,7 +292,7 @@ function Invoke-ToolInSession {
           return $LASTEXITCODE
         }
 
-        $j = Start-Job -ScriptBlock $jobScript -ArgumentList $Tool, $argList -ErrorAction Stop
+        $j = Start-Job -ScriptBlock $jobScript -ArgumentList $Tool, (,$argList) -ErrorAction Stop
         Write-Host "[Remote] Started job Id=$($j.Id)"
 
         # Wait-Job uses seconds for timeout
@@ -307,7 +314,7 @@ function Invoke-ToolInSession {
     catch {
       throw "Failed to launch or monitor process $Tool $($_.Exception.Message)"
     }
-  } -ArgumentList $RemoteDir, $ToolDir, $ToolName, $Options, $WaitSeconds -AsJob -ErrorAction Stop
+  } -ArgumentList $RemoteDir, $ToolDir, $ToolName, (,$Options), $WaitSeconds -AsJob -ErrorAction Stop
 
   return $Job
 }
