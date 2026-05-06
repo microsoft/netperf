@@ -124,10 +124,31 @@ $script:perfCounterJob = $null
 $localFwState = $null
 $localCertThumbprint = $null
 $remoteCertThumbprint = $null
+$script:localCertStoreLocation = 'CurrentUser'
+$script:remoteCertStoreLocation = 'CurrentUser'
 
 function Write-Phase {
   param([Parameter(Mandatory=$true)][string]$Message)
   Write-Host "[$(Get-Date -Format o)] $Message"
+}
+
+function Test-IsAdministrator {
+  $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+  $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+  return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Get-ReceiverBackend {
+  param([Parameter(Mandatory=$true)][string]$Options)
+
+  $tokens = Normalize-Args -Tokens (Convert-ArgStringToArray $Options)
+  for ($i = 0; $i -lt $tokens.Count; $i++) {
+    if ($tokens[$i] -eq '--backend' -and ($i + 1) -lt $tokens.Count) {
+      return $tokens[$i + 1]
+    }
+  }
+
+  return 'msquic'
 }
 
 function Wait-JobWithProgress {
@@ -162,23 +183,34 @@ function Wait-JobWithProgress {
 function New-QuicDevCert {
   <#
     .SYNOPSIS
-    Creates a self-signed certificate for WinQuicEcho in the CurrentUser\My store
+    Creates a self-signed certificate for WinQuicEcho in the requested cert store
     and returns the thumbprint. Cleans up any stale certs from prior runs first.
   #>
+  param(
+    [ValidateSet('CurrentUser', 'LocalMachine')]
+    [string]$StoreLocation = 'CurrentUser'
+  )
+
+  if ($StoreLocation -eq 'LocalMachine' -and -not (Test-IsAdministrator)) {
+    throw "LocalMachine certificate store access requires administrator privileges."
+  }
+
+  $certStorePath = "Cert:\$StoreLocation\My"
+
   # Remove stale certs from interrupted prior runs
-  Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.FriendlyName -eq 'WinQuicEcho Dev Cert' } | ForEach-Object {
+  Get-ChildItem $certStorePath | Where-Object { $_.FriendlyName -eq 'WinQuicEcho Dev Cert' } | ForEach-Object {
     Write-Host "Removing stale local dev cert: $($_.Thumbprint)"
-    Remove-Item "Cert:\CurrentUser\My\$($_.Thumbprint)" -Force -ErrorAction SilentlyContinue
+    Remove-Item "$certStorePath\$($_.Thumbprint)" -Force -ErrorAction SilentlyContinue
   }
   $cert = New-SelfSignedCertificate `
       -DnsName "localhost" `
-      -CertStoreLocation "Cert:\CurrentUser\My" `
+      -CertStoreLocation $certStorePath `
       -FriendlyName "WinQuicEcho Dev Cert" `
       -NotAfter (Get-Date).AddHours(2) `
       -KeyAlgorithm RSA `
       -KeyLength 2048 `
       -HashAlgorithm SHA256
-  Write-Host "Created dev certificate: $($cert.Thumbprint)"
+  Write-Host "Created dev certificate in ${StoreLocation}\My: $($cert.Thumbprint)"
   return $cert.Thumbprint
 }
 
@@ -189,17 +221,31 @@ function New-RemoteQuicDevCert {
     Returns the thumbprint. Cleans up stale certs from prior runs first.
   #>
   param(
-    [Parameter(Mandatory=$true)]$Session
+    [Parameter(Mandatory=$true)]$Session,
+    [ValidateSet('CurrentUser', 'LocalMachine')]
+    [string]$StoreLocation = 'CurrentUser'
   )
-  $thumbprint = Invoke-Command -Session $Session -ScriptBlock {
+  $thumbprint = Invoke-Command -Session $Session -ArgumentList $StoreLocation -ScriptBlock {
+    param($requestedStoreLocation)
+
+    if ($requestedStoreLocation -eq 'LocalMachine') {
+      $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+      $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+      if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        throw "Remote LocalMachine certificate store access requires administrator privileges."
+      }
+    }
+
+    $certStorePath = "Cert:\$requestedStoreLocation\My"
+
     # Remove stale certs from interrupted prior runs
-    Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.FriendlyName -eq 'WinQuicEcho Dev Cert' } | ForEach-Object {
+    Get-ChildItem $certStorePath | Where-Object { $_.FriendlyName -eq 'WinQuicEcho Dev Cert' } | ForEach-Object {
       Write-Host "Removing stale remote dev cert: $($_.Thumbprint)"
-      Remove-Item "Cert:\CurrentUser\My\$($_.Thumbprint)" -Force -ErrorAction SilentlyContinue
+      Remove-Item "$certStorePath\$($_.Thumbprint)" -Force -ErrorAction SilentlyContinue
     }
     $cert = New-SelfSignedCertificate `
         -DnsName "localhost" `
-        -CertStoreLocation "Cert:\CurrentUser\My" `
+        -CertStoreLocation $certStorePath `
         -FriendlyName "WinQuicEcho Dev Cert" `
         -NotAfter (Get-Date).AddHours(2) `
         -KeyAlgorithm RSA `
@@ -207,22 +253,26 @@ function New-RemoteQuicDevCert {
         -HashAlgorithm SHA256
     return $cert.Thumbprint
   }
-  Write-Host "Created remote dev certificate: $thumbprint"
+  Write-Host "Created remote dev certificate in ${StoreLocation}\My: $thumbprint"
   return $thumbprint
 }
 
 function Remove-QuicDevCert {
   <#
     .SYNOPSIS
-    Removes WinQuicEcho dev certificates from CurrentUser\My store by thumbprint.
+    Removes WinQuicEcho dev certificates from the requested store by thumbprint.
   #>
-  param([string]$Thumbprint)
+  param(
+    [string]$Thumbprint,
+    [ValidateSet('CurrentUser', 'LocalMachine')]
+    [string]$StoreLocation = 'CurrentUser'
+  )
   if ($Thumbprint) {
     try {
-      $certPath = "Cert:\CurrentUser\My\$Thumbprint"
+      $certPath = "Cert:\$StoreLocation\My\$Thumbprint"
       if (Test-Path $certPath) {
         Remove-Item $certPath -Force
-        Write-Host "Removed local dev certificate: $Thumbprint"
+        Write-Host "Removed local dev certificate from ${StoreLocation}\My: $Thumbprint"
       }
     } catch {
       Write-Warning "Failed to remove local dev certificate: $($_.Exception.Message)"
@@ -233,22 +283,24 @@ function Remove-QuicDevCert {
 function Remove-RemoteQuicDevCert {
   <#
     .SYNOPSIS
-    Removes WinQuicEcho dev certificates from the remote machine.
+    Removes WinQuicEcho dev certificates from the requested remote store.
   #>
   param(
     [Parameter(Mandatory=$true)]$Session,
-    [string]$Thumbprint
+    [string]$Thumbprint,
+    [ValidateSet('CurrentUser', 'LocalMachine')]
+    [string]$StoreLocation = 'CurrentUser'
   )
   if ($Thumbprint -and $Session) {
     try {
-      Invoke-Command -Session $Session -ArgumentList $Thumbprint -ScriptBlock {
-        param($tp)
-        $certPath = "Cert:\CurrentUser\My\$tp"
+      Invoke-Command -Session $Session -ArgumentList $Thumbprint, $StoreLocation -ScriptBlock {
+        param($tp, $requestedStoreLocation)
+        $certPath = "Cert:\$requestedStoreLocation\My\$tp"
         if (Test-Path $certPath) {
           Remove-Item $certPath -Force
         }
       }
-      Write-Host "Removed remote dev certificate: $Thumbprint"
+      Write-Host "Removed remote dev certificate from ${StoreLocation}\My: $Thumbprint"
     } catch {
       Write-Warning "Failed to remove remote dev certificate: $($_.Exception.Message)"
     }
@@ -323,6 +375,14 @@ function Run-SendTest {
     # Give the server a moment to start listening before the client connects
     Write-Phase "Waiting 5s for remote echo_server to initialize..."
     Start-Sleep -Seconds 5
+    if ($Job.State -ne 'Running') {
+      $null = Receive-Job $Job -Keep -ErrorAction SilentlyContinue
+      foreach ($cj in $Job.ChildJobs) {
+        foreach ($line in $cj.Output) { Write-Host "[Remote stdout] $line" }
+        foreach ($line in $cj.Error) { Write-Host "[Remote stderr] $line" }
+      }
+      throw "Remote echo_server exited during startup (State=$($Job.State))"
+    }
 
     # Client runs locally
     $clientArgs = Convert-ArgStringToArray $SenderOptions
@@ -515,8 +575,14 @@ try {
 
   # Generate dev certificates on both local and remote machines
   Write-Phase "Generating dev certificates for QUIC TLS"
-  $localCertThumbprint = New-QuicDevCert
-  $remoteCertThumbprint = New-RemoteQuicDevCert -Session $Session
+  $receiverBackend = Get-ReceiverBackend -Options $ReceiverOptions
+  if ($receiverBackend -eq 'msquic-km') {
+    $script:localCertStoreLocation = 'LocalMachine'
+    $script:remoteCertStoreLocation = 'LocalMachine'
+  }
+  Write-Phase "Receiver backend '$receiverBackend' will use local cert store '$script:localCertStoreLocation' and remote cert store '$script:remoteCertStoreLocation'"
+  $localCertThumbprint = New-QuicDevCert -StoreLocation $script:localCertStoreLocation
+  $remoteCertThumbprint = New-RemoteQuicDevCert -Session $Session -StoreLocation $script:remoteCertStoreLocation
 
   # ---- Send phase ----
   Write-Phase "Starting CPU/perf counter jobs (send phase)"
@@ -628,9 +694,9 @@ finally {
     }
 
     # Clean up dev certificates
-    Remove-QuicDevCert -Thumbprint $localCertThumbprint
+    Remove-QuicDevCert -Thumbprint $localCertThumbprint -StoreLocation $script:localCertStoreLocation
     if ($Session) {
-      Remove-RemoteQuicDevCert -Session $Session -Thumbprint $remoteCertThumbprint
+      Remove-RemoteQuicDevCert -Session $Session -Thumbprint $remoteCertThumbprint -StoreLocation $script:remoteCertStoreLocation
     }
 
     Restore-FirewallAndCleanup -Session $Session
