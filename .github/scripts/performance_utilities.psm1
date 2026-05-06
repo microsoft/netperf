@@ -229,20 +229,25 @@ function Invoke-ToolInSession {
   }
   if (-not $Options) { $Options = @() }
 
-  $Job = Invoke-Command -Session $Session -ScriptBlock {
-    param($RemoteDir, $ToolDir, $ToolName, $Options, $WaitSeconds)
+  # Serialize options as JSON so they survive PS remoting CLIXML
+  # serialization intact. Plain strings pass through reliably; arrays do not.
+  $optionsJson = if ($Options.Count -gt 0) {
+    @($Options) | ConvertTo-Json -Compress -AsArray
+  } else {
+    '[]'
+  }
+  Write-Host "[Local] Options type: $($Options.GetType().FullName), count: $(@($Options).Count)"
+  Write-Host "[Local] OptionsJson: $optionsJson"
 
-    while ($Options -is [System.Collections.IEnumerable] -and $Options -isnot [string]) {
-      $normalizedOptions = @($Options)
-      if ($normalizedOptions.Count -eq 1 -and
-          $normalizedOptions[0] -is [System.Collections.IEnumerable] -and
-          $normalizedOptions[0] -isnot [string]) {
-        $Options = $normalizedOptions[0]
-        continue
-      }
-      $Options = $normalizedOptions
-      break
+  $Job = Invoke-Command -Session $Session -ScriptBlock {
+    param($RemoteDir, $ToolDir, $ToolName, $OptionsJson, $WaitSeconds)
+
+    # Deserialize options from JSON — reliable regardless of PS remoting quirks
+    $Options = @()
+    if ($OptionsJson -and $OptionsJson -ne '[]') {
+      $Options = @(($OptionsJson | ConvertFrom-Json) | ForEach-Object { [string]$_ })
     }
+    Write-Host "[Remote] OptionsJson raw: $OptionsJson"
 
     # Resolve tool path: platform-agnostic using Join-Path
     $toolDir = Join-Path $RemoteDir $ToolDir
@@ -261,20 +266,14 @@ function Invoke-ToolInSession {
     }
 
     Write-Host "[Remote] Running: $Tool"
-    if ($Options -is [System.Array]) {
+    if ($Options -is [System.Array] -and $Options.Count -gt 0) {
       Write-Host "[Remote] Arguments (array, $($Options.Count) tokens):"
       foreach ($arg in $Options) { Write-Host "  $arg" }
       $argList = $Options
     }
     else {
-      # Options should always arrive as an array (parsed on local side).
-      # If PS remoting flattened it to a single string, treat it as one token.
-      Write-Host "[Remote] Arguments (single string token):"
-      Write-Host "  $Options"
+      Write-Host "[Remote] Arguments: (none)"
       $argList = @()
-      if (-not [string]::IsNullOrEmpty($Options)) {
-        $argList = @($Options)
-      }
     }
     
     try {
@@ -330,7 +329,7 @@ function Invoke-ToolInSession {
     catch {
       throw "Failed to launch or monitor process $Tool $($_.Exception.Message)"
     }
-  } -ArgumentList $RemoteDir, $ToolDir, $ToolName, (,$Options), $WaitSeconds -AsJob -ErrorAction Stop
+  } -ArgumentList $RemoteDir, $ToolDir, $ToolName, $optionsJson, $WaitSeconds -AsJob -ErrorAction Stop
 
   return $Job
 }

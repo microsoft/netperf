@@ -107,12 +107,18 @@ if ($Duration) {
 $script:processTimeoutMs = ($durationInt + 60) * 1000
 $script:jobTimeoutSec    = $durationInt + 120
 
+# The server (receiver) needs extra duration to stay alive while the client
+# completes its full run. The script waits $serverStartupDelaySec before
+# starting the client, so the server must run at least that much longer.
+$serverStartupDelaySec = 5
+$serverDuration = $durationInt + $serverStartupDelaySec + 5
+
 # Add duration option if not already present
 if ($SenderOptions -notmatch '--duration') {
   $SenderOptions += " --duration $durationInt"
 }
 if ($ReceiverOptions -notmatch '--duration') {
-  $ReceiverOptions += " --duration $durationInt"
+  $ReceiverOptions += " --duration $serverDuration"
 }
 
 $ErrorActionPreference = 'Stop'
