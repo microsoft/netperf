@@ -248,18 +248,9 @@ function Invoke-ToolInSession {
       $Options = @(($OptionsJson | ConvertFrom-Json) | ForEach-Object { [string]$_ })
     }
     Write-Host "[Remote] OptionsJson raw: $OptionsJson"
-
-    while ($Options -is [System.Collections.IEnumerable] -and $Options -isnot [string]) {
-      $normalizedOptions = @($Options)
-      if ($normalizedOptions.Count -eq 1 -and
-          $normalizedOptions[0] -is [System.Collections.IEnumerable] -and
-          $normalizedOptions[0] -isnot [string]) {
-        $Options = $normalizedOptions[0]
-        continue
-      }
-      $Options = $normalizedOptions
-      break
+      $Options = @(($OptionsJson | ConvertFrom-Json) | ForEach-Object { [string]$_ })
     }
+    Write-Host "[Remote] OptionsJson raw: $OptionsJson"
 
     # Resolve tool path: platform-agnostic using Join-Path
     $toolDir = Join-Path $RemoteDir $ToolDir
