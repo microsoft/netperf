@@ -107,12 +107,18 @@ if ($Duration) {
 $script:processTimeoutMs = ($durationInt + 60) * 1000
 $script:jobTimeoutSec    = $durationInt + 120
 
+# The server (receiver) needs extra duration to stay alive while the client
+# completes its full run. The script waits $serverStartupDelaySec before
+# starting the client, so the server must run at least that much longer.
+$serverStartupDelaySec = 5
+$serverDuration = $durationInt + $serverStartupDelaySec + 5
+
 # Add duration option if not already present
 if ($SenderOptions -notmatch '--duration') {
   $SenderOptions += " --duration $durationInt"
 }
 if ($ReceiverOptions -notmatch '--duration') {
-  $ReceiverOptions += " --duration $durationInt"
+  $ReceiverOptions += " --duration $serverDuration"
 }
 
 $ErrorActionPreference = 'Stop'
@@ -124,10 +130,226 @@ $script:perfCounterJob = $null
 $localFwState = $null
 $localCertThumbprint = $null
 $remoteCertThumbprint = $null
+$script:localCertStoreLocation = 'CurrentUser'
+$script:remoteCertStoreLocation = 'CurrentUser'
+$script:driverCodeSigningThumbprint = $null
+$script:driverCodeSigningCerPath = $null
 
 function Write-Phase {
   param([Parameter(Mandatory=$true)][string]$Message)
   Write-Host "[$(Get-Date -Format o)] $Message"
+}
+
+function Test-IsAdministrator {
+  $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+  $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+  return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Get-ReceiverBackend {
+  param([Parameter(Mandatory=$true)][string]$Options)
+
+  $tokens = Normalize-Args -Tokens (Convert-ArgStringToArray $Options)
+  for ($i = 0; $i -lt $tokens.Count; $i++) {
+    if ($tokens[$i] -eq '--backend' -and ($i + 1) -lt $tokens.Count) {
+      return $tokens[$i + 1]
+    }
+  }
+
+  return 'msquic'
+}
+
+function Get-QuicEchoKmDriverPath {
+  $toolRoot = Split-Path -Parent $scriptDir
+  $driverPath = Join-Path $toolRoot 'km\winquicecho_km.sys'
+  if (-not (Test-Path -LiteralPath $driverPath)) {
+    throw "Required kernel driver not found: $driverPath"
+  }
+
+  return $driverPath
+}
+
+function Test-LocalTestSigningEnabled {
+  $output = (& bcdedit /enum '{current}' 2>$null | Out-String)
+  return $output -match '(?im)^\s*testsigning\s+Yes\s*$'
+}
+
+function Test-RemoteTestSigningEnabled {
+  param([Parameter(Mandatory=$true)]$Session)
+
+  return Invoke-Command -Session $Session -ScriptBlock {
+    $output = (& bcdedit /enum '{current}' 2>$null | Out-String)
+    return ($output -match '(?im)^\s*testsigning\s+Yes\s*$')
+  } -ErrorAction Stop
+}
+
+function Get-SignToolPath {
+  $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter 'signtool.exe' -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -match '\\x64\\signtool\.exe$' } |
+    Sort-Object FullName -Descending |
+    Select-Object -First 1
+
+  if ($signtool) {
+    return $signtool.FullName
+  }
+
+  return $null
+}
+
+function Prepare-WinQuicEchoKmDriver {
+  param(
+    [Parameter(Mandatory=$true)]$Session,
+    [Parameter(Mandatory=$true)][string]$DriverSourcePath,
+    [Parameter(Mandatory=$true)][string]$RemoteDir
+  )
+
+  if (-not (Test-LocalTestSigningEnabled)) {
+    throw 'Local machine does not have test signing enabled. Enable it with "bcdedit /set testsigning on" and reboot.'
+  }
+  if (-not (Test-RemoteTestSigningEnabled -Session $Session)) {
+    throw 'Remote machine does not have test signing enabled. Enable it with "bcdedit /set testsigning on" and reboot.'
+  }
+
+  $signtoolPath = Get-SignToolPath
+
+  $codeCert = New-SelfSignedCertificate `
+    -Type CodeSigningCert `
+    -Subject 'CN=WinQuicEcho Netperf Test' `
+    -CertStoreLocation 'Cert:\LocalMachine\My' `
+    -NotAfter (Get-Date).AddHours(2)
+  $script:driverCodeSigningThumbprint = $codeCert.Thumbprint
+  $script:driverCodeSigningCerPath = Join-Path $env:TEMP "winquicecho_netperf_$($codeCert.Thumbprint).cer"
+
+  Export-Certificate -Cert $codeCert -FilePath $script:driverCodeSigningCerPath -Force | Out-Null
+  certutil -addstore Root $script:driverCodeSigningCerPath | Out-Null
+  certutil -addstore TrustedPublisher $script:driverCodeSigningCerPath | Out-Null
+
+  Write-Phase "Signing WinQuicEcho kernel driver with temporary test certificate $script:driverCodeSigningThumbprint"
+  if ($signtoolPath) {
+    & $signtoolPath sign /v /fd sha256 /sm /s My /sha1 $script:driverCodeSigningThumbprint $DriverSourcePath
+    if ($LASTEXITCODE -ne 0) {
+      throw "signtool failed with exit code $LASTEXITCODE"
+    }
+  }
+  else {
+    Write-Phase 'signtool.exe not found; falling back to Set-AuthenticodeSignature'
+    $signature = Set-AuthenticodeSignature -FilePath $DriverSourcePath -Certificate $codeCert -HashAlgorithm SHA256
+    if ($signature.Status -ne 'Valid') {
+      throw "Set-AuthenticodeSignature failed with status $($signature.Status): $($signature.StatusMessage)"
+    }
+  }
+
+  $remoteCerPath = Join-Path (Join-Path $RemoteDir 'quic_echo') 'km\winquicecho_km.cer'
+  Invoke-Command -Session $Session -ArgumentList (Split-Path -Parent $remoteCerPath) -ScriptBlock {
+    param($remoteKmDir)
+    if (-not (Test-Path -LiteralPath $remoteKmDir)) {
+      New-Item -ItemType Directory -Path $remoteKmDir -Force | Out-Null
+    }
+  } -ErrorAction Stop
+  Copy-Item -ToSession $Session -Path $script:driverCodeSigningCerPath -Destination $remoteCerPath -Force
+  Invoke-Command -Session $Session -ArgumentList $remoteCerPath -ScriptBlock {
+    param($cerPath)
+    certutil -addstore Root $cerPath | Out-Null
+    certutil -addstore TrustedPublisher $cerPath | Out-Null
+  } -ErrorAction Stop
+}
+
+function Install-LocalWinQuicEchoKmDriver {
+  param([Parameter(Mandatory=$true)][string]$DriverSourcePath)
+
+  if (-not (Test-IsAdministrator)) {
+    throw "Installing the WinQuicEcho kernel driver locally requires administrator privileges."
+  }
+
+  $serviceName = 'WinQuicEcho'
+  $driverDest = Join-Path $env:SystemRoot 'System32\drivers\winquicecho_km.sys'
+
+  $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+  if ($null -ne $svc) {
+    if ($svc.Status -eq 'Running') {
+      Write-Phase "Stopping existing local $serviceName service"
+      & sc.exe stop $serviceName | Out-Null
+      Start-Sleep -Seconds 2
+    }
+    Write-Phase "Deleting existing local $serviceName service"
+    & sc.exe delete $serviceName | Out-Null
+    Start-Sleep -Seconds 2
+  }
+
+  Write-Phase "Copying local WinQuicEcho driver to $driverDest"
+  Copy-Item -LiteralPath $DriverSourcePath -Destination $driverDest -Force
+
+  Write-Phase "Creating local $serviceName kernel service"
+  & sc.exe create $serviceName type= kernel binPath= $driverDest start= demand depend= msquic | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    throw "Local sc create failed with exit code $LASTEXITCODE"
+  }
+
+  Write-Phase "Starting local $serviceName kernel service"
+  & sc.exe start $serviceName
+  if ($LASTEXITCODE -ne 0) {
+    throw "Local sc start failed with exit code $LASTEXITCODE"
+  }
+}
+
+function Install-RemoteWinQuicEchoKmDriver {
+  param(
+    [Parameter(Mandatory=$true)]$Session,
+    [Parameter(Mandatory=$true)][string]$DriverSourcePath,
+    [Parameter(Mandatory=$true)][string]$RemoteDir
+  )
+
+  $remoteKmDir = Join-Path (Join-Path $RemoteDir 'quic_echo') 'km'
+  $remoteDriverSourcePath = Join-Path $remoteKmDir 'winquicecho_km.sys'
+
+  Invoke-Command -Session $Session -ArgumentList $remoteKmDir -ScriptBlock {
+    param($kmDir)
+    if (-not (Test-Path -LiteralPath $kmDir)) {
+      New-Item -ItemType Directory -Path $kmDir -Force | Out-Null
+    }
+  } -ErrorAction Stop
+
+  Write-Phase "Copying WinQuicEcho kernel driver to remote path $remoteDriverSourcePath"
+  Copy-Item -ToSession $Session -LiteralPath $DriverSourcePath -Destination $remoteDriverSourcePath -Force
+
+  Invoke-Command -Session $Session -ArgumentList $remoteDriverSourcePath -ScriptBlock {
+    param($driverSourcePath)
+
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+    if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+      throw "Installing the WinQuicEcho kernel driver remotely requires administrator privileges."
+    }
+
+    $serviceName = 'WinQuicEcho'
+    $driverDest = Join-Path $env:SystemRoot 'System32\drivers\winquicecho_km.sys'
+    $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+    if ($null -ne $svc) {
+      if ($svc.Status -eq 'Running') {
+        Write-Host "Stopping existing remote $serviceName service"
+        & sc.exe stop $serviceName | Out-Null
+        Start-Sleep -Seconds 2
+      }
+      Write-Host "Deleting existing remote $serviceName service"
+      & sc.exe delete $serviceName | Out-Null
+      Start-Sleep -Seconds 2
+    }
+
+    Write-Host "Copying remote WinQuicEcho driver to $driverDest"
+    Copy-Item -LiteralPath $driverSourcePath -Destination $driverDest -Force
+
+    Write-Host "Creating remote $serviceName kernel service"
+    & sc.exe create $serviceName type= kernel binPath= $driverDest start= demand depend= msquic | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+      throw "Remote sc create failed with exit code $LASTEXITCODE"
+    }
+
+    Write-Host "Starting remote $serviceName kernel service"
+    & sc.exe start $serviceName
+    if ($LASTEXITCODE -ne 0) {
+      throw "Remote sc start failed with exit code $LASTEXITCODE"
+    }
+  } -ErrorAction Stop
 }
 
 function Wait-JobWithProgress {
@@ -162,23 +384,34 @@ function Wait-JobWithProgress {
 function New-QuicDevCert {
   <#
     .SYNOPSIS
-    Creates a self-signed certificate for WinQuicEcho in the CurrentUser\My store
+    Creates a self-signed certificate for WinQuicEcho in the requested cert store
     and returns the thumbprint. Cleans up any stale certs from prior runs first.
   #>
+  param(
+    [ValidateSet('CurrentUser', 'LocalMachine')]
+    [string]$StoreLocation = 'CurrentUser'
+  )
+
+  if ($StoreLocation -eq 'LocalMachine' -and -not (Test-IsAdministrator)) {
+    throw "LocalMachine certificate store access requires administrator privileges."
+  }
+
+  $certStorePath = "Cert:\$StoreLocation\My"
+
   # Remove stale certs from interrupted prior runs
-  Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.FriendlyName -eq 'WinQuicEcho Dev Cert' } | ForEach-Object {
+  Get-ChildItem $certStorePath | Where-Object { $_.FriendlyName -eq 'WinQuicEcho Dev Cert' } | ForEach-Object {
     Write-Host "Removing stale local dev cert: $($_.Thumbprint)"
-    Remove-Item "Cert:\CurrentUser\My\$($_.Thumbprint)" -Force -ErrorAction SilentlyContinue
+    Remove-Item "$certStorePath\$($_.Thumbprint)" -Force -ErrorAction SilentlyContinue
   }
   $cert = New-SelfSignedCertificate `
       -DnsName "localhost" `
-      -CertStoreLocation "Cert:\CurrentUser\My" `
+      -CertStoreLocation $certStorePath `
       -FriendlyName "WinQuicEcho Dev Cert" `
       -NotAfter (Get-Date).AddHours(2) `
       -KeyAlgorithm RSA `
       -KeyLength 2048 `
       -HashAlgorithm SHA256
-  Write-Host "Created dev certificate: $($cert.Thumbprint)"
+  Write-Host "Created dev certificate in ${StoreLocation}\My: $($cert.Thumbprint)"
   return $cert.Thumbprint
 }
 
@@ -189,17 +422,31 @@ function New-RemoteQuicDevCert {
     Returns the thumbprint. Cleans up stale certs from prior runs first.
   #>
   param(
-    [Parameter(Mandatory=$true)]$Session
+    [Parameter(Mandatory=$true)]$Session,
+    [ValidateSet('CurrentUser', 'LocalMachine')]
+    [string]$StoreLocation = 'CurrentUser'
   )
-  $thumbprint = Invoke-Command -Session $Session -ScriptBlock {
+  $thumbprint = Invoke-Command -Session $Session -ArgumentList $StoreLocation -ScriptBlock {
+    param($requestedStoreLocation)
+
+    if ($requestedStoreLocation -eq 'LocalMachine') {
+      $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+      $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+      if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        throw "Remote LocalMachine certificate store access requires administrator privileges."
+      }
+    }
+
+    $certStorePath = "Cert:\$requestedStoreLocation\My"
+
     # Remove stale certs from interrupted prior runs
-    Get-ChildItem Cert:\CurrentUser\My | Where-Object { $_.FriendlyName -eq 'WinQuicEcho Dev Cert' } | ForEach-Object {
+    Get-ChildItem $certStorePath | Where-Object { $_.FriendlyName -eq 'WinQuicEcho Dev Cert' } | ForEach-Object {
       Write-Host "Removing stale remote dev cert: $($_.Thumbprint)"
-      Remove-Item "Cert:\CurrentUser\My\$($_.Thumbprint)" -Force -ErrorAction SilentlyContinue
+      Remove-Item "$certStorePath\$($_.Thumbprint)" -Force -ErrorAction SilentlyContinue
     }
     $cert = New-SelfSignedCertificate `
         -DnsName "localhost" `
-        -CertStoreLocation "Cert:\CurrentUser\My" `
+        -CertStoreLocation $certStorePath `
         -FriendlyName "WinQuicEcho Dev Cert" `
         -NotAfter (Get-Date).AddHours(2) `
         -KeyAlgorithm RSA `
@@ -207,22 +454,26 @@ function New-RemoteQuicDevCert {
         -HashAlgorithm SHA256
     return $cert.Thumbprint
   }
-  Write-Host "Created remote dev certificate: $thumbprint"
+  Write-Host "Created remote dev certificate in ${StoreLocation}\My: $thumbprint"
   return $thumbprint
 }
 
 function Remove-QuicDevCert {
   <#
     .SYNOPSIS
-    Removes WinQuicEcho dev certificates from CurrentUser\My store by thumbprint.
+    Removes WinQuicEcho dev certificates from the requested store by thumbprint.
   #>
-  param([string]$Thumbprint)
+  param(
+    [string]$Thumbprint,
+    [ValidateSet('CurrentUser', 'LocalMachine')]
+    [string]$StoreLocation = 'CurrentUser'
+  )
   if ($Thumbprint) {
     try {
-      $certPath = "Cert:\CurrentUser\My\$Thumbprint"
+      $certPath = "Cert:\$StoreLocation\My\$Thumbprint"
       if (Test-Path $certPath) {
         Remove-Item $certPath -Force
-        Write-Host "Removed local dev certificate: $Thumbprint"
+        Write-Host "Removed local dev certificate from ${StoreLocation}\My: $Thumbprint"
       }
     } catch {
       Write-Warning "Failed to remove local dev certificate: $($_.Exception.Message)"
@@ -233,24 +484,105 @@ function Remove-QuicDevCert {
 function Remove-RemoteQuicDevCert {
   <#
     .SYNOPSIS
-    Removes WinQuicEcho dev certificates from the remote machine.
+    Removes WinQuicEcho dev certificates from the requested remote store.
   #>
   param(
     [Parameter(Mandatory=$true)]$Session,
-    [string]$Thumbprint
+    [string]$Thumbprint,
+    [ValidateSet('CurrentUser', 'LocalMachine')]
+    [string]$StoreLocation = 'CurrentUser'
   )
   if ($Thumbprint -and $Session) {
     try {
-      Invoke-Command -Session $Session -ArgumentList $Thumbprint -ScriptBlock {
-        param($tp)
-        $certPath = "Cert:\CurrentUser\My\$tp"
+      Invoke-Command -Session $Session -ArgumentList $Thumbprint, $StoreLocation -ScriptBlock {
+        param($tp, $requestedStoreLocation)
+        $certPath = "Cert:\$requestedStoreLocation\My\$tp"
         if (Test-Path $certPath) {
           Remove-Item $certPath -Force
         }
       }
-      Write-Host "Removed remote dev certificate: $Thumbprint"
+      Write-Host "Removed remote dev certificate from ${StoreLocation}\My: $Thumbprint"
     } catch {
       Write-Warning "Failed to remove remote dev certificate: $($_.Exception.Message)"
+    }
+  }
+}
+
+function Test-BackendUsesPemCerts {
+  <#
+    .SYNOPSIS
+    Returns $true if the backend requires PEM cert/key files instead of Windows cert store.
+  #>
+  param([Parameter(Mandatory=$true)][string]$Backend)
+  return ($Backend -eq 'picoquic' -or $Backend -eq 'ngtcp2')
+}
+
+function New-PemDevCert {
+  <#
+    .SYNOPSIS
+    Generates a self-signed PEM certificate and private key for non-Schannel backends.
+    Returns a hashtable with CertFile and KeyFile paths.
+  #>
+  param(
+    [Parameter(Mandatory=$true)][string]$OutputDir
+  )
+
+  $certFile = Join-Path $OutputDir 'dev_cert.pem'
+  $keyFile  = Join-Path $OutputDir 'dev_key.pem'
+
+  # Remove stale files from prior runs
+  @($certFile, $keyFile) | ForEach-Object {
+    if (Test-Path $_) { Remove-Item $_ -Force }
+  }
+
+  # Use PowerShell to generate a self-signed cert, export to PFX, then convert to PEM
+  $cert = New-SelfSignedCertificate `
+    -DnsName "localhost" `
+    -CertStoreLocation 'Cert:\CurrentUser\My' `
+    -FriendlyName "WinQuicEcho PEM Dev Cert" `
+    -NotAfter (Get-Date).AddHours(2) `
+    -KeyAlgorithm RSA `
+    -KeyLength 2048 `
+    -HashAlgorithm SHA256 `
+    -KeyExportPolicy Exportable
+
+  $thumbprint = $cert.Thumbprint
+  $pfxPath = Join-Path $OutputDir 'dev_cert.pfx'
+  $pfxPassword = ConvertTo-SecureString -String 'devpass' -Force -AsPlainText
+
+  try {
+    Export-PfxCertificate -Cert "Cert:\CurrentUser\My\$thumbprint" -FilePath $pfxPath -Password $pfxPassword | Out-Null
+
+    # Use openssl to convert PFX to PEM (openssl is available on windows-latest and lab machines)
+    & openssl pkcs12 -in $pfxPath -out $certFile -clcerts -nokeys -passin pass:devpass 2>&1 | Out-Null
+    & openssl pkcs12 -in $pfxPath -out $keyFile -nocerts -nodes -passin pass:devpass 2>&1 | Out-Null
+
+    if (-not (Test-Path $certFile) -or -not (Test-Path $keyFile)) {
+      throw "openssl PFX-to-PEM conversion failed"
+    }
+
+    Write-Host "Generated PEM dev cert: $certFile"
+    Write-Host "Generated PEM dev key: $keyFile"
+  } finally {
+    # Clean up PFX and cert store entry
+    if (Test-Path $pfxPath) { Remove-Item $pfxPath -Force }
+    Remove-Item "Cert:\CurrentUser\My\$thumbprint" -Force -ErrorAction SilentlyContinue
+  }
+
+  return @{ CertFile = $certFile; KeyFile = $keyFile }
+}
+
+function Remove-PemDevCert {
+  <#
+    .SYNOPSIS
+    Removes PEM cert/key files from a directory.
+  #>
+  param([Parameter(Mandatory=$true)][string]$Dir)
+  @('dev_cert.pem', 'dev_key.pem') | ForEach-Object {
+    $p = Join-Path $Dir $_
+    if (Test-Path $p) {
+      Remove-Item $p -Force -ErrorAction SilentlyContinue
+      Write-Host "Removed PEM file: $p"
     }
   }
 }
@@ -308,13 +640,19 @@ function Run-SendTest {
     [Parameter(Mandatory=$true)]$Session,
     [Parameter(Mandatory=$true)][string]$SenderOptions,
     [Parameter(Mandatory=$true)][string]$ReceiverOptions,
-    [Parameter(Mandatory=$true)][string]$RemoteCertThumbprint
+    [string]$RemoteCertThumbprint,
+    [string]$RemoteCertFile,
+    [string]$RemoteKeyFile
   )
 
-  # Server runs on remote — add cert-hash for the remote cert
+  # Server runs on remote — add cert args based on backend type
   $serverArgs = Convert-ArgStringToArray $ReceiverOptions
   $serverArgs = Normalize-Args -Tokens $serverArgs
-  $serverArgs += @('--cert-hash', $RemoteCertThumbprint, '--verbose')
+  if ($RemoteCertFile) {
+    $serverArgs += @('--cert-file', $RemoteCertFile, '--key-file', $RemoteKeyFile)
+  } else {
+    $serverArgs += @('--cert-hash', $RemoteCertThumbprint)
+  }
   Write-Host "[Local->Remote] Invoking remote echo_server with arguments:"
   if ($serverArgs -is [System.Array]) { foreach ($arg in $serverArgs) { Write-Host "  $arg" } } else { Write-Host "  $serverArgs" }
   $Job = Invoke-ToolInSession -Session $Session -RemoteDir $script:RemoteDir -ToolDir 'quic_echo' -ToolName "echo_server" -Options $serverArgs -WaitSeconds 0
@@ -323,11 +661,19 @@ function Run-SendTest {
     # Give the server a moment to start listening before the client connects
     Write-Phase "Waiting 5s for remote echo_server to initialize..."
     Start-Sleep -Seconds 5
+    if ($Job.State -ne 'Running') {
+      $null = Receive-Job $Job -Keep -ErrorAction SilentlyContinue
+      foreach ($cj in $Job.ChildJobs) {
+        foreach ($line in $cj.Output) { Write-Host "[Remote stdout] $line" }
+        foreach ($line in $cj.Error) { Write-Host "[Remote stderr] $line" }
+      }
+      throw "Remote echo_server exited during startup (State=$($Job.State))"
+    }
 
     # Client runs locally
     $clientArgs = Convert-ArgStringToArray $SenderOptions
     $clientArgs = Normalize-Args -Tokens $clientArgs
-    $clientArgs += @('--stats-file', 'quic_echo_client_stats.json', '--verbose')
+    $clientArgs += @('--stats-file', 'quic_echo_client_stats.json')
 
     Write-Host "[Local] Running: .\echo_client.exe"
     Write-Host "[Local] Arguments:"
@@ -376,13 +722,19 @@ function Run-RecvTest {
     [Parameter(Mandatory=$true)]$Session,
     [Parameter(Mandatory=$true)][string]$SenderOptions,
     [Parameter(Mandatory=$true)][string]$ReceiverOptions,
-    [Parameter(Mandatory=$true)][string]$LocalCertThumbprint
+    [string]$LocalCertThumbprint,
+    [string]$LocalCertFile,
+    [string]$LocalKeyFile
   )
 
   # Server runs locally — start first so it's listening before the client connects
   $serverArgs = Convert-ArgStringToArray $ReceiverOptions
   $serverArgs = Normalize-Args -Tokens $serverArgs
-  $serverArgs += @('--cert-hash', $LocalCertThumbprint, '--verbose')
+  if ($LocalCertFile) {
+    $serverArgs += @('--cert-file', $LocalCertFile, '--key-file', $LocalKeyFile)
+  } else {
+    $serverArgs += @('--cert-hash', $LocalCertThumbprint)
+  }
 
   Write-Host "[Local] Running: .\echo_server.exe (background process)"
   Write-Host "[Local] Arguments:"
@@ -399,7 +751,7 @@ function Run-RecvTest {
     # Client runs on remote
     $clientArgs = Convert-ArgStringToArray $SenderOptions
     $clientArgs = Normalize-Args -Tokens $clientArgs
-    $clientArgs += @('--verbose')
+    # No --verbose: it logs per-datagram events, throttling throughput via I/O backpressure
     Write-Host "[Local->Remote] Invoking remote echo_client with arguments:"
     if ($clientArgs -is [System.Array]) { foreach ($arg in $clientArgs) { Write-Host "  $arg" } } else { Write-Host "  $clientArgs" }
     $Job = Invoke-ToolInSession -Session $Session -RemoteDir $script:RemoteDir -ToolDir 'quic_echo' -ToolName "echo_client" -Options $clientArgs -WaitSeconds 0
@@ -498,6 +850,15 @@ try {
   # Copy tool to remote
   Copy-ToolDirToRemote -Session $Session -RemoteDir $script:RemoteDir -ToolDir 'quic_echo'
 
+  $receiverBackend = Get-ReceiverBackend -Options $ReceiverOptions
+  if ($receiverBackend -eq 'msquic-km') {
+    $kmDriverPath = Get-QuicEchoKmDriverPath
+    Write-Phase "Receiver backend is msquic-km; installing WinQuicEcho kernel driver locally and remotely"
+    Prepare-WinQuicEchoKmDriver -Session $Session -DriverSourcePath $kmDriverPath -RemoteDir $script:RemoteDir
+    Install-LocalWinQuicEchoKmDriver -DriverSourcePath $kmDriverPath
+    Install-RemoteWinQuicEchoKmDriver -Session $Session -DriverSourcePath $kmDriverPath -RemoteDir $script:RemoteDir
+  }
+
   # Diagnostic: verify executables and msquic.dll are present locally and remotely
   Write-Phase "Verifying local tool files..."
   @('echo_server.exe', 'echo_client.exe', 'msquic.dll') | ForEach-Object {
@@ -515,8 +876,25 @@ try {
 
   # Generate dev certificates on both local and remote machines
   Write-Phase "Generating dev certificates for QUIC TLS"
-  $localCertThumbprint = New-QuicDevCert
-  $remoteCertThumbprint = New-RemoteQuicDevCert -Session $Session
+  $script:usesPemCerts = Test-BackendUsesPemCerts -Backend $receiverBackend
+  if ($script:usesPemCerts) {
+    Write-Phase "Backend '$receiverBackend' uses PEM certs (OpenSSL-based)"
+    $localPemCert = New-PemDevCert -OutputDir $cwd
+    $script:localPemCertDir = $cwd
+    # Copy PEM files to remote tool directory
+    $remoteToolDir = Join-Path $script:RemoteDir 'quic_echo'
+    Copy-Item -ToSession $Session -Path $localPemCert.CertFile -Destination (Join-Path $remoteToolDir 'dev_cert.pem') -Force
+    Copy-Item -ToSession $Session -Path $localPemCert.KeyFile -Destination (Join-Path $remoteToolDir 'dev_key.pem') -Force
+    Write-Phase "PEM cert/key copied to remote at $remoteToolDir"
+  } else {
+    if ($receiverBackend -eq 'msquic-km') {
+      $script:localCertStoreLocation = 'LocalMachine'
+      $script:remoteCertStoreLocation = 'LocalMachine'
+    }
+    Write-Phase "Receiver backend '$receiverBackend' will use local cert store '$script:localCertStoreLocation' and remote cert store '$script:remoteCertStoreLocation'"
+    $localCertThumbprint = New-QuicDevCert -StoreLocation $script:localCertStoreLocation
+    $remoteCertThumbprint = New-RemoteQuicDevCert -Session $Session -StoreLocation $script:remoteCertStoreLocation
+  }
 
   # ---- Send phase ----
   Write-Phase "Starting CPU/perf counter jobs (send phase)"
@@ -524,7 +902,13 @@ try {
   $script:perfCounterJob = CapturePerformanceMonitorAsJob -DurationSeconds $durationInt -Counters $PerformanceCounters
 
   Write-Phase "Starting send test"
-  Run-SendTest -PeerName $PeerName -Session $Session -SenderOptions $SenderOptions -ReceiverOptions $ReceiverOptions -RemoteCertThumbprint $remoteCertThumbprint
+  if ($script:usesPemCerts) {
+    $remoteToolDir = Join-Path $script:RemoteDir 'quic_echo'
+    Run-SendTest -PeerName $PeerName -Session $Session -SenderOptions $SenderOptions -ReceiverOptions $ReceiverOptions `
+      -RemoteCertFile (Join-Path $remoteToolDir 'dev_cert.pem') -RemoteKeyFile (Join-Path $remoteToolDir 'dev_key.pem')
+  } else {
+    Run-SendTest -PeerName $PeerName -Session $Session -SenderOptions $SenderOptions -ReceiverOptions $ReceiverOptions -RemoteCertThumbprint $remoteCertThumbprint
+  }
   Write-Phase "Send test finished"
 
   Write-Phase "Waiting for CPU monitor job (send phase)"
@@ -558,7 +942,12 @@ try {
   $script:perfCounterJob = CapturePerformanceMonitorAsJob -DurationSeconds $durationInt -Counters $PerformanceCounters
 
   Write-Phase "Starting recv test"
-  Run-RecvTest -PeerName $PeerName -Session $Session -SenderOptions $SenderOptions -ReceiverOptions $ReceiverOptions -LocalCertThumbprint $localCertThumbprint
+  if ($script:usesPemCerts) {
+    Run-RecvTest -PeerName $PeerName -Session $Session -SenderOptions $SenderOptions -ReceiverOptions $ReceiverOptions `
+      -LocalCertFile (Join-Path $cwd 'dev_cert.pem') -LocalKeyFile (Join-Path $cwd 'dev_key.pem')
+  } else {
+    Run-RecvTest -PeerName $PeerName -Session $Session -SenderOptions $SenderOptions -ReceiverOptions $ReceiverOptions -LocalCertThumbprint $localCertThumbprint
+  }
   Write-Phase "Recv test finished"
 
   Write-Phase "Waiting for CPU monitor job (recv phase)"
@@ -628,9 +1017,39 @@ finally {
     }
 
     # Clean up dev certificates
-    Remove-QuicDevCert -Thumbprint $localCertThumbprint
-    if ($Session) {
-      Remove-RemoteQuicDevCert -Session $Session -Thumbprint $remoteCertThumbprint
+    if ($script:usesPemCerts) {
+      if ($script:localPemCertDir) { Remove-PemDevCert -Dir $script:localPemCertDir }
+      if ($Session) {
+        $remoteToolDir = Join-Path $script:RemoteDir 'quic_echo'
+        Invoke-Command -Session $Session -ArgumentList $remoteToolDir -ScriptBlock {
+          param($dir)
+          @('dev_cert.pem', 'dev_key.pem') | ForEach-Object {
+            $p = Join-Path $dir $_
+            if (Test-Path $p) { Remove-Item $p -Force -ErrorAction SilentlyContinue }
+          }
+        } -ErrorAction SilentlyContinue
+      }
+    } else {
+      Remove-QuicDevCert -Thumbprint $localCertThumbprint -StoreLocation $script:localCertStoreLocation
+      if ($Session) {
+        Remove-RemoteQuicDevCert -Session $Session -Thumbprint $remoteCertThumbprint -StoreLocation $script:remoteCertStoreLocation
+      }
+    }
+
+    if ($script:driverCodeSigningThumbprint) {
+      certutil -delstore Root $script:driverCodeSigningThumbprint 2>$null | Out-Null
+      certutil -delstore TrustedPublisher $script:driverCodeSigningThumbprint 2>$null | Out-Null
+      certutil -delstore My $script:driverCodeSigningThumbprint 2>$null | Out-Null
+      if ($Session) {
+        Invoke-Command -Session $Session -ArgumentList $script:driverCodeSigningThumbprint -ScriptBlock {
+          param($thumbprint)
+          certutil -delstore Root $thumbprint 2>$null | Out-Null
+          certutil -delstore TrustedPublisher $thumbprint 2>$null | Out-Null
+        } -ErrorAction SilentlyContinue
+      }
+    }
+    if ($script:driverCodeSigningCerPath -and (Test-Path -LiteralPath $script:driverCodeSigningCerPath)) {
+      Remove-Item -LiteralPath $script:driverCodeSigningCerPath -Force -ErrorAction SilentlyContinue
     }
 
     Restore-FirewallAndCleanup -Session $Session

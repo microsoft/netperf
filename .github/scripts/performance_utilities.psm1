@@ -229,8 +229,25 @@ function Invoke-ToolInSession {
   }
   if (-not $Options) { $Options = @() }
 
+  # Serialize options as JSON so they survive PS remoting CLIXML
+  # serialization intact. Plain strings pass through reliably; arrays do not.
+  $optionsJson = if ($Options.Count -gt 0) {
+    @($Options) | ConvertTo-Json -Compress -AsArray
+  } else {
+    '[]'
+  }
+  Write-Host "[Local] Options type: $($Options.GetType().FullName), count: $(@($Options).Count)"
+  Write-Host "[Local] OptionsJson: $optionsJson"
+
   $Job = Invoke-Command -Session $Session -ScriptBlock {
-    param($RemoteDir, $ToolDir, $ToolName, $Options, $WaitSeconds)
+    param($RemoteDir, $ToolDir, $ToolName, $OptionsJson, $WaitSeconds)
+
+    # Deserialize options from JSON — reliable regardless of PS remoting quirks
+    $Options = @()
+    if ($OptionsJson -and $OptionsJson -ne '[]') {
+      $Options = @(($OptionsJson | ConvertFrom-Json) | ForEach-Object { [string]$_ })
+    }
+    Write-Host "[Remote] OptionsJson raw: $OptionsJson"
 
     # Resolve tool path: platform-agnostic using Join-Path
     $toolDir = Join-Path $RemoteDir $ToolDir
@@ -249,20 +266,14 @@ function Invoke-ToolInSession {
     }
 
     Write-Host "[Remote] Running: $Tool"
-    if ($Options -is [System.Array]) {
+    if ($Options -is [System.Array] -and $Options.Count -gt 0) {
       Write-Host "[Remote] Arguments (array, $($Options.Count) tokens):"
       foreach ($arg in $Options) { Write-Host "  $arg" }
       $argList = $Options
     }
     else {
-      # Options should always arrive as an array (parsed on local side).
-      # If PS remoting flattened it to a single string, treat it as one token.
-      Write-Host "[Remote] Arguments (single string token):"
-      Write-Host "  $Options"
+      Write-Host "[Remote] Arguments: (none)"
       $argList = @()
-      if (-not [string]::IsNullOrEmpty($Options)) {
-        $argList = @($Options)
-      }
     }
     
     try {
@@ -273,6 +284,17 @@ function Invoke-ToolInSession {
         Write-Host "[Remote] Starting tool as background job for timeout control..."
         $jobScript = {
           param($ToolPath, $ArgList)
+          while ($ArgList -is [System.Collections.IEnumerable] -and $ArgList -isnot [string]) {
+            $normalizedArgList = @($ArgList)
+            if ($normalizedArgList.Count -eq 1 -and
+                $normalizedArgList[0] -is [System.Collections.IEnumerable] -and
+                $normalizedArgList[0] -isnot [string]) {
+              $ArgList = $normalizedArgList[0]
+              continue
+            }
+            $ArgList = $normalizedArgList
+            break
+          }
           if ($ArgList -is [System.Array]) {
             & $ToolPath @ArgList
           }
@@ -285,7 +307,7 @@ function Invoke-ToolInSession {
           return $LASTEXITCODE
         }
 
-        $j = Start-Job -ScriptBlock $jobScript -ArgumentList $Tool, $argList -ErrorAction Stop
+        $j = Start-Job -ScriptBlock $jobScript -ArgumentList $Tool, (,$argList) -ErrorAction Stop
         Write-Host "[Remote] Started job Id=$($j.Id)"
 
         # Wait-Job uses seconds for timeout
@@ -307,7 +329,7 @@ function Invoke-ToolInSession {
     catch {
       throw "Failed to launch or monitor process $Tool $($_.Exception.Message)"
     }
-  } -ArgumentList $RemoteDir, $ToolDir, $ToolName, $Options, $WaitSeconds -AsJob -ErrorAction Stop
+  } -ArgumentList $RemoteDir, $ToolDir, $ToolName, $optionsJson, $WaitSeconds -AsJob -ErrorAction Stop
 
   return $Job
 }
