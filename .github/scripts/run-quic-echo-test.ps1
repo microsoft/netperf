@@ -1036,22 +1036,6 @@ finally {
       }
     }
 
-    if ($script:driverCodeSigningThumbprint) {
-      certutil -delstore Root $script:driverCodeSigningThumbprint 2>$null | Out-Null
-      certutil -delstore TrustedPublisher $script:driverCodeSigningThumbprint 2>$null | Out-Null
-      certutil -delstore My $script:driverCodeSigningThumbprint 2>$null | Out-Null
-      if ($Session) {
-        Invoke-Command -Session $Session -ArgumentList $script:driverCodeSigningThumbprint -ScriptBlock {
-          param($thumbprint)
-          certutil -delstore Root $thumbprint 2>$null | Out-Null
-          certutil -delstore TrustedPublisher $thumbprint 2>$null | Out-Null
-        } -ErrorAction SilentlyContinue
-      }
-    }
-    if ($script:driverCodeSigningCerPath -and (Test-Path -LiteralPath $script:driverCodeSigningCerPath)) {
-      Remove-Item -LiteralPath $script:driverCodeSigningCerPath -Force -ErrorAction SilentlyContinue
-    }
-
     Restore-FirewallAndCleanup -Session $Session
     Write-Host "Exiting with code $exitCode"
     exit $exitCode
