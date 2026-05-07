@@ -183,6 +183,207 @@ function Test-RemoteTestSigningEnabled {
   } -ErrorAction Stop
 }
 
+function Initialize-WinQuicEchoKmInterop {
+  if ('WinQuicEchoKm.NativeMethods' -as [type]) {
+    return
+  }
+
+  Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+
+namespace WinQuicEchoKm {
+  internal static class NativeMethods {
+    internal static readonly IntPtr InvalidHandleValue = new IntPtr(-1);
+    internal const uint GENERIC_READ = 0x80000000;
+    internal const uint GENERIC_WRITE = 0x40000000;
+    internal const uint OPEN_EXISTING = 3;
+    internal const uint FILE_ATTRIBUTE_NORMAL = 0x80;
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    internal static extern IntPtr CreateFileW(
+      string lpFileName,
+      uint dwDesiredAccess,
+      uint dwShareMode,
+      IntPtr lpSecurityAttributes,
+      uint dwCreationDisposition,
+      uint dwFlagsAndAttributes,
+      IntPtr hTemplateFile);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool DeviceIoControl(
+      IntPtr hDevice,
+      uint dwIoControlCode,
+      IntPtr lpInBuffer,
+      uint nInBufferSize,
+      IntPtr lpOutBuffer,
+      uint nOutBufferSize,
+      out uint lpBytesReturned,
+      IntPtr lpOverlapped);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool CloseHandle(IntPtr hObject);
+  }
+}
+"@
+}
+
+function Get-WinQuicEchoKmStopServerIoctl {
+  [uint32]$deviceType = 0x8000
+  [uint32]$function = 0x801
+  [uint32]$method = 0
+  [uint32]$access = 2
+  return (($deviceType -shl 16) -bor ($access -shl 14) -bor ($function -shl 2) -bor $method)
+}
+
+function Invoke-LocalWinQuicEchoKmStopServer {
+  param([switch]$IgnoreMissingDevice)
+
+  Initialize-WinQuicEchoKmInterop
+
+  $devicePath = '\\.\WinQuicEcho'
+  $handle = [WinQuicEchoKm.NativeMethods]::CreateFileW(
+    $devicePath,
+    [WinQuicEchoKm.NativeMethods]::GENERIC_READ -bor [WinQuicEchoKm.NativeMethods]::GENERIC_WRITE,
+    0,
+    [IntPtr]::Zero,
+    [WinQuicEchoKm.NativeMethods]::OPEN_EXISTING,
+    [WinQuicEchoKm.NativeMethods]::FILE_ATTRIBUTE_NORMAL,
+    [IntPtr]::Zero)
+
+  if ($handle -eq [WinQuicEchoKm.NativeMethods]::InvalidHandleValue) {
+    $lastError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+    if ($IgnoreMissingDevice -and ($lastError -eq 2 -or $lastError -eq 3)) {
+      Write-Host "WinQuicEcho device $devicePath is not present; skipping STOP_SERVER cleanup."
+      return
+    }
+    throw "Failed to open $devicePath for STOP_SERVER IOCTL (Win32 error $lastError)."
+  }
+
+  try {
+    [uint32]$bytesReturned = 0
+    $stopIoctl = Get-WinQuicEchoKmStopServerIoctl
+    $ok = [WinQuicEchoKm.NativeMethods]::DeviceIoControl(
+      $handle,
+      $stopIoctl,
+      [IntPtr]::Zero,
+      0,
+      [IntPtr]::Zero,
+      0,
+      [ref]$bytesReturned,
+      [IntPtr]::Zero)
+    if (-not $ok) {
+      $lastError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+      throw "STOP_SERVER IOCTL failed with Win32 error $lastError."
+    }
+    Write-Host "Sent STOP_SERVER IOCTL to local WinQuicEcho driver."
+  }
+  finally {
+    [void][WinQuicEchoKm.NativeMethods]::CloseHandle($handle)
+  }
+}
+
+function Invoke-RemoteWinQuicEchoKmStopServer {
+  param(
+    [Parameter(Mandatory=$true)]$Session,
+    [switch]$IgnoreMissingDevice
+  )
+
+  Invoke-Command -Session $Session -ArgumentList $IgnoreMissingDevice.IsPresent -ScriptBlock {
+    param([bool]$ignoreMissingDevice)
+
+    if (-not ('WinQuicEchoKm.NativeMethods' -as [type])) {
+      Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+
+namespace WinQuicEchoKm {
+  internal static class NativeMethods {
+    internal static readonly IntPtr InvalidHandleValue = new IntPtr(-1);
+    internal const uint GENERIC_READ = 0x80000000;
+    internal const uint GENERIC_WRITE = 0x40000000;
+    internal const uint OPEN_EXISTING = 3;
+    internal const uint FILE_ATTRIBUTE_NORMAL = 0x80;
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    internal static extern IntPtr CreateFileW(
+      string lpFileName,
+      uint dwDesiredAccess,
+      uint dwShareMode,
+      IntPtr lpSecurityAttributes,
+      uint dwCreationDisposition,
+      uint dwFlagsAndAttributes,
+      IntPtr hTemplateFile);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool DeviceIoControl(
+      IntPtr hDevice,
+      uint dwIoControlCode,
+      IntPtr lpInBuffer,
+      uint nInBufferSize,
+      IntPtr lpOutBuffer,
+      uint nOutBufferSize,
+      out uint lpBytesReturned,
+      IntPtr lpOverlapped);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool CloseHandle(IntPtr hObject);
+  }
+}
+"@
+    }
+
+    [uint32]$deviceType = 0x8000
+    [uint32]$function = 0x801
+    [uint32]$method = 0
+    [uint32]$access = 2
+    [uint32]$stopIoctl = (($deviceType -shl 16) -bor ($access -shl 14) -bor ($function -shl 2) -bor $method)
+    $devicePath = '\\.\WinQuicEcho'
+    $handle = [WinQuicEchoKm.NativeMethods]::CreateFileW(
+      $devicePath,
+      [WinQuicEchoKm.NativeMethods]::GENERIC_READ -bor [WinQuicEchoKm.NativeMethods]::GENERIC_WRITE,
+      0,
+      [IntPtr]::Zero,
+      [WinQuicEchoKm.NativeMethods]::OPEN_EXISTING,
+      [WinQuicEchoKm.NativeMethods]::FILE_ATTRIBUTE_NORMAL,
+      [IntPtr]::Zero)
+
+    if ($handle -eq [WinQuicEchoKm.NativeMethods]::InvalidHandleValue) {
+      $lastError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+      if ($ignoreMissingDevice -and ($lastError -eq 2 -or $lastError -eq 3)) {
+        Write-Host "WinQuicEcho device $devicePath is not present; skipping STOP_SERVER cleanup."
+        return
+      }
+      throw "Failed to open $devicePath for STOP_SERVER IOCTL (Win32 error $lastError)."
+    }
+
+    try {
+      [uint32]$bytesReturned = 0
+      $ok = [WinQuicEchoKm.NativeMethods]::DeviceIoControl(
+        $handle,
+        $stopIoctl,
+        [IntPtr]::Zero,
+        0,
+        [IntPtr]::Zero,
+        0,
+        [ref]$bytesReturned,
+        [IntPtr]::Zero)
+      if (-not $ok) {
+        $lastError = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        throw "STOP_SERVER IOCTL failed with Win32 error $lastError."
+      }
+      Write-Host "Sent STOP_SERVER IOCTL to remote WinQuicEcho driver."
+    }
+    finally {
+      [void][WinQuicEchoKm.NativeMethods]::CloseHandle($handle)
+    }
+  } -ErrorAction Stop
+}
+
 function Get-SignToolPath {
   $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter 'signtool.exe' -ErrorAction SilentlyContinue |
     Where-Object { $_.FullName -match '\\x64\\signtool\.exe$' } |
@@ -266,6 +467,8 @@ function Install-LocalWinQuicEchoKmDriver {
 
   $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
   if ($null -ne $svc) {
+    Write-Phase "Sending STOP_SERVER IOCTL to local $serviceName driver before reinstall"
+    Invoke-LocalWinQuicEchoKmStopServer -IgnoreMissingDevice
     if ($svc.Status -eq 'Running') {
       Write-Phase "Stopping existing local $serviceName service"
       & sc.exe stop $serviceName | Out-Null
@@ -290,6 +493,9 @@ function Install-LocalWinQuicEchoKmDriver {
   if ($LASTEXITCODE -ne 0) {
     throw "Local sc start failed with exit code $LASTEXITCODE"
   }
+
+  Write-Phase "Resetting local $serviceName server state with STOP_SERVER IOCTL"
+  Invoke-LocalWinQuicEchoKmStopServer
 }
 
 function Install-RemoteWinQuicEchoKmDriver {
@@ -311,6 +517,9 @@ function Install-RemoteWinQuicEchoKmDriver {
 
   Write-Phase "Copying WinQuicEcho kernel driver to remote path $remoteDriverSourcePath"
   Copy-Item -ToSession $Session -LiteralPath $DriverSourcePath -Destination $remoteDriverSourcePath -Force
+
+  Write-Phase "Sending STOP_SERVER IOCTL to remote WinQuicEcho driver before reinstall"
+  Invoke-RemoteWinQuicEchoKmStopServer -Session $Session -IgnoreMissingDevice
 
   Invoke-Command -Session $Session -ArgumentList $remoteDriverSourcePath -ScriptBlock {
     param($driverSourcePath)
@@ -350,6 +559,9 @@ function Install-RemoteWinQuicEchoKmDriver {
       throw "Remote sc start failed with exit code $LASTEXITCODE"
     }
   } -ErrorAction Stop
+
+  Write-Phase "Resetting remote WinQuicEcho server state with STOP_SERVER IOCTL"
+  Invoke-RemoteWinQuicEchoKmStopServer -Session $Session
 }
 
 function Wait-JobWithProgress {
@@ -1052,6 +1264,26 @@ finally {
       Remove-QuicDevCert -Thumbprint $localCertThumbprint -StoreLocation $script:localCertStoreLocation
       if ($Session) {
         Remove-RemoteQuicDevCert -Session $Session -Thumbprint $remoteCertThumbprint -StoreLocation $script:remoteCertStoreLocation
+      }
+    }
+
+    if ($receiverBackend -eq 'msquic-km') {
+      try {
+        Write-Phase "Stopping any lingering local WinQuicEcho kernel server state"
+        Invoke-LocalWinQuicEchoKmStopServer -IgnoreMissingDevice
+      }
+      catch {
+        Write-Warning "Failed to stop local WinQuicEcho kernel server state during cleanup: $($_.Exception.Message)"
+      }
+
+      if ($Session) {
+        try {
+          Write-Phase "Stopping any lingering remote WinQuicEcho kernel server state"
+          Invoke-RemoteWinQuicEchoKmStopServer -Session $Session -IgnoreMissingDevice
+        }
+        catch {
+          Write-Warning "Failed to stop remote WinQuicEcho kernel server state during cleanup: $($_.Exception.Message)"
+        }
       }
     }
 
