@@ -134,6 +134,7 @@ $script:localCertStoreLocation = 'CurrentUser'
 $script:remoteCertStoreLocation = 'CurrentUser'
 $script:driverCodeSigningThumbprint = $null
 $script:driverCodeSigningCerPath = $null
+$script:usesPemCerts = $false
 
 function Write-Phase {
   param([Parameter(Mandatory=$true)][string]$Message)
@@ -193,15 +194,15 @@ using System;
 using System.Runtime.InteropServices;
 
 namespace WinQuicEchoKm {
-  internal static class NativeMethods {
-    internal static readonly IntPtr InvalidHandleValue = new IntPtr(-1);
-    internal const uint GENERIC_READ = 0x80000000;
-    internal const uint GENERIC_WRITE = 0x40000000;
-    internal const uint OPEN_EXISTING = 3;
-    internal const uint FILE_ATTRIBUTE_NORMAL = 0x80;
+  public static class NativeMethods {
+    public static readonly IntPtr InvalidHandleValue = new IntPtr(-1);
+    public const uint GENERIC_READ = 0x80000000;
+    public const uint GENERIC_WRITE = 0x40000000;
+    public const uint OPEN_EXISTING = 3;
+    public const uint FILE_ATTRIBUTE_NORMAL = 0x80;
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    internal static extern IntPtr CreateFileW(
+    public static extern IntPtr CreateFileW(
       string lpFileName,
       uint dwDesiredAccess,
       uint dwShareMode,
@@ -212,7 +213,7 @@ namespace WinQuicEchoKm {
 
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    internal static extern bool DeviceIoControl(
+    public static extern bool DeviceIoControl(
       IntPtr hDevice,
       uint dwIoControlCode,
       IntPtr lpInBuffer,
@@ -224,7 +225,7 @@ namespace WinQuicEchoKm {
 
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    internal static extern bool CloseHandle(IntPtr hObject);
+    public static extern bool CloseHandle(IntPtr hObject);
   }
 }
 "@
@@ -300,15 +301,15 @@ using System;
 using System.Runtime.InteropServices;
 
 namespace WinQuicEchoKm {
-  internal static class NativeMethods {
-    internal static readonly IntPtr InvalidHandleValue = new IntPtr(-1);
-    internal const uint GENERIC_READ = 0x80000000;
-    internal const uint GENERIC_WRITE = 0x40000000;
-    internal const uint OPEN_EXISTING = 3;
-    internal const uint FILE_ATTRIBUTE_NORMAL = 0x80;
+  public static class NativeMethods {
+    public static readonly IntPtr InvalidHandleValue = new IntPtr(-1);
+    public const uint GENERIC_READ = 0x80000000;
+    public const uint GENERIC_WRITE = 0x40000000;
+    public const uint OPEN_EXISTING = 3;
+    public const uint FILE_ATTRIBUTE_NORMAL = 0x80;
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    internal static extern IntPtr CreateFileW(
+    public static extern IntPtr CreateFileW(
       string lpFileName,
       uint dwDesiredAccess,
       uint dwShareMode,
@@ -319,7 +320,7 @@ namespace WinQuicEchoKm {
 
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    internal static extern bool DeviceIoControl(
+    public static extern bool DeviceIoControl(
       IntPtr hDevice,
       uint dwIoControlCode,
       IntPtr lpInBuffer,
@@ -331,7 +332,7 @@ namespace WinQuicEchoKm {
 
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    internal static extern bool CloseHandle(IntPtr hObject);
+    public static extern bool CloseHandle(IntPtr hObject);
   }
 }
 "@
