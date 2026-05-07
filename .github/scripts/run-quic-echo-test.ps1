@@ -464,7 +464,6 @@ function Install-LocalWinQuicEchoKmDriver {
   }
 
   $serviceName = 'WinQuicEcho'
-  $driverDest = Join-Path $env:SystemRoot 'System32\drivers\winquicecho_km.sys'
 
   $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
   if ($null -ne $svc) {
@@ -479,6 +478,14 @@ function Install-LocalWinQuicEchoKmDriver {
     & sc.exe delete $serviceName | Out-Null
     Start-Sleep -Seconds 2
   }
+
+  # Use a unique directory per run to avoid locked-file conflicts with a
+  # previously-loaded driver binary that Windows hasn't fully released yet.
+  $driverDir = Join-Path $env:ProgramData "WinQuicEcho\drivers\$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+  if (-not (Test-Path -LiteralPath $driverDir)) {
+    New-Item -ItemType Directory -Path $driverDir -Force | Out-Null
+  }
+  $driverDest = Join-Path $driverDir 'winquicecho_km.sys'
 
   Write-Phase "Copying local WinQuicEcho driver to $driverDest"
   Copy-Item -LiteralPath $DriverSourcePath -Destination $driverDest -Force
@@ -532,7 +539,6 @@ function Install-RemoteWinQuicEchoKmDriver {
     }
 
     $serviceName = 'WinQuicEcho'
-    $driverDest = Join-Path $env:SystemRoot 'System32\drivers\winquicecho_km.sys'
     $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
     if ($null -ne $svc) {
       if ($svc.Status -eq 'Running') {
@@ -544,6 +550,14 @@ function Install-RemoteWinQuicEchoKmDriver {
       & sc.exe delete $serviceName | Out-Null
       Start-Sleep -Seconds 2
     }
+
+    # Use a unique directory per run to avoid locked-file conflicts with a
+    # previously-loaded driver binary that Windows hasn't fully released yet.
+    $driverDir = Join-Path $env:ProgramData "WinQuicEcho\drivers\$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+    if (-not (Test-Path -LiteralPath $driverDir)) {
+      New-Item -ItemType Directory -Path $driverDir -Force | Out-Null
+    }
+    $driverDest = Join-Path $driverDir 'winquicecho_km.sys'
 
     Write-Host "Copying remote WinQuicEcho driver to $driverDest"
     Copy-Item -LiteralPath $driverSourcePath -Destination $driverDest -Force
