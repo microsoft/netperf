@@ -508,6 +508,85 @@ function Remove-RemoteQuicDevCert {
   }
 }
 
+function Test-BackendUsesPemCerts {
+  <#
+    .SYNOPSIS
+    Returns $true if the backend requires PEM cert/key files instead of Windows cert store.
+  #>
+  param([Parameter(Mandatory=$true)][string]$Backend)
+  return ($Backend -eq 'picoquic' -or $Backend -eq 'ngtcp2')
+}
+
+function New-PemDevCert {
+  <#
+    .SYNOPSIS
+    Generates a self-signed PEM certificate and private key for non-Schannel backends.
+    Returns a hashtable with CertFile and KeyFile paths.
+  #>
+  param(
+    [Parameter(Mandatory=$true)][string]$OutputDir
+  )
+
+  $certFile = Join-Path $OutputDir 'dev_cert.pem'
+  $keyFile  = Join-Path $OutputDir 'dev_key.pem'
+
+  # Remove stale files from prior runs
+  @($certFile, $keyFile) | ForEach-Object {
+    if (Test-Path $_) { Remove-Item $_ -Force }
+  }
+
+  # Use PowerShell to generate a self-signed cert, export to PFX, then convert to PEM
+  $cert = New-SelfSignedCertificate `
+    -DnsName "localhost" `
+    -CertStoreLocation 'Cert:\CurrentUser\My' `
+    -FriendlyName "WinQuicEcho PEM Dev Cert" `
+    -NotAfter (Get-Date).AddHours(2) `
+    -KeyAlgorithm RSA `
+    -KeyLength 2048 `
+    -HashAlgorithm SHA256 `
+    -KeyExportPolicy Exportable
+
+  $thumbprint = $cert.Thumbprint
+  $pfxPath = Join-Path $OutputDir 'dev_cert.pfx'
+  $pfxPassword = ConvertTo-SecureString -String 'devpass' -Force -AsPlainText
+
+  try {
+    Export-PfxCertificate -Cert "Cert:\CurrentUser\My\$thumbprint" -FilePath $pfxPath -Password $pfxPassword | Out-Null
+
+    # Use openssl to convert PFX to PEM (openssl is available on windows-latest and lab machines)
+    & openssl pkcs12 -in $pfxPath -out $certFile -clcerts -nokeys -passin pass:devpass 2>&1 | Out-Null
+    & openssl pkcs12 -in $pfxPath -out $keyFile -nocerts -nodes -passin pass:devpass 2>&1 | Out-Null
+
+    if (-not (Test-Path $certFile) -or -not (Test-Path $keyFile)) {
+      throw "openssl PFX-to-PEM conversion failed"
+    }
+
+    Write-Host "Generated PEM dev cert: $certFile"
+    Write-Host "Generated PEM dev key: $keyFile"
+  } finally {
+    # Clean up PFX and cert store entry
+    if (Test-Path $pfxPath) { Remove-Item $pfxPath -Force }
+    Remove-Item "Cert:\CurrentUser\My\$thumbprint" -Force -ErrorAction SilentlyContinue
+  }
+
+  return @{ CertFile = $certFile; KeyFile = $keyFile }
+}
+
+function Remove-PemDevCert {
+  <#
+    .SYNOPSIS
+    Removes PEM cert/key files from a directory.
+  #>
+  param([Parameter(Mandatory=$true)][string]$Dir)
+  @('dev_cert.pem', 'dev_key.pem') | ForEach-Object {
+    $p = Join-Path $Dir $_
+    if (Test-Path $p) {
+      Remove-Item $p -Force -ErrorAction SilentlyContinue
+      Write-Host "Removed PEM file: $p"
+    }
+  }
+}
+
 function Wait-JobWithTimeout {
   <#
     .SYNOPSIS
@@ -561,13 +640,19 @@ function Run-SendTest {
     [Parameter(Mandatory=$true)]$Session,
     [Parameter(Mandatory=$true)][string]$SenderOptions,
     [Parameter(Mandatory=$true)][string]$ReceiverOptions,
-    [Parameter(Mandatory=$true)][string]$RemoteCertThumbprint
+    [string]$RemoteCertThumbprint,
+    [string]$RemoteCertFile,
+    [string]$RemoteKeyFile
   )
 
-  # Server runs on remote — add cert-hash for the remote cert
+  # Server runs on remote — add cert args based on backend type
   $serverArgs = Convert-ArgStringToArray $ReceiverOptions
   $serverArgs = Normalize-Args -Tokens $serverArgs
-  $serverArgs += @('--cert-hash', $RemoteCertThumbprint)
+  if ($RemoteCertFile) {
+    $serverArgs += @('--cert-file', $RemoteCertFile, '--key-file', $RemoteKeyFile)
+  } else {
+    $serverArgs += @('--cert-hash', $RemoteCertThumbprint)
+  }
   Write-Host "[Local->Remote] Invoking remote echo_server with arguments:"
   if ($serverArgs -is [System.Array]) { foreach ($arg in $serverArgs) { Write-Host "  $arg" } } else { Write-Host "  $serverArgs" }
   $Job = Invoke-ToolInSession -Session $Session -RemoteDir $script:RemoteDir -ToolDir 'quic_echo' -ToolName "echo_server" -Options $serverArgs -WaitSeconds 0
@@ -637,13 +722,19 @@ function Run-RecvTest {
     [Parameter(Mandatory=$true)]$Session,
     [Parameter(Mandatory=$true)][string]$SenderOptions,
     [Parameter(Mandatory=$true)][string]$ReceiverOptions,
-    [Parameter(Mandatory=$true)][string]$LocalCertThumbprint
+    [string]$LocalCertThumbprint,
+    [string]$LocalCertFile,
+    [string]$LocalKeyFile
   )
 
   # Server runs locally — start first so it's listening before the client connects
   $serverArgs = Convert-ArgStringToArray $ReceiverOptions
   $serverArgs = Normalize-Args -Tokens $serverArgs
-  $serverArgs += @('--cert-hash', $LocalCertThumbprint)
+  if ($LocalCertFile) {
+    $serverArgs += @('--cert-file', $LocalCertFile, '--key-file', $LocalKeyFile)
+  } else {
+    $serverArgs += @('--cert-hash', $LocalCertThumbprint)
+  }
 
   Write-Host "[Local] Running: .\echo_server.exe (background process)"
   Write-Host "[Local] Arguments:"
@@ -785,13 +876,25 @@ try {
 
   # Generate dev certificates on both local and remote machines
   Write-Phase "Generating dev certificates for QUIC TLS"
-  if ($receiverBackend -eq 'msquic-km') {
-    $script:localCertStoreLocation = 'LocalMachine'
-    $script:remoteCertStoreLocation = 'LocalMachine'
+  $script:usesPemCerts = Test-BackendUsesPemCerts -Backend $receiverBackend
+  if ($script:usesPemCerts) {
+    Write-Phase "Backend '$receiverBackend' uses PEM certs (OpenSSL-based)"
+    $localPemCert = New-PemDevCert -OutputDir $cwd
+    $script:localPemCertDir = $cwd
+    # Copy PEM files to remote tool directory
+    $remoteToolDir = Join-Path $script:RemoteDir 'quic_echo'
+    Copy-Item -ToSession $Session -Path $localPemCert.CertFile -Destination (Join-Path $remoteToolDir 'dev_cert.pem') -Force
+    Copy-Item -ToSession $Session -Path $localPemCert.KeyFile -Destination (Join-Path $remoteToolDir 'dev_key.pem') -Force
+    Write-Phase "PEM cert/key copied to remote at $remoteToolDir"
+  } else {
+    if ($receiverBackend -eq 'msquic-km') {
+      $script:localCertStoreLocation = 'LocalMachine'
+      $script:remoteCertStoreLocation = 'LocalMachine'
+    }
+    Write-Phase "Receiver backend '$receiverBackend' will use local cert store '$script:localCertStoreLocation' and remote cert store '$script:remoteCertStoreLocation'"
+    $localCertThumbprint = New-QuicDevCert -StoreLocation $script:localCertStoreLocation
+    $remoteCertThumbprint = New-RemoteQuicDevCert -Session $Session -StoreLocation $script:remoteCertStoreLocation
   }
-  Write-Phase "Receiver backend '$receiverBackend' will use local cert store '$script:localCertStoreLocation' and remote cert store '$script:remoteCertStoreLocation'"
-  $localCertThumbprint = New-QuicDevCert -StoreLocation $script:localCertStoreLocation
-  $remoteCertThumbprint = New-RemoteQuicDevCert -Session $Session -StoreLocation $script:remoteCertStoreLocation
 
   # ---- Send phase ----
   Write-Phase "Starting CPU/perf counter jobs (send phase)"
@@ -799,7 +902,13 @@ try {
   $script:perfCounterJob = CapturePerformanceMonitorAsJob -DurationSeconds $durationInt -Counters $PerformanceCounters
 
   Write-Phase "Starting send test"
-  Run-SendTest -PeerName $PeerName -Session $Session -SenderOptions $SenderOptions -ReceiverOptions $ReceiverOptions -RemoteCertThumbprint $remoteCertThumbprint
+  if ($script:usesPemCerts) {
+    $remoteToolDir = Join-Path $script:RemoteDir 'quic_echo'
+    Run-SendTest -PeerName $PeerName -Session $Session -SenderOptions $SenderOptions -ReceiverOptions $ReceiverOptions `
+      -RemoteCertFile (Join-Path $remoteToolDir 'dev_cert.pem') -RemoteKeyFile (Join-Path $remoteToolDir 'dev_key.pem')
+  } else {
+    Run-SendTest -PeerName $PeerName -Session $Session -SenderOptions $SenderOptions -ReceiverOptions $ReceiverOptions -RemoteCertThumbprint $remoteCertThumbprint
+  }
   Write-Phase "Send test finished"
 
   Write-Phase "Waiting for CPU monitor job (send phase)"
@@ -833,7 +942,12 @@ try {
   $script:perfCounterJob = CapturePerformanceMonitorAsJob -DurationSeconds $durationInt -Counters $PerformanceCounters
 
   Write-Phase "Starting recv test"
-  Run-RecvTest -PeerName $PeerName -Session $Session -SenderOptions $SenderOptions -ReceiverOptions $ReceiverOptions -LocalCertThumbprint $localCertThumbprint
+  if ($script:usesPemCerts) {
+    Run-RecvTest -PeerName $PeerName -Session $Session -SenderOptions $SenderOptions -ReceiverOptions $ReceiverOptions `
+      -LocalCertFile (Join-Path $cwd 'dev_cert.pem') -LocalKeyFile (Join-Path $cwd 'dev_key.pem')
+  } else {
+    Run-RecvTest -PeerName $PeerName -Session $Session -SenderOptions $SenderOptions -ReceiverOptions $ReceiverOptions -LocalCertThumbprint $localCertThumbprint
+  }
   Write-Phase "Recv test finished"
 
   Write-Phase "Waiting for CPU monitor job (recv phase)"
@@ -903,9 +1017,23 @@ finally {
     }
 
     # Clean up dev certificates
-    Remove-QuicDevCert -Thumbprint $localCertThumbprint -StoreLocation $script:localCertStoreLocation
-    if ($Session) {
-      Remove-RemoteQuicDevCert -Session $Session -Thumbprint $remoteCertThumbprint -StoreLocation $script:remoteCertStoreLocation
+    if ($script:usesPemCerts) {
+      if ($script:localPemCertDir) { Remove-PemDevCert -Dir $script:localPemCertDir }
+      if ($Session) {
+        $remoteToolDir = Join-Path $script:RemoteDir 'quic_echo'
+        Invoke-Command -Session $Session -ArgumentList $remoteToolDir -ScriptBlock {
+          param($dir)
+          @('dev_cert.pem', 'dev_key.pem') | ForEach-Object {
+            $p = Join-Path $dir $_
+            if (Test-Path $p) { Remove-Item $p -Force -ErrorAction SilentlyContinue }
+          }
+        } -ErrorAction SilentlyContinue
+      }
+    } else {
+      Remove-QuicDevCert -Thumbprint $localCertThumbprint -StoreLocation $script:localCertStoreLocation
+      if ($Session) {
+        Remove-RemoteQuicDevCert -Session $Session -Thumbprint $remoteCertThumbprint -StoreLocation $script:remoteCertStoreLocation
+      }
     }
 
     if ($script:driverCodeSigningThumbprint) {
