@@ -857,6 +857,25 @@ try {
     Prepare-WinQuicEchoKmDriver -Session $Session -DriverSourcePath $kmDriverPath -RemoteDir $script:RemoteDir
     Install-LocalWinQuicEchoKmDriver -DriverSourcePath $kmDriverPath
     Install-RemoteWinQuicEchoKmDriver -Session $Session -DriverSourcePath $kmDriverPath -RemoteDir $script:RemoteDir
+
+    # Diagnostic: verify msquic.sys and WinQuicEcho driver status on both machines
+    Write-Phase "Verifying kernel driver status..."
+    Write-Host "Local msquic service:"
+    Get-Service msquic -ErrorAction SilentlyContinue | Select-Object Name, Status, StartType | Out-String | Write-Host
+    Write-Host "Local WinQuicEcho service:"
+    Get-Service WinQuicEcho -ErrorAction SilentlyContinue | Select-Object Name, Status, StartType | Out-String | Write-Host
+    Write-Host "Local msquic.sys exists: $(Test-Path "$env:SystemRoot\System32\drivers\msquic.sys")"
+
+    Write-Host "Remote driver diagnostics:"
+    Invoke-Command -Session $Session -ScriptBlock {
+      Write-Host "Remote msquic service:"
+      Get-Service msquic -ErrorAction SilentlyContinue | Select-Object Name, Status, StartType | Out-String | Write-Host
+      Write-Host "Remote WinQuicEcho service:"
+      Get-Service WinQuicEcho -ErrorAction SilentlyContinue | Select-Object Name, Status, StartType | Out-String | Write-Host
+      Write-Host "Remote msquic.sys exists: $(Test-Path "$env:SystemRoot\System32\drivers\msquic.sys")"
+      # Check Windows version
+      Write-Host "Remote OS: $([System.Environment]::OSVersion.VersionString)"
+    } -ErrorAction SilentlyContinue
   }
 
   # Diagnostic: verify executables and msquic.dll are present locally and remotely
