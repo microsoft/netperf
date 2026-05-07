@@ -421,14 +421,12 @@ jobs:
     # Consider migrating to an organization-owned repository to avoid maintenance risks if the
     # personal account becomes unavailable. For now, this is the authoritative source for the
     # WinQuicEcho tool.
-    uses: Alan-Jowett/WinQuicEcho/.github/workflows/reusable-build.yml@53cd6c01279eb789f6b52218121c248088a0d608
+    uses: Alan-Jowett/WinQuicEcho/.github/workflows/reusable-build.yml@main
     with:
       artifact_name: quic_echo_test
       config: 'Release'
       repository: 'Alan-Jowett/WinQuicEcho'
-      # Pinned to the same audited commit as the workflow ref to prevent
-      # arbitrary code execution via user-controlled inputs.
-      ref: '53cd6c01279eb789f6b52218121c248088a0d608'
+      ref: ${{ inputs.test_tool_ref || 'main' }}
 
   test_quic_echo:
     if: ${{ inputs.test_tool == 'quicEcho' }}
