@@ -198,7 +198,16 @@ function Install-LocalMsQuicKmDriver {
     }
     Write-Phase "Deleting existing local $serviceName service"
     & sc.exe delete $serviceName | Out-Null
-    Start-Sleep -Seconds 2
+    # Wait for Windows to fully release the service entry
+    for ($i = 0; $i -lt 30; $i++) {
+      $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+      if ($null -eq $svc) { break }
+      Write-Host "Waiting for $serviceName service to be fully deleted ($i)..."
+      Start-Sleep -Seconds 1
+    }
+    if ($null -ne (Get-Service -Name $serviceName -ErrorAction SilentlyContinue)) {
+      Write-Warning "$serviceName service still present after 30s; proceeding anyway"
+    }
   }
 
   $driverDir = Join-Path $env:ProgramData "MsQuic\drivers\$(Get-Date -Format 'yyyyMMdd_HHmmss')"
@@ -262,7 +271,12 @@ function Install-RemoteMsQuicKmDriver {
       }
       Write-Host "Deleting existing remote $serviceName service"
       & sc.exe delete $serviceName | Out-Null
-      Start-Sleep -Seconds 2
+      for ($i = 0; $i -lt 30; $i++) {
+        $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+        if ($null -eq $svc) { break }
+        Write-Host "Waiting for $serviceName service to be fully deleted ($i)..."
+        Start-Sleep -Seconds 1
+      }
     }
 
     $driverDir = Join-Path $env:ProgramData "MsQuic\drivers\$(Get-Date -Format 'yyyyMMdd_HHmmss')"
