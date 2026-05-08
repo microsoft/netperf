@@ -170,149 +170,6 @@ function Get-QuicEchoKmDriverPath {
   return $driverPath
 }
 
-function Get-MsQuicKmDriverPath {
-  $toolRoot = Split-Path -Parent $scriptDir
-  $driverPath = Join-Path $toolRoot 'km\msquic.sys'
-  if (-not (Test-Path -LiteralPath $driverPath)) {
-    return $null
-  }
-
-  return $driverPath
-}
-
-function Install-LocalMsQuicKmDriver {
-  param([Parameter(Mandatory=$true)][string]$DriverSourcePath)
-
-  if (-not (Test-IsAdministrator)) {
-    throw "Installing the msquic kernel driver locally requires administrator privileges."
-  }
-
-  $serviceName = 'msquic'
-
-  # Stop the service if running so we can replace the binary.
-  $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-  if ($null -ne $svc -and $svc.Status -eq 'Running') {
-    Write-Phase "Stopping local $serviceName service"
-    & sc.exe stop $serviceName | Out-Null
-    Start-Sleep -Seconds 3
-  }
-
-  # Query the existing service's binary path so we can overwrite in-place,
-  # avoiding service deletion/recreation issues. If no service exists, create
-  # one with a fresh path.
-  $existingBinPath = $null
-  if ($null -ne $svc) {
-    $qcOutput = & sc.exe qc $serviceName 2>&1 | Out-String
-    if ($qcOutput -match 'BINARY_PATH_NAME\s*:\s*(.+)') {
-      $existingBinPath = $Matches[1].Trim()
-    }
-  }
-
-  if ($existingBinPath -and (Split-Path -Parent $existingBinPath | Test-Path)) {
-    $driverDest = $existingBinPath
-    Write-Phase "Overwriting existing msquic.sys at $driverDest"
-  } else {
-    $driverDir = Join-Path $env:ProgramData "MsQuic\drivers\$(Get-Date -Format 'yyyyMMdd_HHmmss')"
-    if (-not (Test-Path -LiteralPath $driverDir)) {
-      New-Item -ItemType Directory -Path $driverDir -Force | Out-Null
-    }
-    $driverDest = Join-Path $driverDir 'msquic.sys'
-    Write-Phase "No existing service path; using $driverDest"
-  }
-
-  Copy-Item -LiteralPath $DriverSourcePath -Destination $driverDest -Force
-
-  if ($null -eq $svc) {
-    Write-Phase "Creating local $serviceName kernel service"
-    & sc.exe create $serviceName type= kernel binPath= $driverDest start= demand | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-      throw "Local sc create $serviceName failed with exit code $LASTEXITCODE"
-    }
-  }
-
-  Write-Phase "Starting local $serviceName kernel service"
-  & sc.exe start $serviceName
-  if ($LASTEXITCODE -ne 0) {
-    throw "Local sc start $serviceName failed with exit code $LASTEXITCODE"
-  }
-}
-
-function Install-RemoteMsQuicKmDriver {
-  param(
-    [Parameter(Mandatory=$true)]$Session,
-    [Parameter(Mandatory=$true)][string]$DriverSourcePath,
-    [Parameter(Mandatory=$true)][string]$RemoteDir
-  )
-
-  $remoteKmDir = Join-Path (Join-Path $RemoteDir 'quic_echo') 'km'
-  $remoteMsQuicPath = Join-Path $remoteKmDir 'msquic.sys'
-
-  Invoke-Command -Session $Session -ArgumentList $remoteKmDir -ScriptBlock {
-    param($kmDir)
-    if (-not (Test-Path -LiteralPath $kmDir)) {
-      New-Item -ItemType Directory -Path $kmDir -Force | Out-Null
-    }
-  } -ErrorAction Stop
-
-  Write-Phase "Copying msquic.sys to remote path $remoteMsQuicPath"
-  Copy-Item -ToSession $Session -LiteralPath $DriverSourcePath -Destination $remoteMsQuicPath -Force
-
-  Invoke-Command -Session $Session -ArgumentList $remoteMsQuicPath -ScriptBlock {
-    param($msquicSourcePath)
-
-    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
-    $principal = [Security.Principal.WindowsPrincipal]::new($identity)
-    if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-      throw "Installing msquic kernel driver remotely requires administrator privileges."
-    }
-
-    $serviceName = 'msquic'
-    $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-    if ($null -ne $svc -and $svc.Status -eq 'Running') {
-      Write-Host "Stopping remote $serviceName service"
-      & sc.exe stop $serviceName | Out-Null
-      Start-Sleep -Seconds 3
-    }
-
-    # Query existing binary path to overwrite in-place
-    $existingBinPath = $null
-    if ($null -ne $svc) {
-      $qcOutput = & sc.exe qc $serviceName 2>&1 | Out-String
-      if ($qcOutput -match 'BINARY_PATH_NAME\s*:\s*(.+)') {
-        $existingBinPath = $Matches[1].Trim()
-      }
-    }
-
-    if ($existingBinPath -and (Split-Path -Parent $existingBinPath | Test-Path)) {
-      $driverDest = $existingBinPath
-      Write-Host "Overwriting existing remote msquic.sys at $driverDest"
-    } else {
-      $driverDir = Join-Path $env:ProgramData "MsQuic\drivers\$(Get-Date -Format 'yyyyMMdd_HHmmss')"
-      if (-not (Test-Path -LiteralPath $driverDir)) {
-        New-Item -ItemType Directory -Path $driverDir -Force | Out-Null
-      }
-      $driverDest = Join-Path $driverDir 'msquic.sys'
-      Write-Host "No existing service path; using $driverDest"
-    }
-
-    Copy-Item -LiteralPath $msquicSourcePath -Destination $driverDest -Force
-
-    if ($null -eq $svc) {
-      Write-Host "Creating remote $serviceName kernel service"
-      & sc.exe create $serviceName type= kernel binPath= $driverDest start= demand | Out-Null
-      if ($LASTEXITCODE -ne 0) {
-        throw "Remote sc create $serviceName failed with exit code $LASTEXITCODE"
-      }
-    }
-
-    Write-Host "Starting remote $serviceName kernel service"
-    & sc.exe start $serviceName
-    if ($LASTEXITCODE -ne 0) {
-      throw "Remote sc start $serviceName failed with exit code $LASTEXITCODE"
-    }
-  } -ErrorAction Stop
-}
-
 function Test-LocalTestSigningEnabled {
   $output = (& bcdedit /enum '{current}' 2>$null | Out-String)
   return $output -match '(?im)^\s*testsigning\s+Yes\s*$'
@@ -1224,18 +1081,6 @@ try {
   if ($receiverBackend -eq 'msquic-km') {
     $kmDriverPath = Get-QuicEchoKmDriverPath
 
-    # Deploy msquic.sys (kernel-mode) if included in the build artifact.
-    # This ensures the lab machines run a compatible version of msquic.sys
-    # that matches the headers the WinQuicEcho kernel driver was built against.
-    $msquicKmPath = Get-MsQuicKmDriverPath
-    if ($msquicKmPath) {
-      Write-Phase "Found msquic.sys in build artifact; deploying kernel-mode msquic locally and remotely"
-      Install-LocalMsQuicKmDriver -DriverSourcePath $msquicKmPath
-      Install-RemoteMsQuicKmDriver -Session $Session -DriverSourcePath $msquicKmPath -RemoteDir $script:RemoteDir
-    } else {
-      Write-Phase "No msquic.sys in build artifact; relying on system-installed msquic.sys"
-    }
-
     Write-Phase "Receiver backend is msquic-km; installing WinQuicEcho kernel driver locally and remotely"
     Prepare-WinQuicEchoKmDriver -Session $Session -DriverSourcePath $kmDriverPath -RemoteDir $script:RemoteDir
     Install-LocalWinQuicEchoKmDriver -DriverSourcePath $kmDriverPath
@@ -1245,18 +1090,29 @@ try {
     Write-Phase "Verifying kernel driver status..."
     Write-Host "Local msquic service:"
     Get-Service msquic -ErrorAction SilentlyContinue | Select-Object Name, Status, StartType | Out-String | Write-Host
+    Write-Host "Local msquic.sys version:"
+    $localMsquicSys = Join-Path $env:SystemRoot 'System32\drivers\msquic.sys'
+    if (Test-Path $localMsquicSys) {
+      (Get-Item $localMsquicSys).VersionInfo | Select-Object FileVersion, ProductVersion, FileDescription | Out-String | Write-Host
+    } else { Write-Host "  NOT FOUND at $localMsquicSys" }
+    Write-Host "Local msquic service config:"
+    & sc.exe qc msquic 2>&1 | Out-String | Write-Host
     Write-Host "Local WinQuicEcho service:"
     Get-Service WinQuicEcho -ErrorAction SilentlyContinue | Select-Object Name, Status, StartType | Out-String | Write-Host
-    Write-Host "Local msquic.sys exists: $(Test-Path "$env:SystemRoot\System32\drivers\msquic.sys")"
 
     Write-Host "Remote driver diagnostics:"
     Invoke-Command -Session $Session -ScriptBlock {
       Write-Host "Remote msquic service:"
       Get-Service msquic -ErrorAction SilentlyContinue | Select-Object Name, Status, StartType | Out-String | Write-Host
+      Write-Host "Remote msquic.sys version:"
+      $msquicSys = Join-Path $env:SystemRoot 'System32\drivers\msquic.sys'
+      if (Test-Path $msquicSys) {
+        (Get-Item $msquicSys).VersionInfo | Select-Object FileVersion, ProductVersion, FileDescription | Out-String | Write-Host
+      } else { Write-Host "  NOT FOUND" }
+      Write-Host "Remote msquic service config:"
+      & sc.exe qc msquic 2>&1 | Out-String | Write-Host
       Write-Host "Remote WinQuicEcho service:"
       Get-Service WinQuicEcho -ErrorAction SilentlyContinue | Select-Object Name, Status, StartType | Out-String | Write-Host
-      Write-Host "Remote msquic.sys exists: $(Test-Path "$env:SystemRoot\System32\drivers\msquic.sys")"
-      # Check Windows version
       Write-Host "Remote OS: $([System.Environment]::OSVersion.VersionString)"
     } -ErrorAction SilentlyContinue
   }
