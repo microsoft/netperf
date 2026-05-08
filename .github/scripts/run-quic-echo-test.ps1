@@ -200,7 +200,6 @@ function Install-MsQuicKmDriver {
     if ($null -ne $svc -and $svc.Status -eq 'Running') {
       Write-Host "[$label] Stopping $serviceName service"
       & sc.exe stop $serviceName | Out-Null
-      # Wait for service to actually stop
       for ($i = 0; $i -lt 15; $i++) {
         $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
         if ($null -eq $svc -or $svc.Status -eq 'Stopped') { break }
@@ -215,14 +214,32 @@ function Install-MsQuicKmDriver {
     Copy-Item -LiteralPath $msquicSysPath -Destination $destPath -Force
     Write-Host "[$label] Copied msquic.sys to $destPath"
 
+    $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
     if ($null -eq $svc) {
-      Write-Host "[$label] No existing msquic service; creating one"
+      # Service doesn't exist — create it
+      Write-Host "[$label] Creating $serviceName service"
       & sc.exe create $serviceName type= kernel binPath= $destPath start= demand | Out-Null
       if ($LASTEXITCODE -ne 0) { throw "[$label] sc create msquic failed ($LASTEXITCODE)" }
     } else {
+      # Try sc config; if it fails with 1072 (SERVICE_MARKED_FOR_DELETE),
+      # wait for the zombie to clear and then create fresh.
       Write-Host "[$label] Reconfiguring msquic service binPath to $destPath"
       & sc.exe config $serviceName binPath= $destPath | Out-Null
-      if ($LASTEXITCODE -ne 0) { throw "[$label] sc config msquic failed ($LASTEXITCODE)" }
+      if ($LASTEXITCODE -eq 1072) {
+        Write-Host "[$label] Service is marked for delete; waiting for cleanup..."
+        for ($i = 0; $i -lt 30; $i++) {
+          if ($null -eq (Get-Service -Name $serviceName -ErrorAction SilentlyContinue)) { break }
+          Start-Sleep -Seconds 1
+        }
+        if ($null -ne (Get-Service -Name $serviceName -ErrorAction SilentlyContinue)) {
+          throw "[$label] msquic service stuck in MARKED_FOR_DELETE after 30s"
+        }
+        Write-Host "[$label] Zombie cleared; creating fresh $serviceName service"
+        & sc.exe create $serviceName type= kernel binPath= $destPath start= demand | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "[$label] sc create msquic failed ($LASTEXITCODE)" }
+      } elseif ($LASTEXITCODE -ne 0) {
+        throw "[$label] sc config msquic failed ($LASTEXITCODE)"
+      }
     }
 
     Write-Host "[$label] Starting $serviceName service"
