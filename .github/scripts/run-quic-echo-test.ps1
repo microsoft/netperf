@@ -189,36 +189,44 @@ function Install-LocalMsQuicKmDriver {
 
   $serviceName = 'msquic'
 
-  # Stop the inbox msquic service if running so we can reconfigure it.
+  # Stop the service if running so we can replace the binary.
   $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
   if ($null -ne $svc -and $svc.Status -eq 'Running') {
-    Write-Phase "Stopping existing local $serviceName service"
+    Write-Phase "Stopping local $serviceName service"
     & sc.exe stop $serviceName | Out-Null
     Start-Sleep -Seconds 3
   }
 
-  $driverDir = Join-Path $env:ProgramData "MsQuic\drivers\$(Get-Date -Format 'yyyyMMdd_HHmmss')"
-  if (-not (Test-Path -LiteralPath $driverDir)) {
-    New-Item -ItemType Directory -Path $driverDir -Force | Out-Null
+  # Query the existing service's binary path so we can overwrite in-place,
+  # avoiding service deletion/recreation issues. If no service exists, create
+  # one with a fresh path.
+  $existingBinPath = $null
+  if ($null -ne $svc) {
+    $qcOutput = & sc.exe qc $serviceName 2>&1 | Out-String
+    if ($qcOutput -match 'BINARY_PATH_NAME\s*:\s*(.+)') {
+      $existingBinPath = $Matches[1].Trim()
+    }
   }
-  $driverDest = Join-Path $driverDir 'msquic.sys'
 
-  Write-Phase "Copying local msquic.sys to $driverDest"
+  if ($existingBinPath -and (Split-Path -Parent $existingBinPath | Test-Path)) {
+    $driverDest = $existingBinPath
+    Write-Phase "Overwriting existing msquic.sys at $driverDest"
+  } else {
+    $driverDir = Join-Path $env:ProgramData "MsQuic\drivers\$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+    if (-not (Test-Path -LiteralPath $driverDir)) {
+      New-Item -ItemType Directory -Path $driverDir -Force | Out-Null
+    }
+    $driverDest = Join-Path $driverDir 'msquic.sys'
+    Write-Phase "No existing service path; using $driverDest"
+  }
+
   Copy-Item -LiteralPath $DriverSourcePath -Destination $driverDest -Force
 
   if ($null -eq $svc) {
-    # No existing service — create one
     Write-Phase "Creating local $serviceName kernel service"
     & sc.exe create $serviceName type= kernel binPath= $driverDest start= demand | Out-Null
     if ($LASTEXITCODE -ne 0) {
       throw "Local sc create $serviceName failed with exit code $LASTEXITCODE"
-    }
-  } else {
-    # Reconfigure the existing service to point at our binary
-    Write-Phase "Reconfiguring local $serviceName service to use $driverDest"
-    & sc.exe config $serviceName binPath= $driverDest | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-      throw "Local sc config $serviceName failed with exit code $LASTEXITCODE"
     }
   }
 
@@ -258,23 +266,35 @@ function Install-RemoteMsQuicKmDriver {
       throw "Installing msquic kernel driver remotely requires administrator privileges."
     }
 
-    # Use a distinct service name so we don't conflict with the inbox msquic
-    # service which may have dependents that prevent deletion.
     $serviceName = 'msquic'
     $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
     if ($null -ne $svc -and $svc.Status -eq 'Running') {
-      Write-Host "Stopping existing remote $serviceName service"
+      Write-Host "Stopping remote $serviceName service"
       & sc.exe stop $serviceName | Out-Null
       Start-Sleep -Seconds 3
     }
 
-    $driverDir = Join-Path $env:ProgramData "MsQuic\drivers\$(Get-Date -Format 'yyyyMMdd_HHmmss')"
-    if (-not (Test-Path -LiteralPath $driverDir)) {
-      New-Item -ItemType Directory -Path $driverDir -Force | Out-Null
+    # Query existing binary path to overwrite in-place
+    $existingBinPath = $null
+    if ($null -ne $svc) {
+      $qcOutput = & sc.exe qc $serviceName 2>&1 | Out-String
+      if ($qcOutput -match 'BINARY_PATH_NAME\s*:\s*(.+)') {
+        $existingBinPath = $Matches[1].Trim()
+      }
     }
-    $driverDest = Join-Path $driverDir 'msquic.sys'
 
-    Write-Host "Copying remote msquic.sys to $driverDest"
+    if ($existingBinPath -and (Split-Path -Parent $existingBinPath | Test-Path)) {
+      $driverDest = $existingBinPath
+      Write-Host "Overwriting existing remote msquic.sys at $driverDest"
+    } else {
+      $driverDir = Join-Path $env:ProgramData "MsQuic\drivers\$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+      if (-not (Test-Path -LiteralPath $driverDir)) {
+        New-Item -ItemType Directory -Path $driverDir -Force | Out-Null
+      }
+      $driverDest = Join-Path $driverDir 'msquic.sys'
+      Write-Host "No existing service path; using $driverDest"
+    }
+
     Copy-Item -LiteralPath $msquicSourcePath -Destination $driverDest -Force
 
     if ($null -eq $svc) {
@@ -282,12 +302,6 @@ function Install-RemoteMsQuicKmDriver {
       & sc.exe create $serviceName type= kernel binPath= $driverDest start= demand | Out-Null
       if ($LASTEXITCODE -ne 0) {
         throw "Remote sc create $serviceName failed with exit code $LASTEXITCODE"
-      }
-    } else {
-      Write-Host "Reconfiguring remote $serviceName service to use $driverDest"
-      & sc.exe config $serviceName binPath= $driverDest | Out-Null
-      if ($LASTEXITCODE -ne 0) {
-        throw "Remote sc config $serviceName failed with exit code $LASTEXITCODE"
       }
     }
 
