@@ -170,6 +170,85 @@ function Get-QuicEchoKmDriverPath {
   return $driverPath
 }
 
+function Get-MsQuicKmDriverPath {
+  $toolRoot = Split-Path -Parent $scriptDir
+  $driverPath = Join-Path $toolRoot 'km\msquic.sys'
+  if (-not (Test-Path -LiteralPath $driverPath)) {
+    return $null
+  }
+  return $driverPath
+}
+
+function Install-MsQuicKmDriver {
+  <#
+    .SYNOPSIS
+    Reconfigures the existing msquic service to load our build of msquic.sys.
+    Stops the service, copies our binary to a stable path, updates binPath
+    via sc config, and restarts.
+  #>
+  param(
+    [Parameter(Mandatory=$true)][string]$DriverSourcePath,
+    $Session
+  )
+
+  $scriptBlock = {
+    param([string]$msquicSysPath, [string]$label)
+
+    $serviceName = 'msquic'
+    $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+
+    if ($null -ne $svc -and $svc.Status -eq 'Running') {
+      Write-Host "[$label] Stopping $serviceName service"
+      & sc.exe stop $serviceName | Out-Null
+      # Wait for service to actually stop
+      for ($i = 0; $i -lt 15; $i++) {
+        $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+        if ($null -eq $svc -or $svc.Status -eq 'Stopped') { break }
+        Start-Sleep -Seconds 1
+      }
+    }
+
+    # Place our msquic.sys in a stable path that survives across the test
+    $destDir = Join-Path $env:ProgramData 'MsQuic\km'
+    if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
+    $destPath = Join-Path $destDir 'msquic.sys'
+    Copy-Item -LiteralPath $msquicSysPath -Destination $destPath -Force
+    Write-Host "[$label] Copied msquic.sys to $destPath"
+
+    if ($null -eq $svc) {
+      Write-Host "[$label] No existing msquic service; creating one"
+      & sc.exe create $serviceName type= kernel binPath= $destPath start= demand | Out-Null
+      if ($LASTEXITCODE -ne 0) { throw "[$label] sc create msquic failed ($LASTEXITCODE)" }
+    } else {
+      Write-Host "[$label] Reconfiguring msquic service binPath to $destPath"
+      & sc.exe config $serviceName binPath= $destPath | Out-Null
+      if ($LASTEXITCODE -ne 0) { throw "[$label] sc config msquic failed ($LASTEXITCODE)" }
+    }
+
+    Write-Host "[$label] Starting $serviceName service"
+    & sc.exe start $serviceName | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "[$label] sc start msquic failed ($LASTEXITCODE)" }
+    Write-Host "[$label] $serviceName service started with custom binary"
+  }
+
+  # Local
+  Write-Phase "Deploying custom msquic.sys locally"
+  & $scriptBlock -msquicSysPath $DriverSourcePath -label 'Local'
+
+  # Remote
+  if ($Session) {
+    Write-Phase "Deploying custom msquic.sys remotely"
+    $remoteDir = Join-Path $script:RemoteDir 'quic_echo\km'
+    Invoke-Command -Session $Session -ArgumentList $remoteDir -ScriptBlock {
+      param($kmDir)
+      if (-not (Test-Path $kmDir)) { New-Item -ItemType Directory -Path $kmDir -Force | Out-Null }
+    } -ErrorAction Stop
+    $remoteMsquicPath = Join-Path $remoteDir 'msquic.sys'
+    Copy-Item -ToSession $Session -LiteralPath $DriverSourcePath -Destination $remoteMsquicPath -Force
+    Invoke-Command -Session $Session -ArgumentList $remoteMsquicPath -ScriptBlock $scriptBlock -ErrorAction Stop
+  }
+}
+
 function Test-LocalTestSigningEnabled {
   $output = (& bcdedit /enum '{current}' 2>$null | Out-String)
   return $output -match '(?im)^\s*testsigning\s+Yes\s*$'
@@ -1080,6 +1159,16 @@ try {
   $receiverBackend = Get-ReceiverBackend -Options $ReceiverOptions
   if ($receiverBackend -eq 'msquic-km') {
     $kmDriverPath = Get-QuicEchoKmDriverPath
+
+    # Deploy version-matched msquic.sys if included in the build artifact.
+    # The inbox msquic.sys v2.2.5 on Server 2022 returns STATUS_NOT_SUPPORTED
+    # (0xc00000bb) from MsQuicOpenVersion(2). We need the v2.5.6 build.
+    $msquicKmPath = Get-MsQuicKmDriverPath
+    if ($msquicKmPath) {
+      Install-MsQuicKmDriver -DriverSourcePath $msquicKmPath -Session $Session
+    } else {
+      Write-Phase "No msquic.sys in build artifact; relying on system-installed msquic.sys"
+    }
 
     Write-Phase "Receiver backend is msquic-km; installing WinQuicEcho kernel driver locally and remotely"
     Prepare-WinQuicEchoKmDriver -Session $Session -DriverSourcePath $kmDriverPath -RemoteDir $script:RemoteDir
