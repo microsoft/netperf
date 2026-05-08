@@ -1301,6 +1301,30 @@ finally {
     # Best-effort WPR cancel in case inner try/finally was bypassed
     try { & wpr -cancel 2>$null } catch { }
 
+    # Stop and dump MsQuic ETW trace if it was started
+    if ($receiverBackend -eq 'msquic-km' -and $Session) {
+      try {
+        Write-Phase "Stopping MsQuic ETW trace on remote machine"
+        Invoke-Command -Session $Session -ScriptBlock {
+          logman stop msquic_diag -ets 2>$null | Out-Null
+          $etlPath = 'C:\_work\msquic_diag.etl'
+          if (Test-Path $etlPath) {
+            Write-Host "MsQuic ETW trace saved ($([math]::Round((Get-Item $etlPath).Length / 1KB)) KB)"
+            Write-Host "=== MsQuic ETW trace events ==="
+            tracerpt $etlPath -o C:\_work\msquic_diag.csv -of CSV -y 2>&1 | Out-Null
+            if (Test-Path 'C:\_work\msquic_diag.csv') {
+              Get-Content 'C:\_work\msquic_diag.csv' -TotalCount 200 | ForEach-Object { Write-Host $_ }
+            } else {
+              Write-Host "tracerpt decode failed; ETL available at $etlPath"
+            }
+            Write-Host "=== End MsQuic ETW trace ==="
+          }
+        } -ErrorAction SilentlyContinue
+      } catch {
+        Write-Warning "Failed to collect MsQuic ETW trace: $($_.Exception.Message)"
+      }
+    }
+
     # Kill the specific local echo_server process if it's still running
     if ($script:serverProc -and -not $script:serverProc.HasExited) {
       Write-Warning "Cleaning up lingering echo_server (PID $($script:serverProc.Id))"
