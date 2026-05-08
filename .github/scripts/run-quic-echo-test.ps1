@@ -1155,6 +1155,19 @@ try {
   }
 
   # ---- Send phase ----
+  # Start MsQuic ETW trace on remote machine to diagnose kernel driver failures
+  if ($receiverBackend -eq 'msquic-km') {
+    Write-Phase "Starting MsQuic ETW trace on remote machine for diagnostics"
+    Invoke-Command -Session $Session -ScriptBlock {
+      # Microsoft-Quic provider GUID
+      $msquicGuid = '{ff15e657-4f26-570e-88ab-0796b258d11c}'
+      logman stop msquic_diag -ets 2>$null | Out-Null
+      logman create trace msquic_diag -ets -o C:\_work\msquic_diag.etl -p $msquicGuid 0xFFFFFFFF 5 -nb 16 256 -bs 1024 -mode Circular -max 64
+      if ($LASTEXITCODE -ne 0) { Write-Warning "Failed to start MsQuic ETW trace (exit code $LASTEXITCODE)" }
+      else { Write-Host "MsQuic ETW trace started" }
+    } -ErrorAction SilentlyContinue
+  }
+
   Write-Phase "Starting CPU/perf counter jobs (send phase)"
   $script:cpuMonitorJob = CaptureIndividualCpuUsagePerformanceMonitorAsJob -DurationSeconds $durationInt
   $script:perfCounterJob = CapturePerformanceMonitorAsJob -DurationSeconds $durationInt -Counters $PerformanceCounters
@@ -1168,6 +1181,35 @@ try {
     Run-SendTest -PeerName $PeerName -Session $Session -SenderOptions $SenderOptions -ReceiverOptions $ReceiverOptions -RemoteCertThumbprint $remoteCertThumbprint
   }
   Write-Phase "Send test finished"
+
+  # Stop and decode MsQuic ETW trace on remote machine
+  if ($receiverBackend -eq 'msquic-km') {
+    Write-Phase "Stopping MsQuic ETW trace on remote machine"
+    Invoke-Command -Session $Session -ScriptBlock {
+      logman stop msquic_diag -ets 2>$null | Out-Null
+      $etlPath = 'C:\_work\msquic_diag.etl'
+      if (Test-Path $etlPath) {
+        Write-Host "MsQuic ETW trace saved to $etlPath ($(((Get-Item $etlPath).Length / 1KB).ToString('N0')) KB)"
+        # Decode the trace to text for inspection
+        Write-Host "=== MsQuic ETW trace events ==="
+        $traceOutput = & netsh trace convert input=$etlPath output=C:\_work\msquic_diag.txt overwrite=yes 2>&1
+        if (Test-Path 'C:\_work\msquic_diag.txt') {
+          Get-Content 'C:\_work\msquic_diag.txt' -TotalCount 200 | ForEach-Object { Write-Host $_ }
+        } else {
+          # Fall back to tracerpt if netsh trace convert doesn't work
+          tracerpt $etlPath -o C:\_work\msquic_diag.csv -of CSV -y 2>&1 | Out-Null
+          if (Test-Path 'C:\_work\msquic_diag.csv') {
+            Get-Content 'C:\_work\msquic_diag.csv' -TotalCount 200 | ForEach-Object { Write-Host $_ }
+          } else {
+            Write-Host "Could not decode ETL trace. Raw file available at $etlPath"
+          }
+        }
+        Write-Host "=== End MsQuic ETW trace ==="
+      } else {
+        Write-Host "No MsQuic ETW trace file found"
+      }
+    } -ErrorAction SilentlyContinue
+  }
 
   Write-Phase "Waiting for CPU monitor job (send phase)"
   Wait-JobWithProgress -Job $script:cpuMonitorJob -Name 'CPU monitor (send)'
