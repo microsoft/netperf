@@ -189,25 +189,12 @@ function Install-LocalMsQuicKmDriver {
 
   $serviceName = 'msquic'
 
+  # Stop the inbox msquic service if running so we can reconfigure it.
   $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-  if ($null -ne $svc) {
-    if ($svc.Status -eq 'Running') {
-      Write-Phase "Stopping existing local $serviceName service"
-      & sc.exe stop $serviceName | Out-Null
-      Start-Sleep -Seconds 2
-    }
-    Write-Phase "Deleting existing local $serviceName service"
-    & sc.exe delete $serviceName | Out-Null
-    # Wait for Windows to fully release the service entry
-    for ($i = 0; $i -lt 30; $i++) {
-      $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-      if ($null -eq $svc) { break }
-      Write-Host "Waiting for $serviceName service to be fully deleted ($i)..."
-      Start-Sleep -Seconds 1
-    }
-    if ($null -ne (Get-Service -Name $serviceName -ErrorAction SilentlyContinue)) {
-      Write-Warning "$serviceName service still present after 30s; proceeding anyway"
-    }
+  if ($null -ne $svc -and $svc.Status -eq 'Running') {
+    Write-Phase "Stopping existing local $serviceName service"
+    & sc.exe stop $serviceName | Out-Null
+    Start-Sleep -Seconds 3
   }
 
   $driverDir = Join-Path $env:ProgramData "MsQuic\drivers\$(Get-Date -Format 'yyyyMMdd_HHmmss')"
@@ -219,10 +206,20 @@ function Install-LocalMsQuicKmDriver {
   Write-Phase "Copying local msquic.sys to $driverDest"
   Copy-Item -LiteralPath $DriverSourcePath -Destination $driverDest -Force
 
-  Write-Phase "Creating local $serviceName kernel service"
-  & sc.exe create $serviceName type= kernel binPath= $driverDest start= demand | Out-Null
-  if ($LASTEXITCODE -ne 0) {
-    throw "Local sc create $serviceName failed with exit code $LASTEXITCODE"
+  if ($null -eq $svc) {
+    # No existing service — create one
+    Write-Phase "Creating local $serviceName kernel service"
+    & sc.exe create $serviceName type= kernel binPath= $driverDest start= demand | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+      throw "Local sc create $serviceName failed with exit code $LASTEXITCODE"
+    }
+  } else {
+    # Reconfigure the existing service to point at our binary
+    Write-Phase "Reconfiguring local $serviceName service to use $driverDest"
+    & sc.exe config $serviceName binPath= $driverDest | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+      throw "Local sc config $serviceName failed with exit code $LASTEXITCODE"
+    }
   }
 
   Write-Phase "Starting local $serviceName kernel service"
@@ -261,22 +258,14 @@ function Install-RemoteMsQuicKmDriver {
       throw "Installing msquic kernel driver remotely requires administrator privileges."
     }
 
+    # Use a distinct service name so we don't conflict with the inbox msquic
+    # service which may have dependents that prevent deletion.
     $serviceName = 'msquic'
     $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-    if ($null -ne $svc) {
-      if ($svc.Status -eq 'Running') {
-        Write-Host "Stopping existing remote $serviceName service"
-        & sc.exe stop $serviceName | Out-Null
-        Start-Sleep -Seconds 2
-      }
-      Write-Host "Deleting existing remote $serviceName service"
-      & sc.exe delete $serviceName | Out-Null
-      for ($i = 0; $i -lt 30; $i++) {
-        $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-        if ($null -eq $svc) { break }
-        Write-Host "Waiting for $serviceName service to be fully deleted ($i)..."
-        Start-Sleep -Seconds 1
-      }
+    if ($null -ne $svc -and $svc.Status -eq 'Running') {
+      Write-Host "Stopping existing remote $serviceName service"
+      & sc.exe stop $serviceName | Out-Null
+      Start-Sleep -Seconds 3
     }
 
     $driverDir = Join-Path $env:ProgramData "MsQuic\drivers\$(Get-Date -Format 'yyyyMMdd_HHmmss')"
@@ -288,10 +277,18 @@ function Install-RemoteMsQuicKmDriver {
     Write-Host "Copying remote msquic.sys to $driverDest"
     Copy-Item -LiteralPath $msquicSourcePath -Destination $driverDest -Force
 
-    Write-Host "Creating remote $serviceName kernel service"
-    & sc.exe create $serviceName type= kernel binPath= $driverDest start= demand | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-      throw "Remote sc create $serviceName failed with exit code $LASTEXITCODE"
+    if ($null -eq $svc) {
+      Write-Host "Creating remote $serviceName kernel service"
+      & sc.exe create $serviceName type= kernel binPath= $driverDest start= demand | Out-Null
+      if ($LASTEXITCODE -ne 0) {
+        throw "Remote sc create $serviceName failed with exit code $LASTEXITCODE"
+      }
+    } else {
+      Write-Host "Reconfiguring remote $serviceName service to use $driverDest"
+      & sc.exe config $serviceName binPath= $driverDest | Out-Null
+      if ($LASTEXITCODE -ne 0) {
+        throw "Remote sc config $serviceName failed with exit code $LASTEXITCODE"
+      }
     }
 
     Write-Host "Starting remote $serviceName kernel service"
