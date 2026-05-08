@@ -242,6 +242,19 @@ function Install-MsQuicKmDriver {
       }
     }
 
+    # After config, ensure service is stopped so the new binary loads on start.
+    # A dependent service may have restarted it during the config window.
+    $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+    if ($null -ne $svc -and $svc.Status -eq 'Running') {
+      Write-Host "[$label] Service still/again running after config; stopping to reload new binary"
+      & sc.exe stop $serviceName | Out-Null
+      for ($i = 0; $i -lt 15; $i++) {
+        $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+        if ($null -eq $svc -or $svc.Status -eq 'Stopped') { break }
+        Start-Sleep -Seconds 1
+      }
+    }
+
     Write-Host "[$label] Starting $serviceName service"
     & sc.exe start $serviceName | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "[$label] sc start msquic failed ($LASTEXITCODE)" }
