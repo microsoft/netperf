@@ -198,13 +198,10 @@ function Install-MsQuicKmDriver {
     $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
 
     if ($null -ne $svc -and $svc.Status -eq 'Running') {
-      Write-Host "[$label] Stopping $serviceName service"
-      & sc.exe stop $serviceName | Out-Null
-      for ($i = 0; $i -lt 15; $i++) {
-        $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-        if ($null -eq $svc -or $svc.Status -eq 'Stopped') { break }
-        Start-Sleep -Seconds 1
-      }
+      # Use 'net stop' — it waits for the service to actually stop and
+      # also stops dependent services (e.g. WinQuicEcho) automatically.
+      Write-Host "[$label] Stopping $serviceName and its dependents via net stop"
+      & net stop $serviceName /y 2>&1 | ForEach-Object { Write-Host "[$label] $_" }
     }
 
     # Place our msquic.sys in a stable path that survives across the test
@@ -216,13 +213,10 @@ function Install-MsQuicKmDriver {
 
     $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
     if ($null -eq $svc) {
-      # Service doesn't exist — create it
       Write-Host "[$label] Creating $serviceName service"
       & sc.exe create $serviceName type= kernel binPath= $destPath start= demand | Out-Null
       if ($LASTEXITCODE -ne 0) { throw "[$label] sc create msquic failed ($LASTEXITCODE)" }
     } else {
-      # Try sc config; if it fails with 1072 (SERVICE_MARKED_FOR_DELETE),
-      # wait for the zombie to clear and then create fresh.
       Write-Host "[$label] Reconfiguring msquic service binPath to $destPath"
       & sc.exe config $serviceName binPath= $destPath | Out-Null
       if ($LASTEXITCODE -eq 1072) {
@@ -242,22 +236,12 @@ function Install-MsQuicKmDriver {
       }
     }
 
-    # After config, ensure service is stopped so the new binary loads on start.
-    # A dependent service may have restarted it during the config window.
-    $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-    if ($null -ne $svc -and $svc.Status -eq 'Running') {
-      Write-Host "[$label] Service still/again running after config; stopping to reload new binary"
-      & sc.exe stop $serviceName | Out-Null
-      for ($i = 0; $i -lt 15; $i++) {
-        $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-        if ($null -eq $svc -or $svc.Status -eq 'Stopped') { break }
-        Start-Sleep -Seconds 1
-      }
-    }
-
     Write-Host "[$label] Starting $serviceName service"
-    & sc.exe start $serviceName | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "[$label] sc start msquic failed ($LASTEXITCODE)" }
+    & net start $serviceName 2>&1 | ForEach-Object { Write-Host "[$label] $_" }
+    $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+    if ($null -eq $svc -or $svc.Status -ne 'Running') {
+      throw "[$label] msquic service failed to start"
+    }
     Write-Host "[$label] $serviceName service started with custom binary"
   }
 
