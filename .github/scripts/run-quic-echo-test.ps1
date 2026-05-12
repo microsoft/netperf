@@ -170,240 +170,70 @@ function Get-QuicEchoKmDriverPath {
   return $driverPath
 }
 
-function Get-MsQuicKmDriverPath {
+function Get-MsQuicPrivDriverPath {
   $toolRoot = Split-Path -Parent $scriptDir
-  $driverPath = Join-Path $toolRoot 'km\msquic.sys'
+  $driverPath = Join-Path $toolRoot 'km\msquicpriv.sys'
   if (-not (Test-Path -LiteralPath $driverPath)) {
     return $null
   }
   return $driverPath
 }
 
-function Install-MsQuicKmDriverLocal {
+function Install-MsQuicPrivDriver {
   <#
     .SYNOPSIS
-    Replaces the local msquic service with a custom msquic.sys build.
-    Stops the service and all dependents, reconfigures binPath, restarts.
-  #>
-  param([Parameter(Mandatory=$true)][string]$DriverSourcePath)
-
-  $serviceName = 'msquic'
-
-  # Use a unique per-run directory to avoid locked-file conflicts
-  $destDir = Join-Path $env:ProgramData "MsQuic\drivers\$(Get-Date -Format 'yyyyMMdd_HHmmss')"
-  if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
-  $destPath = Join-Path $destDir 'msquic.sys'
-  Copy-Item -LiteralPath $DriverSourcePath -Destination $destPath -Force
-  Write-Phase "[Local] Copied msquic.sys to $destPath"
-
-  $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-  if ($null -ne $svc -and $svc.Status -eq 'Running') {
-    # Capture dependent services that are currently running so we can restart them
-    $runningDeps = @(Get-Service -Name $serviceName -DependentServices -ErrorAction SilentlyContinue |
-      Where-Object { $_.Status -eq 'Running' } |
-      Select-Object -ExpandProperty Name)
-    Write-Phase "[Local] Stopping $serviceName (dependents: $($runningDeps -join ', '))"
-    Stop-Service -Name $serviceName -Force -ErrorAction Stop
-    $svc.WaitForStatus('Stopped', (New-TimeSpan -Seconds 30))
-    Write-Phase "[Local] $serviceName stopped"
-  }
-
-  $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-  if ($null -eq $svc) {
-    Write-Phase "[Local] Creating $serviceName service"
-    & sc.exe create $serviceName type= kernel binPath= $destPath start= demand | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "[Local] sc create msquic failed ($LASTEXITCODE)" }
-  } else {
-    Write-Phase "[Local] Reconfiguring msquic service binPath"
-    & sc.exe config $serviceName binPath= $destPath | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "[Local] sc config msquic failed ($LASTEXITCODE)" }
-  }
-
-  Write-Phase "[Local] Starting $serviceName service"
-  Start-Service -Name $serviceName -ErrorAction Stop
-  Write-Phase "[Local] $serviceName started with custom binary from $destPath"
-
-  # Restart dependent services that were running before
-  if ($runningDeps) {
-    foreach ($depName in $runningDeps) {
-      try {
-        Start-Service -Name $depName -ErrorAction SilentlyContinue
-        Write-Phase "[Local] Restarted dependent service: $depName"
-      } catch {
-        Write-Warning "[Local] Could not restart dependent $depName : $($_.Exception.Message)"
-      }
-    }
-  }
-
-  # Verify
-  $qc = & sc.exe qc $serviceName 2>&1 | Out-String
-  Write-Phase "[Local] sc qc msquic:`n$qc"
-}
-
-function Install-MsQuicKmDriverRemote {
-  <#
-    .SYNOPSIS
-    Replaces the remote msquic service with a custom msquic.sys build.
-    Because msquic has dependents (HTTP Service, WinRM), stopping it over
-    PS remoting kills the session. We use a scheduled task to perform the
-    restart out-of-band, then wait for WinRM to recover.
-    Returns $true to signal the caller must reconnect the PS session.
-  #>
-  param(
-    [Parameter(Mandatory=$true)][string]$DriverSourcePath,
-    [Parameter(Mandatory=$true)]$Session
-  )
-
-  # Copy the new msquic.sys to a staging location on the remote
-  $remoteStaging = Join-Path $script:RemoteDir 'quic_echo\km'
-  Invoke-Command -Session $Session -ArgumentList $remoteStaging -ScriptBlock {
-    param($dir)
-    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
-  } -ErrorAction Stop
-  $remoteSrcPath = Join-Path $remoteStaging 'msquic.sys'
-  Copy-Item -ToSession $Session -LiteralPath $DriverSourcePath -Destination $remoteSrcPath -Force
-  Write-Phase "[Remote] Copied msquic.sys to $remoteSrcPath"
-
-  # Prepare and register a scheduled task to do the stop/replace/start cycle.
-  # The task runs as SYSTEM and is fully independent of the PS remoting session.
-  Invoke-Command -Session $Session -ArgumentList $remoteSrcPath -ScriptBlock {
-    param($msquicSrcPath)
-
-    $ts = Get-Date -Format 'yyyyMMdd_HHmmss'
-    $destDir = Join-Path $env:ProgramData "MsQuic\drivers\$ts"
-    if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
-    $destPath = Join-Path $destDir 'msquic.sys'
-
-    $markerPath = 'C:\_work\msquic_restart_result.txt'
-
-    # Build a self-contained restart script
-    $restartScript = @"
-`$ErrorActionPreference = 'Continue'
-`$log = @()
-try {
-  `$log += "Starting msquic restart at `$(Get-Date -Format o)"
-  `$destPath = '$destPath'
-  `$srcPath  = '$msquicSrcPath'
-
-  # Copy to unique per-run location
-  Copy-Item -LiteralPath `$srcPath -Destination `$destPath -Force
-  `$log += "Copied msquic.sys to `$destPath"
-
-  # Capture running dependents before stopping
-  `$deps = @(Get-Service msquic -DependentServices -EA SilentlyContinue |
-    Where-Object { `$_.Status -eq 'Running' } | Select-Object -ExpandProperty Name)
-  `$log += "Dependents to stop: `$(`$deps -join ', ')"
-
-  Stop-Service msquic -Force -EA Stop
-  (Get-Service msquic).WaitForStatus('Stopped', (New-TimeSpan -Seconds 30))
-  `$log += "msquic stopped"
-
-  sc.exe config msquic binPath= `$destPath | Out-Null
-  `$log += "sc config done"
-
-  Start-Service msquic -EA Stop
-  `$log += "msquic started"
-
-  foreach (`$d in `$deps) {
-    try { Start-Service `$d -EA SilentlyContinue; `$log += "Restarted `$d" }
-    catch { `$log += "WARN: could not restart `$d" }
-  }
-
-  `$qc = sc.exe qc msquic 2>&1 | Out-String
-  `$log += "sc qc msquic: `$qc"
-  `$log += "SUCCESS"
-} catch {
-  `$log += "FAILED: `$(`$_.Exception.Message)"
-}
-`$log | Out-File '$markerPath' -Encoding utf8 -Force
-"@
-
-    $scriptPath = 'C:\_work\restart_msquic.ps1'
-    Set-Content -Path $scriptPath -Value $restartScript -Encoding UTF8 -Force
-
-    # Remove stale marker
-    if (Test-Path $markerPath) { Remove-Item $markerPath -Force }
-
-    # Register and run the task
-    $action = New-ScheduledTaskAction -Execute 'powershell.exe' `
-      -Argument "-ExecutionPolicy Bypass -NoProfile -NonInteractive -File `"$scriptPath`""
-    $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
-    Register-ScheduledTask -TaskName 'RestartMsQuic' -Action $action -Principal $principal -Force | Out-Null
-    Start-ScheduledTask -TaskName 'RestartMsQuic'
-    Write-Host "Scheduled task 'RestartMsQuic' started"
-  } -ErrorAction Stop
-
-  # The session will break when msquic (and thus HTTP/WinRM) stops.
-  # Wait for WinRM to come back on the remote machine.
-  Write-Phase "[Remote] Waiting for remote msquic restart cycle (WinRM will temporarily go down)..."
-  $peerName = $env:RemoteName
-  if (-not $peerName) { $peerName = 'netperf-peer' }
-  $maxWait = 90
-  $sw = [System.Diagnostics.Stopwatch]::StartNew()
-  $recovered = $false
-  while ($sw.Elapsed.TotalSeconds -lt $maxWait) {
-    Start-Sleep -Seconds 5
-    try {
-      $testSession = New-PSSession -ComputerName $peerName -ConfigurationName 'PowerShell.7' -ErrorAction Stop `
-        -Credential (New-Object PSCredential(
-          (Get-ItemProperty 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon').DefaultUserName,
-          ((Get-ItemProperty 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon').DefaultPassword |
-            ConvertTo-SecureString -AsPlainText -Force)))
-      # Verify the restart succeeded by reading the marker file
-      $marker = Invoke-Command -Session $testSession -ScriptBlock {
-        $p = 'C:\_work\msquic_restart_result.txt'
-        if (Test-Path $p) { Get-Content $p -Raw } else { 'MARKER_NOT_FOUND' }
-      }
-      Write-Phase "[Remote] Restart marker:`n$marker"
-      if ($marker -match 'SUCCESS') {
-        # Clean up scheduled task
-        Invoke-Command -Session $testSession -ScriptBlock {
-          Unregister-ScheduledTask -TaskName 'RestartMsQuic' -Confirm:$false -ErrorAction SilentlyContinue
-          Remove-Item 'C:\_work\restart_msquic.ps1' -Force -ErrorAction SilentlyContinue
-          Remove-Item 'C:\_work\msquic_restart_result.txt' -Force -ErrorAction SilentlyContinue
-        } -ErrorAction SilentlyContinue
-        Remove-PSSession $testSession
-        $recovered = $true
-        break
-      } elseif ($marker -match 'FAILED') {
-        Remove-PSSession $testSession
-        throw "[Remote] msquic restart task failed. Marker contents:`n$marker"
-      }
-      Remove-PSSession $testSession
-      Write-Phase "[Remote] Marker not ready yet, retrying..."
-    } catch [System.Management.Automation.Remoting.PSRemotingTransportException] {
-      Write-Phase "[Remote] WinRM not yet available ($([math]::Round($sw.Elapsed.TotalSeconds))s elapsed)..."
-    }
-  }
-
-  if (-not $recovered) {
-    throw "[Remote] WinRM did not recover within ${maxWait}s after msquic restart"
-  }
-
-  Write-Phase "[Remote] msquic.sys deployed and service restarted successfully"
-}
-
-function Install-MsQuicKmDriver {
-  <#
-    .SYNOPSIS
-    Replaces the msquic service on local and remote machines with a custom
-    msquic.sys build. The remote case uses a scheduled task because stopping
-    msquic kills WinRM (HTTP Service depends on msquic).
-    Returns $true if the remote PS session was broken and needs reconnection.
+    Installs msquicpriv.sys as a side-by-side kernel service alongside the
+    inbox msquic.sys. This avoids disturbing system services (HTTP, WinRM)
+    that depend on the inbox msquic service.
+    Mirrors the pattern used by microsoft/msquic (Install-Kernel in
+    secnetperf-helpers.psm1).
   #>
   param(
     [Parameter(Mandatory=$true)][string]$DriverSourcePath,
     $Session
   )
 
-  Install-MsQuicKmDriverLocal -DriverSourcePath $DriverSourcePath
+  $serviceName = 'msquicpriv'
 
+  # --- Local ---
+  Write-Phase "Installing $serviceName locally"
+  if (!(Test-Path $DriverSourcePath)) { throw "msquicpriv.sys not found at $DriverSourcePath" }
+
+  # Stop and remove any stale msquicpriv service from a prior run
+  try { & net.exe stop $serviceName /y 2>&1 | Out-Null } catch {}
+  try { & sc.exe delete $serviceName 2>&1 | Out-Null } catch {}
+
+  & sc.exe create $serviceName type= kernel binpath= (Resolve-Path $DriverSourcePath).Path start= demand | Out-Null
+  if ($LASTEXITCODE -ne 0) { throw "[Local] sc create $serviceName failed ($LASTEXITCODE)" }
+  & net.exe start $serviceName
+  if ($LASTEXITCODE -ne 0) { throw "[Local] net start $serviceName failed ($LASTEXITCODE)" }
+  Write-Phase "[Local] $serviceName service running"
+
+  # --- Remote ---
   if ($Session) {
-    Install-MsQuicKmDriverRemote -DriverSourcePath $DriverSourcePath -Session $Session
-    return $true  # caller must reconnect
-  }
+    Write-Phase "Installing $serviceName on remote"
+    $remoteKmDir = Join-Path $script:RemoteDir 'quic_echo\km'
+    $remoteSysPath = Join-Path $remoteKmDir 'msquicpriv.sys'
 
-  return $false
+    Invoke-Command -Session $Session -ArgumentList $remoteKmDir -ScriptBlock {
+      param($dir)
+      if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    } -ErrorAction Stop
+
+    Copy-Item -ToSession $Session -LiteralPath $DriverSourcePath -Destination $remoteSysPath -Force
+
+    Invoke-Command -Session $Session -ArgumentList $remoteSysPath, $serviceName -ScriptBlock {
+      param($sysPath, $svcName)
+      if (!(Test-Path $sysPath)) { throw "msquicpriv.sys not found at $sysPath" }
+      try { & net.exe stop $svcName /y 2>&1 | Out-Null } catch {}
+      try { & sc.exe delete $svcName 2>&1 | Out-Null } catch {}
+      & sc.exe create $svcName type= kernel binpath= $sysPath start= demand | Out-Null
+      if ($LASTEXITCODE -ne 0) { throw "[Remote] sc create $svcName failed ($LASTEXITCODE)" }
+      & net.exe start $svcName
+      if ($LASTEXITCODE -ne 0) { throw "[Remote] net start $svcName failed ($LASTEXITCODE)" }
+    } -ErrorAction Stop
+    Write-Phase "[Remote] $serviceName service running"
+  }
 }
 
 function Test-LocalTestSigningEnabled {
@@ -727,7 +557,7 @@ function Install-LocalWinQuicEchoKmDriver {
   Copy-Item -LiteralPath $DriverSourcePath -Destination $driverDest -Force
 
   Write-Phase "Creating local $serviceName kernel service"
-  & sc.exe create $serviceName type= kernel binPath= $driverDest start= demand depend= msquic | Out-Null
+  & sc.exe create $serviceName type= kernel binPath= $driverDest start= demand depend= msquicpriv | Out-Null
   if ($LASTEXITCODE -ne 0) {
     throw "Local sc create failed with exit code $LASTEXITCODE"
   }
@@ -799,7 +629,7 @@ function Install-RemoteWinQuicEchoKmDriver {
     Copy-Item -LiteralPath $driverSourcePath -Destination $driverDest -Force
 
     Write-Host "Creating remote $serviceName kernel service"
-    & sc.exe create $serviceName type= kernel binPath= $driverDest start= demand depend= msquic | Out-Null
+    & sc.exe create $serviceName type= kernel binPath= $driverDest start= demand depend= msquicpriv | Out-Null
     if ($LASTEXITCODE -ne 0) {
       throw "Remote sc create failed with exit code $LASTEXITCODE"
     }
@@ -1317,20 +1147,15 @@ try {
   if ($receiverBackend -eq 'msquic-km') {
     $kmDriverPath = Get-QuicEchoKmDriverPath
 
-    # Deploy version-matched msquic.sys if included in the build artifact.
-    # The inbox msquic.sys v2.2.5 on Server 2022 returns STATUS_NOT_SUPPORTED
-    # (0xc00000bb) from MsQuicOpenVersion(2). We need the v2.5.6 build.
-    $msquicKmPath = Get-MsQuicKmDriverPath
-    if ($msquicKmPath) {
-      $needsReconnect = Install-MsQuicKmDriver -DriverSourcePath $msquicKmPath -Session $Session
-      if ($needsReconnect) {
-        Write-Phase "Reconnecting PS session after remote msquic.sys deployment..."
-        Remove-PSSession $Session -ErrorAction SilentlyContinue
-        $Session = Create-Session -PeerName $PeerName -RemotePSConfiguration 'PowerShell.7'
-        Write-Phase "PS session reconnected"
-      }
+    # Deploy msquicpriv.sys (side-by-side with inbox msquic.sys) if included
+    # in the build artifact. The inbox msquic.sys v2.2.5 on Server 2022 is too
+    # old — we install msquicpriv.sys as a separate service to avoid disturbing
+    # system services (HTTP, WinRM) that depend on the inbox msquic service.
+    $msquicPrivPath = Get-MsQuicPrivDriverPath
+    if ($msquicPrivPath) {
+      Install-MsQuicPrivDriver -DriverSourcePath $msquicPrivPath -Session $Session
     } else {
-      Write-Phase "No msquic.sys in build artifact; relying on system-installed msquic.sys"
+      Write-Phase "No msquicpriv.sys in build artifact; relying on system-installed msquic.sys"
     }
 
     Write-Phase "Receiver backend is msquic-km; installing WinQuicEcho kernel driver locally and remotely"
@@ -1338,36 +1163,19 @@ try {
     Install-LocalWinQuicEchoKmDriver -DriverSourcePath $kmDriverPath
     Install-RemoteWinQuicEchoKmDriver -Session $Session -DriverSourcePath $kmDriverPath -RemoteDir $script:RemoteDir
 
-    # Diagnostic: verify msquic.sys and WinQuicEcho driver status on both machines
+    # Diagnostic: verify msquicpriv and WinQuicEcho driver status on both machines
     Write-Phase "Verifying kernel driver status..."
-    Write-Host "Local msquic service:"
-    Get-Service msquic -ErrorAction SilentlyContinue | Select-Object Name, Status, StartType | Out-String | Write-Host
-    Write-Host "Local msquic service config:"
-    & sc.exe qc msquic 2>&1 | Out-String | Write-Host
-    Write-Host "Local msquic.sys version (configured binary):"
-    $localMsquicBinPath = (& sc.exe qc msquic 2>&1 | Out-String) -replace '(?s).*BINARY_PATH_NAME\s*:\s*', '' -replace '\r?\n.*', ''
-    if ($localMsquicBinPath -and (Test-Path $localMsquicBinPath)) {
-      (Get-Item $localMsquicBinPath).VersionInfo | Select-Object FileVersion, ProductVersion, FileDescription | Out-String | Write-Host
-    } else {
-      $fallback = Join-Path $env:SystemRoot 'System32\drivers\msquic.sys'
-      if (Test-Path $fallback) {
-        (Get-Item $fallback).VersionInfo | Select-Object FileVersion, ProductVersion, FileDescription | Out-String | Write-Host
-      } else { Write-Host "  msquic.sys NOT FOUND" }
-    }
+    Write-Host "Local msquicpriv service:"
+    Get-Service msquicpriv -ErrorAction SilentlyContinue | Select-Object Name, Status, StartType | Out-String | Write-Host
+    & sc.exe qc msquicpriv 2>&1 | Out-String | Write-Host
     Write-Host "Local WinQuicEcho service:"
     Get-Service WinQuicEcho -ErrorAction SilentlyContinue | Select-Object Name, Status, StartType | Out-String | Write-Host
 
     Write-Host "Remote driver diagnostics:"
     Invoke-Command -Session $Session -ScriptBlock {
-      Write-Host "Remote msquic service:"
-      Get-Service msquic -ErrorAction SilentlyContinue | Select-Object Name, Status, StartType | Out-String | Write-Host
-      Write-Host "Remote msquic.sys version:"
-      $msquicSys = Join-Path $env:SystemRoot 'System32\drivers\msquic.sys'
-      if (Test-Path $msquicSys) {
-        (Get-Item $msquicSys).VersionInfo | Select-Object FileVersion, ProductVersion, FileDescription | Out-String | Write-Host
-      } else { Write-Host "  NOT FOUND" }
-      Write-Host "Remote msquic service config:"
-      & sc.exe qc msquic 2>&1 | Out-String | Write-Host
+      Write-Host "Remote msquicpriv service:"
+      Get-Service msquicpriv -ErrorAction SilentlyContinue | Select-Object Name, Status, StartType | Out-String | Write-Host
+      & sc.exe qc msquicpriv 2>&1 | Out-String | Write-Host
       Write-Host "Remote WinQuicEcho service:"
       Get-Service WinQuicEcho -ErrorAction SilentlyContinue | Select-Object Name, Status, StartType | Out-String | Write-Host
       Write-Host "Remote OS: $([System.Environment]::OSVersion.VersionString)"
@@ -1633,6 +1441,21 @@ finally {
         }
         catch {
           Write-Warning "Failed to stop remote WinQuicEcho kernel server state during cleanup: $($_.Exception.Message)"
+        }
+      }
+
+      # Clean up msquicpriv side-by-side service
+      Write-Phase "Cleaning up msquicpriv service"
+      try { & net.exe stop msquicpriv /y 2>&1 | Out-Null } catch {}
+      try { & sc.exe delete msquicpriv 2>&1 | Out-Null } catch {}
+      if ($Session) {
+        try {
+          Invoke-Command -Session $Session -ScriptBlock {
+            try { & net.exe stop msquicpriv /y 2>&1 | Out-Null } catch {}
+            try { & sc.exe delete msquicpriv 2>&1 | Out-Null } catch {}
+          } -ErrorAction SilentlyContinue
+        } catch {
+          Write-Warning "Failed to clean up remote msquicpriv: $($_.Exception.Message)"
         }
       }
     }
