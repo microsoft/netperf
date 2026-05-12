@@ -1151,15 +1151,31 @@ try {
     # in the build artifact. The inbox msquic.sys v2.2.5 on Server 2022 is too
     # old — we install msquicpriv.sys as a separate service to avoid disturbing
     # system services (HTTP, WinRM) that depend on the inbox msquic service.
+    #
+    # Prepare signing certs first — both msquicpriv.sys and winquicecho_km.sys
+    # need to be test-signed before the kernel will load them.
+    Write-Phase "Receiver backend is msquic-km; preparing test signing certificates"
+    Prepare-WinQuicEchoKmDriver -Session $Session -DriverSourcePath $kmDriverPath -RemoteDir $script:RemoteDir
+
     $msquicPrivPath = Get-MsQuicPrivDriverPath
     if ($msquicPrivPath) {
+      # Sign msquicpriv.sys with the same test certificate used for winquicecho_km.sys
+      Write-Phase "Signing msquicpriv.sys with test certificate $script:driverCodeSigningThumbprint"
+      $signtoolPath = Get-SignToolPath
+      if ($signtoolPath) {
+        & $signtoolPath sign /v /fd sha256 /sm /s My /sha1 $script:driverCodeSigningThumbprint $msquicPrivPath
+        if ($LASTEXITCODE -ne 0) { throw "signtool failed to sign msquicpriv.sys (exit code $LASTEXITCODE)" }
+      } else {
+        $cert = Get-ChildItem "Cert:\LocalMachine\My\$script:driverCodeSigningThumbprint"
+        $sig = Set-AuthenticodeSignature -FilePath $msquicPrivPath -Certificate $cert -HashAlgorithm SHA256
+        if ($sig.Status -ne 'Valid') { throw "Set-AuthenticodeSignature failed for msquicpriv.sys: $($sig.StatusMessage)" }
+      }
       Install-MsQuicPrivDriver -DriverSourcePath $msquicPrivPath -Session $Session
     } else {
       Write-Phase "No msquicpriv.sys in build artifact; relying on system-installed msquic.sys"
     }
 
-    Write-Phase "Receiver backend is msquic-km; installing WinQuicEcho kernel driver locally and remotely"
-    Prepare-WinQuicEchoKmDriver -Session $Session -DriverSourcePath $kmDriverPath -RemoteDir $script:RemoteDir
+    Write-Phase "Installing WinQuicEcho kernel driver locally and remotely"
     Install-LocalWinQuicEchoKmDriver -DriverSourcePath $kmDriverPath
     Install-RemoteWinQuicEchoKmDriver -Session $Session -DriverSourcePath $kmDriverPath -RemoteDir $script:RemoteDir
 
