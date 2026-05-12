@@ -421,7 +421,7 @@ jobs:
     # Consider migrating to an organization-owned repository to avoid maintenance risks if the
     # personal account becomes unavailable. For now, this is the authoritative source for the
     # WinQuicEcho tool.
-    uses: Alan-Jowett/WinQuicEcho/.github/workflows/reusable-build.yml@fix/start-server-diagnostics
+    uses: Alan-Jowett/WinQuicEcho/.github/workflows/reusable-build.yml@main
     with:
       artifact_name: quic_echo_test
       config: 'Release'
