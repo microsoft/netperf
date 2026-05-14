@@ -1159,17 +1159,37 @@ try {
 
     $msquicPrivPath = Get-MsQuicPrivDriverPath
     if ($msquicPrivPath) {
-      # Sign msquicpriv.sys with the same test certificate used for winquicecho_km.sys
-      Write-Phase "Signing msquicpriv.sys with test certificate $script:driverCodeSigningThumbprint"
-      $signtoolPath = Get-SignToolPath
-      if ($signtoolPath) {
-        & $signtoolPath sign /v /fd sha256 /sm /s My /sha1 $script:driverCodeSigningThumbprint $msquicPrivPath
-        if ($LASTEXITCODE -ne 0) { throw "signtool failed to sign msquicpriv.sys (exit code $LASTEXITCODE)" }
-      } else {
-        $cert = Get-ChildItem "Cert:\LocalMachine\My\$script:driverCodeSigningThumbprint"
-        $sig = Set-AuthenticodeSignature -FilePath $msquicPrivPath -Certificate $cert -HashAlgorithm SHA256
-        if ($sig.Status -ne 'Valid') { throw "Set-AuthenticodeSignature failed for msquicpriv.sys: $($sig.StatusMessage)" }
+      # The pre-built msquicpriv.sys from msquic CI is signed with CoreNet-CI
+      # certificates. Install those certs on both machines so the driver is
+      # fully trusted (not just test-signed). This matches the msquic team's
+      # prepare-machine.ps1 -ForTest -InstallSigningCertificates step.
+      Write-Phase "Installing CoreNet-CI signing certificates for msquicpriv.sys"
+      $corenetZip = Join-Path $env:TEMP 'corenet-ci.zip'
+      $corenetDir = Join-Path $env:TEMP 'corenet-ci-main'
+      if (-not (Test-Path $corenetDir)) {
+        Invoke-WebRequest -Uri 'https://github.com/microsoft/corenet-ci/archive/refs/heads/main.zip' -OutFile $corenetZip
+        Expand-Archive -Path $corenetZip -DestinationPath $env:TEMP -Force
+        Remove-Item $corenetZip -Force -ErrorAction SilentlyContinue
       }
+      $setupDir = Join-Path $corenetDir 'vm-setup'
+      $coreNetCert = Join-Path $setupDir 'CoreNetSignRoot.cer'
+      if (Test-Path $coreNetCert) {
+        certutil -addstore Root $coreNetCert 2>&1 | Out-Null
+        certutil -addstore TrustedPublisher $coreNetCert 2>&1 | Out-Null
+        Write-Phase "[Local] Installed CoreNet-CI signing cert"
+        # Install on remote too
+        $remoteCertPath = Join-Path $script:RemoteDir 'CoreNetSignRoot.cer'
+        Copy-Item -ToSession $Session -LiteralPath $coreNetCert -Destination $remoteCertPath -Force
+        Invoke-Command -Session $Session -ArgumentList $remoteCertPath -ScriptBlock {
+          param($certPath)
+          certutil -addstore Root $certPath 2>&1 | Out-Null
+          certutil -addstore TrustedPublisher $certPath 2>&1 | Out-Null
+        } -ErrorAction Stop
+        Write-Phase "[Remote] Installed CoreNet-CI signing cert"
+      } else {
+        Write-Warning "CoreNet-CI signing cert not found at $coreNetCert"
+      }
+
       Install-MsQuicPrivDriver -DriverSourcePath $msquicPrivPath -Session $Session
     } else {
       Write-Phase "No msquicpriv.sys in build artifact; relying on system-installed msquic.sys"
