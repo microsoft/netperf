@@ -1181,6 +1181,16 @@ try {
 
     # Diagnostic: verify msquicpriv and WinQuicEcho driver status on both machines
     Write-Phase "Verifying kernel driver status..."
+
+    # Log detailed OS version on both machines
+    Write-Host "Local OS version:"
+    $ntVer = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
+    Write-Host "  BuildLabEx: $($ntVer.BuildLabEx)"
+    Write-Host "  CurrentBuildNumber: $($ntVer.CurrentBuildNumber)"
+    Write-Host "  UBR: $($ntVer.UBR)"
+    Write-Host "  ProductName: $($ntVer.ProductName)"
+    Write-Host "  DisplayVersion: $($ntVer.DisplayVersion)"
+
     Write-Host "Local msquicpriv service:"
     Get-Service msquicpriv -ErrorAction SilentlyContinue | Select-Object Name, Status, StartType | Out-String | Write-Host
     & sc.exe qc msquicpriv 2>&1 | Out-String | Write-Host
@@ -1189,12 +1199,19 @@ try {
 
     Write-Host "Remote driver diagnostics:"
     Invoke-Command -Session $Session -ScriptBlock {
+      Write-Host "Remote OS version:"
+      $ntVer = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
+      Write-Host "  BuildLabEx: $($ntVer.BuildLabEx)"
+      Write-Host "  CurrentBuildNumber: $($ntVer.CurrentBuildNumber)"
+      Write-Host "  UBR: $($ntVer.UBR)"
+      Write-Host "  ProductName: $($ntVer.ProductName)"
+      Write-Host "  DisplayVersion: $($ntVer.DisplayVersion)"
+
       Write-Host "Remote msquicpriv service:"
       Get-Service msquicpriv -ErrorAction SilentlyContinue | Select-Object Name, Status, StartType | Out-String | Write-Host
       & sc.exe qc msquicpriv 2>&1 | Out-String | Write-Host
       Write-Host "Remote WinQuicEcho service:"
       Get-Service WinQuicEcho -ErrorAction SilentlyContinue | Select-Object Name, Status, StartType | Out-String | Write-Host
-      Write-Host "Remote OS: $([System.Environment]::OSVersion.VersionString)"
     } -ErrorAction SilentlyContinue
   }
 
