@@ -1,3 +1,12 @@
+<#
+
+Run on the host physical machine:
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+./setup-runner-windows.ps1 -IsHost -Password $Password -GithubToken $GithubToken -GithubRunnerName "RR1-NETPERF-47"
+
+
+#>
+
 param (
     [Parameter(Mandatory = $false)]
     [string]$Username = "secnetperf",
