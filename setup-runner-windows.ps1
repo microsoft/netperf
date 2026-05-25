@@ -33,7 +33,7 @@ param (
     [switch]$IsHost,
 
     [Parameter(Mandatory = $false)]
-    [switch]$InstallMana = $true
+    [switch]$InstallMana = $false
 )
 
 Set-StrictMode -Version 'Latest'
