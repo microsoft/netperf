@@ -7,14 +7,14 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 Run on client VM:
 bcdedit /set testsigning on
 <restart>
-./setup-runner-windows.ps1 -Username $Username -Password $Password -SetupRemotePowershell -NewIpAddress $NewIpAddress
+./setup-runner-windows.ps1 -Username $Username -Password $Password -SetupRemotePowershell -NewIpAddress $NewIpAddress -PeerIp $PeerIp
 
 Run on server VM:
 bcdedit /set testsigning on
 <restart>
 ./setup-runner-windows.ps1 -Username $Username -Password $Password -SetupRemotePowershell -NewIpAddress $NewIpAddress
 
-Verify ping netperf-peer works on both ends
+Verify ping netperf-peer works on client
 
 Then run on client VM:
 ./setup-runner-windows.ps1 -Username $Username -Password $Password -GithubToken $GithubToken -GithubRunnerName "VM-47-48"
