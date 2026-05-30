@@ -254,6 +254,42 @@ function Prepare-WinQuicEchoKmDriver {
   } -ErrorAction Stop
 }
 
+function Ensure-MsQuicLoaded {
+  param([string]$Label = 'local')
+
+  $msquicSys = Join-Path $env:SystemRoot 'System32\drivers\msquic.sys'
+  $WriteFunc = if ($Label -eq 'local') { { param($m) Write-Phase $m } } else { { param($m) Write-Host $m } }
+
+  # Check if msquic.sys file exists
+  if (-not (Test-Path -LiteralPath $msquicSys)) {
+    & $WriteFunc "WARNING: msquic.sys not found at $msquicSys"
+    # Try to find it elsewhere on the system
+    $found = Get-ChildItem -Path "$env:SystemRoot\System32\drivers" -Filter 'msquic*' -ErrorAction SilentlyContinue
+    if ($found) { & $WriteFunc "Found msquic files: $($found.Name -join ', ')" }
+    else { & $WriteFunc "No msquic driver files found in drivers directory" }
+    return
+  }
+
+  & $WriteFunc "Found msquic.sys at $msquicSys (size: $((Get-Item $msquicSys).Length) bytes)"
+
+  # Ensure service entry exists
+  $svc = Get-Service -Name 'msquic' -ErrorAction SilentlyContinue
+  if ($null -eq $svc) {
+    & $WriteFunc "Creating msquic kernel service"
+    & sc.exe create msquic type= kernel binPath= $msquicSys start= demand | Out-Null
+  }
+
+  # Start if not running
+  $svc = Get-Service -Name 'msquic' -ErrorAction SilentlyContinue
+  if ($null -ne $svc -and $svc.Status -ne 'Running') {
+    & $WriteFunc "Starting msquic service"
+    & sc.exe start msquic 2>&1
+    if ($LASTEXITCODE -ne 0) { & $WriteFunc "WARNING: msquic start failed with exit code $LASTEXITCODE" }
+  } elseif ($null -ne $svc) {
+    & $WriteFunc "msquic service is already running"
+  }
+}
+
 function Install-LocalWinQuicEchoKmDriver {
   param([Parameter(Mandatory=$true)][string]$DriverSourcePath)
 
@@ -261,34 +297,82 @@ function Install-LocalWinQuicEchoKmDriver {
     throw "Installing the WinQuicEcho kernel driver locally requires administrator privileges."
   }
 
-  $serviceName = 'WinQuicEcho'
   $driverDest = Join-Path $env:SystemRoot 'System32\drivers\winquicecho_km.sys'
 
-  $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-  if ($null -ne $svc) {
-    if ($svc.Status -eq 'Running') {
-      Write-Phase "Stopping existing local $serviceName service"
-      & sc.exe stop $serviceName | Out-Null
+  # Ensure msquic.sys is loaded (WinQuicEcho has PE import dependency on it)
+  Ensure-MsQuicLoaded -Label 'local'
+
+  # Stop any running instance (primary or alternate service name).
+  foreach ($name in @('WinQuicEcho', 'WinQuicEchoAlt')) {
+    $s = Get-Service -Name $name -ErrorAction SilentlyContinue
+    if ($null -ne $s -and $s.Status -eq 'Running') {
+      Write-Phase "Stopping existing local $name service"
+      & sc.exe stop $name | Out-Null
       Start-Sleep -Seconds 2
     }
-    Write-Phase "Deleting existing local $serviceName service"
-    & sc.exe delete $serviceName | Out-Null
-    Start-Sleep -Seconds 2
+  }
+
+  # Kernel driver images stay memory-mapped (file-locked) even after unload.
+  # Rename the stale file out of the way so we can place the new one.
+  if (Test-Path -LiteralPath $driverDest) {
+    $stale = "${driverDest}.$([guid]::NewGuid().ToString('N')).old"
+    try {
+      Move-Item -LiteralPath $driverDest -Destination $stale -Force
+      Write-Phase "Renamed stale driver to $stale"
+    } catch {
+      Write-Phase "Could not rename stale driver ($($_.Exception.Message)); will overwrite in place"
+    }
   }
 
   Write-Phase "Copying local WinQuicEcho driver to $driverDest"
   Copy-Item -LiteralPath $DriverSourcePath -Destination $driverDest -Force
 
-  Write-Phase "Creating local $serviceName kernel service"
-  & sc.exe create $serviceName type= kernel binPath= $driverDest start= demand depend= msquic | Out-Null
-  if ($LASTEXITCODE -ne 0) {
-    throw "Local sc create failed with exit code $LASTEXITCODE"
+  # Pick a usable service name. A prior sc.exe delete can leave a zombie
+  # entry that blocks create (1072) and config (1072). The driver's device
+  # name is hardcoded so ANY service name works.
+  # Use relative ImagePath (like msquic) — the I/O Manager prepends \SystemRoot\.
+  $serviceName = $null
+  $relativeDriverPath = "system32\drivers\winquicecho_km.sys"
+  foreach ($name in @('WinQuicEcho', 'WinQuicEchoAlt')) {
+    $svc = Get-Service -Name $name -ErrorAction SilentlyContinue
+    if ($null -eq $svc) {
+      Write-Phase "Creating local $name kernel service"
+      & sc.exe create $name type= kernel binPath= $driverDest start= demand | Out-Null
+      if ($LASTEXITCODE -eq 0) {
+        Set-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Services\$name" -Name "ImagePath" -Value $relativeDriverPath
+        $serviceName = $name; break
+      }
+      Write-Phase "sc create $name failed ($LASTEXITCODE); trying next name"
+    } else {
+      & sc.exe config $name start= demand depend= / | Out-Null
+      if ($LASTEXITCODE -eq 0) {
+        Set-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Services\$name" -Name "ImagePath" -Value $relativeDriverPath
+        $serviceName = $name; Write-Phase "Reconfigured local $name service"; break
+      }
+      Write-Phase "sc config $name failed ($LASTEXITCODE); trying next name"
+    }
+  }
+  if ($null -eq $serviceName) {
+    $uniqueName = "WinQuicEcho_$([guid]::NewGuid().ToString('N').Substring(0,8))"
+    Write-Phase "All primary service names exhausted; creating $uniqueName"
+    & sc.exe create $uniqueName type= kernel binPath= $driverDest start= demand | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+      Set-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Services\$uniqueName" -Name "ImagePath" -Value $relativeDriverPath
+      $serviceName = $uniqueName
+    }
+    else { throw "Cannot create service $uniqueName (exit=$LASTEXITCODE). The VM may need a reboot." }
+  }
+
+  if (-not (Test-Path -LiteralPath $driverDest)) {
+    throw "Driver file not found at $driverDest after copy"
   }
 
   Write-Phase "Starting local $serviceName kernel service"
-  & sc.exe start $serviceName
-  if ($LASTEXITCODE -ne 0) {
-    throw "Local sc start failed with exit code $LASTEXITCODE"
+  try {
+    Start-Service -Name $serviceName -ErrorAction Stop
+    Write-Phase "Service $serviceName started successfully"
+  } catch {
+    throw "Local driver start failed: $($_.Exception.Message)"
   }
 }
 
@@ -321,33 +405,112 @@ function Install-RemoteWinQuicEchoKmDriver {
       throw "Installing the WinQuicEcho kernel driver remotely requires administrator privileges."
     }
 
-    $serviceName = 'WinQuicEcho'
     $driverDest = Join-Path $env:SystemRoot 'System32\drivers\winquicecho_km.sys'
-    $svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
-    if ($null -ne $svc) {
-      if ($svc.Status -eq 'Running') {
-        Write-Host "Stopping existing remote $serviceName service"
-        & sc.exe stop $serviceName | Out-Null
-        Start-Sleep -Seconds 2
+
+    # Ensure msquic.sys is loaded (WinQuicEcho has PE import dependency on it)
+    $msquicSys = Join-Path $env:SystemRoot 'System32\drivers\msquic.sys'
+    if (Test-Path -LiteralPath $msquicSys) {
+      Write-Host "Found msquic.sys at $msquicSys (size: $((Get-Item $msquicSys).Length) bytes)"
+      $svc = Get-Service -Name 'msquic' -ErrorAction SilentlyContinue
+      if ($null -eq $svc) {
+        Write-Host "Creating msquic kernel service"
+        & sc.exe create msquic type= kernel binPath= $msquicSys start= demand | Out-Null
       }
-      Write-Host "Deleting existing remote $serviceName service"
-      & sc.exe delete $serviceName | Out-Null
-      Start-Sleep -Seconds 2
+      $svc = Get-Service -Name 'msquic' -ErrorAction SilentlyContinue
+      if ($null -ne $svc -and $svc.Status -ne 'Running') {
+        Write-Host "Starting msquic service"
+        & sc.exe start msquic 2>&1
+      } elseif ($null -ne $svc) { Write-Host "msquic service is already running" }
+    } else {
+      Write-Host "WARNING: msquic.sys not found at $msquicSys"
+      $found = Get-ChildItem -Path "$env:SystemRoot\System32\drivers" -Filter 'msquic*' -ErrorAction SilentlyContinue
+      if ($found) { Write-Host "Found msquic files: $($found.Name -join ', ')" }
+    }
+
+    # Stop any running instance (primary or alternate service name).
+    # Verify the stop succeeded before proceeding.
+    foreach ($name in @('WinQuicEcho', 'WinQuicEchoAlt')) {
+      $s = Get-Service -Name $name -ErrorAction SilentlyContinue
+      if ($null -ne $s -and $s.Status -eq 'Running') {
+        Write-Host "Stopping existing remote $name service"
+        & sc.exe stop $name 2>&1 | ForEach-Object { Write-Host "  $_" }
+        # Wait for service to fully stop
+        for ($i = 0; $i -lt 15; $i++) {
+          $s = Get-Service -Name $name -ErrorAction SilentlyContinue
+          if ($null -eq $s -or $s.Status -ne 'Running') { break }
+          Start-Sleep -Seconds 1
+        }
+        $s = Get-Service -Name $name -ErrorAction SilentlyContinue
+        if ($null -ne $s -and $s.Status -eq 'Running') {
+          Write-Host "WARNING: Remote $name service still running after stop attempt"
+        }
+      }
+    }
+
+    # Kernel driver images stay memory-mapped (file-locked) even after unload.
+    if (Test-Path -LiteralPath $driverDest) {
+      $stale = "${driverDest}.$([guid]::NewGuid().ToString('N')).old"
+      try {
+        Move-Item -LiteralPath $driverDest -Destination $stale -Force
+        Write-Host "Renamed stale driver to $stale"
+      } catch {
+        Write-Host "Could not rename stale driver ($($_.Exception.Message)); will overwrite in place"
+      }
     }
 
     Write-Host "Copying remote WinQuicEcho driver to $driverDest"
     Copy-Item -LiteralPath $driverSourcePath -Destination $driverDest -Force
 
-    Write-Host "Creating remote $serviceName kernel service"
-    & sc.exe create $serviceName type= kernel binPath= $driverDest start= demand depend= msquic | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-      throw "Remote sc create failed with exit code $LASTEXITCODE"
+    # Pick a usable service name, falling back to an alternate if the
+    # primary is a zombie from a prior sc.exe delete.
+    # Use relative ImagePath (like msquic) for reliable kernel driver loading.
+    $relativeDriverPath = "system32\drivers\winquicecho_km.sys"
+    $serviceName = $null
+    foreach ($name in @('WinQuicEcho', 'WinQuicEchoAlt')) {
+      $svc = Get-Service -Name $name -ErrorAction SilentlyContinue
+      if ($null -eq $svc) {
+        Write-Host "Creating remote $name kernel service"
+        & sc.exe create $name type= kernel binPath= $driverDest start= demand | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+          Set-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Services\$name" -Name "ImagePath" -Value $relativeDriverPath
+          $serviceName = $name; break
+        }
+        Write-Host "sc create $name failed ($LASTEXITCODE); trying next name"
+      } else {
+        & sc.exe config $name start= demand depend= / | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+          Set-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Services\$name" -Name "ImagePath" -Value $relativeDriverPath
+          $serviceName = $name; Write-Host "Reconfigured remote $name service"; break
+        }
+        Write-Host "sc config $name failed ($LASTEXITCODE); trying next name"
+      }
+    }
+    if ($null -eq $serviceName) {
+      $uniqueName = "WinQuicEcho_$([guid]::NewGuid().ToString('N').Substring(0,8))"
+      Write-Host "All primary service names exhausted; creating $uniqueName"
+      & sc.exe create $uniqueName type= kernel binPath= $driverDest start= demand | Out-Null
+      if ($LASTEXITCODE -eq 0) {
+        Set-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Services\$uniqueName" -Name "ImagePath" -Value $relativeDriverPath
+        $serviceName = $uniqueName
+      } else { throw "Cannot create service $uniqueName (exit=$LASTEXITCODE). The VM may need a reboot." }
+    }
+
+    if (-not (Test-Path -LiteralPath $driverDest)) {
+      throw "Driver file not found at $driverDest after copy"
     }
 
     Write-Host "Starting remote $serviceName kernel service"
-    & sc.exe start $serviceName
-    if ($LASTEXITCODE -ne 0) {
-      throw "Remote sc start failed with exit code $LASTEXITCODE"
+    $svcStatus = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+    if ($null -ne $svcStatus -and $svcStatus.Status -eq 'Running') {
+      Write-Host "Service $serviceName is already running"
+    } else {
+      try {
+        Start-Service -Name $serviceName -ErrorAction Stop
+        Write-Host "Service $serviceName started successfully"
+      } catch {
+        & sc.exe start $serviceName 2>&1 | ForEach-Object { Write-Host "  sc.exe: $_" }
+        throw "Remote service start failed: $($_.Exception.Message)"
+      }
     }
   } -ErrorAction Stop
 }
@@ -748,9 +911,18 @@ function Run-RecvTest {
     Write-Phase "Waiting 5s for local echo_server to initialize..."
     Start-Sleep -Seconds 5
 
-    # Client runs on remote
+    # Client runs on remote — replace --server with the local machine's hostname
+    # so the remote client connects back to us, not to itself.
     $clientArgs = Convert-ArgStringToArray $SenderOptions
     $clientArgs = Normalize-Args -Tokens $clientArgs
+    $localHostname = $env:COMPUTERNAME
+    for ($i = 0; $i -lt $clientArgs.Count; $i++) {
+      if ($clientArgs[$i] -eq '--server' -and ($i + 1) -lt $clientArgs.Count) {
+        Write-Host "[Recv] Replacing --server '$($clientArgs[$i+1])' with local hostname '$localHostname'"
+        $clientArgs[$i+1] = $localHostname
+        break
+      }
+    }
     # No --verbose: it logs per-datagram events, throttling throughput via I/O backpressure
     Write-Host "[Local->Remote] Invoking remote echo_client with arguments:"
     if ($clientArgs -is [System.Array]) { foreach ($arg in $clientArgs) { Write-Host "  $arg" } } else { Write-Host "  $clientArgs" }
