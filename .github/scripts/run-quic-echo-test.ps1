@@ -319,6 +319,59 @@ function Get-WinQuicEchoServiceNames {
   return $serviceNames | Sort-Object -Unique
 }
 
+function Remove-OldWinQuicEchoDriverBackups {
+  param(
+    [Parameter(Mandatory=$true)][string]$DriverPath,
+    [int]$KeepCount = 3
+  )
+
+  $backupPattern = '{0}.*.old' -f [IO.Path]::GetFileName($DriverPath)
+  $backupDir = Split-Path -Parent $DriverPath
+  if (-not (Test-Path -LiteralPath $backupDir)) {
+    return
+  }
+
+  $backups = @(Get-ChildItem -LiteralPath $backupDir -Filter $backupPattern -File -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending)
+  if ($backups.Count -le $KeepCount) {
+    return
+  }
+
+  foreach ($backup in $backups | Select-Object -Skip $KeepCount) {
+    try {
+      Remove-Item -LiteralPath $backup.FullName -Force
+      Write-Phase "Removed stale driver backup $($backup.FullName)"
+    } catch {
+      Write-Phase "Could not remove stale driver backup $($backup.FullName): $($_.Exception.Message)"
+    }
+  }
+}
+
+function Update-ServerArgument {
+  param(
+    [Parameter(Mandatory=$true)][string[]]$Args,
+    [Parameter(Mandatory=$true)][string]$ServerName,
+    [string]$LogPrefix = '[Recv]'
+  )
+
+  for ($i = 0; $i -lt $Args.Count; $i++) {
+    if ($Args[$i] -eq '--server' -and ($i + 1) -lt $Args.Count) {
+      Write-Host "$LogPrefix Replacing --server '$($Args[$i+1])' with local hostname '$ServerName'"
+      $Args[$i+1] = $ServerName
+      break
+    }
+
+    if ($Args[$i] -like '--server=*') {
+      $existingServer = $Args[$i].Substring('--server='.Length)
+      Write-Host "$LogPrefix Replacing --server '$existingServer' with local hostname '$ServerName'"
+      $Args[$i] = "--server=$ServerName"
+      break
+    }
+  }
+
+  return $Args
+}
+
 function Install-LocalWinQuicEchoKmDriver {
   param([Parameter(Mandatory=$true)][string]$DriverSourcePath)
 
@@ -352,6 +405,7 @@ function Install-LocalWinQuicEchoKmDriver {
       Write-Phase "Could not rename stale driver ($($_.Exception.Message)); will overwrite in place"
     }
   }
+  Remove-OldWinQuicEchoDriverBackups -DriverPath $driverDest
 
   Write-Phase "Copying local WinQuicEcho driver to $driverDest"
   Copy-Item -LiteralPath $DriverSourcePath -Destination $driverDest -Force
@@ -520,6 +574,17 @@ function Install-RemoteWinQuicEchoKmDriver {
         Write-Host "Renamed stale driver to $stale"
       } catch {
         Write-Host "Could not rename stale driver ($($_.Exception.Message)); will overwrite in place"
+      }
+    }
+    $backupPattern = '{0}.*.old' -f [IO.Path]::GetFileName($driverDest)
+    $backups = @(Get-ChildItem -LiteralPath (Split-Path -Parent $driverDest) -Filter $backupPattern -File -ErrorAction SilentlyContinue |
+      Sort-Object LastWriteTime -Descending)
+    foreach ($backup in $backups | Select-Object -Skip 3) {
+      try {
+        Remove-Item -LiteralPath $backup.FullName -Force
+        Write-Host "Removed stale remote driver backup $($backup.FullName)"
+      } catch {
+        Write-Host "Could not remove stale remote driver backup $($backup.FullName): $($_.Exception.Message)"
       }
     }
 
@@ -981,13 +1046,7 @@ function Run-RecvTest {
     $clientArgs = Convert-ArgStringToArray $SenderOptions
     $clientArgs = Normalize-Args -Tokens $clientArgs
     $localHostname = $env:COMPUTERNAME
-    for ($i = 0; $i -lt $clientArgs.Count; $i++) {
-      if ($clientArgs[$i] -eq '--server' -and ($i + 1) -lt $clientArgs.Count) {
-        Write-Host "[Recv] Replacing --server '$($clientArgs[$i+1])' with local hostname '$localHostname'"
-        $clientArgs[$i+1] = $localHostname
-        break
-      }
-    }
+    $clientArgs = Update-ServerArgument -Args $clientArgs -ServerName $localHostname
     # No --verbose: it logs per-datagram events, throttling throughput via I/O backpressure
     Write-Host "[Local->Remote] Invoking remote echo_client with arguments:"
     if ($clientArgs -is [System.Array]) { foreach ($arg in $clientArgs) { Write-Host "  $arg" } } else { Write-Host "  $clientArgs" }
