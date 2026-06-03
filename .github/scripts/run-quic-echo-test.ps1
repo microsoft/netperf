@@ -305,6 +305,20 @@ function Ensure-MsQuicLoaded {
   }
 }
 
+function Get-WinQuicEchoServiceNames {
+  $serviceNames = @(
+    Get-Service -Name 'WinQuicEcho*' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
+  )
+
+  foreach ($name in @('WinQuicEcho', 'WinQuicEchoAlt')) {
+    if ($name -notin $serviceNames) {
+      $serviceNames += $name
+    }
+  }
+
+  return $serviceNames | Sort-Object -Unique
+}
+
 function Install-LocalWinQuicEchoKmDriver {
   param([Parameter(Mandatory=$true)][string]$DriverSourcePath)
 
@@ -317,8 +331,8 @@ function Install-LocalWinQuicEchoKmDriver {
   # Ensure msquic.sys is loaded (WinQuicEcho has PE import dependency on it)
   Ensure-MsQuicLoaded -Label 'local'
 
-  # Stop any running instance (primary or alternate service name).
-  foreach ($name in @('WinQuicEcho', 'WinQuicEchoAlt')) {
+  # Stop any running WinQuicEcho instance, including prior fallback names.
+  foreach ($name in Get-WinQuicEchoServiceNames) {
     $s = Get-Service -Name $name -ErrorAction SilentlyContinue
     if ($null -ne $s -and $s.Status -eq 'Running') {
       Write-Phase "Stopping existing local $name service"
@@ -411,8 +425,9 @@ function Install-RemoteWinQuicEchoKmDriver {
   Write-Phase "Copying WinQuicEcho kernel driver to remote path $remoteDriverSourcePath"
   Copy-Item -ToSession $Session -LiteralPath $DriverSourcePath -Destination $remoteDriverSourcePath -Force
 
-  Invoke-Command -Session $Session -ArgumentList $remoteDriverSourcePath -ScriptBlock {
-    param($driverSourcePath)
+  $remoteWinQuicEchoServiceNames = Get-WinQuicEchoServiceNames
+  Invoke-Command -Session $Session -ArgumentList $remoteDriverSourcePath, $remoteWinQuicEchoServiceNames -ScriptBlock {
+    param($driverSourcePath, $existingServiceNames)
 
     function Ensure-RemoteMsQuicLoaded {
       param([Parameter(Mandatory=$true)][string]$MsQuicPath)
@@ -471,9 +486,15 @@ function Install-RemoteWinQuicEchoKmDriver {
     $msquicSys = Join-Path $env:SystemRoot 'System32\drivers\msquic.sys'
     Ensure-RemoteMsQuicLoaded -MsQuicPath $msquicSys
 
-    # Stop any running instance (primary or alternate service name).
+    # Stop any running WinQuicEcho instance, including prior fallback names.
     # Verify the stop succeeded before proceeding.
-    foreach ($name in @('WinQuicEcho', 'WinQuicEchoAlt')) {
+    $serviceNames = @($existingServiceNames)
+    foreach ($service in Get-Service -Name 'WinQuicEcho*' -ErrorAction SilentlyContinue) {
+      if ($service.Name -notin $serviceNames) {
+        $serviceNames += $service.Name
+      }
+    }
+    foreach ($name in ($serviceNames | Sort-Object -Unique)) {
       $s = Get-Service -Name $name -ErrorAction SilentlyContinue
       if ($null -ne $s -and $s.Status -eq 'Running') {
         Write-Host "Stopping existing remote $name service"
