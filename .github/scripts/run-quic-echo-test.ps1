@@ -121,8 +121,6 @@ if ($ReceiverOptions -notmatch '--duration') {
   $ReceiverOptions += " --duration $serverDuration"
 }
 
-Write-ClientConcurrencySummary -Options $SenderOptions
-
 $ErrorActionPreference = 'Stop'
 $Session = $null
 $exitCode = 0
@@ -190,6 +188,8 @@ function Write-ClientConcurrencySummary {
 
   Write-Phase "Client concurrency target: $connections connection(s), $outstanding outstanding request(s) per connection, $maxInflight max in-flight requests, payload ${payload}B, warmup ${warmup}s, connect stagger ${connectStaggerMs}ms"
 }
+
+Write-ClientConcurrencySummary -Options $SenderOptions
 
 function Get-QuicEchoKmDriverPath {
   $toolRoot = Split-Path -Parent $scriptDir
