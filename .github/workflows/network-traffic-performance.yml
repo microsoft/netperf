@@ -47,6 +47,11 @@ on:
         required: false
         default: '60'
         type: string
+      request_response_size:
+        description: 'Payload size in bytes for both request and echoed response (QUIC echo only)'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -531,6 +536,7 @@ jobs:
         Write-Output "  TCP IP Tracing: ${{ inputs.tcp_ip_tracing }}"
         Write-Output "  ref: ${{ inputs.ref }}"
         Write-Output "  Duration: ${{ inputs.duration }}"
+        Write-Output "  RequestResponseSize: ${{ inputs.request_response_size }}"
 
     - name: Diagnostic - List files in quic_echo Release directory
       run: |
@@ -557,6 +563,7 @@ jobs:
         MATRIX_SENDER_CONNECT_STAGGER_MS: ${{ matrix.vec.sender_connect_stagger_ms }}
         MATRIX_SENDER_WARMUP: ${{ matrix.vec.sender_warmup }}
         RECEIVER_OPTIONS: ${{ inputs.receiver_options }}
+        REQUEST_RESPONSE_SIZE: ${{ inputs.request_response_size }}
       shell: pwsh
       run: |
         $scriptPath = '.\run-quic-echo-test.ps1'
@@ -583,6 +590,7 @@ jobs:
         $effectiveSenderOptions = Add-DefaultCliOption -Options $effectiveSenderOptions -Name '--outstanding' -Value $env:MATRIX_SENDER_OUTSTANDING
         $effectiveSenderOptions = Add-DefaultCliOption -Options $effectiveSenderOptions -Name '--connect-stagger-ms' -Value $env:MATRIX_SENDER_CONNECT_STAGGER_MS
         $effectiveSenderOptions = Add-DefaultCliOption -Options $effectiveSenderOptions -Name '--warmup' -Value $env:MATRIX_SENDER_WARMUP
+        $effectiveSenderOptions = Add-DefaultCliOption -Options $effectiveSenderOptions -Name '--payload' -Value $env:REQUEST_RESPONSE_SIZE
 
         $params = @{
           PeerName = 'netperf-peer'
