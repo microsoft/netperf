@@ -443,11 +443,21 @@ jobs:
             arch: x64
             # Extra runner label to narrow the runner pool for this environment.
             runner_extra: ebpf
+            sender_connections: ''
+            sender_outstanding: ''
+            sender_connect_stagger_ms: ''
+            sender_warmup: ''
           - env: lab
             os: "rsiof"
             arch: x64
             # No ebpf label on the rs_iof runner; use harmless duplicate.
             runner_extra: self-hosted
+            # Match the current RSS fanout on the rs_iof VMs and allow enough
+            # in-flight work to expose bottlenecks beyond single-RTT ping-pong.
+            sender_connections: '16'
+            sender_outstanding: '16'
+            sender_connect_stagger_ms: '0'
+            sender_warmup: '15'
     runs-on:
       - self-hosted
       - ${{ matrix.vec.env }}
@@ -531,6 +541,10 @@ jobs:
         Write-Output "Input parameters:"
         Write-Output "  Profile: ${{ inputs.profile }}"
         Write-Output "  SenderOptions: ${{ inputs.sender_options }}"
+        Write-Output "  Matrix SenderConnections: ${{ matrix.vec.sender_connections }}"
+        Write-Output "  Matrix SenderOutstanding: ${{ matrix.vec.sender_outstanding }}"
+        Write-Output "  Matrix SenderConnectStaggerMs: ${{ matrix.vec.sender_connect_stagger_ms }}"
+        Write-Output "  Matrix SenderWarmup: ${{ matrix.vec.sender_warmup }}"
         Write-Output "  ReceiverOptions: ${{ inputs.receiver_options }}"
         Write-Output "  TCP IP Tracing: ${{ inputs.tcp_ip_tracing }}"
         Write-Output "  ref: ${{ inputs.ref }}"
@@ -556,14 +570,41 @@ jobs:
       env:
         PROFILE: ${{ inputs.profile }}
         SENDER_OPTIONS: ${{ inputs.sender_options }}
+        MATRIX_SENDER_CONNECTIONS: ${{ matrix.vec.sender_connections }}
+        MATRIX_SENDER_OUTSTANDING: ${{ matrix.vec.sender_outstanding }}
+        MATRIX_SENDER_CONNECT_STAGGER_MS: ${{ matrix.vec.sender_connect_stagger_ms }}
+        MATRIX_SENDER_WARMUP: ${{ matrix.vec.sender_warmup }}
         RECEIVER_OPTIONS: ${{ inputs.receiver_options }}
       shell: pwsh
       run: |
         $scriptPath = '.\run-quic-echo-test.ps1'
+        function Add-DefaultCliOption {
+          param(
+            [Parameter(Mandatory = $true)][string]$Options,
+            [Parameter(Mandatory = $true)][string]$Name,
+            [string]$Value
+          )
+
+          if ([string]::IsNullOrWhiteSpace($Value)) {
+            return $Options
+          }
+
+          if ($Options -match "(^|\s)$([regex]::Escape($Name))(?=\s|$)") {
+            return $Options
+          }
+
+          return ("$Options $Name $Value").Trim()
+        }
+
+        $effectiveSenderOptions = $env:SENDER_OPTIONS
+        $effectiveSenderOptions = Add-DefaultCliOption -Options $effectiveSenderOptions -Name '--connections' -Value $env:MATRIX_SENDER_CONNECTIONS
+        $effectiveSenderOptions = Add-DefaultCliOption -Options $effectiveSenderOptions -Name '--outstanding' -Value $env:MATRIX_SENDER_OUTSTANDING
+        $effectiveSenderOptions = Add-DefaultCliOption -Options $effectiveSenderOptions -Name '--connect-stagger-ms' -Value $env:MATRIX_SENDER_CONNECT_STAGGER_MS
+        $effectiveSenderOptions = Add-DefaultCliOption -Options $effectiveSenderOptions -Name '--warmup' -Value $env:MATRIX_SENDER_WARMUP
 
         $params = @{
           PeerName = 'netperf-peer'
-          SenderOptions = $env:SENDER_OPTIONS
+          SenderOptions = $effectiveSenderOptions
           ReceiverOptions = $env:RECEIVER_OPTIONS
           Duration = '${{ inputs.duration }}'
         }
