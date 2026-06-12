@@ -121,6 +121,8 @@ if ($ReceiverOptions -notmatch '--duration') {
   $ReceiverOptions += " --duration $serverDuration"
 }
 
+Write-ClientConcurrencySummary -Options $SenderOptions
+
 $ErrorActionPreference = 'Stop'
 $Session = $null
 $exitCode = 0
@@ -157,6 +159,36 @@ function Get-ReceiverBackend {
   }
 
   return 'msquic'
+}
+
+function Get-OptionValue {
+  param(
+    [Parameter(Mandatory=$true)][string]$Options,
+    [Parameter(Mandatory=$true)][string]$Name,
+    [Parameter(Mandatory=$true)][string]$DefaultValue
+  )
+
+  $tokens = Normalize-Args -Tokens (Convert-ArgStringToArray $Options)
+  for ($i = 0; $i -lt $tokens.Count; $i++) {
+    if ($tokens[$i] -eq $Name -and ($i + 1) -lt $tokens.Count) {
+      return $tokens[$i + 1]
+    }
+  }
+
+  return $DefaultValue
+}
+
+function Write-ClientConcurrencySummary {
+  param([Parameter(Mandatory=$true)][string]$Options)
+
+  $connections = [int](Get-OptionValue -Options $Options -Name '--connections' -DefaultValue '1')
+  $outstanding = [int](Get-OptionValue -Options $Options -Name '--outstanding' -DefaultValue '1')
+  $payload = [int](Get-OptionValue -Options $Options -Name '--payload' -DefaultValue '64')
+  $warmup = [int](Get-OptionValue -Options $Options -Name '--warmup' -DefaultValue '5')
+  $connectStaggerMs = [int](Get-OptionValue -Options $Options -Name '--connect-stagger-ms' -DefaultValue '25')
+  $maxInflight = $connections * $outstanding
+
+  Write-Phase "Client concurrency target: $connections connection(s), $outstanding outstanding request(s) per connection, $maxInflight max in-flight requests, payload ${payload}B, warmup ${warmup}s, connect stagger ${connectStaggerMs}ms"
 }
 
 function Get-QuicEchoKmDriverPath {
