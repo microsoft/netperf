@@ -431,7 +431,7 @@ jobs:
       ref: '53cd6c01279eb789f6b52218121c248088a0d608'
 
   test_quic_echo:
-    if: ${{ inputs.test_tool == 'quicEcho' }}
+    if: ${{ inputs.test_tool == 'quicEcho' && (!contains(inputs.receiver_options, '--backend msquic-km') || matrix.vec.supports_msquic_km) }}
     name: Network Traffic Test (QUIC echo)
     needs: [build_quic_echo]
     strategy:
@@ -443,6 +443,7 @@ jobs:
             arch: x64
             # Extra runner label to narrow the runner pool for this environment.
             runner_extra: ebpf
+            supports_msquic_km: false
             sender_connections: ''
             sender_outstanding: ''
             sender_connect_stagger_ms: ''
@@ -452,6 +453,7 @@ jobs:
             arch: x64
             # No ebpf label on the rs_iof runner; use harmless duplicate.
             runner_extra: self-hosted
+            supports_msquic_km: true
             # Match the current RSS fanout on the rs_iof VMs and allow enough
             # in-flight work to expose bottlenecks beyond single-RTT ping-pong.
             sender_connections: '16'
