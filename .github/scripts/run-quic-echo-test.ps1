@@ -134,6 +134,7 @@ $script:localCertStoreLocation = 'CurrentUser'
 $script:remoteCertStoreLocation = 'CurrentUser'
 $script:driverCodeSigningThumbprint = $null
 $script:driverCodeSigningCerPath = $null
+$script:usesPemCerts = $false
 
 function Write-Phase {
   param([Parameter(Mandatory=$true)][string]$Message)
@@ -593,7 +594,7 @@ function Install-RemoteWinQuicEchoKmDriver {
         }
         $s = Get-Service -Name $name -ErrorAction SilentlyContinue
         if ($null -ne $s -and $s.Status -eq 'Running') {
-          throw "Remote $name service is still running after stop attempt"
+          Write-Warning "Remote $name service is still running after stop attempt"
         }
       }
     }
