@@ -39,11 +39,7 @@
     "react-dom": "^18.2.0",
     "react-helmet-async": "^2.0.4",
     "react-hook-form": "^7.72.1",
-<<<<<<< HEAD
-    "react-router-dom": "^7.14.1",
-=======
     "react-router-dom": "^7.18.1",
->>>>>>> origin/main
     "simplebar-react": "^3.3.2",
     "sql.js": "^1.13.0"
   },
