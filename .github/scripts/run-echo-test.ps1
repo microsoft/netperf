@@ -87,8 +87,12 @@ if ($Duration -and [int]::TryParse($Duration, [ref]$durationInt) -and $durationI
   if ($SenderOptions -notmatch '--duration') {
     $SenderOptions += " --duration $Duration"
   }
+  # Server needs extra duration to stay alive while the client completes.
+  # The script waits before starting the client, so the server must outlive
+  # the client's full run.
+  $serverDuration = $durationInt + 10
   if ($ReceiverOptions -notmatch '--duration') {
-    $ReceiverOptions += " --duration $Duration"
+    $ReceiverOptions += " --duration $serverDuration"
   }
 }
 
