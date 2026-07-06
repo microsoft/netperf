@@ -1,3 +1,26 @@
+<#
+
+Run on the host physical machine(s):
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+./setup-runner-windows.ps1 -IsHost -Password $Password -GithubToken $GithubToken -GithubRunnerName "RR1-NETPERF-47"
+
+Run on client VM:
+bcdedit /set testsigning on
+<restart>
+./setup-runner-windows.ps1 -Username $Username -Password $Password -SetupRemotePowershell -NewIpAddress $NewIpAddress -PeerIp $PeerIp
+
+Run on server VM:
+bcdedit /set testsigning on
+<restart>
+./setup-runner-windows.ps1 -Username $Username -Password $Password -SetupRemotePowershell -NewIpAddress $NewIpAddress
+
+Verify ping netperf-peer works on client
+
+Then run on client VM:
+./setup-runner-windows.ps1 -Username $Username -Password $Password -GithubToken $GithubToken -GithubRunnerName "VM-47-48"
+
+#>
+
 param (
     [Parameter(Mandatory = $false)]
     [string]$Username = "secnetperf",
@@ -33,7 +56,7 @@ param (
     [switch]$IsHost,
 
     [Parameter(Mandatory = $false)]
-    [switch]$InstallMana = $true
+    [switch]$InstallMana = $false
 )
 
 Set-StrictMode -Version 'Latest'

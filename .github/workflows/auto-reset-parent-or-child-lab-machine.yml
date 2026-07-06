@@ -98,7 +98,9 @@ jobs:
           { parent-or-child: "parent=rr1-netperf-09\\localadminuser",    vm-name: "netperf-windows-2022-client" },
           # { parent-or-child: "rr1-netperf-15",                           vm-name: "kernel-bvt-runner" },
           { parent-or-child: "child=rr1-netperf-11\\localadminuser",     vm-name: "netperf-ubuntu-server" },
-          { parent-or-child: "parent=rr1-netperf-12\\localadminuser",    vm-name: "netperf-ubuntu-client" }
+          { parent-or-child: "parent=rr1-netperf-12\\localadminuser",    vm-name: "netperf-ubuntu-client" },
+          { parent-or-child: "parent=rr1-netperf-48\\localadminuser",    vm-name: "netperf_rs_iof_client" },
+          { parent-or-child: "child=rr1-netperf-47\\localadminuser",     vm-name: "netperf_rs_iof_server" },
         ]
     runs-on:
       - self-hosted
