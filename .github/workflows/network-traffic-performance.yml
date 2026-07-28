@@ -443,8 +443,8 @@ jobs:
       fail-fast: false
       matrix:
         vec: ${{ fromJSON(contains(inputs.receiver_options, '--backend msquic-km') &&
-          '[{"env":"lab","os":"rsiof","arch":"x64","runner_extra":"self-hosted","sender_connections":"16","sender_outstanding":"16","sender_connect_stagger_ms":"0","sender_warmup":"15"}]' ||
-          '[{"env":"lab","os":"2022","arch":"x64","runner_extra":"ebpf","sender_connections":"","sender_outstanding":"","sender_connect_stagger_ms":"","sender_warmup":""},{"env":"lab","os":"rsiof","arch":"x64","runner_extra":"self-hosted","sender_connections":"16","sender_outstanding":"16","sender_connect_stagger_ms":"0","sender_warmup":"15"}]') }}
+          '[{"env":"lab","os":"rsiof","arch":"x64","runner_extra":"self-hosted","supports_msquic_km":true,"sender_connections":"16","sender_outstanding":"16","sender_connect_stagger_ms":"0","sender_warmup":"15"}]' ||
+          '[{"env":"lab","os":"2022","arch":"x64","runner_extra":"ebpf","supports_msquic_km":false,"sender_connections":"","sender_outstanding":"","sender_connect_stagger_ms":"","sender_warmup":""},{"env":"lab","os":"rsiof","arch":"x64","runner_extra":"self-hosted","supports_msquic_km":true,"sender_connections":"16","sender_outstanding":"16","sender_connect_stagger_ms":"0","sender_warmup":"15"}]') }}
     runs-on:
       - self-hosted
       - ${{ matrix.vec.env }}

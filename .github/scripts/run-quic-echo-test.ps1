@@ -561,6 +561,51 @@ function Install-RemoteWinQuicEchoKmDriver {
       }
     }
 
+    function Ensure-RemoteMsQuicLoaded {
+      param([Parameter(Mandatory=$true)][string]$MsQuicPath)
+
+      $relativeMsQuicPath = 'system32\drivers\msquic.sys'
+
+      if (-not (Test-Path -LiteralPath $MsQuicPath)) {
+        Write-Host "Required msquic.sys not found at $MsQuicPath"
+        $found = Get-ChildItem -Path "$env:SystemRoot\System32\drivers" -Filter 'msquic*' -ErrorAction SilentlyContinue
+        if ($found) { Write-Host "Found msquic files: $($found.Name -join ', ')" }
+        else { Write-Host "No msquic driver files found in drivers directory" }
+        throw "Required msquic.sys was not found; kernel-mode WinQuicEcho tests require the inbox msquic driver."
+      }
+
+      Write-Host "Found msquic.sys at $MsQuicPath (size: $((Get-Item $MsQuicPath).Length) bytes)"
+
+      $svc = Get-Service -Name 'msquic' -ErrorAction SilentlyContinue
+      if ($null -eq $svc) {
+        Write-Host "Creating msquic kernel service"
+        & sc.exe create msquic type= kernel binPath= $MsQuicPath start= demand | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+          throw "Remote sc create msquic failed with exit code $LASTEXITCODE"
+        }
+      }
+
+      try {
+        Set-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Services\msquic" -Name "ImagePath" -Value $relativeMsQuicPath
+      } catch {
+        throw "Failed to normalize remote msquic ImagePath: $($_.Exception.Message)"
+      }
+
+      $svc = Get-Service -Name 'msquic' -ErrorAction SilentlyContinue
+      if ($null -eq $svc) {
+        throw "Remote msquic service was not found after create"
+      }
+      if ($svc.Status -ne 'Running') {
+        Write-Host "Starting msquic service"
+        & sc.exe start msquic 2>&1 | ForEach-Object { Write-Host "  $_" }
+        if ($LASTEXITCODE -ne 0) {
+          throw "Remote sc start msquic failed with exit code $LASTEXITCODE"
+        }
+      } else {
+        Write-Host "msquic service is already running"
+      }
+    }
+
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = [Security.Principal.WindowsPrincipal]::new($identity)
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
