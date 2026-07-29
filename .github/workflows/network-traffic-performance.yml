@@ -412,6 +412,7 @@ jobs:
     if: ${{ always() && inputs.test_tool == 'ctsTraffic' }}
     permissions:
       actions: write
+      contents: write
     uses: microsoft/netperf/.github/workflows/schedule-lab-reset.yml@main
     with:
       workflowId: ${{ github.run_id }}
@@ -680,6 +681,7 @@ jobs:
     if: ${{ always() && inputs.test_tool == 'quicEcho' }}
     permissions:
       actions: write
+      contents: write
     uses: microsoft/netperf/.github/workflows/schedule-lab-reset.yml@main
     with:
       workflowId: ${{ github.run_id }}
