@@ -399,8 +399,13 @@ function Ensure-MsQuicPrivLoaded {
     throw "Required msquicpriv.sys not found at $DriverPath"
   }
 
-  Copy-Item -LiteralPath $DriverPath -Destination $driverDest -Force
   $svc = Get-Service -Name 'msquicpriv' -ErrorAction SilentlyContinue
+  if ($null -ne $svc -and $svc.Status -eq 'Running') {
+    & $WriteFunc "msquicpriv service is already running; reusing the loaded driver"
+    return
+  }
+
+  Copy-Item -LiteralPath $DriverPath -Destination $driverDest -Force
   if ($null -eq $svc) {
     & $WriteFunc "Creating msquicpriv kernel service"
     & sc.exe create msquicpriv type= kernel binPath= $driverDest start= demand | Out-Null
@@ -769,8 +774,12 @@ function Install-RemoteWinQuicEchoKmDriver {
     if (-not (Test-Path -LiteralPath $msquicPrivSourcePath)) {
       throw "Required msquicpriv.sys not found at $msquicPrivSourcePath"
     }
-    Copy-Item -LiteralPath $msquicPrivSourcePath -Destination $msquicPrivDest -Force
     $msquicPrivSvc = Get-Service -Name 'msquicpriv' -ErrorAction SilentlyContinue
+    if ($null -ne $msquicPrivSvc -and $msquicPrivSvc.Status -eq 'Running') {
+      Write-Host "msquicpriv service is already running; reusing the loaded driver"
+    } else {
+      Copy-Item -LiteralPath $msquicPrivSourcePath -Destination $msquicPrivDest -Force
+    }
     if ($null -eq $msquicPrivSvc) {
       Write-Host "Creating msquicpriv kernel service"
       & sc.exe create msquicpriv type= kernel binPath= $msquicPrivDest start= demand | Out-Null
