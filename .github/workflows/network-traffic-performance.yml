@@ -21,11 +21,18 @@ on:
         type: boolean
       sender_options:
         description: 'Command-line options for the sender (quoted string)'
-        required: true
+        required: false
+        default: ''
         type: string
       receiver_options:
         description: 'Command-line options for the receiver (quoted string)'
-        required: true
+        required: false
+        default: ''
+        type: string
+      experiments:
+        description: 'Optional JSON list: [{"name":"case-1","sender_options":"...","receiver_options":"..."}]'
+        required: false
+        default: ''
         type: string
       test_tool_ref:
         description: 'Branch or ref to build the test tool from'
@@ -67,6 +74,92 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  prepare_experiments:
+    name: Prepare experiment matrix
+    runs-on: windows-latest
+    outputs:
+      matrix: ${{ steps.prepare.outputs.matrix }}
+    steps:
+    - name: Prepare matrix
+      id: prepare
+      env:
+        EXPERIMENTS: ${{ inputs.experiments }}
+        SENDER_OPTIONS: ${{ inputs.sender_options }}
+        RECEIVER_OPTIONS: ${{ inputs.receiver_options }}
+        TEST_TOOL: ${{ inputs.test_tool }}
+      shell: pwsh
+      run: |
+        $rawExperiments = $env:EXPERIMENTS
+        if ([string]::IsNullOrWhiteSpace($rawExperiments)) {
+          if ([string]::IsNullOrWhiteSpace($env:SENDER_OPTIONS) -or [string]::IsNullOrWhiteSpace($env:RECEIVER_OPTIONS)) {
+            throw 'sender_options and receiver_options are required when experiments is not provided.'
+          }
+          $experiments = @([pscustomobject]@{
+            name = 'single'
+            sender_options = $env:SENDER_OPTIONS
+            receiver_options = $env:RECEIVER_OPTIONS
+          })
+        } else {
+          try {
+            $experiments = @(ConvertFrom-Json -InputObject $rawExperiments)
+          } catch {
+            throw "experiments must be valid JSON: $($_.Exception.Message)"
+          }
+          if ($experiments.Count -eq 0) {
+            throw 'experiments must contain at least one item.'
+          }
+        }
+
+        if ($experiments.Count -gt 50) {
+          throw 'experiments cannot contain more than 50 items.'
+        }
+
+        $matrixEntries = [System.Collections.Generic.List[object]]::new()
+        $index = 0
+        foreach ($experiment in $experiments) {
+          $index++
+          if ([string]::IsNullOrWhiteSpace([string]$experiment.name)) {
+            $experiment | Add-Member -NotePropertyName name -NotePropertyValue "experiment-$index"
+          }
+          if ([string]$experiment.name -notmatch '^[A-Za-z0-9._-]{1,50}$') {
+            throw "Experiment name '$($experiment.name)' must be 1-50 characters using only letters, numbers, '.', '_' or '-'."
+          }
+          if ([string]::IsNullOrWhiteSpace([string]$experiment.sender_options) -or
+              [string]::IsNullOrWhiteSpace([string]$experiment.receiver_options)) {
+            throw "Experiment '$($experiment.name)' must specify sender_options and receiver_options."
+          }
+
+          $base = [ordered]@{
+            name = [string]$experiment.name
+            sender_options = [string]$experiment.sender_options
+            receiver_options = [string]$experiment.receiver_options
+          }
+
+          if ($env:TEST_TOOL -eq 'quicEcho') {
+            $isKernel = $base.receiver_options -match '(?i)--backend\s+msquic-km(\s|$)'
+            $quicRunners = if ($isKernel) {
+              @(
+                @{ env = 'lab'; os = 'rsiof'; arch = 'x64'; runner_extra = 'self-hosted'; supports_msquic_km = $true; sender_connections = '16'; sender_outstanding = '16'; sender_connect_stagger_ms = '0'; sender_warmup = '15' }
+              )
+            } else {
+              @(
+                @{ env = 'lab'; os = '2022'; arch = 'x64'; runner_extra = 'ebpf'; supports_msquic_km = $false; sender_connections = ''; sender_outstanding = ''; sender_connect_stagger_ms = ''; sender_warmup = '' }
+                @{ env = 'lab'; os = 'rsiof'; arch = 'x64'; runner_extra = 'self-hosted'; supports_msquic_km = $true; sender_connections = '16'; sender_outstanding = '16'; sender_connect_stagger_ms = '0'; sender_warmup = '15' }
+              )
+            }
+            foreach ($runner in $quicRunners) {
+              $matrixEntries.Add([ordered]@{ experiment = $base } + $runner)
+            }
+          } elseif ($env:TEST_TOOL -eq 'echo') {
+            $matrixEntries.Add([ordered]@{ experiment = $base; env = 'lab'; os = '2022'; arch = 'x64'; runner_extra = 'ebpf' })
+          } else {
+            $matrixEntries.Add([ordered]@{ experiment = $base; env = 'lab'; os = '2022'; arch = 'x64' })
+          }
+        }
+
+        $matrix = [ordered]@{ include = @($matrixEntries) } | ConvertTo-Json -Compress -Depth 10
+        "matrix=$matrix" >> $env:GITHUB_OUTPUT
+
   build_cts_traffic:
     if: ${{ inputs.test_tool == 'ctsTraffic' }}
     name: Build cts-traffic
@@ -81,19 +174,16 @@ jobs:
   test_cts_traffic:
     if: ${{ inputs.test_tool == 'ctsTraffic' }}
     name: Network Traffic Test
-    needs: [build_cts_traffic]
+    needs: [build_cts_traffic, prepare_experiments]
     strategy:
       fail-fast: false
-      matrix:
-        vec:
-          - env: lab
-            os: "2022"
-            arch: x64
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.prepare_experiments.outputs.matrix) }}
     runs-on:
       - self-hosted
-      - ${{ matrix.vec.env }}
-      - os-windows-${{ matrix.vec.os }}
-      - ${{ matrix.vec.arch }}
+      - ${{ matrix.env }}
+      - os-windows-${{ matrix.os }}
+      - ${{ matrix.arch }}
 
     steps:
     - name: Checkout repository
@@ -137,8 +227,9 @@ jobs:
       run: |
         Write-Output "Input parameters:"
         Write-Output "  Profile: ${{ inputs.profile }}"
-        Write-Output "  SenderOptions: ${{ inputs.sender_options }}"
-        Write-Output "  ReceiverOptions: ${{ inputs.receiver_options }}"
+        Write-Output "  Experiment: ${{ matrix.experiment.name }}"
+        Write-Output "  SenderOptions: ${{ matrix.experiment.sender_options }}"
+        Write-Output "  ReceiverOptions: ${{ matrix.experiment.receiver_options }}"
         Write-Output "  TCP IP Tracing: ${{ inputs.tcp_ip_tracing }}"
         Write-Output "  ref: ${{ inputs.ref }}"
 
@@ -146,8 +237,8 @@ jobs:
       working-directory: ${{ github.workspace }}\cts-traffic
       env:
         PROFILE: ${{ inputs.profile }}
-        SENDER_OPTIONS: ${{ inputs.sender_options }}
-        RECEIVER_OPTIONS: ${{ inputs.receiver_options }}
+        SENDER_OPTIONS: ${{ matrix.experiment.sender_options }}
+        RECEIVER_OPTIONS: ${{ matrix.experiment.receiver_options }}
       shell: pwsh
       run: |
         # Build parameter hashtable for proper named parameter binding
@@ -176,7 +267,7 @@ jobs:
       if: always()
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
       with:
-        name: cts_traffic_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        name: cts_traffic_${{ matrix.experiment.name }}_${{ matrix.env }}_${{ matrix.os }}_${{ matrix.arch }}
         path: |
           ${{ github.workspace }}\cts-traffic\*.csv
           ${{ github.workspace }}\cts-traffic\*.log
@@ -185,14 +276,14 @@ jobs:
       if: always()
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
       with:
-        name: tcpip_trace_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        name: tcpip_trace_${{ matrix.experiment.name }}_${{ matrix.env }}_${{ matrix.os }}_${{ matrix.arch }}
         path: ${{ github.workspace }}\ETL\tcpip_trace.etl
 
     - name: Upload CPU Profile
       if:  always()
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
       with:
-        name: cpu_profile_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        name: cpu_profile_${{ matrix.experiment.name }}_${{ matrix.env }}_${{ matrix.os }}_${{ matrix.arch }}
         path: ${{ github.workspace }}\ETL\cpu_profile-*.etl
 
   build_echo_test:
@@ -212,19 +303,16 @@ jobs:
   test_echo_server:
     if: ${{ inputs.test_tool == 'echo' }}
     name: Network Traffic Test (echo)
-    needs: [build_echo_test]
+    needs: [build_echo_test, prepare_experiments]
     strategy:
       fail-fast: false
-      matrix:
-        vec:
-          - env: lab
-            os: "2022"
-            arch: x64
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.prepare_experiments.outputs.matrix) }}
     runs-on:
       - self-hosted
-      - ${{ matrix.vec.env }}
-      - os-windows-${{ matrix.vec.os }}
-      - ${{ matrix.vec.arch }}
+      - ${{ matrix.env }}
+      - os-windows-${{ matrix.os }}
+      - ${{ matrix.arch }}
       - ebpf
 
     steps:
@@ -303,8 +391,9 @@ jobs:
       run: |
         Write-Output "Input parameters:"
         Write-Output "  Profile: ${{ inputs.profile }}"
-        Write-Output "  SenderOptions: ${{ inputs.sender_options }}"
-        Write-Output "  ReceiverOptions: ${{ inputs.receiver_options }}"
+        Write-Output "  Experiment: ${{ matrix.experiment.name }}"
+        Write-Output "  SenderOptions: ${{ matrix.experiment.sender_options }}"
+        Write-Output "  ReceiverOptions: ${{ matrix.experiment.receiver_options }}"
         Write-Output "  TCP IP Tracing: ${{ inputs.tcp_ip_tracing }}"
         Write-Output "  ref: ${{ inputs.ref }}"
         Write-Output "  Duration: ${{ inputs.duration }}"
@@ -328,8 +417,8 @@ jobs:
       working-directory: ${{ github.workspace }}\echo\RelWithDebInfo
       env:
         PROFILE: ${{ inputs.profile }}
-        SENDER_OPTIONS: ${{ inputs.sender_options }}
-        RECEIVER_OPTIONS: ${{ inputs.receiver_options }}
+        SENDER_OPTIONS: ${{ matrix.experiment.sender_options }}
+        RECEIVER_OPTIONS: ${{ matrix.experiment.receiver_options }}
       shell: pwsh
       run: |
         # Use hashtable splatting so parameters bind by name (array splatting is positional).
@@ -376,7 +465,7 @@ jobs:
       if: always()
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
       with:
-        name: echo_test_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        name: echo_test_${{ matrix.experiment.name }}_${{ matrix.env }}_${{ matrix.os }}_${{ matrix.arch }}
         path: |
           ${{ github.workspace }}\echo\*.csv
           ${{ github.workspace }}\echo\*.log
@@ -386,28 +475,28 @@ jobs:
       if: always()
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
       with:
-        name: tcpip_trace_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        name: tcpip_trace_${{ matrix.experiment.name }}_${{ matrix.env }}_${{ matrix.os }}_${{ matrix.arch }}
         path: ${{ github.workspace }}\ETL\tcpip_trace.etl
 
     - name: Upload CPU Profile
       if:  always()
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
       with:
-        name: cpu_profile_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        name: cpu_profile_${{ matrix.experiment.name }}_${{ matrix.env }}_${{ matrix.os }}_${{ matrix.arch }}
         path: ${{ github.workspace }}\ETL\cpu_profile-*.etl
 
     - name: Upload PktMon Drop ETL
       if:  always()
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
       with:
-        name: pktmon_drop_trace_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        name: pktmon_drop_trace_${{ matrix.experiment.name }}_${{ matrix.env }}_${{ matrix.os }}_${{ matrix.arch }}
         path: ${{ github.workspace }}\ETL\pktmon_drop_trace.etl
 
     - name: Upload Crash Dumps
       if:  always()
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
       with:
-        name: crash_dumps_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        name: crash_dumps_${{ matrix.experiment.name }}_${{ matrix.env }}_${{ matrix.os }}_${{ matrix.arch }}
         path: |
           ${{ github.workspace }}\echo\RelWithDebInfo
 
@@ -444,19 +533,17 @@ jobs:
   test_quic_echo:
     if: ${{ inputs.test_tool == 'quicEcho' }}
     name: Network Traffic Test (QUIC echo)
-    needs: [build_quic_echo]
+    needs: [build_quic_echo, prepare_experiments]
     strategy:
       fail-fast: false
-      matrix:
-        vec: ${{ fromJSON(contains(inputs.receiver_options, '--backend msquic-km') &&
-          '[{"env":"lab","os":"rsiof","arch":"x64","runner_extra":"self-hosted","supports_msquic_km":true,"sender_connections":"16","sender_outstanding":"16","sender_connect_stagger_ms":"0","sender_warmup":"15"}]' ||
-          '[{"env":"lab","os":"2022","arch":"x64","runner_extra":"ebpf","supports_msquic_km":false,"sender_connections":"","sender_outstanding":"","sender_connect_stagger_ms":"","sender_warmup":""},{"env":"lab","os":"rsiof","arch":"x64","runner_extra":"self-hosted","supports_msquic_km":true,"sender_connections":"16","sender_outstanding":"16","sender_connect_stagger_ms":"0","sender_warmup":"15"}]') }}
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.prepare_experiments.outputs.matrix) }}
     runs-on:
       - self-hosted
-      - ${{ matrix.vec.env }}
-      - os-windows-${{ matrix.vec.os }}
-      - ${{ matrix.vec.arch }}
-      - ${{ matrix.vec.runner_extra }}
+      - ${{ matrix.env }}
+      - os-windows-${{ matrix.os }}
+      - ${{ matrix.arch }}
+      - ${{ matrix.runner_extra }}
 
     steps:
     - name: Pre-clean leftover PktMon artifacts
@@ -533,12 +620,13 @@ jobs:
       run: |
         Write-Output "Input parameters:"
         Write-Output "  Profile: ${{ inputs.profile }}"
-        Write-Output "  SenderOptions: ${{ inputs.sender_options }}"
-        Write-Output "  Matrix SenderConnections: ${{ matrix.vec.sender_connections }}"
-        Write-Output "  Matrix SenderOutstanding: ${{ matrix.vec.sender_outstanding }}"
-        Write-Output "  Matrix SenderConnectStaggerMs: ${{ matrix.vec.sender_connect_stagger_ms }}"
-        Write-Output "  Matrix SenderWarmup: ${{ matrix.vec.sender_warmup }}"
-        Write-Output "  ReceiverOptions: ${{ inputs.receiver_options }}"
+        Write-Output "  Experiment: ${{ matrix.experiment.name }}"
+        Write-Output "  SenderOptions: ${{ matrix.experiment.sender_options }}"
+        Write-Output "  Matrix SenderConnections: ${{ matrix.sender_connections }}"
+        Write-Output "  Matrix SenderOutstanding: ${{ matrix.sender_outstanding }}"
+        Write-Output "  Matrix SenderConnectStaggerMs: ${{ matrix.sender_connect_stagger_ms }}"
+        Write-Output "  Matrix SenderWarmup: ${{ matrix.sender_warmup }}"
+        Write-Output "  ReceiverOptions: ${{ matrix.experiment.receiver_options }}"
         Write-Output "  TCP IP Tracing: ${{ inputs.tcp_ip_tracing }}"
         Write-Output "  ref: ${{ inputs.ref }}"
         Write-Output "  Duration: ${{ inputs.duration }}"
@@ -564,12 +652,12 @@ jobs:
       working-directory: ${{ github.workspace }}\quic_echo\Release
       env:
         PROFILE: ${{ inputs.profile }}
-        SENDER_OPTIONS: ${{ inputs.sender_options }}
-        MATRIX_SENDER_CONNECTIONS: ${{ matrix.vec.sender_connections }}
-        MATRIX_SENDER_OUTSTANDING: ${{ matrix.vec.sender_outstanding }}
-        MATRIX_SENDER_CONNECT_STAGGER_MS: ${{ matrix.vec.sender_connect_stagger_ms }}
-        MATRIX_SENDER_WARMUP: ${{ matrix.vec.sender_warmup }}
-        RECEIVER_OPTIONS: ${{ inputs.receiver_options }}
+        SENDER_OPTIONS: ${{ matrix.experiment.sender_options }}
+        MATRIX_SENDER_CONNECTIONS: ${{ matrix.sender_connections }}
+        MATRIX_SENDER_OUTSTANDING: ${{ matrix.sender_outstanding }}
+        MATRIX_SENDER_CONNECT_STAGGER_MS: ${{ matrix.sender_connect_stagger_ms }}
+        MATRIX_SENDER_WARMUP: ${{ matrix.sender_warmup }}
+        RECEIVER_OPTIONS: ${{ matrix.experiment.receiver_options }}
         REQUEST_RESPONSE_SIZE: ${{ inputs.request_response_size }}
         INSTALL_MSQUIC: ${{ inputs.install_msquic }}
       shell: pwsh
@@ -650,7 +738,7 @@ jobs:
       if: always()
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
       with:
-        name: quic_echo_test_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        name: quic_echo_test_${{ matrix.experiment.name }}_${{ matrix.env }}_${{ matrix.os }}_${{ matrix.arch }}
         path: |
           ${{ github.workspace }}\quic_echo\*.csv
           ${{ github.workspace }}\quic_echo\*.log
@@ -660,28 +748,28 @@ jobs:
       if: always()
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
       with:
-        name: tcpip_trace_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        name: tcpip_trace_${{ matrix.experiment.name }}_${{ matrix.env }}_${{ matrix.os }}_${{ matrix.arch }}
         path: ${{ github.workspace }}\ETL\tcpip_trace.etl
 
     - name: Upload CPU Profile
       if:  always()
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
       with:
-        name: cpu_profile_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        name: cpu_profile_${{ matrix.experiment.name }}_${{ matrix.env }}_${{ matrix.os }}_${{ matrix.arch }}
         path: ${{ github.workspace }}\ETL\cpu_profile-*.etl
 
     - name: Upload PktMon Drop ETL
       if:  always()
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
       with:
-        name: pktmon_drop_trace_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        name: pktmon_drop_trace_${{ matrix.experiment.name }}_${{ matrix.env }}_${{ matrix.os }}_${{ matrix.arch }}
         path: ${{ github.workspace }}\ETL\pktmon_drop_trace.etl
 
     - name: Upload Crash Dumps
       if:  always()
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
       with:
-        name: crash_dumps_${{ matrix.vec.env }}_${{ matrix.vec.os }}_${{ matrix.vec.arch }}
+        name: crash_dumps_${{ matrix.experiment.name }}_${{ matrix.env }}_${{ matrix.os }}_${{ matrix.arch }}
         path: |
           ${{ github.workspace }}\quic_echo\dumps
 
