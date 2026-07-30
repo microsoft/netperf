@@ -52,6 +52,11 @@ on:
         required: false
         default: ''
         type: string
+      install_msquic:
+        description: 'Install the MsQuic kernel driver from the test artifact instead of using the OS version'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -538,6 +543,7 @@ jobs:
         Write-Output "  ref: ${{ inputs.ref }}"
         Write-Output "  Duration: ${{ inputs.duration }}"
         Write-Output "  RequestResponseSize: ${{ inputs.request_response_size }}"
+        Write-Output "  InstallMsQuic: ${{ inputs.install_msquic }}"
 
     - name: Diagnostic - List files in quic_echo Release directory
       run: |
@@ -565,6 +571,7 @@ jobs:
         MATRIX_SENDER_WARMUP: ${{ matrix.vec.sender_warmup }}
         RECEIVER_OPTIONS: ${{ inputs.receiver_options }}
         REQUEST_RESPONSE_SIZE: ${{ inputs.request_response_size }}
+        INSTALL_MSQUIC: ${{ inputs.install_msquic }}
       shell: pwsh
       run: |
         $scriptPath = '.\run-quic-echo-test.ps1'
@@ -602,6 +609,9 @@ jobs:
 
         if ($env:PROFILE -eq 'true' -or $env:PROFILE -eq 'True' -or $env:PROFILE -eq 'TRUE' -or $env:PROFILE -eq $true) {
           $params.CpuProfile = $true
+        }
+        if ($env:INSTALL_MSQUIC -eq 'true' -or $env:INSTALL_MSQUIC -eq 'True' -or $env:INSTALL_MSQUIC -eq 'TRUE' -or $env:INSTALL_MSQUIC -eq $true) {
+          $params.InstallMsQuic = $true
         }
 
         Write-Output "Running: $scriptPath with parameters:"
