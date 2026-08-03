@@ -545,7 +545,7 @@ jobs:
       if: ${{ failure() }}
       runs-on: ubuntu-latest
       steps:
-        - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
           if: ${{ github.event_name == 'repository_dispatch' }}
           env:
             TITLE: 'eBPF for Windows Performance Test Failed'
