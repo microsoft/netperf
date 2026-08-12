@@ -6,8 +6,7 @@ from WSL2 to a Windows peer with and without ShadowSocketProxy.
 ## Pair provisioning
 
 The GitHub Actions runner must be a Windows 2022 self-hosted runner with the
-existing `lab`, `x64`, and `ebpf` labels. Provision it before running the
-workflow:
+existing `lab` and `x64` labels. Provision it before running the workflow:
 
 - Install WSL2 and a pinned Ubuntu distribution.
 - Install Rust 1.96.1, `cargo`, `tc`, and `iperf3` inside WSL.

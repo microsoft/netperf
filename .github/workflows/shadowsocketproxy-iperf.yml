@@ -76,7 +76,6 @@ jobs:
       - lab
       - os-windows-2022
       - x64
-      - ebpf
 
     steps:
     - name: Checkout netperf
