@@ -108,13 +108,20 @@ jobs:
       run: |
         $distribution = $env:DISTRIBUTION
         if ([string]::IsNullOrWhiteSpace($distribution)) {
-          $distribution = (& wsl.exe --list --quiet | Out-String) -replace "`0", ''
-          $distribution = ($distribution -split "`r?`n" |
-            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
-            Select-Object -First 1).Trim()
+          $wslList = ((& wsl.exe --list --quiet 2>$null | Out-String) -replace "`0", '')
+          $candidates = $wslList -split "`r?`n" |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { $_ -match '^[A-Za-z0-9][A-Za-z0-9._-]*$' }
+          foreach ($candidate in $candidates) {
+            & wsl.exe -d $candidate -- true 2>$null
+            if ($LASTEXITCODE -eq 0) {
+              $distribution = $candidate
+              break
+            }
+          }
         }
         if ([string]::IsNullOrWhiteSpace($distribution)) {
-          throw 'No WSL distribution is installed on the runner'
+          throw 'No usable WSL distribution is installed on the runner; provision WSL2 with a Linux distribution before running this benchmark'
         }
         "DISTRIBUTION=$distribution" >> $env:GITHUB_ENV
         Write-Host "Using WSL distribution: $distribution"
