@@ -43,6 +43,13 @@ on:
         required: false
         default: false
         type: boolean
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/shadowsocketproxy-iperf.yml'
+      - '.github/scripts/run-shadowsocketproxy-iperf.ps1'
+      - 'docs/shadowsocketproxy-iperf.md'
 
 permissions:
   contents: read
@@ -50,6 +57,16 @@ permissions:
 concurrency:
   group: shadowsocketproxy-iperf-${{ inputs.target_peer || 'target' }}
   cancel-in-progress: true
+
+env:
+  SHADOW_REF: ${{ inputs.shadow_ref || 'main' }}
+  TARGET_PEER: ${{ inputs.target_peer || 'netperf-peer' }}
+  TARGET_ADDRESS: ${{ inputs.target_address || '' }}
+  DISTRIBUTION: ${{ inputs.distribution || 'Ubuntu' }}
+  DURATION: ${{ inputs.duration || '30' }}
+  RUNS: ${{ inputs.runs || '3' }}
+  UDP_RATES: ${{ inputs.udp_rates || '100M,1G' }}
+  SKIP_PROXY: ${{ inputs.skip_proxy || false }}
 
 jobs:
   benchmark:
@@ -84,13 +101,13 @@ jobs:
       shell: pwsh
       run: |
         git clone --no-checkout --filter=blob:none https://github.com/Alan-Jowett/ShadowSocketProxy.git "${{ github.workspace }}\ShadowSocketProxy"
-        git -C "${{ github.workspace }}\ShadowSocketProxy" fetch --depth 1 origin "${{ inputs.shadow_ref }}"
+        git -C "${{ github.workspace }}\ShadowSocketProxy" fetch --depth 1 origin "$env:SHADOW_REF"
         git -C "${{ github.workspace }}\ShadowSocketProxy" checkout --detach FETCH_HEAD
 
     - name: Validate WSL prerequisites
       shell: pwsh
       run: |
-        $distribution = "${{ inputs.distribution }}"
+        $distribution = $env:DISTRIBUTION
         wsl.exe -d $distribution -- uname -a
         wsl.exe -d $distribution -- sh -lc "command -v cargo && command -v tc && command -v iperf3"
         wsl.exe -d $distribution -u root -- sh -lc 'iface=$(ip route show default | awk "{print $5}"); tc qdisc show dev "$iface"'
@@ -100,7 +117,7 @@ jobs:
       working-directory: ${{ github.workspace }}\ShadowSocketProxy
       run: |
         $wslRoot = "/mnt/c/$((Get-Location).Path.Substring(3) -replace '\\','/')"
-        wsl.exe -d "${{ inputs.distribution }}" -- bash -lc "cd '$wslRoot' && make -C crates/bpf clean all && cargo build --locked --release -p shadow-socket-proxy-control --features tls-psk"
+        wsl.exe -d "$env:DISTRIBUTION" -- bash -lc "cd '$wslRoot' && make -C crates/bpf clean all && cargo build --locked --release -p shadow-socket-proxy-control --features tls-psk"
         if ($LASTEXITCODE -ne 0) { throw "WSL ShadowSocketProxy build failed" }
 
     - name: Build Windows host proxy
@@ -113,26 +130,26 @@ jobs:
     - name: Run baseline and proxy benchmark
       shell: pwsh
       run: |
-        $targetAddress = "${{ inputs.target_address }}"
+        $targetAddress = $env:TARGET_ADDRESS
         if ([string]::IsNullOrWhiteSpace($targetAddress)) {
-          $targetAddress = [System.Net.Dns]::GetHostAddresses("${{ inputs.target_peer }}") |
+          $targetAddress = [System.Net.Dns]::GetHostAddresses($env:TARGET_PEER) |
             Where-Object { $_.AddressFamily -eq [System.Net.Sockets.AddressFamily]::InterNetwork } |
             Select-Object -First 1 -ExpandProperty IPAddressToString
         }
         if ([string]::IsNullOrWhiteSpace($targetAddress)) {
-          throw "Could not resolve an IPv4 address for target peer '${{ inputs.target_peer }}'"
+          throw "Could not resolve an IPv4 address for target peer '$env:TARGET_PEER'"
         }
-        Write-Host "Using target peer ${{ inputs.target_peer }} at $targetAddress"
+        Write-Host "Using target peer $env:TARGET_PEER at $targetAddress"
         $params = @{
-          TargetPeer = "${{ inputs.target_peer }}"
+          TargetPeer = $env:TARGET_PEER
           TargetAddress = $targetAddress
           ShadowRoot = "${{ github.workspace }}\ShadowSocketProxy"
-          Distribution = "${{ inputs.distribution }}"
-          Duration = [int]"${{ inputs.duration }}"
-          Runs = [int]"${{ inputs.runs }}"
-          UdpRates = "${{ inputs.udp_rates }}"
+          Distribution = $env:DISTRIBUTION
+          Duration = [int]$env:DURATION
+          Runs = [int]$env:RUNS
+          UdpRates = $env:UDP_RATES
         }
-        if ("${{ inputs.skip_proxy }}" -eq "true") {
+        if ($env:SKIP_PROXY -eq "true") {
           $params.SkipProxy = $true
         }
         & "${{ github.workspace }}\.github\scripts\run-shadowsocketproxy-iperf.ps1" @params
