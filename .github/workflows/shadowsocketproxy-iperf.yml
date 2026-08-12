@@ -76,6 +76,7 @@ jobs:
       - lab
       - os-windows-2022
       - x64
+      - wsl
 
     steps:
     - name: Checkout netperf
