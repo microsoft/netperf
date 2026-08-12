@@ -96,11 +96,12 @@ jobs:
         New-Item -ItemType Directory -Force -Path "$workspace\results" | Out-Null
 
     - name: Checkout ShadowSocketProxy
-      shell: pwsh
-      run: |
-        git clone --no-checkout --filter=blob:none https://github.com/Alan-Jowett/ShadowSocketProxy.git "${{ github.workspace }}\ShadowSocketProxy"
-        git -C "${{ github.workspace }}\ShadowSocketProxy" fetch --depth 1 origin "$env:SHADOW_REF"
-        git -C "${{ github.workspace }}\ShadowSocketProxy" checkout --detach FETCH_HEAD
+      uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633
+      with:
+        repository: Alan-Jowett/ShadowSocketProxy
+        ref: ${{ env.SHADOW_REF }}
+        path: ShadowSocketProxy
+        fetch-depth: 1
 
     - name: Validate WSL prerequisites
       shell: pwsh
