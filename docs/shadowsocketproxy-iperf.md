@@ -8,7 +8,7 @@ from WSL2 to a Windows peer with and without ShadowSocketProxy.
 The GitHub Actions runner must be a Windows 2022 self-hosted runner with the
 existing `lab` and `x64` labels. Provision it before running the workflow:
 
-- Install WSL2 and a pinned Ubuntu distribution.
+- Install WSL2 and a pinned Linux distribution.
 - Install Rust 1.96.1, `cargo`, `tc`, and `iperf3` inside WSL.
 - Confirm the WSL kernel permits TC/BPF attachment.
 - Install a pinned Windows `iperf3.exe` on the target peer.
@@ -21,6 +21,9 @@ after the run.
 The default target is `netperf-peer`. Its IPv4 address is resolved on the
 runner, matching the existing eBPF performance workflows; an address can be
 provided explicitly when DNS is unavailable.
+
+The workflow uses the first installed WSL distribution when no distribution is
+specified. Set the `distribution` input to pin a particular distribution.
 
 ## Measurements
 

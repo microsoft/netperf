@@ -19,9 +19,9 @@ on:
         default: ''
         type: string
       distribution:
-        description: 'Installed WSL distribution on the runner'
+        description: 'Installed WSL distribution; blank selects the first installed distribution'
         required: false
-        default: 'Ubuntu'
+        default: ''
         type: string
       duration:
         description: 'iperf3 duration per run in seconds'
@@ -62,7 +62,7 @@ env:
   SHADOW_REF: ${{ inputs.shadow_ref || 'main' }}
   TARGET_PEER: ${{ inputs.target_peer || 'netperf-peer' }}
   TARGET_ADDRESS: ${{ inputs.target_address || '' }}
-  DISTRIBUTION: ${{ inputs.distribution || 'Ubuntu' }}
+  DISTRIBUTION: ${{ inputs.distribution || '' }}
   DURATION: ${{ inputs.duration || '30' }}
   RUNS: ${{ inputs.runs || '3' }}
   UDP_RATES: ${{ inputs.udp_rates || '100M,1G' }}
@@ -107,6 +107,17 @@ jobs:
       shell: pwsh
       run: |
         $distribution = $env:DISTRIBUTION
+        if ([string]::IsNullOrWhiteSpace($distribution)) {
+          $distribution = (& wsl.exe --list --quiet | Out-String) -replace "`0", ''
+          $distribution = ($distribution -split "`r?`n" |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            Select-Object -First 1).Trim()
+        }
+        if ([string]::IsNullOrWhiteSpace($distribution)) {
+          throw 'No WSL distribution is installed on the runner'
+        }
+        "DISTRIBUTION=$distribution" >> $env:GITHUB_ENV
+        Write-Host "Using WSL distribution: $distribution"
         wsl.exe -d $distribution -- uname -a
         wsl.exe -d $distribution -- sh -lc "command -v cargo && command -v tc && command -v iperf3"
         wsl.exe -d $distribution -u root -- sh -lc 'iface=$(ip route show default | awk "{print $5}"); tc qdisc show dev "$iface"'
