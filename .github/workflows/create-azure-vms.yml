@@ -56,21 +56,21 @@ jobs:
     runs-on: windows-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v2
+      uses: actions/checkout@0717577d45739eb3c851188b29f50ed6c0b2194e # v2.8.0
     - name: Login to Azure
-      uses: azure/login@v3
+      uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3.0.1
       with:
         client-id: ${{ secrets.AZURE_CLIENT_ID }}
         tenant-id: ${{ secrets.AZURE_TENANT_ID }}
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         enable-AzPSSession: true
     - name: Run manage-azure-vms.ps1
-      uses: azure/powershell@v3
+      uses: azure/powershell@f5b8adcfff1904872c7b98d4012d4914d74b1a82 # v3.0.0
       with:
         inlineScript: ./.github/workflows/manage-azure-vms.ps1 -GithubPatToken ${{ secrets.PERSONAL_ACCESS_TOKEN }} -MatrixFileName ${{ inputs.matrix_filename }}
         azPSVersion: '11.5.0'
     - name: Create Azure VMs
-      uses: azure/powershell@v3
+      uses: azure/powershell@f5b8adcfff1904872c7b98d4012d4914d74b1a82 # v3.0.0
       with:
         inlineScript: |
           ./.github/workflows/create-azure-machines.ps1 -Password ${{ secrets.VM_PASSWORD }} -GithubPatToken ${{ secrets.PERSONAL_ACCESS_TOKEN }} -WorkflowId ${{ inputs.workflowId }}
