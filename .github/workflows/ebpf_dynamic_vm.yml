@@ -150,7 +150,7 @@ jobs:
         Start-Process -FilePath "vc_redist.x64.exe" -ArgumentList "/quiet /qn /norestart" -Wait -NoNewWindow
 
     - name: Download ebpf-for-windows
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
       with:
         name: "ebpf-for-windows - MSI installer (none_NativeOnlyRelease)"
         path: ${{ github.workspace }}\bpf_performance
@@ -206,7 +206,7 @@ jobs:
         Expand-Archive -Path build-Release-windows-2022.zip -DestinationPath .
 
     - name: Download cts-traffic
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
       with:
         name: "cts-traffic Release"
         path: ${{ github.workspace }}\cts-traffic

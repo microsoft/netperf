@@ -92,12 +92,12 @@ jobs:
         ref: ${{ github.event.client_payload.ref || inputs.ref || '' }}
         repository: microsoft/msquic
     - name: Download Build Artifacts
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
       with: # note we always use binaries built on windows-2022.
         name: ${{ matrix.vec.config }}-${{ matrix.vec.plat }}-windows-2022-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}${{ matrix.vec.build }}
         path: artifacts
     - name: Download Build Artifacts for Testing From WinUser
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
       with: # note we always use binaries built on windows-2022.
         name: ${{ matrix.vec.config }}-windows-windows-2022-${{ matrix.vec.arch }}-${{ matrix.vec.tls }}${{ matrix.vec.build }}
         path: artifacts
