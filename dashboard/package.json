@@ -24,7 +24,7 @@
     "@emotion/styled": "^11.14.1",
     "@faker-js/faker": "^10.2.0",
     "@iconify/react": "^6.0.2",
-    "@mui/lab": "^5.0.0-alpha.165",
+    "@mui/lab": "^6.0.0-dev.20240529-082515-213b5e33ab",
     "@mui/material": "^5.15.13",
     "apexcharts": "3.44.2",
     "chart.js": "^4.5.1",
