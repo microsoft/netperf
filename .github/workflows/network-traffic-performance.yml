@@ -52,6 +52,11 @@ on:
         required: false
         default: ''
         type: string
+      install_msquic:
+        description: 'Install the MsQuic kernel driver from the test artifact instead of using the OS version'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -412,6 +417,7 @@ jobs:
     if: ${{ always() && inputs.test_tool == 'ctsTraffic' }}
     permissions:
       actions: write
+      contents: write
     uses: microsoft/netperf/.github/workflows/schedule-lab-reset.yml@main
     with:
       workflowId: ${{ github.run_id }}
@@ -426,14 +432,14 @@ jobs:
     # Consider migrating to an organization-owned repository to avoid maintenance risks if the
     # personal account becomes unavailable. For now, this is the authoritative source for the
     # WinQuicEcho tool.
-    uses: Alan-Jowett/WinQuicEcho/.github/workflows/reusable-build.yml@53cd6c01279eb789f6b52218121c248088a0d608
+    uses: Alan-Jowett/WinQuicEcho/.github/workflows/reusable-build.yml@504b79cc4ac31140a2f1e47c1ce554090b84f4d3
     with:
       artifact_name: quic_echo_test
       config: 'Release'
       repository: 'Alan-Jowett/WinQuicEcho'
       # Pinned to the same audited commit as the workflow ref to prevent
       # arbitrary code execution via user-controlled inputs.
-      ref: '53cd6c01279eb789f6b52218121c248088a0d608'
+      ref: '504b79cc4ac31140a2f1e47c1ce554090b84f4d3'
 
   test_quic_echo:
     if: ${{ inputs.test_tool == 'quicEcho' }}
@@ -443,8 +449,8 @@ jobs:
       fail-fast: false
       matrix:
         vec: ${{ fromJSON(contains(inputs.receiver_options, '--backend msquic-km') &&
-          '[{"env":"lab","os":"rsiof","arch":"x64","runner_extra":"self-hosted","sender_connections":"16","sender_outstanding":"16","sender_connect_stagger_ms":"0","sender_warmup":"15"}]' ||
-          '[{"env":"lab","os":"2022","arch":"x64","runner_extra":"ebpf","sender_connections":"","sender_outstanding":"","sender_connect_stagger_ms":"","sender_warmup":""},{"env":"lab","os":"rsiof","arch":"x64","runner_extra":"self-hosted","sender_connections":"16","sender_outstanding":"16","sender_connect_stagger_ms":"0","sender_warmup":"15"}]') }}
+          '[{"env":"lab","os":"rsiof","arch":"x64","runner_extra":"self-hosted","supports_msquic_km":true,"sender_connections":"16","sender_outstanding":"16","sender_connect_stagger_ms":"0","sender_warmup":"15"}]' ||
+          '[{"env":"lab","os":"2022","arch":"x64","runner_extra":"ebpf","supports_msquic_km":false,"sender_connections":"","sender_outstanding":"","sender_connect_stagger_ms":"","sender_warmup":""},{"env":"lab","os":"rsiof","arch":"x64","runner_extra":"self-hosted","supports_msquic_km":true,"sender_connections":"16","sender_outstanding":"16","sender_connect_stagger_ms":"0","sender_warmup":"15"}]') }}
     runs-on:
       - self-hosted
       - ${{ matrix.vec.env }}
@@ -537,6 +543,7 @@ jobs:
         Write-Output "  ref: ${{ inputs.ref }}"
         Write-Output "  Duration: ${{ inputs.duration }}"
         Write-Output "  RequestResponseSize: ${{ inputs.request_response_size }}"
+        Write-Output "  InstallMsQuic: ${{ inputs.install_msquic }}"
 
     - name: Diagnostic - List files in quic_echo Release directory
       run: |
@@ -564,6 +571,7 @@ jobs:
         MATRIX_SENDER_WARMUP: ${{ matrix.vec.sender_warmup }}
         RECEIVER_OPTIONS: ${{ inputs.receiver_options }}
         REQUEST_RESPONSE_SIZE: ${{ inputs.request_response_size }}
+        INSTALL_MSQUIC: ${{ inputs.install_msquic }}
       shell: pwsh
       run: |
         $scriptPath = '.\run-quic-echo-test.ps1'
@@ -601,6 +609,9 @@ jobs:
 
         if ($env:PROFILE -eq 'true' -or $env:PROFILE -eq 'True' -or $env:PROFILE -eq 'TRUE' -or $env:PROFILE -eq $true) {
           $params.CpuProfile = $true
+        }
+        if ($env:INSTALL_MSQUIC -eq 'true' -or $env:INSTALL_MSQUIC -eq 'True' -or $env:INSTALL_MSQUIC -eq 'TRUE' -or $env:INSTALL_MSQUIC -eq $true) {
+          $params.InstallMsQuic = $true
         }
 
         Write-Output "Running: $scriptPath with parameters:"
@@ -680,6 +691,7 @@ jobs:
     if: ${{ always() && inputs.test_tool == 'quicEcho' }}
     permissions:
       actions: write
+      contents: write
     uses: microsoft/netperf/.github/workflows/schedule-lab-reset.yml@main
     with:
       workflowId: ${{ github.run_id }}

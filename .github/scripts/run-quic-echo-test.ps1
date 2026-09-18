@@ -3,7 +3,8 @@ param(
   [string]$PeerName,
   [string]$SenderOptions,
   [string]$ReceiverOptions,
-  [string]$Duration = "60"
+  [string]$Duration = "60",
+  [switch]$InstallMsQuic
 )
 
 Set-StrictMode -Version Latest
@@ -202,6 +203,26 @@ function Get-QuicEchoKmDriverPath {
   return $driverPath
 }
 
+function Get-MsQuicPrivDriverPath {
+  $toolRoot = Split-Path -Parent $scriptDir
+  $driverPath = Join-Path $toolRoot 'km\msquicpriv.sys'
+  if (-not (Test-Path -LiteralPath $driverPath)) {
+    throw "Required MsQuic kernel driver not found: $driverPath"
+  }
+
+  return $driverPath
+}
+
+function Get-MsQuicDriverPath {
+  $toolRoot = Split-Path -Parent $scriptDir
+  $driverPath = Join-Path $toolRoot 'km\msquic.sys'
+  if (-not (Test-Path -LiteralPath $driverPath)) {
+    throw "Requested MsQuic kernel driver not found: $driverPath"
+  }
+
+  return $driverPath
+}
+
 function Test-LocalTestSigningEnabled {
   $output = (& bcdedit /enum '{current}' 2>$null | Out-String)
   return $output -match '(?im)^\s*testsigning\s+Yes\s*$'
@@ -233,6 +254,7 @@ function Prepare-WinQuicEchoKmDriver {
   param(
     [Parameter(Mandatory=$true)]$Session,
     [Parameter(Mandatory=$true)][string]$DriverSourcePath,
+    [Parameter(Mandatory=$true)][string]$MsQuicPrivDriverSourcePath,
     [Parameter(Mandatory=$true)][string]$RemoteDir
   )
 
@@ -241,6 +263,9 @@ function Prepare-WinQuicEchoKmDriver {
   }
   if (-not (Test-RemoteTestSigningEnabled -Session $Session)) {
     throw 'Remote machine does not have test signing enabled. Enable it with "bcdedit /set testsigning on" and reboot.'
+  }
+  if (-not (Test-Path -LiteralPath $MsQuicPrivDriverSourcePath)) {
+    throw "Required msquicpriv.sys not found at $MsQuicPrivDriverSourcePath"
   }
 
   $signtoolPath = Get-SignToolPath
@@ -288,11 +313,33 @@ function Prepare-WinQuicEchoKmDriver {
 }
 
 function Ensure-MsQuicLoaded {
-  param([string]$Label = 'local')
+  param(
+    [string]$DriverSourcePath,
+    [string]$Label = 'local'
+  )
 
   $msquicSys = Join-Path $env:SystemRoot 'System32\drivers\msquic.sys'
   $relativeMsQuicPath = 'system32\drivers\msquic.sys'
   $WriteFunc = if ($Label -eq 'local') { { param($m) Write-Phase $m } } else { { param($m) Write-Host $m } }
+
+  $svc = Get-Service -Name 'msquic' -ErrorAction SilentlyContinue
+  if ($DriverSourcePath) {
+    if (-not (Test-Path -LiteralPath $DriverSourcePath)) {
+      throw "Requested MsQuic kernel driver not found at $DriverSourcePath"
+    }
+    if ($null -ne $svc -and $svc.Status -eq 'Running') {
+      & $WriteFunc "Stopping msquic service to install the requested driver"
+      Stop-Service -Name 'msquic' -Force -ErrorAction Stop
+      $svc.WaitForStatus('Stopped', '00:00:30')
+    }
+    if (Test-Path -LiteralPath $msquicSys) {
+      $stale = "${msquicSys}.$([guid]::NewGuid().ToString('N')).os"
+      Move-Item -LiteralPath $msquicSys -Destination $stale -Force -ErrorAction Stop
+      & $WriteFunc "Moved the OS msquic.sys to $stale"
+    }
+    Copy-Item -LiteralPath $DriverSourcePath -Destination $msquicSys -Force -ErrorAction Stop
+    & $WriteFunc "Installed MsQuic driver from $DriverSourcePath"
+  }
 
   # Check if msquic.sys file exists
   if (-not (Test-Path -LiteralPath $msquicSys)) {
@@ -335,6 +382,46 @@ function Ensure-MsQuicLoaded {
     }
   } else {
     & $WriteFunc "msquic service is already running"
+  }
+}
+
+function Ensure-MsQuicPrivLoaded {
+  param(
+    [Parameter(Mandatory=$true)][string]$DriverPath,
+    [string]$Label = 'local'
+  )
+
+  $driverDest = Join-Path $env:SystemRoot 'System32\drivers\msquicpriv.sys'
+  $relativeDriverPath = 'system32\drivers\msquicpriv.sys'
+  $WriteFunc = if ($Label -eq 'local') { { param($m) Write-Phase $m } } else { { param($m) Write-Host $m } }
+
+  if (-not (Test-Path -LiteralPath $DriverPath)) {
+    throw "Required msquicpriv.sys not found at $DriverPath"
+  }
+
+  Copy-Item -LiteralPath $DriverPath -Destination $driverDest -Force
+  $svc = Get-Service -Name 'msquicpriv' -ErrorAction SilentlyContinue
+  if ($null -eq $svc) {
+    & $WriteFunc "Creating msquicpriv kernel service"
+    & sc.exe create msquicpriv type= kernel binPath= $driverDest start= demand | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+      throw "sc create msquicpriv failed with exit code $LASTEXITCODE"
+    }
+  }
+
+  Set-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Services\msquicpriv" -Name "ImagePath" -Value $relativeDriverPath
+  $svc = Get-Service -Name 'msquicpriv' -ErrorAction SilentlyContinue
+  if ($null -eq $svc) {
+    throw "msquicpriv service was not found after create"
+  }
+  if ($svc.Status -ne 'Running') {
+    & $WriteFunc "Starting msquicpriv service"
+    & sc.exe start msquicpriv 2>&1
+    if ($LASTEXITCODE -ne 0) {
+      throw "sc start msquicpriv failed with exit code $LASTEXITCODE"
+    }
+  } else {
+    & $WriteFunc "msquicpriv service is already running"
   }
 }
 
@@ -406,7 +493,11 @@ function Update-ServerArgument {
 }
 
 function Install-LocalWinQuicEchoKmDriver {
-  param([Parameter(Mandatory=$true)][string]$DriverSourcePath)
+  param(
+    [Parameter(Mandatory=$true)][string]$DriverSourcePath,
+    [Parameter(Mandatory=$true)][string]$MsQuicPrivDriverSourcePath,
+    [string]$MsQuicDriverSourcePath
+  )
 
   if (-not (Test-IsAdministrator)) {
     throw "Installing the WinQuicEcho kernel driver locally requires administrator privileges."
@@ -415,7 +506,8 @@ function Install-LocalWinQuicEchoKmDriver {
   $driverDest = Join-Path $env:SystemRoot 'System32\drivers\winquicecho_km.sys'
 
   # Ensure msquic.sys is loaded (WinQuicEcho has PE import dependency on it)
-  Ensure-MsQuicLoaded -Label 'local'
+  Ensure-MsQuicLoaded -DriverSourcePath $MsQuicDriverSourcePath -Label 'local'
+  Ensure-MsQuicPrivLoaded -DriverPath $MsQuicPrivDriverSourcePath -Label 'local'
 
   # Stop any running WinQuicEcho instance, including prior fallback names.
   foreach ($name in Get-WinQuicEchoServiceNames) {
@@ -453,14 +545,14 @@ function Install-LocalWinQuicEchoKmDriver {
     $svc = Get-Service -Name $name -ErrorAction SilentlyContinue
     if ($null -eq $svc) {
       Write-Phase "Creating local $name kernel service"
-      & sc.exe create $name type= kernel binPath= $driverDest start= demand depend= msquic | Out-Null
+      & sc.exe create $name type= kernel binPath= $driverDest start= demand depend= msquicpriv | Out-Null
       if ($LASTEXITCODE -eq 0) {
         Set-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Services\$name" -Name "ImagePath" -Value $relativeDriverPath
         $serviceName = $name; break
       }
       Write-Phase "sc create $name failed ($LASTEXITCODE); trying next name"
     } else {
-      & sc.exe config $name start= demand depend= msquic | Out-Null
+      & sc.exe config $name start= demand depend= msquicpriv | Out-Null
       if ($LASTEXITCODE -eq 0) {
         Set-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Services\$name" -Name "ImagePath" -Value $relativeDriverPath
         $serviceName = $name; Write-Phase "Reconfigured local $name service"; break
@@ -471,7 +563,7 @@ function Install-LocalWinQuicEchoKmDriver {
   if ($null -eq $serviceName) {
     $uniqueName = "WinQuicEcho_$([guid]::NewGuid().ToString('N').Substring(0,8))"
     Write-Phase "All primary service names exhausted; creating $uniqueName"
-    & sc.exe create $uniqueName type= kernel binPath= $driverDest start= demand depend= msquic | Out-Null
+    & sc.exe create $uniqueName type= kernel binPath= $driverDest start= demand depend= msquicpriv | Out-Null
     if ($LASTEXITCODE -eq 0) {
       Set-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Services\$uniqueName" -Name "ImagePath" -Value $relativeDriverPath
       $serviceName = $uniqueName
@@ -496,11 +588,15 @@ function Install-RemoteWinQuicEchoKmDriver {
   param(
     [Parameter(Mandatory=$true)]$Session,
     [Parameter(Mandatory=$true)][string]$DriverSourcePath,
+    [Parameter(Mandatory=$true)][string]$MsQuicPrivDriverSourcePath,
+    [string]$MsQuicDriverSourcePath,
     [Parameter(Mandatory=$true)][string]$RemoteDir
   )
 
   $remoteKmDir = Join-Path (Join-Path $RemoteDir 'quic_echo') 'km'
   $remoteDriverSourcePath = Join-Path $remoteKmDir 'winquicecho_km.sys'
+  $remoteMsQuicPrivSourcePath = Join-Path $remoteKmDir 'msquicpriv.sys'
+  $remoteMsQuicSourcePath = Join-Path $remoteKmDir 'msquic.sys'
 
   Invoke-Command -Session $Session -ArgumentList $remoteKmDir -ScriptBlock {
     param($kmDir)
@@ -511,15 +607,110 @@ function Install-RemoteWinQuicEchoKmDriver {
 
   Write-Phase "Copying WinQuicEcho kernel driver to remote path $remoteDriverSourcePath"
   Copy-Item -ToSession $Session -LiteralPath $DriverSourcePath -Destination $remoteDriverSourcePath -Force
+  Write-Phase "Copying msquicpriv kernel driver to remote path $remoteMsQuicPrivSourcePath"
+  Copy-Item -ToSession $Session -LiteralPath $MsQuicPrivDriverSourcePath -Destination $remoteMsQuicPrivSourcePath -Force
+  if ($MsQuicDriverSourcePath) {
+    Write-Phase "Copying MsQuic kernel driver to remote path $remoteMsQuicSourcePath"
+    Copy-Item -ToSession $Session -LiteralPath $MsQuicDriverSourcePath -Destination $remoteMsQuicSourcePath -Force
+  }
 
   $remoteWinQuicEchoServiceNames = Get-WinQuicEchoServiceNames
-  Invoke-Command -Session $Session -ArgumentList $remoteDriverSourcePath, $remoteWinQuicEchoServiceNames -ScriptBlock {
-    param($driverSourcePath, $existingServiceNames)
+  Invoke-Command -Session $Session -ArgumentList $remoteDriverSourcePath, $remoteMsQuicPrivSourcePath, $remoteMsQuicSourcePath, $remoteWinQuicEchoServiceNames -ScriptBlock {
+    param($driverSourcePath, $msquicPrivSourcePath, $msquicSourcePath, $existingServiceNames)
 
     function Ensure-RemoteMsQuicLoaded {
-      param([Parameter(Mandatory=$true)][string]$MsQuicPath)
+      param(
+        [Parameter(Mandatory=$true)][string]$MsQuicPath,
+        [string]$DriverSourcePath
+      )
 
       $relativeMsQuicPath = 'system32\drivers\msquic.sys'
+
+      $svc = Get-Service -Name 'msquic' -ErrorAction SilentlyContinue
+      if ($DriverSourcePath) {
+        if (-not (Test-Path -LiteralPath $DriverSourcePath)) {
+          throw "Requested MsQuic kernel driver not found at $DriverSourcePath"
+        }
+        if ($null -ne $svc -and $svc.Status -eq 'Running') {
+          Write-Host "Stopping msquic service to install the requested driver"
+          Stop-Service -Name 'msquic' -Force -ErrorAction Stop
+          $svc.WaitForStatus('Stopped', '00:00:30')
+        }
+        if (Test-Path -LiteralPath $MsQuicPath) {
+          $stale = "${MsQuicPath}.$([guid]::NewGuid().ToString('N')).os"
+          Move-Item -LiteralPath $MsQuicPath -Destination $stale -Force -ErrorAction Stop
+          Write-Host "Moved the OS msquic.sys to $stale"
+        }
+        Copy-Item -LiteralPath $DriverSourcePath -Destination $MsQuicPath -Force -ErrorAction Stop
+        Write-Host "Installed MsQuic driver from $DriverSourcePath"
+      }
+
+      if (-not (Test-Path -LiteralPath $MsQuicPath)) {
+        Write-Host "Required msquic.sys not found at $MsQuicPath"
+        $found = Get-ChildItem -Path "$env:SystemRoot\System32\drivers" -Filter 'msquic*' -ErrorAction SilentlyContinue
+        if ($found) { Write-Host "Found msquic files: $($found.Name -join ', ')" }
+        else { Write-Host "No msquic driver files found in drivers directory" }
+        throw "Required msquic.sys was not found; kernel-mode WinQuicEcho tests require the inbox msquic driver."
+      }
+
+      Write-Host "Found msquic.sys at $MsQuicPath (size: $((Get-Item $MsQuicPath).Length) bytes)"
+
+      $svc = Get-Service -Name 'msquic' -ErrorAction SilentlyContinue
+      if ($null -eq $svc) {
+        Write-Host "Creating msquic kernel service"
+        & sc.exe create msquic type= kernel binPath= $MsQuicPath start= demand | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+          throw "Remote sc create msquic failed with exit code $LASTEXITCODE"
+        }
+      }
+
+      try {
+        Set-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Services\msquic" -Name "ImagePath" -Value $relativeMsQuicPath
+      } catch {
+        throw "Failed to normalize remote msquic ImagePath: $($_.Exception.Message)"
+      }
+
+      $svc = Get-Service -Name 'msquic' -ErrorAction SilentlyContinue
+      if ($null -eq $svc) {
+        throw "Remote msquic service was not found after create"
+      }
+      if ($svc.Status -ne 'Running') {
+        Write-Host "Starting msquic service"
+        & sc.exe start msquic 2>&1 | ForEach-Object { Write-Host "  $_" }
+        if ($LASTEXITCODE -ne 0) {
+          throw "Remote sc start msquic failed with exit code $LASTEXITCODE"
+        }
+      } else {
+        Write-Host "msquic service is already running"
+      }
+    }
+
+    function Ensure-RemoteMsQuicLoaded {
+      param(
+        [Parameter(Mandatory=$true)][string]$MsQuicPath,
+        [string]$DriverSourcePath
+      )
+
+      $relativeMsQuicPath = 'system32\drivers\msquic.sys'
+
+      $svc = Get-Service -Name 'msquic' -ErrorAction SilentlyContinue
+      if ($DriverSourcePath) {
+        if (-not (Test-Path -LiteralPath $DriverSourcePath)) {
+          throw "Requested MsQuic kernel driver not found at $DriverSourcePath"
+        }
+        if ($null -ne $svc -and $svc.Status -eq 'Running') {
+          Write-Host "Stopping msquic service to install the requested driver"
+          Stop-Service -Name 'msquic' -Force -ErrorAction Stop
+          $svc.WaitForStatus('Stopped', '00:00:30')
+        }
+        if (Test-Path -LiteralPath $MsQuicPath) {
+          $stale = "${MsQuicPath}.$([guid]::NewGuid().ToString('N')).os"
+          Move-Item -LiteralPath $MsQuicPath -Destination $stale -Force -ErrorAction Stop
+          Write-Host "Moved the OS msquic.sys to $stale"
+        }
+        Copy-Item -LiteralPath $DriverSourcePath -Destination $MsQuicPath -Force -ErrorAction Stop
+        Write-Host "Installed MsQuic driver from $DriverSourcePath"
+      }
 
       if (-not (Test-Path -LiteralPath $MsQuicPath)) {
         Write-Host "Required msquic.sys not found at $MsQuicPath"
@@ -571,7 +762,34 @@ function Install-RemoteWinQuicEchoKmDriver {
 
     # Ensure msquic.sys is loaded (WinQuicEcho has PE import dependency on it)
     $msquicSys = Join-Path $env:SystemRoot 'System32\drivers\msquic.sys'
-    Ensure-RemoteMsQuicLoaded -MsQuicPath $msquicSys
+    $msquicSource = if (Test-Path -LiteralPath $msquicSourcePath) { $msquicSourcePath } else { $null }
+    Ensure-RemoteMsQuicLoaded -MsQuicPath $msquicSys -DriverSourcePath $msquicSource
+
+    $msquicPrivDest = Join-Path $env:SystemRoot 'System32\drivers\msquicpriv.sys'
+    if (-not (Test-Path -LiteralPath $msquicPrivSourcePath)) {
+      throw "Required msquicpriv.sys not found at $msquicPrivSourcePath"
+    }
+    Copy-Item -LiteralPath $msquicPrivSourcePath -Destination $msquicPrivDest -Force
+    $msquicPrivSvc = Get-Service -Name 'msquicpriv' -ErrorAction SilentlyContinue
+    if ($null -eq $msquicPrivSvc) {
+      Write-Host "Creating msquicpriv kernel service"
+      & sc.exe create msquicpriv type= kernel binPath= $msquicPrivDest start= demand | Out-Null
+      if ($LASTEXITCODE -ne 0) {
+        throw "Remote sc create msquicpriv failed with exit code $LASTEXITCODE"
+      }
+    }
+    Set-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Services\msquicpriv" -Name "ImagePath" -Value 'system32\drivers\msquicpriv.sys'
+    $msquicPrivSvc = Get-Service -Name 'msquicpriv' -ErrorAction SilentlyContinue
+    if ($null -eq $msquicPrivSvc) {
+      throw "Remote msquicpriv service was not found after create"
+    }
+    if ($msquicPrivSvc.Status -ne 'Running') {
+      Write-Host "Starting msquicpriv service"
+      & sc.exe start msquicpriv 2>&1 | ForEach-Object { Write-Host "  $_" }
+      if ($LASTEXITCODE -ne 0) {
+        throw "Remote sc start msquicpriv failed with exit code $LASTEXITCODE"
+      }
+    }
 
     # Stop any running WinQuicEcho instance, including prior fallback names.
     # Verify the stop succeeded before proceeding.
@@ -633,14 +851,14 @@ function Install-RemoteWinQuicEchoKmDriver {
       $svc = Get-Service -Name $name -ErrorAction SilentlyContinue
       if ($null -eq $svc) {
         Write-Host "Creating remote $name kernel service"
-        & sc.exe create $name type= kernel binPath= $driverDest start= demand depend= msquic | Out-Null
+        & sc.exe create $name type= kernel binPath= $driverDest start= demand depend= msquicpriv | Out-Null
         if ($LASTEXITCODE -eq 0) {
           Set-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Services\$name" -Name "ImagePath" -Value $relativeDriverPath
           $serviceName = $name; break
         }
         Write-Host "sc create $name failed ($LASTEXITCODE); trying next name"
       } else {
-        & sc.exe config $name start= demand depend= msquic | Out-Null
+        & sc.exe config $name start= demand depend= msquicpriv | Out-Null
         if ($LASTEXITCODE -eq 0) {
           Set-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Services\$name" -Name "ImagePath" -Value $relativeDriverPath
           $serviceName = $name; Write-Host "Reconfigured remote $name service"; break
@@ -651,7 +869,7 @@ function Install-RemoteWinQuicEchoKmDriver {
     if ($null -eq $serviceName) {
       $uniqueName = "WinQuicEcho_$([guid]::NewGuid().ToString('N').Substring(0,8))"
       Write-Host "All primary service names exhausted; creating $uniqueName"
-      & sc.exe create $uniqueName type= kernel binPath= $driverDest start= demand depend= msquic | Out-Null
+      & sc.exe create $uniqueName type= kernel binPath= $driverDest start= demand depend= msquicpriv | Out-Null
       if ($LASTEXITCODE -eq 0) {
         Set-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Services\$uniqueName" -Name "ImagePath" -Value $relativeDriverPath
         $serviceName = $uniqueName
@@ -1182,10 +1400,13 @@ try {
   $receiverBackend = Get-ReceiverBackend -Options $ReceiverOptions
   if ($receiverBackend -eq 'msquic-km') {
     $kmDriverPath = Get-QuicEchoKmDriverPath
-    Write-Phase "Receiver backend is msquic-km; installing WinQuicEcho kernel driver locally and remotely"
-    Prepare-WinQuicEchoKmDriver -Session $Session -DriverSourcePath $kmDriverPath -RemoteDir $script:RemoteDir
-    Install-LocalWinQuicEchoKmDriver -DriverSourcePath $kmDriverPath
-    Install-RemoteWinQuicEchoKmDriver -Session $Session -DriverSourcePath $kmDriverPath -RemoteDir $script:RemoteDir
+    $msquicPrivDriverPath = Get-MsQuicPrivDriverPath
+    $msquicDriverPath = if ($InstallMsQuic) { Get-MsQuicDriverPath } else { $null }
+    $msquicMode = if ($InstallMsQuic) { 'built MsQuic driver' } else { 'OS MsQuic driver' }
+    Write-Phase "Receiver backend is msquic-km; installing WinQuicEcho kernel driver locally and remotely using the $msquicMode"
+    Prepare-WinQuicEchoKmDriver -Session $Session -DriverSourcePath $kmDriverPath -MsQuicPrivDriverSourcePath $msquicPrivDriverPath -RemoteDir $script:RemoteDir
+    Install-LocalWinQuicEchoKmDriver -DriverSourcePath $kmDriverPath -MsQuicPrivDriverSourcePath $msquicPrivDriverPath -MsQuicDriverSourcePath $msquicDriverPath
+    Install-RemoteWinQuicEchoKmDriver -Session $Session -DriverSourcePath $kmDriverPath -MsQuicPrivDriverSourcePath $msquicPrivDriverPath -MsQuicDriverSourcePath $msquicDriverPath -RemoteDir $script:RemoteDir
   }
 
   # Diagnostic: verify executables and msquic.dll are present locally and remotely
