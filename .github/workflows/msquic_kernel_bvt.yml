@@ -25,14 +25,21 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
     - name: Print Parameters
+      env:
+        DISPATCH_GUID: ${{ github.event.client_payload.guid }}
+        DISPATCH_SHA: ${{ github.event.client_payload.sha }}
+        DISPATCH_REF: ${{ github.event.client_payload.ref }}
+        DISPATCH_PR: ${{ github.event.client_payload.pr }}
+        DISPATCH_LOGS: ${{ github.event.client_payload.logs }}
+        DISPATCH_FILTER: ${{ github.event.client_payload.filter }}
       run: |
         echo "Parameters from repository_dispatch:"
-        echo "guid: ${{ github.event.client_payload.guid }}"
-        echo "sha: ${{ github.event.client_payload.sha }}"
-        echo "ref: ${{ github.event.client_payload.ref }}"
-        echo "pr: ${{ github.event.client_payload.pr }}"
-        echo "logs: ${{ github.event.client_payload.logs }}"
-        echo "filter: ${{ github.event.client_payload.filter }}"
+        echo "guid: $DISPATCH_GUID"
+        echo "sha: $DISPATCH_SHA"
+        echo "ref: $DISPATCH_REF"
+        echo "pr: $DISPATCH_PR"
+        echo "logs: $DISPATCH_LOGS"
+        echo "filter: $DISPATCH_FILTER"
 
   build-windows-kernel:
     name: Build WinKernel
@@ -121,7 +128,9 @@ jobs:
     - name: Test
       shell: pwsh
       timeout-minutes: 90
-      run: scripts/test.ps1 -Config ${{ matrix.vec.config }} -Arch ${{ matrix.vec.arch }} -Tls ${{ matrix.vec.tls }} -OsRunner ${{ matrix.vec.os }} -GHA -LogProfile Full.Light -GenerateXmlResults -Kernel -Filter ${{ github.event.client_payload.filter || inputs.filter || '' }}
+      env:
+        TEST_FILTER: ${{ github.event.client_payload.filter || inputs.filter || '' }}
+      run: scripts/test.ps1 -Config ${{ matrix.vec.config }} -Arch ${{ matrix.vec.arch }} -Tls ${{ matrix.vec.tls }} -OsRunner ${{ matrix.vec.os }} -GHA -LogProfile Full.Light -GenerateXmlResults -Kernel -Filter $env:TEST_FILTER
     - name: Upload on Failure
       uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
       if: failure()
