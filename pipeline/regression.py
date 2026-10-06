@@ -5,6 +5,48 @@ import argparse
 import glob
 import os
 
+# Mapping from DB test IDs (old-format and new scenario-* format) to consumer keys.
+# The consumer (secnetperf.ps1 / secnetperf-helpers.psm1) builds keys as "$scenario-$transport",
+# e.g. "upload-quic", "download-tcp". The DB uses different naming conventions.
+DB_TO_CONSUMER_KEY = {
+    # Old format → consumer
+    "tput-up-quic":                    "upload-quic",
+    "tput-up-tcp":                     "upload-tcp",
+    "tput-down-quic":                  "download-quic",
+    "tput-down-tcp":                   "download-tcp",
+    "hps-conns-100-quic":              "hps-quic",
+    "hps-conns-100-tcp":               "hps-tcp",
+    "rps-up-512-down-4000-quic":       "rps-quic",
+    "rps-up-512-down-4000-tcp":        "rps-tcp",
+    "max-rps-up-512-down-4000-quic":   "rps-quic",
+    "max-rps-up-512-down-4000-tcp":    "rps-tcp",
+    # New scenario-* format → consumer
+    "scenario-upload-quic":            "upload-quic",
+    "scenario-upload-tcp":             "upload-tcp",
+    "scenario-download-quic":          "download-quic",
+    "scenario-download-tcp":           "download-tcp",
+    "scenario-hps-quic":               "hps-quic",
+    "scenario-hps-tcp":                "hps-tcp",
+    "scenario-rps-quic":               "rps-quic",
+    "scenario-rps-tcp":                "rps-tcp",
+    "scenario-rps-multi-quic":         "rps-multi-quic",
+    "scenario-rps-multi-tcp":          "rps-multi-tcp",
+    "scenario-latency-quic":           "latency-quic",
+    "scenario-latency-tcp":            "latency-tcp",
+}
+
+
+def remap_to_consumer_keys(data):
+    """Remap DB test IDs to consumer-format keys, merging env data when collisions occur."""
+    result = {}
+    for db_key, env_data in data.items():
+        consumer_key = DB_TO_CONSUMER_KEY.get(db_key, db_key)
+        if consumer_key not in result:
+            result[consumer_key] = {}
+        # Merge: newer data (scenario-*) overwrites older data for same env
+        result[consumer_key].update(env_data)
+    return result
+
 # Create the parser
 parser = argparse.ArgumentParser(description="Process a feature integer.")
 
@@ -306,6 +348,10 @@ def sliding_window():
                             continue
                         regression_file[testid][f"{os_name}-{arch}-{context}-{io}-{tls}"] = compute_baseline(data, testid)
                         watermark_regression_file[testid][f"{os_name}-{arch}-{context}-{io}-{tls}"] = compute_baseline_watermark(data, testid)
+
+    # Remap DB test IDs to consumer-format keys before saving
+    regression_file = remap_to_consumer_keys(regression_file)
+    watermark_regression_file = remap_to_consumer_keys(watermark_regression_file)
 
     # Save results to a json file.
     with open('regression.json', 'w') as f:
