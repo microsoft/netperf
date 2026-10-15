@@ -48,6 +48,8 @@ jobs:
       - name: Check_Dispatched_ID;${{ github.event.client_payload.workflow_id }}
         if: ${{ github.event_name == 'repository_dispatch' }}
         timeout-minutes: 45
+        env:
+          DISPATCH_WORKFLOW_ID: ${{ github.event.client_payload.workflow_id }}
         run: |
           $headers = @{
             "Accept" = "application/vnd.github+json"
@@ -56,7 +58,7 @@ jobs:
           }
           $url = "https://api.github.com/repos/microsoft/netperf/actions/runs?status=in_progress"
           Write-Debug "GET $url"
-          $workflow_id_that_dispatched_this_workflow = "${{ github.event.client_payload.workflow_id }}"
+          $workflow_id_that_dispatched_this_workflow = $env:DISPATCH_WORKFLOW_ID
           $stop = $true
           while ($true) {
             $stop = $true
@@ -136,14 +138,18 @@ jobs:
       - ${{ inputs.parent-or-child }}
     steps:
     - name: RESET STATE (parent or child)
+      env:
+        VM_NAME: ${{ inputs.vm-name }}
       run: |
         # TODO: Eventually, for WS 2025, we want to instead CRUD the VMs, instead of simply reseting their checkpoints here.
-        $vmName = "${{ inputs.vm-name }}"
+        $vmName = $env:VM_NAME
         $checkPointName = "LATEST"
         Restore-VMSnapshot -VMName $vmName -Name $checkPointName -Confirm:$false
     - name: Start VM, wait for online status, alert observer.
+      env:
+        VM_NAME: ${{ inputs.vm-name }}
       run: |
-        $vmName = "${{ inputs.vm-name }}"
+        $vmName = $env:VM_NAME
         if ($vmName.Contains("linux") -or $vmName.Contains("ubuntu")) {
           Restart-VM -Name $vmName -Force
         } else {
