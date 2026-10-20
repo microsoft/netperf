@@ -2,7 +2,7 @@
 // import Button from '@mui/material/Button';
 import PropTypes from 'prop-types';
 
-import Grid from '@mui/material/Unstable_Grid2';
+import Grid from '@mui/material/Grid';
 
 // import Iconify from 'src/components/iconify';
 
@@ -22,7 +22,7 @@ function GraphView(props) {
   const { title, subheader, series, labels, map, options } = props;
   return (
 
-        <Grid xs={12} md={6} lg={12}>
+        <Grid size={{ xs: 12, md: 6, lg: 12 }}>
           <AppWebsiteVisits
             title={title}
             subheader={subheader}

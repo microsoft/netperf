@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 import Button from '@mui/material/Button';
 import Container from '@mui/material/Container';
-import Grid from '@mui/material/Unstable_Grid2';
+import Grid from '@mui/material/Grid';
 import Typography from '@mui/material/Typography';
 
 
@@ -304,7 +304,7 @@ export default function AppView() {
       {/* <br /> */}
       <p><b>Windows hardware SKU:</b> {getLatestSkuInformation(env, windowsOs, windows)} | <b>Linux hardware SKU:</b> {getLatestSkuInformation(env, linuxOs, linux)}</p>
       <Grid container spacing={3}>
-        <Grid xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <AppWidgetSummary
             title="Secnetperf + QUIC + iocp download throughput"
             total={windowsDownloadThroughputQuic}
@@ -329,7 +329,7 @@ export default function AppView() {
                 </Button>
         </Grid>
 
-        <Grid xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <AppWidgetSummary
             title="Secnetperf + QUIC + epoll download throughput"
             title2="Secnetperf + TCP + epoll download throughput"
@@ -362,7 +362,7 @@ export default function AppView() {
           />
           <p>Note: for io = WSK, the application driving the perf test (Secnetperf) is ALSO in Kernel mode.</p>
         </Grid>
-        <Grid xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <AppWidgetSummary
             title="Secnetperf + QUIC + iocp 99th percentile latency"
             title2="Secnetperf + TCP + iocp 99th percentile latency"
@@ -398,7 +398,7 @@ export default function AppView() {
           />
         </Grid>
 
-        <Grid xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <AppWidgetSummary
             title="Secnetperf + QUIC + epoll 99th percentile latency"
             title2="Secnetperf + TCP + epoll 99th percentile latency"
@@ -437,7 +437,7 @@ export default function AppView() {
           />
         </Grid>
         {/* Throughput */}
-        <Grid xs={12} md={6} lg={6}>
+        <Grid size={{ xs: 12, md: 6, lg: 6 }}>
           <AppWebsiteVisits
             title="Secnetperf Throughput Comparison (Gbps), higher the better."
             subheader={` ${envStr}`}
@@ -528,7 +528,7 @@ export default function AppView() {
           />
         </Grid>
         {/* Latency */}
-        <Grid xs={12} md={6} lg={6}>
+        <Grid size={{ xs: 12, md: 6, lg: 6 }}>
           <AppWebsiteVisits
             title="Secnetperf Latency Comparison (µs), lower the better."
             subheader={` ${envStr}`}
@@ -628,7 +628,7 @@ export default function AppView() {
           />
         </Grid>
 
-        <Grid xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <AppWidgetSummary
             title="Secnetperf + QUIC + iocp RPS"
             title2="Secnetperf + TCP + iocp RPS"
@@ -653,7 +653,7 @@ export default function AppView() {
             }
           />
         </Grid>
-        <Grid xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <AppWidgetSummary
             title="Secnetperf + QUIC + epoll RPS"
             title2="Secnetperf + TCP + epoll RPS"
@@ -679,7 +679,7 @@ export default function AppView() {
           />
         </Grid>
 
-        <Grid xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <AppWidgetSummary
             title="Secnetperf + QUIC + iocp HPS"
             title2="Secnetperf + TCP + iocp HPS"
@@ -703,7 +703,7 @@ export default function AppView() {
             }
           />
         </Grid>
-        <Grid xs={12} sm={6} md={3}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
           <AppWidgetSummary
             title="Secnetperf + QUIC + epoll HPS"
             title2="Secnetperf + TCP + epoll HPS"
@@ -729,7 +729,7 @@ export default function AppView() {
           />
         </Grid>
         {/* RPS */}
-        <Grid xs={12} md={6} lg={6}>
+        <Grid size={{ xs: 12, md: 6, lg: 6 }}>
           <AppWebsiteVisits
             title="RPS Comparison (requests per second), higher the better."
             subheader={` ${envStr}`}
@@ -802,7 +802,7 @@ export default function AppView() {
           />
         </Grid>
         {/* HPS */}
-        <Grid xs={12} md={6} lg={6}>
+        <Grid size={{ xs: 12, md: 6, lg: 6 }}>
           <AppWebsiteVisits
             title="HPS Comparison (handshakes per second), higher the better."
             subheader={`${envStr}`}
