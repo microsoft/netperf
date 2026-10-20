@@ -1,8 +1,40 @@
 name: "Run Test Script [NEEDS NETPERF REPO CLONED FIRST]"
 description: "This action runs multiple steps as a composite action."
 inputs:
-  run-script-cmd:
-    description: "The serialized matrix of values to use for the composite action."
+  log-profile:
+    description: "The logging profile to use for the test."
+    type: string
+    required: true
+  msquic-commit:
+    description: "The MsQuic commit or ref to test."
+    type: string
+    required: true
+  environment:
+    description: "The test environment."
+    type: string
+    required: true
+  platform:
+    description: "The test platform."
+    type: string
+    required: true
+  os:
+    description: "The target operating system."
+    type: string
+    required: true
+  arch:
+    description: "The target architecture."
+    type: string
+    required: true
+  tls:
+    description: "The TLS provider."
+    type: string
+    required: true
+  io:
+    description: "The I/O provider."
+    type: string
+    required: true
+  filter:
+    description: "The test filter."
     type: string
     required: true
   matrix:
@@ -16,34 +48,37 @@ inputs:
 runs:
   using: "composite"
   steps:
-  - name: Set context and import the netperf-lib.psm1 library
-    id: netperf_context
+  - name: Run Windows PowerShell test script
     if: ${{ env.HAS_PWSH == 'false' }}
-    shell: python
-    run: |
-      import json
-      matrix = json.loads("""${{ inputs.matrix }}""")
-      json_str = json.dumps(matrix).replace('"', '\\"').replace('\n', ' ').replace('\r', ' ')
-      prep_code = f"./netperfrepo/set-netperf-context.ps1 -Matrix '{json_str}' -SyncerSecret '${{ inputs.syncer-secret }}' -GithubRunId '${{ github.run_id }}-${{ github.run_attempt }}';"
-      prep_code += "Import-Module ./netperfrepo/netperf-lib.psm1;"
-      print(f"::set-output name=netperf_context::{prep_code}")
-  - name: Squeeze code to 1 line
-    if: ${{ env.HAS_PWSH == 'false' }}
-    id: squeeze_code
-    shell: python
-    run: |
-      run_script_powershell_code = """${{ inputs.run-script-cmd }}"""
-      squeezed_code = run_script_powershell_code.replace('\n', '').replace('\r', '').replace('`', ' ')
-      print(f"::set-output name=squeezed_code::{squeezed_code}")
-  - name: Run Pwsh Command
-    if: ${{ env.HAS_PWSH == 'false' }}
-    run: |
-      powershell -Command "${{ steps.netperf_context.outputs.netperf_context }} ${{ steps.squeeze_code.outputs.squeezed_code }}"
     shell: cmd
-  - name: Run Pwsh Command
+    env:
+      NETPERF_MATRIX: ${{ inputs.matrix }}
+      NETPERF_SYNCER_SECRET: ${{ inputs.syncer-secret }}
+      NETPERF_GITHUB_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+      NETPERF_LOG_PROFILE: ${{ inputs.log-profile }}
+      NETPERF_MSQUIC_COMMIT: ${{ inputs.msquic-commit }}
+      NETPERF_ENVIRONMENT: ${{ inputs.environment }}
+      NETPERF_PLATFORM: ${{ inputs.platform }}
+      NETPERF_OS: ${{ inputs.os }}
+      NETPERF_ARCH: ${{ inputs.arch }}
+      NETPERF_TLS: ${{ inputs.tls }}
+      NETPERF_IO: ${{ inputs.io }}
+      NETPERF_FILTER: ${{ inputs.filter }}
+    run: powershell -NoProfile -ExecutionPolicy Bypass -File ".\netperfrepo\.github\actions\run-test-script\run-test-script.ps1"
+  - name: Run PowerShell test script
     if: ${{ env.HAS_PWSH == 'true' }}
-    run: |
-      ./netperfrepo/set-netperf-context.ps1 -Matrix '${{ inputs.matrix }}' -SyncerSecret '${{ inputs.syncer-secret }}' -GithubRunId '${{ github.run_id }}-${{ github.run_attempt }}'
-      Import-Module ./netperfrepo/netperf-lib.psm1
-      ${{ inputs.run-script-cmd }}
     shell: pwsh
+    env:
+      NETPERF_MATRIX: ${{ inputs.matrix }}
+      NETPERF_SYNCER_SECRET: ${{ inputs.syncer-secret }}
+      NETPERF_GITHUB_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+      NETPERF_LOG_PROFILE: ${{ inputs.log-profile }}
+      NETPERF_MSQUIC_COMMIT: ${{ inputs.msquic-commit }}
+      NETPERF_ENVIRONMENT: ${{ inputs.environment }}
+      NETPERF_PLATFORM: ${{ inputs.platform }}
+      NETPERF_OS: ${{ inputs.os }}
+      NETPERF_ARCH: ${{ inputs.arch }}
+      NETPERF_TLS: ${{ inputs.tls }}
+      NETPERF_IO: ${{ inputs.io }}
+      NETPERF_FILTER: ${{ inputs.filter }}
+    run: ./netperfrepo/.github/actions/run-test-script/run-test-script.ps1
