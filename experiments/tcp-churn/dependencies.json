@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "provenance": [
+    "https://github.com/microsoft/netperf/blob/20bf929/.github/workflows/cts_traffic.yml",
+    "https://github.com/microsoft/ebpf-for-windows/blob/fb94520bfdd7ddf048e2f7561a65392988d4fca1/scripts/common.psm1"
+  ],
+  "assets": [
+    {
+      "file": "ctsTraffic.exe",
+      "url": "https://raw.githubusercontent.com/microsoft/ctsTraffic/4468b8085b6ac58c531596216f10e812287174ea/Releases/2.0.4.0/x64/ctsTraffic.exe",
+      "sha256": "9AC0F6A19DA355343133F658C6E5D0DC40919F9A13020F86621194C31CE20B12"
+    },
+    {
+      "file": "duonic.ps1",
+      "url": "https://raw.githubusercontent.com/microsoft/corenet-ci/5c39610141ee4583246f6854883d6dba25e00f52/vm-setup/duonic/duonic.ps1",
+      "sha256": "19D1E0545670ACE51C7962F44900FA3A4F1ABAA1C135D6772284F2BABC63EBB9"
+    },
+    {
+      "file": "duonic.sys",
+      "url": "https://raw.githubusercontent.com/microsoft/corenet-ci/5c39610141ee4583246f6854883d6dba25e00f52/vm-setup/duonic/duonic.sys",
+      "sha256": "82645574CC9DB38B197BCBC11CC46AD9BE0E76A72756DE4FD49F4E1D576C85D5"
+    },
+    {
+      "file": "duonic.inf",
+      "url": "https://raw.githubusercontent.com/microsoft/corenet-ci/5c39610141ee4583246f6854883d6dba25e00f52/vm-setup/duonic/duonic.inf",
+      "sha256": "FD6AE4503FFD7FC7C2DCD2913CF6B56C5474570F15EC1B2D1FE15B3693C66713"
+    },
+    {
+      "file": "duonic.cat",
+      "url": "https://raw.githubusercontent.com/microsoft/corenet-ci/5c39610141ee4583246f6854883d6dba25e00f52/vm-setup/duonic/duonic.cat",
+      "sha256": "0A9EA0A37CAB0FE33B49EDB4418711C8F77BAE548860FF06B3A33EA1189442CA"
+    },
+    {
+      "file": "dswdevice.exe",
+      "url": "https://raw.githubusercontent.com/microsoft/corenet-ci/5c39610141ee4583246f6854883d6dba25e00f52/vm-setup/duonic/dswdevice.exe",
+      "sha256": "A2B1587D140A4E3BB173B49AE62051936FFDB9ED5B23E4841B9F24B46F66881E"
+    }
+  ]
+}
