@@ -12,6 +12,13 @@ on:
         description: Run the dedicated lab smoke after source tests
         type: boolean
         default: false
+      environment:
+        description: Execution target (hosted is deployment validation, not lab performance)
+        type: choice
+        options:
+          - netperf-lab
+          - hosted-smoke
+        default: netperf-lab
       seconds:
         description: Traffic duration (5..120 seconds)
         type: string
@@ -39,10 +46,10 @@ jobs:
   lab:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.execute_lab }}
     needs: source-tests
-    runs-on: [self-hosted, lab, os-windows-2022, x64]
+    runs-on: ${{ fromJSON(inputs.environment == 'hosted-smoke' && '["windows-2022"]' || '["self-hosted","lab","os-windows-2022","x64"]') }}
     timeout-minutes: 15
     concurrency:
-      group: tcp-churn-dedicated-lab
+      group: tcp-churn-${{ inputs.environment || 'netperf-lab' }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -69,7 +76,7 @@ jobs:
           retention-days: 14
 
   reset:
-    if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.execute_lab }}
+    if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.execute_lab && inputs.environment != 'hosted-smoke' }}
     needs: lab
     permissions:
       contents: write

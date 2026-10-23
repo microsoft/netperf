@@ -48,6 +48,11 @@ The workflow first runs source-only tests on a GitHub-hosted Windows runner.
 Privileged lab execution is **manual dispatch only**, on the existing
 `self-hosted, lab, os-windows-2022, x64` labels. It is not a pull-request-triggered
 self-hosted job. Use `execute_lab=true` after reviewing the branch.
+An explicit `environment=hosted-smoke` option runs the same actual DuoNIC fixture
+on a fresh GitHub-hosted Windows machine if lab capacity is unavailable. This is
+deployment/traffic compatibility validation only, not an 80-processor lab result.
+The public driver is Microsoft-signed; no trust policy is changed. A hosted run
+does not schedule a reset of the unrelated netperf lab.
 
 The lab adapter refuses existing DuoNIC devices, colliding aliases or an assigned
 fixture subnet before installing one public pair,
