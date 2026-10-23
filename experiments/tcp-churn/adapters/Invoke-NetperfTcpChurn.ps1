@@ -19,8 +19,13 @@ try {
 $root=Split-Path $PSScriptRoot
 Import-Module (Join-Path $root 'TcpChurn.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'WindowsCts.psm1') -Force
-if (@(Get-NetAdapter -IncludeHidden -ErrorAction Stop | Where-Object InterfaceDescription -match '(?i)duonic').Count) {
-    throw 'Refusing to provision over any existing DuoNIC devices; use the manual adapter instead.'
+$existing=@(Get-NetAdapter -IncludeHidden -ErrorAction Stop)
+if (@($existing | Where-Object { $_.InterfaceDescription -match '(?i)duonic' -or $_.Name -like 'duo?' }).Count) {
+    throw 'Refusing to provision over existing DuoNIC devices or fixture aliases; use the manual adapter instead.'
+}
+if (@(Get-NetIPAddress -AddressFamily IPv4 -IncludeAllCompartments -ErrorAction Stop |
+    Where-Object IPAddress -like '192.168.1.*').Count) {
+    throw 'The public fixture subnet is already assigned; use a preconfigured manual fixture instead.'
 }
 if (Test-Path -LiteralPath $PublishDirectory) { throw 'Publish directory must be new.' }
 New-Item -ItemType Directory -Path $PublishDirectory -ErrorAction Stop | Out-Null

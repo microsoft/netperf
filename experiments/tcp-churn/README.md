@@ -49,7 +49,8 @@ Privileged lab execution is **manual dispatch only**, on the existing
 `self-hosted, lab, os-windows-2022, x64` labels. It is not a pull-request-triggered
 self-hosted job. Use `execute_lab=true` after reviewing the branch.
 
-The lab adapter refuses any existing DuoNIC devices, installs one public pair,
+The lab adapter refuses existing DuoNIC devices, colliding aliases or an assigned
+fixture subnet before installing one public pair,
 uses explicit CTS bind/listen addresses and the public setup's host routes, and
 requires data to be accounted for by both adapters. It does not claim that mere
 local traffic is a valid path test. It removes its own processes, named firewall
