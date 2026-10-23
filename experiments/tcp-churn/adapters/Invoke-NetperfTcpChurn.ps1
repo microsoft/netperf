@@ -66,7 +66,7 @@ try {
         }
         $phase='firewall'
     }
-    $null=New-NetFirewallRule -Name $rule -Direction Inbound -Action Allow -Protocol TCP `
+    $null=New-NetFirewallRule -Name $rule -DisplayName $rule -Direction Inbound -Action Allow -Protocol TCP `
         -LocalPort 53617 -LocalAddress 192.168.1.12 -RemoteAddress 192.168.1.11 -ErrorAction Stop
     $firewall=$true
     $phase='traffic'

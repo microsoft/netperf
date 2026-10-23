@@ -94,6 +94,19 @@ try {
     } finally { $null=& $windows.Close $windows.State $localPlan }
     Check ($null -eq $windows.State.Server) 'Cross-module adapter cleanup did not reset owned state.'
     Check (Test-Path -LiteralPath (Join-Path $work 'server.out.txt')) 'Adapter diagnostics were not local.'
+    $tokens=$null; $parseErrors=$null
+    $fixture=[Management.Automation.Language.Parser]::ParseFile(
+        (Join-Path $PSScriptRoot 'adapters\Invoke-NetperfTcpChurn.ps1'),[ref]$tokens,[ref]$parseErrors)
+    Check ($parseErrors.Count -eq 0) 'Fixture does not parse.'
+    $firewall=@($fixture.FindAll({
+        param($node)
+        $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'New-NetFirewallRule'
+    },$true))
+    Check ($firewall.Count -eq 1) 'Unexpected firewall setup surface.'
+    $parameters=@($firewall[0].CommandElements |
+        Where-Object { $_ -is [Management.Automation.Language.CommandParameterAst] } |
+        ForEach-Object ParameterName)
+    Check ($parameters -contains 'Name' -and $parameters -contains 'DisplayName') 'Firewall setup must be non-interactive.'
     Write-Output "Passed $script:count public-source checks."
 } finally {
     # Only this explicitly created, uniquely named test directory is removed.
