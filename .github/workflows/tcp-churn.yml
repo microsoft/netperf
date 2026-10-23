@@ -1,0 +1,79 @@
+name: TCP churn experiment
+
+on:
+  push:
+    branches: [main, 'user/mtfriesen/tcp-churn-public']
+    paths:
+      - experiments/tcp-churn/**
+      - .github/workflows/tcp-churn.yml
+  workflow_dispatch:
+    inputs:
+      execute_lab:
+        description: Run the dedicated lab smoke after source tests
+        type: boolean
+        default: false
+      seconds:
+        description: Traffic duration (5..120 seconds)
+        type: string
+        default: '15'
+      connections:
+        description: Concurrent connections (1..1024)
+        type: string
+        default: '16'
+
+permissions:
+  contents: read
+
+jobs:
+  source-tests:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Public-source contract tests
+        shell: pwsh
+        run: ./experiments/tcp-churn/Test-TcpChurn.ps1
+
+  lab:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.execute_lab }}
+    needs: source-tests
+    runs-on: [self-hosted, lab, os-windows-2022, x64]
+    timeout-minutes: 15
+    concurrency:
+      group: tcp-churn-dedicated-lab
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Single-host public DuoNIC fixture
+        shell: pwsh
+        env:
+          CHURN_SECONDS: ${{ inputs.seconds }}
+          CHURN_CONNECTIONS: ${{ inputs.connections }}
+        run: |
+          $publish = Join-Path $env:RUNNER_TEMP "tcp-churn-public-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          ./experiments/tcp-churn/adapters/Invoke-NetperfTcpChurn.ps1 `
+            -ScratchParent $env:RUNNER_TEMP -PublishDirectory $publish `
+            -Seconds ([int]$env:CHURN_SECONDS) -Connections ([int]$env:CHURN_CONNECTIONS) `
+            -DedicatedLab
+      - name: Publish numeric result only
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: tcp-churn-numeric-result
+          path: ${{ runner.temp }}/tcp-churn-public-${{ github.run_id }}-${{ github.run_attempt }}/result.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  reset:
+    if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.execute_lab }}
+    needs: lab
+    permissions:
+      contents: write
+      actions: read
+    uses: ./.github/workflows/schedule-lab-reset.yml
+    with:
+      workflowId: '${{ github.run_id }}'
