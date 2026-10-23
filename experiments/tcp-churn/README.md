@@ -54,6 +54,12 @@ uses explicit CTS bind/listen addresses and the public setup's host routes, and
 requires data to be accounted for by both adapters. It does not claim that mere
 local traffic is a valid path test. It removes its own processes, named firewall
 rule and software-device instances; netperf's standard lab reset is also scheduled.
+The client has a time ceiling and a connection-attempt cap (at most 32 iterations
+per concurrent connection, and 8192 attempts in total). It may finish before the
+time ceiling. This avoids silently exhausting the ordinary ephemeral-port range
+in a deployment smoke; it is not a sustained-load measurement. A longer campaign
+needs an explicit reuse/port budget and resource checks rather than OS tuning
+hidden in the workload.
 
 No Secure Boot/test-signing/trust/Defender setting is weakened. If the existing lab
 image cannot load the public driver, preparation fails; use an approved image

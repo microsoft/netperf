@@ -24,11 +24,15 @@ function New-TcpChurnPlan {
         }
     }
     if ($ClientAddress -eq $ServerAddress) { throw 'Distinct endpoint addresses are required.' }
+    # Bound this deployment smoke below a typical ephemeral-port range. Sustained
+    # churn needs an explicit port-reuse/resource budget, not silent OS tuning.
+    $iterations=[int][Math]::Min(32,[Math]::Floor(8192.0/$Connections))
     $base=@('-protocol:tcp','-pattern:push',"-port:$Port","-transfer:$BytesPerConnection")
     [pscustomobject]@{
         Schema=1; Seconds=$Seconds; Port=$Port; Connections=$Connections
+        MaximumConnectionAttempts=$Connections*$iterations
         ClientAddress=$ClientAddress; ServerAddress=$ServerAddress
-        ClientArguments=$base + @("-bind:$ClientAddress","-target:$ServerAddress","-connections:$Connections","-TimeLimit:$($Seconds*1000)")
+        ClientArguments=$base + @("-bind:$ClientAddress","-target:$ServerAddress","-connections:$Connections","-iterations:$iterations","-TimeLimit:$($Seconds*1000)")
         ServerArguments=$base + @("-listen:$ServerAddress","-TimeLimit:$(($Seconds+30)*1000)")
     }
 }

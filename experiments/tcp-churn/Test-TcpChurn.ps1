@@ -38,6 +38,9 @@ try {
     Check ($plan.ClientArguments -contains '-TimeLimit:15000') 'CTS duration must be milliseconds.'
     Check ($plan.ClientArguments -contains '-bind:192.0.2.10') 'Explicit bind missing.'
     Check ($plan.ServerArguments -contains '-listen:192.0.2.11') 'Explicit listener missing.'
+    Check ($plan.ClientArguments -contains '-iterations:32') 'Unbounded connection churn in deployment smoke.'
+    $wide=New-TcpChurnPlan -ClientAddress 192.0.2.10 -ServerAddress 192.0.2.11 -Connections 4096
+    Check ($wide.MaximumConnectionAttempts -le 8192) 'Ephemeral-port smoke budget exceeded.'
     Reject { New-TcpChurnPlan -ClientAddress 127.0.0.1 -ServerAddress 192.0.2.11 }
     Reject { New-TcpChurnPlan -ClientAddress 192.0.2.10 -ServerAddress 192.0.2.10 }
     Reject { New-TcpChurnPlan -ClientAddress ::1 -ServerAddress 192.0.2.11 }
