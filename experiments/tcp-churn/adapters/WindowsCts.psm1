@@ -50,7 +50,11 @@ function Invoke-TcpChurnTool {
     try {
         if (-not $child.Process.WaitForExit($TimeoutSeconds*1000)) { throw 'Test tool deadline exceeded.' }
         $code=$child.Process.ExitCode
-        if ($code -ne 0) { throw "Test tool returned exit code $code." }
+        if ($code -ne 0) {
+            $error=[InvalidOperationException]::new("Test tool returned exit code $code.")
+            $error.Data['ToolExitCode']=$code
+            throw $error
+        }
         [pscustomobject]@{ ExitCode=$code }
     } finally { Close-ChurnChild $child }
 }

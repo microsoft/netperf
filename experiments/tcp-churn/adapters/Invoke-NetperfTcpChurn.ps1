@@ -37,23 +37,34 @@ New-Item -ItemType Directory -Path $logs -ErrorAction Stop | Out-Null
 $owned=$false; $firewall=$false; $failure=$null; $result=$null
 $rule='NetperfTcpChurn-'+[guid]::NewGuid().ToString('N')
 $phase='acquire'
+$observations=[ordered]@{
+    adapterCount=0; upCount=0; aliasCount=0; preferredAddresses=0; cleanupErrors=0; toolExitCode=0
+}
 try {
     $null=& (Join-Path $root 'Acquire-PublicTools.ps1') -Destination $tools
-    $phase='provision'
+    $phase='install'
     $owned=$true
     $null=Invoke-TcpChurnTool -Program (Get-Process -Id $PID).Path -Arguments @(
         '-NoProfile','-File',(Join-Path $tools 'duonic.ps1'),'-Install','-NumNicPairs','1','-NoFirewallRules'
     ) -Directory $tools -LogPrefix (Join-Path $logs 'setup') -TimeoutSeconds 300
+    $phase='adapter-check'
     $nics=@(Get-NetAdapter -IncludeHidden -ErrorAction Stop | Where-Object InterfaceDescription -match '(?i)duonic')
+    $observations.adapterCount=$nics.Count
+    $observations.upCount=@($nics | Where-Object Status -eq 'Up').Count
+    $observations.aliasCount=@($nics | Where-Object Name -in @('duo1','duo2')).Count
     if ($nics.Count -ne 2 -or @($nics | Where-Object Status -ne 'Up').Count -ne 0 -or
         @($nics | Where-Object Name -in @('duo1','duo2')).Count -ne 2) {
         throw 'Public fixture did not create the expected healthy pair.'
     }
+    $phase='address-check'
     foreach ($binding in @(@('duo1','192.168.1.11'),@('duo2','192.168.1.12'))) {
-        if (@(Get-NetIPAddress -InterfaceAlias $binding[0] -AddressFamily IPv4 -ErrorAction Stop |
-            Where-Object { $_.IPAddress -eq $binding[1] -and $_.AddressState -eq 'Preferred' }).Count -ne 1) {
+        $addresses=@(Get-NetIPAddress -InterfaceAlias $binding[0] -AddressFamily IPv4 -ErrorAction Stop |
+            Where-Object { $_.IPAddress -eq $binding[1] -and $_.AddressState -eq 'Preferred' })
+        $observations.preferredAddresses+=$addresses.Count
+        if ($addresses.Count -ne 1) {
             throw 'DuoNIC address postcondition failed.'
         }
+        $phase='firewall'
     }
     $null=New-NetFirewallRule -Name $rule -Direction Inbound -Action Allow -Protocol TCP `
         -LocalPort 53617 -LocalAddress 192.168.1.12 -RemoteAddress 192.168.1.11 -ErrorAction Stop
@@ -65,6 +76,7 @@ try {
     $result=Invoke-TcpChurnExperiment -Plan $plan -Adapter $adapter
 } catch {
     $failure=$_
+    if ($_.Exception.Data.Contains('ToolExitCode')) { $observations.toolExitCode=[int]$_.Exception.Data['ToolExitCode'] }
 } finally {
     $cleanup=[Collections.Generic.List[Exception]]::new()
     if ($firewall) {
@@ -87,13 +99,14 @@ try {
         } catch { $cleanup.Add($_.Exception) }
     }
     if ($cleanup.Count) {
+        $observations.cleanupErrors=$cleanup.Count
         if ($null -ne $failure) { $cleanup.Add($failure.Exception) }
         $failure=[AggregateException]::new('Lab cleanup failed.',$cleanup)
     }
 }
 if ($null -ne $failure) {
-    [ordered]@{schema=1;workload='tcp-churn';outcome='failed';phase=$phase;conclusion='no-measurement'} |
-        ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PublishDirectory 'result.json') -Encoding utf8
+    [ordered]@{schema=1;workload='tcp-churn';outcome='failed';phase=$phase;observations=$observations;conclusion='no-measurement'} |
+        ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $PublishDirectory 'result.json') -Encoding utf8
     throw "TCP churn failed during $phase or cleanup. Raw diagnostics stay on the runner and are not publication artifacts."
 }
 Export-TcpChurnPublicResult -Result $result -Path (Join-Path $PublishDirectory 'result.json')
