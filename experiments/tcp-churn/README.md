@@ -255,9 +255,77 @@ adapters/evidence, not copies of private implementations. Keep recovery/progress
 tests alongside performance work. Raw captures remain guest-local and consume
 substantial disk space; do not publish them.
 
+### 128-processor functional gate
+
+CPU oversubscription, if the hypervisor permits the requested topology, can test
+control-path correctness without providing performance evidence. Do not infer
+single-VM startup support from aggregate vCPU overcommit or from an accepted
+processor-count configuration.
+
+The management workflow has a separate `probe_128_topology=true` mode.
+`topology_vcpus` defaults to 128; use 80 for a control on the current host.
+The probe creates a GUID-owned, generation-2 diskless VM with disconnected
+networking, 2 GiB startup memory and one virtual thread per core. It starts,
+stops and removes only that VM, including partial-create recovery. It does not
+change the existing guests, install a driver, weaken trust, or boot a guest OS.
+Only numeric/fixed-status `topology-check.json` is published; native errors stay
+in management-host scratch. Processor-configuration rejection and startup
+rejection are recorded separately from cleanup failure.
+
+[Initial actual-host probe 40390355259](https://github.com/microsoft/netperf/actions/runs/40390355259)
+found 40 physical cores, 80 host logical processors and an existing 80-vCPU
+guest. Configuring 128 vCPUs succeeded, but startup failed; owned-VM removal
+was verified. That initial probe used 512 MiB; subsequent control/target probes
+use the same 2 GiB allocation. A diskless boot success would establish only
+Hyper-V startup capacity, not Windows guest enumeration or RSS coverage.
+
+The same-memory controls confirmed the distinction:
+[80-vCPU control 40391042784](https://github.com/microsoft/netperf/actions/runs/40391042784)
+started successfully;
+[128-vCPU target 40391047006](https://github.com/microsoft/netperf/actions/runs/40391047006)
+accepted configuration but failed startup. Both used one virtual thread per
+core, and both verified owned-VM removal. The current host therefore has not
+provided a usable 128-vCPU guest. Do not treat accepted configuration or a
+successful negative-capacity workflow as a 128-CPU RSS validation pass.
+
+`Invoke-RssControlCheck.ps1` is a separate **read-only**, fail-closed check for
+an already configured adapter on a suitable Windows guest. Use only approved
+installed drivers and dedicate the adapter before changing its configuration.
+For a suitable 128-processor topology and a driver supporting 128 queues, the
+configuration can be applied locally, outside this read-only checker:
+
 ```powershell
-./Test-TcpChurn.ps1
+Set-NetAdapterRss -Name owned-duonic -Profile NUMAScalingStatic `
+  -BaseProcessorGroup 0 -BaseProcessorNumber 0 `
+  -MaxProcessorGroup 1 -MaxProcessorNumber 63 `
+  -MaxProcessors 128 -NumberOfReceiveQueues 128
+./Invoke-RssControlCheck.ps1 -AdapterName owned-duonic -PublishFile C:\Runs\rss-control.json
 ```
 
-Tests use a memory adapter and a bounded owned PowerShell child. They do not
-install a driver or pretend to be a real network performance run.
+The checker reads the effective state twice, requiring enabled RSS, 128 queues,
+128 maximum processors, 128 distinct RSS processor-array entries, consistent
+array metadata, and an indirection table covering every one of those 128 targets.
+It validates group-relative coordinates and rejects duplicates, missing targets,
+out-of-set targets, unknown representations and changed/invalid second reads.
+The parser supports public CIM processor objects and group:number[/preference]
+strings; it does not turn unknown data into defaults.
+
+This distinguishes a configured queue limit from actual reported assignment.
+It leaves all adapter settings unchanged. Re-run after an approved adapter
+restart to check persistence; the checker itself does not restart networking.
+Its result explicitly leaves runtime DPC coverage and performance **unverified**.
+Those require traffic/capture evidence, not just RSS settings. The current public
+DuoNIC package remains limited to 16, so these scripts do not claim a live
+128-queue driver test. No unpublished OS/driver binaries are acquired or uploaded.
+RSS excludes SMT siblings; verify the guest's eligible processor set rather than
+equating 128 vCPUs with 128 eligible targets.
+
+```powershell
+./Test-TcpChurn.ps1
+./Test-HyperVTopologyProbe.ps1
+./Test-RssControl.ps1
+```
+
+Tests use a memory adapter, a bounded owned PowerShell child, mocked Hyper-V
+lifecycle operations and synthetic RSS snapshots. They do not install a driver,
+operate real VMs or pretend to be runtime/performance coverage.

@@ -11,7 +11,7 @@ $ErrorActionPreference='Stop'
 if (Test-Path -LiteralPath $PublishDirectory) { throw 'Use a new publication directory.' }
 $null=New-Item -ItemType Directory -Path $PublishDirectory -ErrorAction Stop
 $result=[ordered]@{
-    schema=1;requestedVirtualProcessors=$ProcessorCount;hostLogicalProcessors=0;hostPhysicalCores=0
+    schema=1;requestedVirtualProcessors=$ProcessorCount;startupMemoryBytes=2GB;hostLogicalProcessors=0;hostPhysicalCores=0
     referenceGuestVirtualProcessors=0;configuredVirtualProcessors=0;configuredThreadsPerCore=0
     configured=$false;started=$false;cleanupVerified=$false;phase='host-query'
     failureHResult=0;processorCapacityErrorReported=$false;memoryCapacityErrorReported=$false
@@ -50,11 +50,11 @@ try {
 } catch {
     $failure=$_
     $result.failureHResult=[int]$_.Exception.HResult
-    $details=@($_.Exception.Message,$_.ErrorDetails.Message) -join "`n"
+    $details=@($_.Exception.ToString(),$_.ErrorDetails.Message,$_.ToString()) -join "`n"
     $result.processorCapacityErrorReported=($details -match '(?is)logical processors' -and
         $details -match '(?i)not have enough|insufficient|exceed|maximum|greater|more than|limit')
     $result.memoryCapacityErrorReported=($details -match '(?is)memory' -and
-        $details -match '(?i)not enough|insufficient|not available|not available|allocate')
+        $details -match '(?i)not enough|insufficient|not available|allocate')
     $failure|Out-String|Set-Content -LiteralPath ($PublishDirectory+'.diagnostic.txt') -Encoding utf8
 } finally {
     if($creationAttempted -and $null -eq $vm) {

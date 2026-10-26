@@ -34,7 +34,10 @@ function Set-VMProcessor {
 }
 function Start-VM {
     param($VM,$ErrorAction)
-    if($global:TcpChurnTopologyMock.Phase -eq 'start') { throw 'Simulated start rejection.' }
+    if($global:TcpChurnTopologyMock.Phase -eq 'start') {
+        throw [InvalidOperationException]::new('Simulated start rejection.',
+            [InvalidOperationException]::new('This server does not have enough logical processors; maximum 80.'))
+    }
     $global:TcpChurnTopologyMock.VM.State='Running'
 }
 function Get-VM {
@@ -72,6 +75,7 @@ foreach($phase in @('success','configure','start','partial-create','cleanup')) {
         if($result.cleanupVerified -ne ($phase -ne 'cleanup')) { throw "Incorrect cleanup report for $phase." }
         if($result.started -ne ($phase -in @('success','cleanup'))) { throw "Incorrect start report for $phase." }
         if($result.rssControlPathVerified -or $result.performanceVerified) { throw 'Capacity probe claimed RSS/performance validation.' }
+        if($result.processorCapacityErrorReported -ne ($phase -eq 'start')) { throw 'Nested processor-capacity diagnosis was not classified correctly.' }
         if($phase -eq 'success' -and ($result.configuredVirtualProcessors -ne 128 -or $global:TcpChurnTopologyMock.Stops -ne 1)) {
             throw 'Successful probe did not exercise 128-vCPU startup and owned shutdown.'
         }
