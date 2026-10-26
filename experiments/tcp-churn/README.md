@@ -48,6 +48,10 @@ The workflow first runs source-only tests on a GitHub-hosted Windows runner.
 Privileged lab execution is **manual dispatch only**, on the existing
 `self-hosted, lab, os-windows-2022, x64` labels. It is not a pull-request-triggered
 self-hosted job. Use `execute_lab=true` after reviewing the branch.
+`environment=netperf-windows-lab` explicitly permits any dedicated Windows x64
+lab runner, removing only the Windows-2022 image constraint. It still requires
+both `self-hosted` and `lab`; inspect the actual job's runner assignment and OS
+before comparing results across machines/images. This is not a hosted fallback.
 An explicit `environment=hosted-smoke` option runs the same actual DuoNIC fixture
 on a fresh GitHub-hosted Windows machine if lab capacity is unavailable. This is
 deployment/traffic compatibility validation only, not an 80-processor lab result.

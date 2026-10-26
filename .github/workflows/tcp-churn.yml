@@ -17,6 +17,7 @@ on:
         type: choice
         options:
           - netperf-lab
+          - netperf-windows-lab
           - hosted-smoke
         default: netperf-lab
       seconds:
@@ -46,7 +47,7 @@ jobs:
   lab:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.execute_lab }}
     needs: source-tests
-    runs-on: ${{ fromJSON(inputs.environment == 'hosted-smoke' && '["windows-2022"]' || '["self-hosted","lab","os-windows-2022","x64"]') }}
+    runs-on: ${{ fromJSON(inputs.environment == 'hosted-smoke' && '["windows-2022"]' || inputs.environment == 'netperf-windows-lab' && '["self-hosted","Windows","lab","x64"]' || '["self-hosted","lab","os-windows-2022","x64"]') }}
     timeout-minutes: 15
     concurrency:
       group: tcp-churn-${{ inputs.environment || 'netperf-lab' }}
