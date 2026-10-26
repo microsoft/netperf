@@ -38,7 +38,7 @@ $eventSession='TcpChurnProbe-'+[guid]::NewGuid().ToString('N')
 $eventTrace=Join-Path $Diagnostics 'tcp-probes.etl'
 $trace=Join-Path $Diagnostics 'cpu.etl'
 $timing=[ordered]@{}
-$progress=[ordered]@{schema=1;stage='wpr-start';completedBatches=0;connections=0L;failureType=$null;failureCode=0;failureReason='none';traceBytes=0L;profileStopped=$false}
+$progress=[ordered]@{schema=1;stage='wpr-start';completedBatches=0;connections=0L;failureType=$null;failureCode=0;toolExitCode=0;failureReason='none';traceBytes=0L;profileStopped=$false}
 $totals=[ordered]@{ schema=1;workload='tcp-churn';outcome='collected';connections=0L;seconds=0.0;bytesSent=0L
     connectionsPerSecond=0.0;megabitsPerSecond=0.0;adapterTransmitDelta=0L;adapterReceiveDelta=0L
     cpuCoverage='not-measured';targetBranchCoverage='not-measured';mechanismVerified=$false;conclusion='collection-only' }
@@ -47,8 +47,9 @@ try {
     $null=Invoke-TcpChurnTool -Program "$env:SystemRoot\System32\wpr.exe" -Arguments @('-start','CPU','-filemode') `
         -Directory $Diagnostics -LogPrefix (Join-Path $Diagnostics 'wpr-start') -TimeoutSeconds 30
     $owned=$true
+    $progress.stage='probes-start'
     $null=Invoke-TcpChurnTool -Program "$env:SystemRoot\System32\logman.exe" -Arguments @(
-        'create','trace',$eventSession,'-p',[string]$provider.Id,('0x'+$keywords.ToString('X16')),'5'
+        'create','trace',$eventSession,'-p','Microsoft-Windows-TCPIP',('0x'+$keywords.ToString('X16')),'5'
         '-o',$eventTrace,'-f','bincirc','-max','128','-ets'
     ) -Directory $Diagnostics -LogPrefix (Join-Path $Diagnostics 'probes-start') -TimeoutSeconds 30
     $eventOwned=$true
@@ -85,6 +86,7 @@ try {
     $failure=$_
     $progress.failureType=$_.Exception.GetType().FullName
     $progress.failureCode=$_.Exception.HResult
+    if ($_.Exception.Data.Contains('ToolExitCode')) { $progress.toolExitCode=[int]$_.Exception.Data['ToolExitCode'] }
     foreach ($reason in @('Traffic command failed; diagnostics belong to the adapter.',
         'Healthy churn did not complete error-free traffic.',
         'Data was not accounted for on the selected adapters.',
@@ -116,15 +118,18 @@ finally {
             if ($null -ne $failure) { throw [AggregateException]::new('Campaign and owned WPR stop failed.',[Exception[]]@($failure.Exception,$_.Exception)) }
             throw
         }
-        $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @(
-            '--events',$eventTrace,(Join-Path $PublishDirectory 'tcp-events.json'),'interval',
-            $timing.loadStart,$timing.loadEnd,(Join-Path $PublishDirectory 'tcp-state.json')
-        ) -Directory $Diagnostics -LogPrefix (Join-Path $Diagnostics 'probe-analysis') -TimeoutSeconds 120
-        $progress | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PublishDirectory 'cpu-progress.json')
     }
+    $progress | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PublishDirectory 'cpu-progress.json')
 }
 $timing | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $Diagnostics 'intervals.json')
 if (-not $owned -or -not $progress.profileStopped) { throw $failure }
+if (-not $timing.Contains('loadStart')) { throw $failure }
+if ($eventOwned) {
+    $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @(
+        '--events',$eventTrace,(Join-Path $PublishDirectory 'tcp-events.json'),'interval',
+        $timing.loadStart,$timing.loadEnd,(Join-Path $PublishDirectory 'tcp-state.json')
+    ) -Directory $Diagnostics -LogPrefix (Join-Path $Diagnostics 'probe-analysis') -TimeoutSeconds 120
+}
 foreach ($interval in @('idle','load')) {
     $progress.stage="analyze-$interval"
     $progress | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PublishDirectory 'cpu-progress.json')
