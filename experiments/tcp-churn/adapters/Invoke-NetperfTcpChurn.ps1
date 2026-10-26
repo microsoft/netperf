@@ -71,14 +71,20 @@ try {
     }
     $phase='address-check'
     foreach ($binding in @(@('duo1','192.168.1.11'),@('duo2','192.168.1.12'))) {
-        $addresses=@(Get-NetIPAddress -InterfaceAlias $binding[0] -AddressFamily IPv4 -ErrorAction Stop |
-            Where-Object { $_.IPAddress -eq $binding[1] -and $_.AddressState -eq 'Preferred' })
+        $dad=[Diagnostics.Stopwatch]::StartNew()
+        do {
+            $addresses=@(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop |
+                Where-Object { $_.InterfaceAlias -eq $binding[0] -and $_.IPAddress -eq $binding[1] -and $_.AddressState -eq 'Preferred' })
+            if ($addresses.Count -eq 1) { break }
+            if ($dad.Elapsed.TotalSeconds -ge 30) { throw 'DuoNIC addresses did not become Preferred after RSS reconfiguration.' }
+            Start-Sleep -Milliseconds 200
+        } while ($true)
         $observations.preferredAddresses+=$addresses.Count
         if ($addresses.Count -ne 1) {
             throw 'DuoNIC address postcondition failed.'
         }
-        $phase='firewall'
     }
+    $phase='firewall'
     $ports=if($ProfileCpu){'53617-53816'}else{'53617'}
     $null=New-NetFirewallRule -Name $rule -DisplayName $rule -Direction Inbound -Action Allow -Protocol TCP `
         -LocalPort $ports -LocalAddress 192.168.1.12 -RemoteAddress 192.168.1.11 -ErrorAction Stop
