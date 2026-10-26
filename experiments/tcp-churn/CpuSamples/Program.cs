@@ -70,8 +70,10 @@ internal static class Program
                 var processors = new HashSet<int>();
                 stage = "samples";
                 long samples = 0, withStack = 0, network = 0, unresolved = 0;
-                foreach (var sample in log.Events.OfType<SampledProfileTraceData>())
+                foreach (var record in log.Events)
                 {
+                    var sample = record as SampledProfileTraceData;
+                    if (sample == null) continue;
                     var utc = sample.TimeStamp.ToUniversalTime();
                     if (utc < start || utc > end) continue;
                     samples++;
@@ -131,7 +133,8 @@ internal static class Program
         {
             File.WriteAllText(args[1], JsonConvert.SerializeObject(new {
                 schema = 1, outcome = "analysis-failed", stage,
-                errorType = error.GetType().FullName, errorCode = error.HResult
+                errorType = error.GetType().FullName, errorCode = error.HResult,
+                errorSite = error.TargetSite == null ? "" : error.TargetSite.DeclaringType.FullName + "." + error.TargetSite.Name
             }));
             // ETL paths/host/process details belong in guest-local diagnostics, not public logs.
             Console.Error.WriteLine("CPU analysis failed; inspect guest-local symbol-analysis.log.");
