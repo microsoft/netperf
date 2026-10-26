@@ -38,6 +38,7 @@ $tools=Join-Path $scratch 'tools'
 $logs=Join-Path $scratch 'diagnostics'
 New-Item -ItemType Directory -Path $logs -ErrorAction Stop | Out-Null
 $owned=$false; $firewall=$false; $failure=$null; $result=$null
+$sourceOwned=@()
 $rule='NetperfTcpChurn-'+[guid]::NewGuid().ToString('N')
 $phase='acquire'
 $observations=[ordered]@{
@@ -89,8 +90,27 @@ try {
         $phase='source-addresses'
         foreach ($last in 21..28) {
             $address="192.168.1.$last"
-            $null=New-NetIPAddress -InterfaceAlias duo1 -IPAddress $address -PrefixLength 24 -SkipAsSource $true -ErrorAction Stop
-            $null=New-NetRoute -InterfaceAlias duo2 -DestinationPrefix "$address/32" -NextHop 0.0.0.0 -RouteMetric 0 -ErrorAction Stop
+            $existingAddress=@(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop |
+                Where-Object{ $_.InterfaceAlias -eq 'duo1' -and $_.IPAddress -eq $address })
+            if ($existingAddress.Count -gt 1 -or ($existingAddress.Count -eq 1 -and
+                ($existingAddress[0].PrefixLength -ne 24 -or -not $existingAddress[0].SkipAsSource))) {
+                throw 'Existing owned-instance address does not match the test configuration.'
+            }
+            if ($existingAddress.Count -eq 0) {
+                $null=New-NetIPAddress -InterfaceAlias duo1 -IPAddress $address -PrefixLength 24 `
+                    -SkipAsSource $true -PolicyStore ActiveStore -ErrorAction Stop
+            }
+            $sourceOwned+=$address
+            $existingRoute=@(Get-NetRoute -AddressFamily IPv4 -ErrorAction Stop |
+                Where-Object{ $_.InterfaceAlias -eq 'duo2' -and $_.DestinationPrefix -eq "$address/32" })
+            if ($existingRoute.Count -gt 1 -or ($existingRoute.Count -eq 1 -and
+                ($existingRoute[0].NextHop -ne '0.0.0.0' -or $existingRoute[0].RouteMetric -ne 0))) {
+                throw 'Existing owned-instance route does not match the test configuration.'
+            }
+            if ($existingRoute.Count -eq 0) {
+                $null=New-NetRoute -InterfaceAlias duo2 -DestinationPrefix "$address/32" -NextHop 0.0.0.0 `
+                    -RouteMetric 0 -PolicyStore ActiveStore -ErrorAction Stop
+            }
             $wait=[Diagnostics.Stopwatch]::StartNew()
             while (@(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop |
                 Where-Object { $_.IPAddress -eq $address -and $_.AddressState -eq 'Preferred' }).Count -ne 1) {
@@ -126,6 +146,18 @@ try {
     if ($_.Exception.Data.Contains('ToolExitCode')) { $observations.toolExitCode=[int]$_.Exception.Data['ToolExitCode'] }
 } finally {
     $cleanup=[Collections.Generic.List[Exception]]::new()
+    foreach ($address in $sourceOwned) {
+        foreach ($store in @('ActiveStore','PersistentStore')) {
+            try {
+                $routes=@(Get-NetRoute -AddressFamily IPv4 -PolicyStore $store -ErrorAction Stop |
+                    Where-Object{ $_.InterfaceAlias -eq 'duo2' -and $_.DestinationPrefix -eq "$address/32" -and $_.NextHop -eq '0.0.0.0' })
+                foreach($route in $routes) { $route | Remove-NetRoute -Confirm:$false -ErrorAction Stop }
+                $addresses=@(Get-NetIPAddress -AddressFamily IPv4 -PolicyStore $store -ErrorAction Stop |
+                    Where-Object{ $_.InterfaceAlias -eq 'duo1' -and $_.IPAddress -eq $address -and $_.SkipAsSource })
+                foreach($item in $addresses) { $item | Remove-NetIPAddress -Confirm:$false -ErrorAction Stop }
+            } catch { $cleanup.Add($_.Exception) }
+        }
+    }
     if ($firewall) {
         try { Remove-NetFirewallRule -Name $rule -ErrorAction Stop }
         catch { $cleanup.Add($_.Exception) }
