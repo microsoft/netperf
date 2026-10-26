@@ -7,7 +7,9 @@ param(
     [Parameter(Mandatory)][pscredential]$Credential,
     [Parameter(Mandatory)][string]$PublishDirectory,
     [ValidateRange(5,120)][int]$Seconds=15,
-    [ValidateRange(1,1024)][int]$Connections=16
+    [ValidateRange(1,1024)][int]$Connections=16,
+    [switch]$ProfileCpu,
+    [string]$AnalyzerDirectory
 )
 $ErrorActionPreference='Stop'
 if (Test-Path -LiteralPath $PublishDirectory) { throw 'Use a new publication directory.' }
@@ -34,28 +36,40 @@ try {
         param($path)
         New-Item -ItemType Directory -Path (Join-Path $path 'adapters') -Force -ErrorAction Stop | Out-Null
     } -ArgumentList $remoteRoot
-    foreach ($file in @('TcpChurn.psm1','Acquire-PublicTools.ps1','dependencies.json')) {
+    foreach ($file in @('TcpChurn.psm1','Acquire-PublicTools.ps1','dependencies.json','Invoke-CpuCampaign.ps1')) {
         Copy-Item -LiteralPath (Join-Path $localRoot $file) -Destination (Join-Path $remoteRoot $file) -ToSession $session -ErrorAction Stop
+    }
+    if ($ProfileCpu) {
+        Copy-Item -LiteralPath $AnalyzerDirectory -Destination (Join-Path $guestRoot 'analyzer') `
+            -Recurse -ToSession $session -ErrorAction Stop
     }
     foreach ($file in @('WindowsCts.psm1','Invoke-NetperfTcpChurn.ps1')) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $file) -Destination (Join-Path $remoteRoot "adapters\$file") -ToSession $session -ErrorAction Stop
     }
     $phase='guest-traffic'
     $exit=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
-        param($root,$seconds,$connections)
+        param($root,$seconds,$connections,$profile)
         if (@(Get-Process -Name 'Runner.Worker','ctsTraffic' -ErrorAction Ignore).Count) {
             throw 'Guest became busy before traffic setup.'
         }
         $program=Join-Path $root 'experiment\adapters\Invoke-NetperfTcpChurn.ps1'
         # Native diagnostics remain inside the guest, never in public logs/artifacts.
+        $extra=@()
+        if ($profile) { $extra=@('-ProfileCpu','-AnalyzerDirectory',(Join-Path $root 'analyzer')) }
         & pwsh -NoProfile -NonInteractive -File $program -ScratchParent $root `
             -PublishDirectory (Join-Path $root 'publish') -Seconds $seconds `
-            -Connections $connections -DedicatedLab *> (Join-Path $root 'adapter.log')
+            -Connections $connections -DedicatedLab @extra *> (Join-Path $root 'adapter.log')
         $LASTEXITCODE
-    } -ArgumentList $guestRoot,$Seconds,$Connections
+    } -ArgumentList $guestRoot,$Seconds,$Connections,[bool]$ProfileCpu
     $phase='guest-result'
     $remoteResult=Join-Path $guestRoot 'publish\result.json'
     Copy-Item -LiteralPath $remoteResult -Destination (Join-Path $PublishDirectory 'result.json') -FromSession $session -ErrorAction Stop
+    if ($ProfileCpu) {
+        foreach ($file in @('cpu-idle.json','cpu-load.json')) {
+            Copy-Item -LiteralPath (Join-Path $guestRoot "publish\$file") -Destination (Join-Path $PublishDirectory $file) `
+                -FromSession $session -ErrorAction Stop
+        }
+    }
     $result=Get-Content -LiteralPath (Join-Path $PublishDirectory 'result.json') -Raw | ConvertFrom-Json
     if ($exit -ne 0 -or $result.outcome -ne 'collected') { throw 'Guest experiment or cleanup did not succeed.' }
     $success=$true

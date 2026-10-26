@@ -1,6 +1,17 @@
 name: TCP churn netperf guest
 on:
   workflow_dispatch:
+    inputs:
+      profile_cpu:
+        description: Collect guest-local CPU stacks and publish public-symbol aggregates
+        type: boolean
+        default: false
+      seconds:
+        type: string
+        default: '30'
+      connections:
+        type: string
+        default: '256'
   push:
     branches: ['user/mtfriesen/tcp-churn-public']
     paths: ['.github/workflows/tcp-churn-guest.yml']
@@ -15,12 +26,31 @@ jobs:
           persist-credentials: false
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-TcpChurn.ps1
+  build-analyzer:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.profile_cpu }}
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Build new analyzer from public source only
+        shell: pwsh
+        run: |
+          dotnet publish ./experiments/tcp-churn/CpuSamples/CpuSamples.csproj -c Release -o ./analyzer
+          if ($LASTEXITCODE) { throw 'Analyzer build failed.' }
+          ./analyzer/CpuSamples.exe --self-test
+          if ($LASTEXITCODE) { throw 'Analyzer self-test failed.' }
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: public-source-cpu-analyzer
+          path: analyzer/
+          retention-days: 7
   guest-smoke:
-    if: ${{ github.event_name == 'workflow_dispatch' }}
-    needs: source-tests
+    if: ${{ always() && github.event_name == 'workflow_dispatch' && needs.source-tests.result == 'success' && (needs.build-analyzer.result == 'success' || needs.build-analyzer.result == 'skipped') }}
+    needs: [source-tests, build-analyzer]
     # Same documented management slot as the targeted lab reset workflow.
     runs-on: [self-hosted, 'parent=rr1-netperf-26\localadminuser']
-    timeout-minutes: 10
+    timeout-minutes: 15
     concurrency:
       group: tcp-churn-netperf-guest
       cancel-in-progress: false
@@ -28,25 +58,41 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        if: ${{ inputs.profile_cpu }}
+        with:
+          name: public-source-cpu-analyzer
+          path: analyzer
       - name: Run inside the existing idle lab VM
         shell: powershell
         env:
           GUEST_USER: ${{ secrets.VM_DUMMY_USERNAME }}
           GUEST_PASSWORD: ${{ secrets.VM_DUMMY_PASSWORD }}
+          PROFILE_CPU: ${{ inputs.profile_cpu }}
+          SECONDS: ${{ inputs.seconds }}
+          CONNECTIONS: ${{ inputs.connections }}
         run: |
           if (!$env:GUEST_USER -or !$env:GUEST_PASSWORD) { throw 'Configured VM credentials are required.' }
           $password = ConvertTo-SecureString $env:GUEST_PASSWORD -AsPlainText -Force
           $credential = [pscredential]::new($env:GUEST_USER, $password)
           Remove-Item Env:\GUEST_PASSWORD
           $publish = Join-Path $env:RUNNER_TEMP "tcp-churn-guest-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $extra = @{}
+          if ($env:PROFILE_CPU -eq 'true') {
+            $extra.ProfileCpu = $true
+            $extra.AnalyzerDirectory = Join-Path $env:GITHUB_WORKSPACE 'analyzer'
+          }
           ./experiments/tcp-churn/adapters/Invoke-NetperfGuestTcpChurn.ps1 `
             -VmName netperf-windows-2022-client -Credential $credential `
-            -PublishDirectory $publish
+            -PublishDirectory $publish -Seconds ([int]$env:SECONDS) -Connections ([int]$env:CONNECTIONS) @extra
       - name: Publish numeric result only
         if: always()
         uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
         with:
           name: tcp-churn-guest-result
-          path: ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/result.json
+          path: |
+            ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/result.json
+            ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/cpu-idle.json
+            ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/cpu-load.json
           if-no-files-found: warn
           retention-days: 14

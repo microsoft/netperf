@@ -7,7 +7,9 @@ param(
     [Parameter(Mandatory)][string]$PublishDirectory,
     [ValidateRange(5,120)][int]$Seconds=15,
     [ValidateRange(1,1024)][int]$Connections=16,
-    [switch]$DedicatedLab
+    [switch]$DedicatedLab,
+    [switch]$ProfileCpu,
+    [string]$AnalyzerDirectory
 )
 $ErrorActionPreference='Stop'
 if (-not $DedicatedLab -or -not $IsWindows) { throw 'Provisioning requires an explicitly dedicated Windows lab.' }
@@ -66,14 +68,22 @@ try {
         }
         $phase='firewall'
     }
+    $ports=if($ProfileCpu){'53617-53816'}else{'53617'}
     $null=New-NetFirewallRule -Name $rule -DisplayName $rule -Direction Inbound -Action Allow -Protocol TCP `
-        -LocalPort 53617 -LocalAddress 192.168.1.12 -RemoteAddress 192.168.1.11 -ErrorAction Stop
+        -LocalPort $ports -LocalAddress 192.168.1.12 -RemoteAddress 192.168.1.11 -ErrorAction Stop
     $firewall=$true
     $phase='traffic'
-    $plan=New-TcpChurnPlan -ClientAddress 192.168.1.11 -ServerAddress 192.168.1.12 -Seconds $Seconds -Connections $Connections
-    $adapter=New-WindowsCtsAdapter -Executable (Join-Path $tools 'ctsTraffic.exe') -DiagnosticsDirectory $logs `
-        -ClientInterface duo1 -ServerInterface duo2
-    $result=Invoke-TcpChurnExperiment -Plan $plan -Adapter $adapter
+    if ($ProfileCpu) {
+        $phase='cpu-campaign'
+        & (Join-Path $root 'Invoke-CpuCampaign.ps1') -Tools $tools -Diagnostics $logs `
+            -PublishDirectory $PublishDirectory -AnalyzerDirectory $AnalyzerDirectory -Seconds $Seconds -Connections $Connections
+        $result=Get-Content -LiteralPath (Join-Path $PublishDirectory 'result.json') -Raw | ConvertFrom-Json
+    } else {
+        $plan=New-TcpChurnPlan -ClientAddress 192.168.1.11 -ServerAddress 192.168.1.12 -Seconds $Seconds -Connections $Connections
+        $adapter=New-WindowsCtsAdapter -Executable (Join-Path $tools 'ctsTraffic.exe') -DiagnosticsDirectory $logs `
+            -ClientInterface duo1 -ServerInterface duo2
+        $result=Invoke-TcpChurnExperiment -Plan $plan -Adapter $adapter
+    }
 } catch {
     $failure=$_
     if ($_.Exception.Data.Contains('ToolExitCode')) { $observations.toolExitCode=[int]$_.Exception.Data['ToolExitCode'] }
@@ -109,5 +119,5 @@ if ($null -ne $failure) {
         ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $PublishDirectory 'result.json') -Encoding utf8
     throw "TCP churn failed during $phase or cleanup. Raw diagnostics stay on the runner and are not publication artifacts."
 }
-Export-TcpChurnPublicResult -Result $result -Path (Join-Path $PublishDirectory 'result.json')
+if (-not $ProfileCpu) { Export-TcpChurnPublicResult -Result $result -Path (Join-Path $PublishDirectory 'result.json') }
 Write-Output 'Collected numeric TCP churn results; CPU coverage and target mechanism are not verified.'

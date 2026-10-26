@@ -1,0 +1,73 @@
+# Copyright (c) Microsoft Corporation.
+# SPDX-License-Identifier: MIT
+#Requires -Version 7.2
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory)][string]$Tools,
+    [Parameter(Mandatory)][string]$Diagnostics,
+    [Parameter(Mandatory)][string]$PublishDirectory,
+    [Parameter(Mandatory)][string]$AnalyzerDirectory,
+    [ValidateRange(15,120)][int]$Seconds=30,
+    [ValidateRange(1,1024)][int]$Connections=256
+)
+$ErrorActionPreference='Stop'
+Import-Module (Join-Path $PSScriptRoot 'TcpChurn.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'adapters\WindowsCts.psm1') -Force
+$analyzer=Join-Path $AnalyzerDirectory 'CpuSamples.exe'
+if (-not (Test-Path -LiteralPath $analyzer -PathType Leaf)) { throw 'Source-built analyzer missing.' }
+$owned=$false; $failure=$null
+$trace=Join-Path $Diagnostics 'cpu.etl'
+$timing=[ordered]@{}
+$totals=[ordered]@{ schema=1;workload='tcp-churn';outcome='collected';connections=0L;seconds=0.0;bytesSent=0L
+    connectionsPerSecond=0.0;megabitsPerSecond=0.0;adapterTransmitDelta=0L;adapterReceiveDelta=0L
+    cpuCoverage='not-measured';targetBranchCoverage='not-measured';mechanismVerified=$false;conclusion='collection-only' }
+try {
+    # Never cancel a pre-existing WPR session to take ownership.
+    $null=Invoke-TcpChurnTool -Program "$env:SystemRoot\System32\wpr.exe" -Arguments @('-start','CPU','-filemode') `
+        -Directory $Diagnostics -LogPrefix (Join-Path $Diagnostics 'wpr-start') -TimeoutSeconds 30
+    $owned=$true
+    $timing.idleStart=[DateTime]::UtcNow.ToString('o')
+    Start-Sleep -Seconds 5
+    $timing.idleEnd=[DateTime]::UtcNow.ToString('o')
+    $timing.loadStart=[DateTime]::UtcNow.ToString('o')
+    $clock=[Diagnostics.Stopwatch]::StartNew()
+    $batch=0
+    do {
+        $directory=Join-Path $Diagnostics "batch-$batch"
+        New-Item -ItemType Directory -Path $directory -ErrorAction Stop | Out-Null
+        $plan=New-TcpChurnPlan -ClientAddress 192.168.1.11 -ServerAddress 192.168.1.12 `
+            -Port (53617+$batch) -Connections $Connections -Seconds 15
+        # Public documented socket option. No TCP global or registry setting is changed.
+        $plan.ClientArguments += '-PortScalability:on'
+        $adapter=New-WindowsCtsAdapter -Executable (Join-Path $Tools 'ctsTraffic.exe') `
+            -DiagnosticsDirectory $directory -ClientInterface duo1 -ServerInterface duo2
+        $result=Invoke-TcpChurnExperiment -Plan $plan -Adapter $adapter
+        foreach ($field in @('connections','bytesSent','adapterTransmitDelta','adapterReceiveDelta')) {
+            $totals[$field]+=$result.$field
+        }
+        $batch++
+    } while ($clock.Elapsed.TotalSeconds -lt $Seconds -and $batch -lt 200)
+    $timing.loadEnd=[DateTime]::UtcNow.ToString('o')
+    $totals.seconds=$clock.Elapsed.TotalSeconds
+    $totals.connectionsPerSecond=$totals.connections/$totals.seconds
+    $totals.megabitsPerSecond=8.0*$totals.bytesSent/1000000.0/$totals.seconds
+} catch { $failure=$_ }
+finally {
+    if ($owned) {
+        try {
+            $null=Invoke-TcpChurnTool -Program "$env:SystemRoot\System32\wpr.exe" -Arguments @('-stop',$trace) `
+                -Directory $Diagnostics -LogPrefix (Join-Path $Diagnostics 'wpr-stop') -TimeoutSeconds 120
+        } catch {
+            if ($null -ne $failure) { throw [AggregateException]::new('Campaign and owned WPR stop failed.',[Exception[]]@($failure.Exception,$_.Exception)) }
+            throw
+        }
+    }
+}
+$timing | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $Diagnostics 'intervals.json')
+if ($null -ne $failure) { throw $failure }
+foreach ($interval in @('idle','load')) {
+    $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @(
+        $trace,(Join-Path $PublishDirectory "cpu-$interval.json"),$timing["${interval}Start"],$timing["${interval}End"]
+    ) -Directory $Diagnostics -LogPrefix (Join-Path $Diagnostics "analysis-$interval") -TimeoutSeconds 300
+}
+Export-TcpChurnPublicResult -Result ([pscustomobject]$totals) -Path (Join-Path $PublishDirectory 'result.json')

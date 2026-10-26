@@ -44,7 +44,7 @@ function Invoke-TcpChurnTool {
         [Parameter(Mandatory)][string[]]$Arguments,
         [Parameter(Mandatory)][string]$Directory,
         [Parameter(Mandatory)][string]$LogPrefix,
-        [ValidateRange(1,300)][int]$TimeoutSeconds=60
+        [ValidateRange(1,600)][int]$TimeoutSeconds=60
     )
     $child=Start-ChurnChild $Program $Arguments $Directory $LogPrefix
     try {
