@@ -2,6 +2,10 @@ name: TCP churn netperf guest
 on:
   workflow_dispatch:
     inputs:
+      probe_128_topology:
+        description: Boot and remove an isolated diskless 128-vCPU VM; no existing guest changes
+        type: boolean
+        default: false
       profile_cpu:
         description: Collect guest-local CPU stacks and publish public-symbol aggregates
         type: boolean
@@ -38,6 +42,8 @@ jobs:
           persist-credentials: false
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-TcpChurn.ps1
+      - shell: pwsh
+        run: ./experiments/tcp-churn/Test-HyperVTopologyProbe.ps1
   build-analyzer:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.profile_cpu }}
     runs-on: windows-2022
@@ -86,7 +92,17 @@ jobs:
           SYN_DROP: ${{ inputs.syn_drop }}
           PROBE_PEER: ${{ inputs.probe_peer }}
           PEER_MEASUREMENT: ${{ inputs.peer_measurement }}
+          PROBE_128_TOPOLOGY: ${{ inputs.probe_128_topology }}
         run: |
+          $publish = Join-Path $env:RUNNER_TEMP "tcp-churn-guest-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          if ($env:PROBE_128_TOPOLOGY -eq 'true') {
+            if ($env:PROFILE_CPU -eq 'true' -or $env:SYN_DROP -eq 'true' -or $env:PEER_MEASUREMENT -eq 'true' -or $env:PROBE_PEER -eq 'true') {
+              throw 'Topology probing is separate from traffic and profiling.'
+            }
+            ./experiments/tcp-churn/adapters/Invoke-HyperVTopologyProbe.ps1 `
+              -PublishDirectory $publish -ReferenceVmName netperf-windows-2022-client
+            return
+          }
           if (!$env:GUEST_USER -or !$env:GUEST_PASSWORD) { throw 'Configured VM credentials are required.' }
           $password = ConvertTo-SecureString $env:GUEST_PASSWORD -AsPlainText -Force
           $credential = [pscredential]::new($env:GUEST_USER, $password)
@@ -123,5 +139,6 @@ jobs:
             ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/tcp-events.json
             ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/peer-check.json
             ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/lock-evidence.json
+            ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/topology-check.json
           if-no-files-found: warn
           retention-days: 14
