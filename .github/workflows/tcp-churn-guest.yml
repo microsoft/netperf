@@ -12,6 +12,10 @@ on:
       connections:
         type: string
         default: '256'
+      syn_drop:
+        description: Scoped silent SYN-drop outage (not PMTU probing)
+        type: boolean
+        default: false
   push:
     branches: ['user/mtfriesen/tcp-churn-public']
     paths: ['.github/workflows/tcp-churn-guest.yml']
@@ -71,6 +75,7 @@ jobs:
           PROFILE_CPU: ${{ inputs.profile_cpu }}
           SECONDS: ${{ inputs.seconds }}
           CONNECTIONS: ${{ inputs.connections }}
+          SYN_DROP: ${{ inputs.syn_drop }}
         run: |
           if (!$env:GUEST_USER -or !$env:GUEST_PASSWORD) { throw 'Configured VM credentials are required.' }
           $password = ConvertTo-SecureString $env:GUEST_PASSWORD -AsPlainText -Force
@@ -81,6 +86,10 @@ jobs:
           if ($env:PROFILE_CPU -eq 'true') {
             $extra.ProfileCpu = $true
             $extra.AnalyzerDirectory = Join-Path $env:GITHUB_WORKSPACE 'analyzer'
+          }
+          if ($env:SYN_DROP -eq 'true') {
+            if ($env:PROFILE_CPU -ne 'true') { throw 'SYN-drop measurement requires CPU profiling.' }
+            $extra.SynDrop = $true
           }
           ./experiments/tcp-churn/adapters/Invoke-NetperfGuestTcpChurn.ps1 `
             -VmName netperf-windows-2022-client -Credential $credential `

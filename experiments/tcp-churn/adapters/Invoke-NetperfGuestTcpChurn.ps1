@@ -9,7 +9,8 @@ param(
     [ValidateRange(5,120)][int]$Seconds=15,
     [ValidateRange(1,1024)][int]$Connections=16,
     [switch]$ProfileCpu,
-    [string]$AnalyzerDirectory
+    [string]$AnalyzerDirectory,
+    [switch]$SynDrop
 )
 $ErrorActionPreference='Stop'
 if (Test-Path -LiteralPath $PublishDirectory) { throw 'Use a new publication directory.' }
@@ -48,7 +49,7 @@ try {
     }
     $phase='guest-traffic'
     $exit=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
-        param($root,$seconds,$connections,$profile)
+        param($root,$seconds,$connections,$profile,$synDrop)
         if (@(Get-Process -Name 'Runner.Worker','ctsTraffic' -ErrorAction Ignore).Count) {
             throw 'Guest became busy before traffic setup.'
         }
@@ -56,11 +57,12 @@ try {
         # Native diagnostics remain inside the guest, never in public logs/artifacts.
         $extra=@()
         if ($profile) { $extra=@('-ProfileCpu','-AnalyzerDirectory',(Join-Path $root 'analyzer')) }
+        if ($synDrop) { $extra+='-SynDrop' }
         & pwsh -NoProfile -NonInteractive -File $program -ScratchParent $root `
             -PublishDirectory (Join-Path $root 'publish') -Seconds $seconds `
             -Connections $connections -DedicatedLab @extra *> (Join-Path $root 'adapter.log')
         $LASTEXITCODE
-    } -ArgumentList $guestRoot,$Seconds,$Connections,[bool]$ProfileCpu
+    } -ArgumentList $guestRoot,$Seconds,$Connections,[bool]$ProfileCpu,[bool]$SynDrop
     $phase='guest-result'
     $remoteResult=Join-Path $guestRoot 'publish\result.json'
     Copy-Item -LiteralPath $remoteResult -Destination (Join-Path $PublishDirectory 'result.json') -FromSession $session -ErrorAction Stop
@@ -74,7 +76,8 @@ try {
         }
     }
     $result=Get-Content -LiteralPath (Join-Path $PublishDirectory 'result.json') -Raw | ConvertFrom-Json
-    if ($exit -ne 0 -or $result.outcome -ne 'collected') { throw 'Guest experiment or cleanup did not succeed.' }
+    $expected=if($SynDrop){'observed-syn-failures'}else{'collected'}
+    if ($exit -ne 0 -or $result.outcome -ne $expected) { throw 'Guest experiment or cleanup did not succeed.' }
     $success=$true
 } catch {
     if (-not (Test-Path -LiteralPath (Join-Path $PublishDirectory 'result.json'))) {

@@ -8,7 +8,8 @@ param(
     [Parameter(Mandatory)][string]$PublishDirectory,
     [Parameter(Mandatory)][string]$AnalyzerDirectory,
     [ValidateRange(15,120)][int]$Seconds=30,
-    [ValidateRange(1,1024)][int]$Connections=256
+    [ValidateRange(1,1024)][int]$Connections=256,
+    [switch]$SynDrop
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
@@ -22,7 +23,8 @@ $provider=Get-WinEvent -ListProvider 'Microsoft-Windows-TCPIP' -ErrorAction Stop
 $keywords=0L
 $manifestEvents=@($provider.Events | ForEach-Object {
     $task=if($null -eq $_.Task){''}else{$_.Task.Name}
-    if ($task -match '(?i)black|bhdetect|pmtu' -or $_.Description -match '(?i)black.?hole|full.?size.+ack') {
+    if ($task -match '(?i)black|bhdetect|pmtu' -or $_.Description -match '(?i)black.?hole|full.?size.+ack' -or
+        $task -in @('TcpTcbSynSend','TcpDisconnectTcbRtoTimeout','TcpDataTransferRetransmitRound')) {
         foreach ($keyword in $_.Keywords) { $keywords=$keywords -bor $keyword.Value }
         [ordered]@{Id=$_.Id;Version=$_.Version;Task=$task;Description=$_.Description}
     }
@@ -42,6 +44,8 @@ $collector=$null
 $ready=Join-Path $Diagnostics 'probe-ready'
 $stop=Join-Path $Diagnostics 'probe-stop'
 $eventTrace=Join-Path $Diagnostics 'tcp-probes.etl'
+$blockRule='TcpChurnSynDrop-'+[guid]::NewGuid().ToString('N')
+$blockOwned=$false
 $trace=Join-Path $Diagnostics 'cpu.etl'
 $timing=[ordered]@{}
 $progress=[ordered]@{schema=1;stage='wpr-start';completedBatches=0;connections=0L;failureType=$null;failureCode=0;toolExitCode=0;failureReason='none';traceBytes=0L;profileStopped=$false}
@@ -81,6 +85,33 @@ try {
         $plan.ClientArguments += '-PortScalability:on'
         $adapter=New-WindowsCtsAdapter -Executable (Join-Path $Tools 'ctsTraffic.exe') `
             -DiagnosticsDirectory $directory -ClientInterface duo1 -ServerInterface duo2
+        if ($SynDrop) {
+            $plan.ClientArguments=@($plan.ClientArguments|Where-Object{$_ -notlike '-iterations:*'})
+            $plan.ClientArguments+='-iterations:1'
+            $null=New-NetFirewallRule -Name $blockRule -DisplayName $blockRule -Direction Inbound `
+                -Action Block -Protocol TCP -LocalPort $plan.Port -LocalAddress $plan.ServerAddress `
+                -RemoteAddress $plan.ClientAddress -ErrorAction Stop
+            $blockOwned=$true
+            try {
+                $null=& $adapter.StartPeer $adapter.State $plan
+                $listen=[Diagnostics.Stopwatch]::StartNew()
+                while (-not (& $adapter.PeerReady $adapter.State $plan)) {
+                    if ($listen.Elapsed.TotalSeconds -gt 20) { throw 'Owned SYN-drop listener did not become ready.' }
+                    Start-Sleep -Milliseconds 100
+                }
+                $execution=& $adapter.RunClient $adapter.State $plan
+                $summary=ConvertFrom-CtsChurnOutput $execution.Text
+                if ($summary.Completed -ne 0 -or $summary.ProtocolErrors -ne 0 -or
+                    $summary.NetworkErrors -ne $Connections -or $execution.ExitCode -ne $Connections -or
+                    $summary.Milliseconds -lt 3000) {
+                    throw 'SYN-drop outcomes do not match the deliberately blocked connection attempts.'
+                }
+                $totals.outcome='observed-syn-failures'
+                $totals['failedConnections']=$summary.NetworkErrors
+                $totals['fault']='scoped-silent-syn-drop'
+            } finally { $null=& $adapter.Close $adapter.State $plan }
+            break
+        }
         $result=Invoke-TcpChurnExperiment -Plan $plan -Adapter $adapter
         foreach ($field in @('connections','bytesSent','adapterTransmitDelta','adapterReceiveDelta')) {
             $totals[$field]+=$result.$field
@@ -107,6 +138,10 @@ try {
     $timing.loadEnd=[DateTime]::UtcNow.ToString('o')
 }
 finally {
+    if ($blockOwned) {
+        try { Remove-NetFirewallRule -Name $blockRule -ErrorAction Stop }
+        catch { if($null -eq $failure){$failure=$_}else{Write-Warning 'Owned SYN-drop rule cleanup also failed.'} }
+    }
     if ($eventOwned) {
         try {
             [IO.File]::WriteAllText($stop,'stop')
@@ -156,4 +191,12 @@ foreach ($interval in @('idle','load')) {
 $progress.stage='complete'
 $progress | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PublishDirectory 'cpu-progress.json')
 if ($null -ne $failure) { throw $failure }
-Export-TcpChurnPublicResult -Result ([pscustomobject]$totals) -Path (Join-Path $PublishDirectory 'result.json')
+if ($SynDrop) {
+    [ordered]@{
+        schema=1;workload='tcp-churn';outcome='observed-syn-failures';fault='scoped-silent-syn-drop'
+        failedConnections=$totals.failedConnections;seconds=$clock.Elapsed.TotalSeconds
+        mechanismVerified=$false;conclusion='fault-observation-only'
+    } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PublishDirectory 'result.json')
+} else {
+    Export-TcpChurnPublicResult -Result ([pscustomobject]$totals) -Path (Join-Path $PublishDirectory 'result.json')
+}

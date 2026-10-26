@@ -66,8 +66,8 @@ internal static class Program
             {
                 var state = JObject.Parse(File.ReadAllText(args[6]));
                 var provider = Guid.Parse((string)state["publicProviderGuid"]);
-                var names = state["publicProviderEvents"].ToDictionary(
-                    item => (int)item["Id"], item => (string)item["Task"]);
+                var names = state["publicProviderEvents"].GroupBy(item => (int)item["Id"]).ToDictionary(
+                    group => group.Key, group => (string)group.First()["Task"]);
                 var counts = names.Values.Distinct().ToDictionary(name => name, name => 0L);
                 var startTime = DateTime.Parse(args[4], null, System.Globalization.DateTimeStyles.RoundtripKind).ToUniversalTime();
                 var endTime = DateTime.Parse(args[5], null, System.Globalization.DateTimeStyles.RoundtripKind).ToUniversalTime();

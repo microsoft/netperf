@@ -9,7 +9,8 @@ param(
     [ValidateRange(1,1024)][int]$Connections=16,
     [switch]$DedicatedLab,
     [switch]$ProfileCpu,
-    [string]$AnalyzerDirectory
+    [string]$AnalyzerDirectory,
+    [switch]$SynDrop
 )
 $ErrorActionPreference='Stop'
 if (-not $DedicatedLab -or -not $IsWindows) { throw 'Provisioning requires an explicitly dedicated Windows lab.' }
@@ -108,7 +109,7 @@ try {
     if ($ProfileCpu) {
         $phase='cpu-campaign'
         & (Join-Path $root 'Invoke-CpuCampaign.ps1') -Tools $tools -Diagnostics $logs `
-            -PublishDirectory $PublishDirectory -AnalyzerDirectory $AnalyzerDirectory -Seconds $Seconds -Connections $Connections
+            -PublishDirectory $PublishDirectory -AnalyzerDirectory $AnalyzerDirectory -Seconds $Seconds -Connections $Connections -SynDrop:$SynDrop
         $result=Get-Content -LiteralPath (Join-Path $PublishDirectory 'result.json') -Raw | ConvertFrom-Json
     } else {
         $plan=New-TcpChurnPlan -ClientAddress 192.168.1.11 -ServerAddress 192.168.1.12 -Seconds $Seconds -Connections $Connections
