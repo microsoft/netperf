@@ -302,7 +302,7 @@ For a suitable 128-processor topology and a driver supporting 128 queues, the
 configuration can be applied locally, outside this read-only checker:
 
 ```powershell
-Set-NetAdapterRss -Name owned-duonic -Profile NUMAScalingStatic `
+Set-NetAdapterRss -Name owned-duonic -Profile NUMAStatic `
   -BaseProcessorGroup 0 -BaseProcessorNumber 0 `
   -MaxProcessorGroup 1 -MaxProcessorNumber 63 `
   -MaxProcessors 128 -NumberOfReceiveQueues 128
@@ -326,6 +326,34 @@ DuoNIC package remains limited to 16, so these scripts do not claim a live
 128-queue driver test. No unpublished OS/driver binaries are acquired or uploaded.
 RSS excludes SMT siblings; verify the guest's eligible processor set rather than
 equating 128 vCPUs with 128 eligible targets.
+
+### Arbitrary RSS counts on an approved dedicated adapter
+
+The read-only checker accepts every integer from 1 through 128 independently
+for `ExpectedQueues` and `ExpectedProcessors`, including 40. It runs under
+Windows PowerShell 5.1 as well as PowerShell 7:
+
+```powershell
+./Invoke-RssControlCheck.ps1 -AdapterName owned-duonic `
+  -ExpectedProcessors 40 -ExpectedQueues 40 -PublishFile C:\Runs\rss40.json
+```
+
+The installed driver must independently support the requested values; changing
+the checker's arguments does not add capability to the pinned public driver.
+RSS processor/queue counts need not be powers of two. The indirection table and
+packet-ring lengths can remain powers of two independently of those counts.
+
+An approved, separately supplied driver was exercised on a dedicated physical
+80-logical-processor lab host with **40 queues and 40 RSS processors** on both
+ends of a pair. Two independent reads and a subsequent adapter restart retained
+40 distinct indirection targets across processor groups 0 and 1 in 128-entry
+tables. CTS completed 8,192 connections and 512 MiB of payload with zero network
+or protocol errors; selected transmit/receive byte deltas both measured
+540,114,834 bytes. This is functional/control-path and traffic proof, **not**
+a sustained performance comparison or per-processor runtime DPC coverage.
+No native driver, catalog, private source, certificate or raw lab diagnostics
+are published by this experiment. Approved driver provisioning remains external
+to the public workload.
 
 ```powershell
 ./Test-TcpChurn.ps1

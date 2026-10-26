@@ -1,12 +1,12 @@
 # Copyright (c) Microsoft Corporation.
 # SPDX-License-Identifier: MIT
-#Requires -Version 7.2
+#Requires -Version 5.1
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$AdapterName,
     [Parameter(Mandatory)][string]$PublishFile,
     [ValidateRange(1,128)][int]$ExpectedProcessors=128,
-    [ValidateSet(1,2,4,8,16,32,64,128)][int]$ExpectedQueues=128
+    [ValidateRange(1,128)][int]$ExpectedQueues=128
 )
 $ErrorActionPreference='Stop'
 Import-Module (Join-Path $PSScriptRoot 'RssControl.psm1') -Force

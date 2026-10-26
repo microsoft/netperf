@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # SPDX-License-Identifier: MIT
-#Requires -Version 7.2
+#Requires -Version 5.1
 $ErrorActionPreference='Stop'
 Import-Module (Join-Path $PSScriptRoot 'RssControl.psm1') -Force
 function New-Settings {
@@ -22,6 +22,36 @@ $checks=0
 $s=New-Settings;$r=Assert-RssControlPath -Settings $s
 if(-not $r.controlPathVerified -or $r.distinctAssignedProcessors -ne 128 -or
     ($r.processorGroups -join ',') -ne '0,1' -or $r.runtimeDpcCoverageVerified -or $r.performanceVerified) { throw '128-processor topology was not classified correctly.' }
+$checks++
+foreach($count in 1..128) {
+    $s=New-Settings
+    $s.MaxProcessors=$count;$s.NumberOfReceiveQueues=$count;$s.RssProcessorArraySize=$count
+    $s.RssProcessorArray=@($s.RssProcessorArray|Select-Object -First $count)
+    $s.IndirectionTable=@(0..127|ForEach-Object{
+        [pscustomobject]@{Group=[int][Math]::Floor(($_%$count)/64);Number=($_%$count)%64}
+    })
+    $r=Assert-RssControlPath -Settings $s -ExpectedProcessors $count -ExpectedQueues $count
+    if($r.rssProcessors -ne $count -or $r.receiveQueues -ne $count -or $r.distinctAssignedProcessors -ne $count) {
+        throw "RSS count $count was rejected or rounded."
+    }
+    $checks++
+}
+foreach($count in @(0,129)) {
+    foreach($parameter in @('ExpectedProcessors','ExpectedQueues')) {
+        $arguments=@{Settings=(New-Settings)};$arguments[$parameter]=$count;$rejected=$false
+        try { $null=Assert-RssControlPath @arguments } catch { $rejected=$true }
+        if(-not $rejected) { throw "Out-of-range $parameter was accepted." }
+        $checks++
+    }
+}
+$s=New-Settings
+$s.MaxProcessors=40;$s.NumberOfReceiveQueues=40;$s.RssProcessorArraySize=40
+$s.RssProcessorArray=@($s.RssProcessorArray|Select-Object -First 40)
+$s.IndirectionTable=@(0..127|ForEach-Object{[pscustomobject]@{Group=0;Number=$_%40}})
+$r=Assert-RssControlPath -Settings $s -ExpectedProcessors 40 -ExpectedQueues 40
+if($r.rssProcessors -ne 40 -or $r.receiveQueues -ne 40 -or $r.distinctAssignedProcessors -ne 40) {
+    throw 'Non-power-of-two queue/processor count 40 was rejected or rounded.'
+}
 $checks++
 $s=New-Settings
 $s.RssProcessorArray=@(0..127|ForEach-Object{"$([int][Math]::Floor($_/64)):$($_%64)/0"})
