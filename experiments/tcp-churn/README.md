@@ -223,6 +223,13 @@ Verified on the actual 80-logical-processor netperf guest:
     events lost. CPU sampling covered 44.56 seconds, with 4,158 samples including
     814 with TCPIP on the stack. The 1,024 blocked attempts took 42.105 seconds.
     Post-restore firewall profile verification passed.
+- [Timing-verified repeat 40387935712](https://github.com/microsoft/netperf/actions/runs/40387935712):
+    **39 target wait samples**, 1,024 retransmission timeouts and 4,096 retransmission
+    rounds; zero CPU or probe events lost. CPU sampling covered 44.366 seconds,
+    with 4,336 samples including 952 with TCPIP on the stack. The corrected result
+    separates 42.130 seconds of client traffic, 44.366 seconds of load-phase wall
+    time, and 58.605 seconds including capture processing. Timing invariants,
+    exact-ancestry assertion and cleanup verification passed.
 
 `CpuEvidence.psm1` requires lossless collection and that exact public-symbol caller
 ancestry, rejecting unrelated shutdown waits. `lock-evidence.json` reports a
@@ -231,7 +238,7 @@ SYN-drop campaign fails its reproduction assertion if the fault or target wait
 is absent; absence in one finite sample is not proof the path never runs.
 For SYN-drop results, `seconds` is the load-phase wall time, `clientSeconds` is
 the CTS-reported traffic duration, and `loadAndAnalysisSeconds` includes subsequent
-capture processing. In the two outage runs above, the old `result.seconds`
+capture processing. In the first two outage runs above, the old `result.seconds`
 included processing; use `cpu-load.intervalSeconds` and
 `cpu-progress.synOutcomes.Milliseconds` for those runs instead.
 
