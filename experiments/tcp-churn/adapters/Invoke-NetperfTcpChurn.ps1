@@ -84,10 +84,25 @@ try {
             throw 'DuoNIC address postcondition failed.'
         }
     }
+    if ($ProfileCpu) {
+        $phase='source-addresses'
+        foreach ($last in 21..28) {
+            $address="192.168.1.$last"
+            $null=New-NetIPAddress -InterfaceAlias duo1 -IPAddress $address -PrefixLength 24 -SkipAsSource $true -ErrorAction Stop
+            $null=New-NetRoute -InterfaceAlias duo2 -DestinationPrefix "$address/32" -NextHop 0.0.0.0 -RouteMetric 0 -ErrorAction Stop
+            $wait=[Diagnostics.Stopwatch]::StartNew()
+            while (@(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop |
+                Where-Object { $_.IPAddress -eq $address -and $_.AddressState -eq 'Preferred' }).Count -ne 1) {
+                if ($wait.Elapsed.TotalSeconds -gt 30) { throw 'Owned source address did not become Preferred.' }
+                Start-Sleep -Milliseconds 200
+            }
+        }
+    }
     $phase='firewall'
     $ports=if($ProfileCpu){'53617-53816'}else{'53617'}
+    $remote=if($ProfileCpu){@('192.168.1.11')+@(21..28|ForEach-Object{"192.168.1.$_"})}else{@('192.168.1.11')}
     $null=New-NetFirewallRule -Name $rule -DisplayName $rule -Direction Inbound -Action Allow -Protocol TCP `
-        -LocalPort $ports -LocalAddress 192.168.1.12 -RemoteAddress 192.168.1.11 -ErrorAction Stop
+        -LocalPort $ports -LocalAddress 192.168.1.12 -RemoteAddress $remote -ErrorAction Stop
     $firewall=$true
     $phase='traffic'
     if ($ProfileCpu) {

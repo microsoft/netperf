@@ -74,7 +74,8 @@ try {
     do {
         $directory=Join-Path $Diagnostics "batch-$batch"
         New-Item -ItemType Directory -Path $directory -ErrorAction Stop | Out-Null
-        $plan=New-TcpChurnPlan -ClientAddress 192.168.1.11 -ServerAddress 192.168.1.12 `
+        $source="192.168.1.$(21+($batch%8))"
+        $plan=New-TcpChurnPlan -ClientAddress $source -ServerAddress 192.168.1.12 `
             -Port (53617+$batch) -Connections $Connections -Seconds ([Math]::Min(120,$Seconds+30))
         # Public documented socket option. No TCP global or registry setting is changed.
         $plan.ClientArguments += '-PortScalability:on'

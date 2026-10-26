@@ -135,6 +135,7 @@ internal static class Program
                 var networkLeaves = new Dictionary<string, long>();
                 var processors = new HashSet<int>();
                 var networkProcessors = new Dictionary<string, long>();
+                var callers = new Dictionary<string, Dictionary<string, long>>();
                 stage = "samples";
                 long samples = 0, withStack = 0, network = 0, unresolved = 0;
                 foreach (var record in log.Events)
@@ -177,7 +178,17 @@ internal static class Program
                     if (!hit) continue;
                     network++;
                     Add(networkProcessors, sample.ProcessorNumber.ToString());
-                    foreach (var frame in seen) Add(networkFrames, frame);
+                    var publicStack = string.Join(" <- ", frames.Take(24));
+                    foreach (var frame in seen)
+                    {
+                        Add(networkFrames, frame);
+                        if (!callers.TryGetValue(frame, out var frameStacks))
+                        {
+                            frameStacks = new Dictionary<string, long>();
+                            callers[frame] = frameStacks;
+                        }
+                        Add(frameStacks, publicStack);
+                    }
                     if (leaf != null) Add(networkLeaves, leaf);
                     if (frames.Count > 0) Add(networkStacks, string.Join(" <- ", frames.Take(24)));
                 }
@@ -197,6 +208,8 @@ internal static class Program
                         pair.Key.StartsWith("nt!", StringComparison.Ordinal) &&
                         pair.Key.Split(new[] { " <- " }, StringSplitOptions.None)[0].IndexOf("spin", StringComparison.OrdinalIgnoreCase) >= 0)
                         .ToDictionary(pair => pair.Key, pair => pair.Value), 512),
+                    publicNetworkFunctionCallers = callers.OrderBy(pair => pair.Key).Take(4096)
+                        .Select(pair => new { function = pair.Key, stacks = Top(pair.Value, 8) }).ToArray(),
                     conclusion = "sample-evidence-only"
                 }, Formatting.Indented));
                 return samples > 0 ? 0 : 3;
