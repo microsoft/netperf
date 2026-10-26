@@ -217,11 +217,23 @@ Verified on the actual 80-logical-processor netperf guest:
     <- tcpip!TcpNotifyTcbDelay
   ```
 
+- [Repeat 40387003564](https://github.com/microsoft/netperf/actions/runs/40387003564):
+    the exact-ancestry assertion passed with **32 target wait samples**, 1,024
+    retransmission timeouts and 4,096 retransmission rounds; zero CPU or probe
+    events lost. CPU sampling covered 44.56 seconds, with 4,158 samples including
+    814 with TCPIP on the stack. The 1,024 blocked attempts took 42.105 seconds.
+    Post-restore firewall profile verification passed.
+
 `CpuEvidence.psm1` requires lossless collection and that exact public-symbol caller
 ancestry, rejecting unrelated shutdown waits. `lock-evidence.json` reports a
 lower-bound wait-sample count because caller stacks are bounded. A real-peer
 SYN-drop campaign fails its reproduction assertion if the fault or target wait
 is absent; absence in one finite sample is not proof the path never runs.
+For SYN-drop results, `seconds` is the load-phase wall time, `clientSeconds` is
+the CTS-reported traffic duration, and `loadAndAnalysisSeconds` includes subsequent
+capture processing. In the two outage runs above, the old `result.seconds`
+included processing; use `cpu-load.intervalSeconds` and
+`cpu-progress.synOutcomes.Milliseconds` for those runs instead.
 
 These are different workloads, not before/after optimization measurements.
 The outage demonstrates connection-failure update contention, **not BH probing**

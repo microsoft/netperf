@@ -209,7 +209,8 @@ if ($null -ne $failure) { throw $failure }
 if ($SynDrop) {
     [ordered]@{
         schema=1;workload='tcp-churn';outcome='observed-syn-failures';fault='scoped-silent-syn-drop'
-        failedConnections=$totals.failedConnections;seconds=$clock.Elapsed.TotalSeconds
+        failedConnections=$totals.failedConnections;seconds=$totals.seconds
+        clientSeconds=$progress.synOutcomes.Milliseconds/1000.0;loadAndAnalysisSeconds=$clock.Elapsed.TotalSeconds
         mechanismVerified=$false;conclusion='fault-observation-only'
     } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PublishDirectory 'result.json')
     Import-Module (Join-Path $PSScriptRoot 'CpuEvidence.psm1') -Force
