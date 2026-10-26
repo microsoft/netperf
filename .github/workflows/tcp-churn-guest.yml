@@ -16,6 +16,10 @@ on:
         description: Scoped silent SYN-drop outage (not PMTU probing)
         type: boolean
         default: false
+      probe_peer:
+        description: Check idle netperf peer connectivity without traffic or faults
+        type: boolean
+        default: false
   push:
     branches: ['user/mtfriesen/tcp-churn-public']
     paths: ['.github/workflows/tcp-churn-guest.yml']
@@ -76,6 +80,7 @@ jobs:
           SECONDS: ${{ inputs.seconds }}
           CONNECTIONS: ${{ inputs.connections }}
           SYN_DROP: ${{ inputs.syn_drop }}
+          PROBE_PEER: ${{ inputs.probe_peer }}
         run: |
           if (!$env:GUEST_USER -or !$env:GUEST_PASSWORD) { throw 'Configured VM credentials are required.' }
           $password = ConvertTo-SecureString $env:GUEST_PASSWORD -AsPlainText -Force
@@ -91,6 +96,7 @@ jobs:
             if ($env:PROFILE_CPU -ne 'true') { throw 'SYN-drop measurement requires CPU profiling.' }
             $extra.SynDrop = $true
           }
+          if ($env:PROBE_PEER -eq 'true') { $extra.ProbePeer = $true }
           ./experiments/tcp-churn/adapters/Invoke-NetperfGuestTcpChurn.ps1 `
             -VmName netperf-windows-2022-client -Credential $credential `
             -PublishDirectory $publish -Seconds ([int]$env:SECONDS) -Connections ([int]$env:CONNECTIONS) @extra
@@ -106,5 +112,6 @@ jobs:
             ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/cpu-progress.json
             ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/tcp-state.json
             ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/tcp-events.json
+            ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/peer-check.json
           if-no-files-found: warn
           retention-days: 14
