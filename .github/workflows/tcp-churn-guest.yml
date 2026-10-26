@@ -1,10 +1,23 @@
 name: TCP churn netperf guest
 on:
   workflow_dispatch:
+  push:
+    branches: ['user/mtfriesen/tcp-churn-public']
+    paths: ['.github/workflows/tcp-churn-guest.yml']
 permissions:
   contents: read
 jobs:
+  source-tests:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - shell: pwsh
+        run: ./experiments/tcp-churn/Test-TcpChurn.ps1
   guest-smoke:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    needs: source-tests
     # Same documented management slot as the targeted lab reset workflow.
     runs-on: [self-hosted, 'parent=rr1-netperf-26\localadminuser']
     timeout-minutes: 10
