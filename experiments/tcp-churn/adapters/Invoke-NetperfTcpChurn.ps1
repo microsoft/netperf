@@ -41,6 +41,7 @@ $rule='NetperfTcpChurn-'+[guid]::NewGuid().ToString('N')
 $phase='acquire'
 $observations=[ordered]@{
     adapterCount=0; upCount=0; aliasCount=0; preferredAddresses=0; cleanupErrors=0; toolExitCode=0
+    publicCampaignErrorLine=0; publicErrorType='none'
 }
 try {
     $null=& (Join-Path $root 'Acquire-PublicTools.ps1') -Destination $tools
@@ -86,6 +87,10 @@ try {
     }
 } catch {
     $failure=$_
+    $observations.publicErrorType=$_.Exception.GetType().FullName
+    if ($_.ScriptStackTrace -match 'Invoke-CpuCampaign\.ps1: line (\d+)') {
+        $observations.publicCampaignErrorLine=[int]$Matches[1]
+    }
     if ($_.Exception.Data.Contains('ToolExitCode')) { $observations.toolExitCode=[int]$_.Exception.Data['ToolExitCode'] }
 } finally {
     $cleanup=[Collections.Generic.List[Exception]]::new()
