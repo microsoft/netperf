@@ -273,7 +273,7 @@ in management-host scratch. Processor-configuration rejection and startup
 rejection are recorded separately from cleanup failure.
 
 [Initial actual-host probe 40390355259](https://github.com/microsoft/netperf/actions/runs/40390355259)
-found 40 physical cores, 80 host logical processors and an existing 80-vCPU
+found 40 host-OS-reported cores, 80 host logical processors and an existing 80-vCPU
 guest. Configuring 128 vCPUs succeeded, but startup failed; owned-VM removal
 was verified. That initial probe used 512 MiB; subsequent control/target probes
 use the same 2 GiB allocation. A diskless boot success would establish only
@@ -287,6 +287,13 @@ accepted configuration but failed startup. Both used one virtual thread per
 core, and both verified owned-VM removal. The current host therefore has not
 provided a usable 128-vCPU guest. Do not treat accepted configuration or a
 successful negative-capacity workflow as a 128-CPU RSS validation pass.
+
+The management host is itself a VM, so its reported core count describes virtual
+topology, not the underlying physical hardware. These results do not establish
+the same startup behavior on bare-metal Hyper-V. Schema 2 therefore uses
+`hostReportedCores`, not schema 1's misleading `hostPhysicalCores` field, and
+records Hyper-V's `LogicalProcessorCount` separately from the host OS's processor
+count. Interpret the old artifact's core field as host-OS-reported topology only.
 
 `Invoke-RssControlCheck.ps1` is a separate **read-only**, fail-closed check for
 an already configured adapter on a suitable Windows guest. Use only approved

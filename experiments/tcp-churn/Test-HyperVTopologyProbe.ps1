@@ -6,7 +6,7 @@ $global:TcpChurnTopologyMock=$null
 function Get-CimInstance {
     param($ClassName,$ErrorAction)
     switch($ClassName) {
-        Win32_ComputerSystem { [pscustomobject]@{NumberOfLogicalProcessors=80} }
+        Win32_ComputerSystem { [pscustomobject]@{NumberOfLogicalProcessors=64} }
         Win32_Processor { [pscustomobject]@{NumberOfCores=40} }
         Win32_OperatingSystem { [pscustomobject]@{FreePhysicalMemory=8GB/1KB} }
         default { throw 'Unexpected CIM query.' }
@@ -16,6 +16,10 @@ function Get-VMProcessor {
     param($VMName,$VM,$ErrorAction)
     if($VMName) { [pscustomobject]@{Count=80} }
     else { [pscustomobject]@{Count=$global:TcpChurnTopologyMock.Count;HwThreadCountPerCore=1} }
+}
+function Get-VMHost {
+    param($ErrorAction)
+    [pscustomobject]@{LogicalProcessorCount=80}
 }
 function New-VM {
     param($Name,$Generation,[switch]$NoVHD,$MemoryStartupBytes,$ErrorAction)
@@ -72,6 +76,8 @@ foreach($phase in @('success','configure','start','partial-create','cleanup')) {
             throw "Unexpected outcome for ${phase}: $diagnostic"
         }
         $result=Get-Content -LiteralPath (Join-Path $root 'topology-check.json') -Raw|ConvertFrom-Json
+        if($result.schema -ne 2 -or $result.hostReportedCores -ne 40 -or $result.hostLogicalProcessors -ne 80 -or $result.hostOsLogicalProcessors -ne 64 -or
+            $result.coreCountSource -ne 'host-os-reported-topology') { throw 'Reported topology was mislabeled as physical hardware.' }
         if($result.cleanupVerified -ne ($phase -ne 'cleanup')) { throw "Incorrect cleanup report for $phase." }
         if($result.started -ne ($phase -in @('success','cleanup'))) { throw "Incorrect start report for $phase." }
         if($result.rssControlPathVerified -or $result.performanceVerified) { throw 'Capacity probe claimed RSS/performance validation.' }

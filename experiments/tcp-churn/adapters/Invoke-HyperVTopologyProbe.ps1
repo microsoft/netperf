@@ -11,7 +11,8 @@ $ErrorActionPreference='Stop'
 if (Test-Path -LiteralPath $PublishDirectory) { throw 'Use a new publication directory.' }
 $null=New-Item -ItemType Directory -Path $PublishDirectory -ErrorAction Stop
 $result=[ordered]@{
-    schema=1;requestedVirtualProcessors=$ProcessorCount;startupMemoryBytes=2GB;hostLogicalProcessors=0;hostPhysicalCores=0
+    schema=2;requestedVirtualProcessors=$ProcessorCount;startupMemoryBytes=2GB;hostLogicalProcessors=0
+    hostOsLogicalProcessors=0;hostReportedCores=0;coreCountSource='host-os-reported-topology'
     referenceGuestVirtualProcessors=0;configuredVirtualProcessors=0;configuredThreadsPerCore=0
     configured=$false;started=$false;cleanupVerified=$false;phase='host-query'
     failureHResult=0;processorCapacityErrorReported=$false;memoryCapacityErrorReported=$false
@@ -21,8 +22,10 @@ $result=[ordered]@{
 $vm=$null;$failure=$null;$cleanupFailure=$null;$creationAttempted=$false
 $ownedName='netperf-cpu-probe-'+[guid]::NewGuid().ToString('N')
 try {
-    $result.hostLogicalProcessors=[int](Get-CimInstance Win32_ComputerSystem -ErrorAction Stop).NumberOfLogicalProcessors
-    $result.hostPhysicalCores=[int](Get-CimInstance Win32_Processor -ErrorAction Stop|Measure-Object NumberOfCores -Sum).Sum
+    $result.hostLogicalProcessors=[int](Get-VMHost -ErrorAction Stop).LogicalProcessorCount
+    if($result.hostLogicalProcessors -lt 1) { throw 'Hyper-V logical processor count is unavailable.' }
+    $result.hostOsLogicalProcessors=[int](Get-CimInstance Win32_ComputerSystem -ErrorAction Stop).NumberOfLogicalProcessors
+    $result.hostReportedCores=[int](Get-CimInstance Win32_Processor -ErrorAction Stop|Measure-Object NumberOfCores -Sum).Sum
     $result.referenceGuestVirtualProcessors=[int](Get-VMProcessor -VMName $ReferenceVmName -ErrorAction Stop).Count
     if ([long](Get-CimInstance Win32_OperatingSystem -ErrorAction Stop).FreePhysicalMemory -lt (4GB/1KB)) {
         throw 'Insufficient free host memory for an isolated capacity probe.'
