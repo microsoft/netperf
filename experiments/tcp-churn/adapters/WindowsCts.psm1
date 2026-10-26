@@ -221,6 +221,14 @@ function Close-RemoteChurn($State,$Plan) {
                         try { Set-NetFirewallProfile -Name $profile.Name -Enabled $profile.Enabled -ErrorAction Stop }
                         catch { $errors.Add($_.Exception);$profilesRestored=$false }
                     }
+                    $effective=@(Get-NetFirewallProfile -ErrorAction Stop)
+                    foreach($profile in $global:OwnedChurnPeer.Profiles) {
+                        $actual=@($effective|Where-Object Name -eq $profile.Name)
+                        if($actual.Count -ne 1 -or [string]$actual[0].Enabled -ne [string]$profile.Enabled) {
+                            $errors.Add([InvalidOperationException]::new('Peer firewall state differs after restoration.'))
+                            $profilesRestored=$false
+                        }
+                    }
                     if (-not $profilesRestored) { throw [AggregateException]::new('Peer profile restoration failed; scoped recovery rules retained.',$errors) }
                     foreach($rule in $global:OwnedChurnPeer.Rules) {
                         try { Remove-NetFirewallRule -Name $rule -ErrorAction Stop } catch { $errors.Add($_.Exception) }

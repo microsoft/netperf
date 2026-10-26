@@ -7,7 +7,8 @@ black-hole probing, dead-gateway failover, or use of every processor.
 
 All implementation here is public test code. Do not add private OS source, private
 helpers, internal identifiers, unpublished binaries, signing keys, or private build
-references. No new binary is required by this implementation.
+references. Basic traffic needs no new binary. Optional CPU analysis builds its
+small helper from this public source and public NuGet packages.
 
 `dependencies.json` pins existing public CTS and DuoNIC assets by full commit and
 SHA256. They are downloaded into runner-local scratch, **not committed, cached as
@@ -15,10 +16,12 @@ Actions artifacts, or re-uploaded**. The DuoNIC acquisition precedent is
 [eBPF's public helper](https://github.com/microsoft/ebpf-for-windows/blob/fb94520bfdd7ddf048e2f7561a65392988d4fca1/scripts/common.psm1);
 netperf already runs CTS in its `cts_traffic.yml` workflow.
 
-Only `result.json` from a separate publication directory is uploaded. The publisher
-reconstructs a field allowlist containing numeric measurements and fixed status
-labels. Raw stdout, addresses, host inventory, traces, binaries and adapter state
-are not artifacts. Do not broaden that upload to the scratch/workspace directory.
+Only explicitly allowlisted JSON files from a separate publication directory are
+uploaded. Traffic results contain numeric measurements and fixed status labels;
+CPU results additionally contain bounded public-system-symbol aggregates.
+Raw stdout, addresses, host inventory, traces and existing tool/driver binaries
+are not artifacts. The separately built public-source analyzer is the exception.
+Do not broaden uploads to the scratch/workspace directory.
 
 ## Interface and adapters
 
@@ -172,10 +175,66 @@ ordinary loopback benchmark is rejected, and byte counters are not evidence that
 particular kernel algorithm ran. Large transfers exercise ordinary TCP data, not
 necessarily a black hole.
 
-This first cut has no loss injection, selective PMTU filter, routed DGD topology,
-kernel lock-site counters, or before/after statistical claim. Add those
-as public-source adapters/evidence, not copies of private implementations. Keep
-required recovery/progress tests alongside performance work.
+### Real-peer outage reproduction
+
+Dispatch `tcp-churn-guest.yml` on this branch with `profile_cpu=true`,
+`peer_measurement=true`, `syn_drop=true`, `seconds=60`, and `connections=1024`.
+The management adapter reaches the existing idle peer using configured credentials;
+the workload still uses the portable CTS adapter interface. A scoped peer firewall
+block silently drops the test connection attempts. This is a SYN-loss experiment,
+**not** selective PMTU loss or established-flow black-hole probing.
+
+The peer adapter snapshots all firewall profile Enabled states, installs a
+client-scoped remoting allow rule before enabling disabled profiles, and creates
+test-port rules scoped to the actual endpoint addresses. Cleanup restores and
+re-reads the original profile states before deleting its rules. Restoration failure
+is an error and retains the recovery rules, not a successful experiment. No global
+TCP setting or OS binary is changed.
+
+The exact-ID event collector discovers the public TCPIP provider metadata on the
+running image and uses an owned, bounded session. Read lost-event counters: the
+earlier broad-keyword collection was lossy and is not valid counting evidence.
+Counts are provider-wide, not correlated to individual test connections.
+
+Verified on the actual 80-logical-processor netperf guest:
+
+- [Healthy run 40380401452](https://github.com/microsoft/netperf/actions/runs/40380401452):
+  24,576 connections over 54.19 seconds; 153,852 CPU samples, including 44,820
+  with TCPIP on the stack; 149 full-size-ACK tracking events; zero CPU or probe
+  events lost. No BH entry/exit/failure events. Path-info waits seen principally
+  under connection shutdown must not be called BH-confirmation contention.
+- [Outage run 40385886331](https://github.com/microsoft/netperf/actions/runs/40385886331):
+  1,024 failed connections, 1,024 retransmission timeouts and 4,096 retransmission
+  rounds; 3,757 CPU samples, including 815 with TCPIP on the stack; zero CPU or
+  probe events lost. The retained public stacks include **20 queued-wait samples**
+  under the connection-failure path-info update:
+
+  ```text
+  nt!KxWaitForLockOwnerShip
+    <- nt!KeAcquireInStackQueuedSpinLock
+    <- tcpip!IpNlpSetPathInfo
+    <- tcpip!InetSetPathConnectionFailedAf
+    <- tcpip!TcpNotifyTcbDelay
+  ```
+
+`CpuEvidence.psm1` requires lossless collection and that exact public-symbol caller
+ancestry, rejecting unrelated shutdown waits. `lock-evidence.json` reports a
+lower-bound wait-sample count because caller stacks are bounded. A real-peer
+SYN-drop campaign fails its reproduction assertion if the fault or target wait
+is absent; absence in one finite sample is not proof the path never runs.
+
+These are different workloads, not before/after optimization measurements.
+The outage demonstrates connection-failure update contention, **not BH probing**
+(BH entry was zero), DGD, or contention magnitude across all 80 CPUs. CPU sample
+counts are not weighted whole-system CPU percentages. The public DuoNIC package
+supports at most 16 RSS queues/processors; the local fixture opts into that supported
+spread and records placement rather than claiming 80-way receive concurrency.
+
+Still missing: selective PMTU filtering, routed DGD topology, kernel lock-site
+counters, and a before/after statistical comparison. Add those as public-source
+adapters/evidence, not copies of private implementations. Keep recovery/progress
+tests alongside performance work. Raw captures remain guest-local and consume
+substantial disk space; do not publish them.
 
 ```powershell
 ./Test-TcpChurn.ps1

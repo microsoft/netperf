@@ -57,7 +57,7 @@ try {
         param($path)
         New-Item -ItemType Directory -Path (Join-Path $path 'adapters') -Force -ErrorAction Stop | Out-Null
     } -ArgumentList $remoteRoot
-    foreach ($file in @('TcpChurn.psm1','Acquire-PublicTools.ps1','dependencies.json','Invoke-CpuCampaign.ps1')) {
+    foreach ($file in @('TcpChurn.psm1','CpuEvidence.psm1','Acquire-PublicTools.ps1','dependencies.json','Invoke-CpuCampaign.ps1')) {
         Copy-Item -LiteralPath (Join-Path $localRoot $file) -Destination (Join-Path $remoteRoot $file) -ToSession $session -ErrorAction Stop
     }
     if ($ProfileCpu) {
@@ -101,7 +101,7 @@ try {
     $remoteResult=Join-Path $guestRoot 'publish\result.json'
     Copy-Item -LiteralPath $remoteResult -Destination (Join-Path $PublishDirectory 'result.json') -FromSession $session -ErrorAction Stop
     if ($ProfileCpu) {
-        foreach ($file in @('cpu-idle.json','cpu-load.json','cpu-progress.json','tcp-state.json','tcp-events.json')) {
+        foreach ($file in @('cpu-idle.json','cpu-load.json','cpu-progress.json','tcp-state.json','tcp-events.json','lock-evidence.json')) {
             $remoteFile=Join-Path $guestRoot "publish\$file"
             if (Invoke-Command -Session $session -ScriptBlock {param($p) Test-Path -LiteralPath $p -PathType Leaf} -ArgumentList $remoteFile) {
                 Copy-Item -LiteralPath $remoteFile -Destination (Join-Path $PublishDirectory $file) `

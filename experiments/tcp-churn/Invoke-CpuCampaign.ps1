@@ -212,6 +212,15 @@ if ($SynDrop) {
         failedConnections=$totals.failedConnections;seconds=$clock.Elapsed.TotalSeconds
         mechanismVerified=$false;conclusion='fault-observation-only'
     } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PublishDirectory 'result.json')
+    Import-Module (Join-Path $PSScriptRoot 'CpuEvidence.psm1') -Force
+    $evidence=Get-TcpChurnWaitEvidence `
+        -Cpu (Get-Content -LiteralPath (Join-Path $PublishDirectory 'cpu-load.json') -Raw|ConvertFrom-Json) `
+        -Events (Get-Content -LiteralPath (Join-Path $PublishDirectory 'tcp-events.json') -Raw|ConvertFrom-Json) `
+        -Outcome (Get-Content -LiteralPath (Join-Path $PublishDirectory 'result.json') -Raw|ConvertFrom-Json)
+    $evidence|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $PublishDirectory 'lock-evidence.json')
+    if ($null -ne $PeerSession -and (-not $evidence.verifiedFault -or -not $evidence.queuedWaitObserved)) {
+        throw 'The real-peer outage did not produce the required sampled queued-wait evidence.'
+    }
 } else {
     Export-TcpChurnPublicResult -Result ([pscustomobject]$totals) -Path (Join-Path $PublishDirectory 'result.json')
 }

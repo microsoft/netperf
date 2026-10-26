@@ -4,6 +4,7 @@
 $ErrorActionPreference='Stop'
 Import-Module (Join-Path $PSScriptRoot 'TcpChurn.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'adapters\WindowsCts.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'CpuEvidence.psm1') -Force
 $script:count=0
 function Check([bool]$Value,[string]$Message) {
     if (-not $Value) { throw $Message }
@@ -107,6 +108,24 @@ try {
         Where-Object { $_ -is [Management.Automation.Language.CommandParameterAst] } |
         ForEach-Object ParameterName)
     Check ($parameters -contains 'Name' -and $parameters -contains 'DisplayName') 'Firewall setup must be non-interactive.'
+    $cpu=[pscustomobject]@{outcome='sampled';eventsLost=0;publicNetworkFunctionCallers=@(
+        [pscustomobject]@{function='tcpip!IpNlpSetPathInfo';stacks=@(
+            [pscustomobject]@{name='nt!KxWaitForLockOwnerShip <- nt!KeAcquireInStackQueuedSpinLock <- tcpip!IpNlpSetPathInfo <- tcpip!InetSetPathConnectionFailedAf <- tcpip!TcpNotifyTcbDelay';samples=3}
+        )}
+    )}
+    $events=[pscustomobject]@{outcome='counted';eventsLost=0;publicProbeCounts=[pscustomobject]@{
+        TcpDisconnectTcbRtoTimeout=1;TcpDataTransferRetransmitRound=4;TcpBlackHoleDetectionEntry=0;TcpBhDetectFullSizeAck=0
+    }}
+    $outcome=[pscustomobject]@{outcome='observed-syn-failures'}
+    $proof=Get-TcpChurnWaitEvidence -Cpu $cpu -Events $events -Outcome $outcome
+    Check ($proof.verifiedFault -and $proof.queuedWaitObserved -and $proof.queuedWaitSamplesLowerBound -eq 3) 'Target wait was not recognized.'
+    Check ($proof.blackHoleProbeEntryEvents -eq 0 -and $proof.conclusion -ne 'improvement') 'SYN failure was misreported as PMTU probing/improvement.'
+    $cpu.publicNetworkFunctionCallers[0].stacks[0].name='nt!KxWaitForLockOwnerShip <- nt!KeAcquireInStackQueuedSpinLock <- tcpip!IpNlpSetPathInfo <- tcpip!TcpShutdownTcb'
+    Check (-not (Get-TcpChurnWaitEvidence -Cpu $cpu -Events $events -Outcome $outcome).queuedWaitObserved) 'Unrelated path update matched target contention.'
+    $cpu.eventsLost=1
+    Reject {Get-TcpChurnWaitEvidence -Cpu $cpu -Events $events -Outcome $outcome}
+    $cpu.eventsLost=0;$events.eventsLost=1
+    Reject {Get-TcpChurnWaitEvidence -Cpu $cpu -Events $events -Outcome $outcome}
     Write-Output "Passed $script:count public-source checks."
 } finally {
     # Only this explicitly created, uniquely named test directory is removed.
