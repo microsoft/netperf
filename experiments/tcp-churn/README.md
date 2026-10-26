@@ -76,9 +76,7 @@ image cannot load the public driver, preparation fails; use an approved image
 rather than installing a private signing key. The driver package may remain in the
 disposable image's driver store until reset.
 
-## Manual machine
-
-### Management-host fallback
+## Management-host fallback
 
 `tcp-churn-guest.yml` uses the documented management slot from netperf's
 targeted-reset workflow to execute **inside its existing lab VM**, not on the
@@ -92,8 +90,27 @@ remain in guest scratch; only numeric result JSON is copied back.
 This is not a reservation system: use it only for an idle dedicated guest.
 Normal guest-runner scheduling is preferred. It does not reset the guest or
 terminate another experiment to obtain access.
+The existing management host uses Windows PowerShell 5.1; only this thin
+PowerShell Direct wrapper supports that version. The actual experiment runs
+under PowerShell 7 in the VM. No PowerShell installation or runner-registration
+change is needed on the host.
 
-## Manual machine usage
+Verified actual netperf execution:
+[run 40371149553](https://github.com/microsoft/netperf/actions/runs/40371149553).
+The management job ran on `RR1-Netperf-25`, executing within the documented
+`netperf-windows-2022-client` guest. It completed 512 connections and 32 MiB of
+payload; selected DuoNIC transmit and receive byte deltas both accounted for
+the transfer. Owned fixture cleanup succeeded, and the artifact contained only
+the allowlisted numeric result. The CTS interval was 85 ms: deployment/traffic
+proof, **not** a sustained-throughput or 80-CPU performance result.
+
+Recent eBPF runs used the same Windows-2022 lab labels as the original direct
+dispatch, so those labels were not inferred to be incorrect. The direct queue
+remained unassigned even after a successful targeted reset; the management
+slot provided the proven path into the actual lab VM without changing runner
+registration. Keep these two execution paths distinct when reporting outcomes.
+
+## Manual machine
 
 Prepare and dedicate two interfaces with an actual path between them, using only
 approved public tooling. Keep native tools outside source checkouts.
