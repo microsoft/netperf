@@ -18,7 +18,7 @@ if (-not (Test-Path -LiteralPath $analyzer -PathType Leaf)) { throw 'Source-buil
 $owned=$false; $failure=$null
 $trace=Join-Path $Diagnostics 'cpu.etl'
 $timing=[ordered]@{}
-$progress=[ordered]@{schema=1;stage='wpr-start';completedBatches=0;connections=0L;failureType=$null;failureCode=0;traceBytes=0L;profileStopped=$false}
+$progress=[ordered]@{schema=1;stage='wpr-start';completedBatches=0;connections=0L;failureType=$null;failureCode=0;failureReason='none';traceBytes=0L;profileStopped=$false}
 $totals=[ordered]@{ schema=1;workload='tcp-churn';outcome='collected';connections=0L;seconds=0.0;bytesSent=0L
     connectionsPerSecond=0.0;megabitsPerSecond=0.0;adapterTransmitDelta=0L;adapterReceiveDelta=0L
     cpuCoverage='not-measured';targetBranchCoverage='not-measured';mechanismVerified=$false;conclusion='collection-only' }
@@ -60,6 +60,13 @@ try {
     $failure=$_
     $progress.failureType=$_.Exception.GetType().FullName
     $progress.failureCode=$_.Exception.HResult
+    foreach ($reason in @('Traffic command failed; diagnostics belong to the adapter.',
+        'Healthy churn did not complete error-free traffic.',
+        'Data was not accounted for on the selected adapters.',
+        'CTS client deadline exceeded.','CTS server exited while traffic was active.')) {
+        if ($_.Exception.Message -eq $reason) { $progress.failureReason=$reason }
+    }
+    $timing.loadEnd=[DateTime]::UtcNow.ToString('o')
 }
 finally {
     if ($owned) {
@@ -76,7 +83,7 @@ finally {
     }
 }
 $timing | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $Diagnostics 'intervals.json')
-if ($null -ne $failure) { throw $failure }
+if (-not $owned -or -not $progress.profileStopped) { throw $failure }
 foreach ($interval in @('idle','load')) {
     $progress.stage="analyze-$interval"
     $progress | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PublishDirectory 'cpu-progress.json')
@@ -86,4 +93,5 @@ foreach ($interval in @('idle','load')) {
 }
 $progress.stage='complete'
 $progress | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PublishDirectory 'cpu-progress.json')
+if ($null -ne $failure) { throw $failure }
 Export-TcpChurnPublicResult -Result ([pscustomobject]$totals) -Path (Join-Path $PublishDirectory 'result.json')
