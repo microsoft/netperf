@@ -121,9 +121,13 @@ internal static class Program
                     networkModuleSamples = network, unresolvedNetworkFrames = unresolved,
                     observedProcessorNumbers = processors.OrderBy(value => value).ToArray(),
                     traceProcessorCount = log.NumberOfProcessors, eventsLost = log.EventsLost,
-                    publicNetworkFrames = Top(networkFrames, 100),
+                    publicNetworkFrames = Top(networkFrames, 4096),
                     publicNetworkStackLeaves = Top(networkLeaves, 50),
-                    publicNetworkStacks = Top(networkStacks, 50),
+                    publicNetworkStacks = Top(networkStacks, 256),
+                    publicNetworkSpinStacks = Top(networkStacks.Where(pair =>
+                        pair.Key.StartsWith("nt!", StringComparison.Ordinal) &&
+                        pair.Key.Split(new[] { " <- " }, StringSplitOptions.None)[0].IndexOf("spin", StringComparison.OrdinalIgnoreCase) >= 0)
+                        .ToDictionary(pair => pair.Key, pair => pair.Value), 512),
                     conclusion = "sample-evidence-only"
                 }, Formatting.Indented));
                 return samples > 0 ? 0 : 3;

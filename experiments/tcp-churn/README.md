@@ -129,6 +129,39 @@ allowlisted result if those measurements are intended to be public.
 
 ## Limits and next experiments
 
+### CPU sampling campaign
+
+The management-guest workflow now accepts `profile_cpu=true`, `seconds` and
+`connections`. It builds the new `CpuSamples` helper entirely from this public
+source and public NuGet dependencies. Unlike existing CTS/driver/OS binaries,
+this new source-built test helper is an explicitly separate build artifact;
+no private binary is involved.
+
+Inside the guest, the campaign starts the built-in WPR CPU profile without
+cancelling or taking over a pre-existing recording. It records an idle window,
+then repeated finite connection batches on distinct server ports, with the
+documented CTS port-scalability socket option. No global TCP reuse or timeout
+setting is changed. A time ceiling/batch cap bounds the campaign; resource
+failures remain failures, not successful measurements.
+
+WPR is stopped before analysis, and raw ETL/ETLX plus diagnostic logs remain
+in guest-local scratch. The helper consults only Microsoft's public symbol
+server, never an environment/private symbol path or source server. Published
+JSON includes interval sample counts, lost events, observed processor numbers,
+and bounded resolved frames/stacks from `tcpip` and `ntoskrnl` only. No process
+names/command lines, addresses, module paths or raw traces are published.
+
+Partial captures may be analyzed even if a later traffic batch fails. Always
+read `result.json` and `cpu-progress.json` together with the sample aggregates.
+Sampled branch entry is not evidence of exclusive-lock waiting; a spin/lock
+frame must occur on the relevant network stack to support a contention claim.
+Absence in a finite sample is not proof that a short function never executed.
+Unresolved symbols or lost events must be reported, not converted to zeros.
+
+The analyzer uses .NET Framework already available on the Windows guest. Its
+public package references and native symbol dependencies are built on hosted
+Windows CI; no runtime is installed on the management host.
+
 Use an optimized, unchanged public baseline for this smoke. This project does not
 deploy private OS bits or know private feature identifiers. Build labels, if added
 later, are not feature-state evidence.
@@ -140,7 +173,7 @@ particular kernel algorithm ran. Large transfers exercise ordinary TCP data, not
 necessarily a black hole.
 
 This first cut has no loss injection, selective PMTU filter, routed DGD topology,
-kernel lock-site counters, CPU stacks, or before/after statistical claim. Add those
+kernel lock-site counters, or before/after statistical claim. Add those
 as public-source adapters/evidence, not copies of private implementations. Keep
 required recovery/progress tests alongside performance work.
 

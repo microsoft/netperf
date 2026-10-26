@@ -11,10 +11,24 @@ param(
     [ValidateRange(1,1024)][int]$Connections=256
 )
 $ErrorActionPreference='Stop'
+Set-StrictMode -Version Latest
 Import-Module (Join-Path $PSScriptRoot 'TcpChurn.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'adapters\WindowsCts.psm1') -Force
 $analyzer=Join-Path $AnalyzerDirectory 'CpuSamples.exe'
 if (-not (Test-Path -LiteralPath $analyzer -PathType Leaf)) { throw 'Source-built analyzer missing.' }
+$key=Get-Item -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters' -ErrorAction Stop
+$value=$key.GetValue('EnablePMTUBHDetect',$null)
+$provider=Get-WinEvent -ListProvider 'Microsoft-Windows-TCPIP' -ErrorAction Stop
+$manifestEvents=@($provider.Events | ForEach-Object {
+    $task=if($null -eq $_.Task){''}else{$_.Task.Name}
+    if ($task -match '(?i)black|bhdetect|pmtu' -or $_.Description -match '(?i)black.?hole|full.?size.+ack') {
+        [ordered]@{Id=$_.Id;Version=$_.Version;Task=$task;Description=$_.Description}
+    }
+})
+[ordered]@{
+    schema=1;bhRegistryOverridePresent=($null -ne $value);bhRegistryOverride=$value
+    registryDefaultInference='not-inferred';publicProviderEvents=$manifestEvents
+} | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $PublishDirectory 'tcp-state.json')
 $owned=$false; $failure=$null
 $trace=Join-Path $Diagnostics 'cpu.etl'
 $timing=[ordered]@{}
