@@ -1,0 +1,39 @@
+name: TCP churn netperf guest
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  guest-smoke:
+    # Same documented management slot as the targeted lab reset workflow.
+    runs-on: [self-hosted, 'parent=rr1-netperf-26\localadminuser']
+    timeout-minutes: 10
+    concurrency:
+      group: tcp-churn-netperf-guest
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Run inside the existing idle lab VM
+        shell: pwsh
+        env:
+          GUEST_USER: ${{ secrets.VM_DUMMY_USERNAME }}
+          GUEST_PASSWORD: ${{ secrets.VM_DUMMY_PASSWORD }}
+        run: |
+          if (!$env:GUEST_USER -or !$env:GUEST_PASSWORD) { throw 'Configured VM credentials are required.' }
+          $password = ConvertTo-SecureString $env:GUEST_PASSWORD -AsPlainText -Force
+          $credential = [pscredential]::new($env:GUEST_USER, $password)
+          Remove-Item Env:\GUEST_PASSWORD
+          $publish = Join-Path $env:RUNNER_TEMP "tcp-churn-guest-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          ./experiments/tcp-churn/adapters/Invoke-NetperfGuestTcpChurn.ps1 `
+            -VmName netperf-windows-2022-client -Credential $credential `
+            -PublishDirectory $publish
+      - name: Publish numeric result only
+        if: always()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08 # v4.6.0
+        with:
+          name: tcp-churn-guest-result
+          path: ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/result.json
+          if-no-files-found: warn
+          retention-days: 14

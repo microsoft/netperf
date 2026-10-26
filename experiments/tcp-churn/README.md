@@ -78,6 +78,23 @@ disposable image's driver store until reset.
 
 ## Manual machine
 
+### Management-host fallback
+
+`tcp-churn-guest.yml` uses the documented management slot from netperf's
+targeted-reset workflow to execute **inside its existing lab VM**, not on the
+Hyper-V host. This manual fallback uses configured VM credentials through
+PowerShell Direct, refuses active Actions workers/CTS in the guest, and leaves
+runner registration and host networking unchanged. It copies only this public
+experiment's text sources; tools are downloaded in the guest. Authentication
+failure is not a reason to change credentials or host policy. Raw diagnostics
+remain in guest scratch; only numeric result JSON is copied back.
+
+This is not a reservation system: use it only for an idle dedicated guest.
+Normal guest-runner scheduling is preferred. It does not reset the guest or
+terminate another experiment to obtain access.
+
+## Manual machine usage
+
 Prepare and dedicate two interfaces with an actual path between them, using only
 approved public tooling. Keep native tools outside source checkouts.
 
