@@ -14,7 +14,8 @@ $result=[ordered]@{
     schema=1;requestedVirtualProcessors=$ProcessorCount;hostLogicalProcessors=0;hostPhysicalCores=0
     referenceGuestVirtualProcessors=0;configuredVirtualProcessors=0;configuredThreadsPerCore=0
     configured=$false;started=$false;cleanupVerified=$false;phase='host-query'
-    failureHResult=0;rssControlPathVerified=$false;performanceVerified=$false
+    failureHResult=0;processorCapacityErrorReported=$false;memoryCapacityErrorReported=$false
+    rssControlPathVerified=$false;performanceVerified=$false
     conclusion='virtualization-capacity-only'
 }
 $vm=$null;$failure=$null;$cleanupFailure=$null;$creationAttempted=$false
@@ -29,7 +30,7 @@ try {
     $result.phase='create'
     $creationAttempted=$true
     $vm=New-VM -Name $ownedName `
-        -Generation 2 -NoVHD -MemoryStartupBytes 512MB -ErrorAction Stop
+        -Generation 2 -NoVHD -MemoryStartupBytes 2GB -ErrorAction Stop
     Set-VM -VM $vm -AutomaticStartAction Nothing -AutomaticStopAction TurnOff -CheckpointType Disabled -ErrorAction Stop
     $result.phase='configure'
     Set-VMProcessor -VM $vm -Count $ProcessorCount -HwThreadCountPerCore 1 -ErrorAction Stop
@@ -49,6 +50,11 @@ try {
 } catch {
     $failure=$_
     $result.failureHResult=[int]$_.Exception.HResult
+    $details=@($_.Exception.Message,$_.ErrorDetails.Message) -join "`n"
+    $result.processorCapacityErrorReported=($details -match '(?is)logical processors' -and
+        $details -match '(?i)not have enough|insufficient|exceed|maximum|greater|more than|limit')
+    $result.memoryCapacityErrorReported=($details -match '(?is)memory' -and
+        $details -match '(?i)not enough|insufficient|not available|not available|allocate')
     $failure|Out-String|Set-Content -LiteralPath ($PublishDirectory+'.diagnostic.txt') -Encoding utf8
 } finally {
     if($creationAttempted -and $null -eq $vm) {

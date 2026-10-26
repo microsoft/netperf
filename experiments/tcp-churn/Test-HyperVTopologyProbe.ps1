@@ -19,7 +19,7 @@ function Get-VMProcessor {
 }
 function New-VM {
     param($Name,$Generation,[switch]$NoVHD,$MemoryStartupBytes,$ErrorAction)
-    if($Generation -ne 2 -or -not $NoVHD -or $MemoryStartupBytes -ne 512MB) { throw 'Unsafe probe creation.' }
+    if($Generation -ne 2 -or -not $NoVHD -or $MemoryStartupBytes -ne 2GB) { throw 'Unsafe probe creation.' }
     $global:TcpChurnTopologyMock.VM=[pscustomobject]@{Id=[guid]::NewGuid();Name=$Name;State='Off'}
     $global:TcpChurnTopologyMock.Registered=$true
     if($global:TcpChurnTopologyMock.Phase -eq 'partial-create') { throw 'Simulated partial create failure.' }
@@ -40,6 +40,7 @@ function Start-VM {
 function Get-VM {
     param($Id,$ErrorAction)
     if($global:TcpChurnTopologyMock.Registered) { $global:TcpChurnTopologyMock.VM }
+    if(-not $Id) { [pscustomobject]@{Id=[guid]::Empty;Name='unrelated-existing-guest';State='Running'} }
 }
 function Stop-VM {
     [CmdletBinding(SupportsShouldProcess)]
