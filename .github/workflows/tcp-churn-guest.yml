@@ -20,6 +20,10 @@ on:
         description: Check idle netperf peer connectivity without traffic or faults
         type: boolean
         default: false
+      peer_measurement:
+        description: Measure over the actual idle netperf peer instead of single-host DuoNIC
+        type: boolean
+        default: false
   push:
     branches: ['user/mtfriesen/tcp-churn-public']
     paths: ['.github/workflows/tcp-churn-guest.yml']
@@ -81,6 +85,7 @@ jobs:
           CONNECTIONS: ${{ inputs.connections }}
           SYN_DROP: ${{ inputs.syn_drop }}
           PROBE_PEER: ${{ inputs.probe_peer }}
+          PEER_MEASUREMENT: ${{ inputs.peer_measurement }}
         run: |
           if (!$env:GUEST_USER -or !$env:GUEST_PASSWORD) { throw 'Configured VM credentials are required.' }
           $password = ConvertTo-SecureString $env:GUEST_PASSWORD -AsPlainText -Force
@@ -97,6 +102,10 @@ jobs:
             $extra.SynDrop = $true
           }
           if ($env:PROBE_PEER -eq 'true') { $extra.ProbePeer = $true }
+          if ($env:PEER_MEASUREMENT -eq 'true') {
+            if ($env:PROFILE_CPU -ne 'true') { throw 'Peer measurement requires CPU profiling.' }
+            $extra.PeerMeasurement = $true
+          }
           ./experiments/tcp-churn/adapters/Invoke-NetperfGuestTcpChurn.ps1 `
             -VmName netperf-windows-2022-client -Credential $credential `
             -PublishDirectory $publish -Seconds ([int]$env:SECONDS) -Connections ([int]$env:CONNECTIONS) @extra

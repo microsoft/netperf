@@ -11,7 +11,8 @@ param(
     [switch]$ProfileCpu,
     [string]$AnalyzerDirectory,
     [switch]$SynDrop,
-    [switch]$ProbePeer
+    [switch]$ProbePeer,
+    [switch]$PeerMeasurement
 )
 $ErrorActionPreference='Stop'
 if (Test-Path -LiteralPath $PublishDirectory) { throw 'Use a new publication directory.' }
@@ -63,25 +64,39 @@ try {
         Copy-Item -LiteralPath $AnalyzerDirectory -Destination (Join-Path $guestRoot 'analyzer') `
             -Recurse -ToSession $session -ErrorAction Stop
     }
-    foreach ($file in @('WindowsCts.psm1','Invoke-NetperfTcpChurn.ps1')) {
+    foreach ($file in @('WindowsCts.psm1','Invoke-NetperfTcpChurn.ps1','Invoke-NetperfPeerCpu.ps1')) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $file) -Destination (Join-Path $remoteRoot "adapters\$file") -ToSession $session -ErrorAction Stop
     }
     $phase='guest-traffic'
     $exit=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
-        param($root,$seconds,$connections,$profile,$synDrop)
+        param($root,$seconds,$connections,$profile,$synDrop,$peerMeasurement,$credential)
         if (@(Get-Process -Name 'Runner.Worker','ctsTraffic' -ErrorAction Ignore).Count) {
             throw 'Guest became busy before traffic setup.'
         }
         $program=Join-Path $root 'experiment\adapters\Invoke-NetperfTcpChurn.ps1'
         # Native diagnostics remain inside the guest, never in public logs/artifacts.
         $extra=@()
-        if ($profile) { $extra=@('-ProfileCpu','-AnalyzerDirectory',(Join-Path $root 'analyzer')) }
+        $credentialFile=$null
+        if ($peerMeasurement) {
+            $program=Join-Path $root 'experiment\adapters\Invoke-NetperfPeerCpu.ps1'
+            $credentialFile=Join-Path $root 'peer-credential.clixml'
+            # DPAPI-protected for this same account/machine; child deletes it immediately on import.
+            $credential|Export-Clixml -LiteralPath $credentialFile -ErrorAction Stop
+            $extra=@('-CredentialFile',$credentialFile,'-AnalyzerDirectory',(Join-Path $root 'analyzer'))
+        } else {
+            $extra=@('-DedicatedLab')
+            if ($profile) { $extra+=@('-ProfileCpu','-AnalyzerDirectory',(Join-Path $root 'analyzer')) }
+        }
         if ($synDrop) { $extra+='-SynDrop' }
-        & pwsh -NoProfile -NonInteractive -File $program -ScratchParent $root `
-            -PublishDirectory (Join-Path $root 'publish') -Seconds $seconds `
-            -Connections $connections -DedicatedLab @extra *> (Join-Path $root 'adapter.log')
-        $LASTEXITCODE
-    } -ArgumentList $guestRoot,$Seconds,$Connections,[bool]$ProfileCpu,[bool]$SynDrop
+        try {
+            & pwsh -NoProfile -NonInteractive -File $program -ScratchParent $root `
+                -PublishDirectory (Join-Path $root 'publish') -Seconds $seconds `
+                -Connections $connections @extra *> (Join-Path $root 'adapter.log')
+            $LASTEXITCODE
+        } finally {
+            if($credentialFile -and (Test-Path -LiteralPath $credentialFile)){Remove-Item -LiteralPath $credentialFile -ErrorAction Stop}
+        }
+    } -ArgumentList $guestRoot,$Seconds,$Connections,[bool]$ProfileCpu,[bool]$SynDrop,[bool]$PeerMeasurement,$Credential
     $phase='guest-result'
     $remoteResult=Join-Path $guestRoot 'publish\result.json'
     Copy-Item -LiteralPath $remoteResult -Destination (Join-Path $PublishDirectory 'result.json') -FromSession $session -ErrorAction Stop

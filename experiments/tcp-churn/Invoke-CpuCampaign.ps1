@@ -9,7 +9,13 @@ param(
     [Parameter(Mandatory)][string]$AnalyzerDirectory,
     [ValidateRange(15,120)][int]$Seconds=30,
     [ValidateRange(1,1024)][int]$Connections=256,
-    [switch]$SynDrop
+    [switch]$SynDrop,
+    $PeerSession,
+    [string]$PeerRoot,
+    [string]$ClientInterface='duo1',
+    [string]$PeerInterface='duo2',
+    [string]$FixedClientAddress,
+    [string]$PeerAddress='192.168.1.12'
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
@@ -33,7 +39,7 @@ $manifestEvents=@($provider.Events | ForEach-Object {
     schema=1;bhRegistryOverridePresent=($null -ne $value);bhRegistryOverride=$value
     registryDefaultInference='not-inferred';publicProviderEvents=$manifestEvents
     publicProviderGuid=[string]$provider.Id;publicProbeKeywordMask=$keywords.ToString('X16')
-    fixtureRss=@(foreach($alias in @('duo1','duo2')) {
+    fixtureRss=@(foreach($alias in @($ClientInterface)) {
         Get-NetAdapterRss -Name $alias -ErrorAction Stop |
             Select-Object Enabled,NumberOfReceiveQueues,MaxProcessors,BaseProcessorGroup,BaseProcessorNumber,MaxProcessorGroup,MaxProcessorNumber
     })
@@ -78,20 +84,27 @@ try {
     do {
         $directory=Join-Path $Diagnostics "batch-$batch"
         New-Item -ItemType Directory -Path $directory -ErrorAction Stop | Out-Null
-        $source="192.168.1.$(21+($batch%8))"
-        $plan=New-TcpChurnPlan -ClientAddress $source -ServerAddress 192.168.1.12 `
+        $source=if($FixedClientAddress){$FixedClientAddress}else{"192.168.1.$(21+($batch%8))"}
+        $plan=New-TcpChurnPlan -ClientAddress $source -ServerAddress $PeerAddress `
             -Port (53617+$batch) -Connections $Connections -Seconds ([Math]::Min(120,$Seconds+30))
         # Public documented socket option. No TCP global or registry setting is changed.
         $plan.ClientArguments += '-PortScalability:on'
-        $adapter=New-WindowsCtsAdapter -Executable (Join-Path $Tools 'ctsTraffic.exe') `
-            -DiagnosticsDirectory $directory -ClientInterface duo1 -ServerInterface duo2
+        if ($null -ne $PeerSession) {
+            $adapter=New-RemoteWindowsCtsAdapter -Executable (Join-Path $Tools 'ctsTraffic.exe') -DiagnosticsDirectory $directory `
+                -ClientInterface $ClientInterface -PeerInterface $PeerInterface -PeerSession $PeerSession -PeerRoot $PeerRoot -DropSyn ([bool]$SynDrop)
+        } else {
+            $adapter=New-WindowsCtsAdapter -Executable (Join-Path $Tools 'ctsTraffic.exe') `
+                -DiagnosticsDirectory $directory -ClientInterface duo1 -ServerInterface duo2
+        }
         if ($SynDrop) {
             $plan.ClientArguments=@($plan.ClientArguments|Where-Object{$_ -notlike '-iterations:*'})
             $plan.ClientArguments+='-iterations:1'
-            $null=New-NetFirewallRule -Name $blockRule -DisplayName $blockRule -Direction Inbound `
-                -Action Block -Protocol TCP -LocalPort $plan.Port -LocalAddress $plan.ServerAddress `
-                -RemoteAddress $plan.ClientAddress -ErrorAction Stop
-            $blockOwned=$true
+            if ($null -eq $PeerSession) {
+                $null=New-NetFirewallRule -Name $blockRule -DisplayName $blockRule -Direction Inbound `
+                    -Action Block -Protocol TCP -LocalPort $plan.Port -LocalAddress $plan.ServerAddress `
+                    -RemoteAddress $plan.ClientAddress -ErrorAction Stop
+                $blockOwned=$true
+            }
             try {
                 $null=& $adapter.StartPeer $adapter.State $plan
                 $listen=[Diagnostics.Stopwatch]::StartNew()

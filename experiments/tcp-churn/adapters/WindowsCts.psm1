@@ -138,4 +138,83 @@ function Stop-TcpChurnCollector {
     Close-ChurnChild $Collector
 }
 
-Export-ModuleMember -Function New-WindowsCtsAdapter,Invoke-TcpChurnTool,Start-TcpChurnCollector,Stop-TcpChurnCollector
+function Start-RemoteChurnPeer($State,$Plan) {
+    $State.PeerStarted=$true
+    Invoke-Command -Session $State.Session -ErrorAction Stop -ScriptBlock {
+        param($root,$plan,$client,$drop)
+        Import-Module (Join-Path $root 'WindowsCts.psm1') -Force
+        $global:OwnedChurnPeer=@{Handle=$null;Rules=@()}
+        foreach ($action in $(if($drop){@('Allow','Block')}else{@('Allow')})) {
+            $rule='TcpChurnPeer-'+[guid]::NewGuid().ToString('N')
+            $null=New-NetFirewallRule -Name $rule -DisplayName $rule -Direction Inbound -Action $action `
+                -Protocol TCP -LocalPort $plan.Port -LocalAddress $plan.ServerAddress -RemoteAddress $client -ErrorAction Stop
+            $global:OwnedChurnPeer.Rules+=$rule
+        }
+        $global:OwnedChurnPeer.Handle=Start-TcpChurnCollector -Program (Join-Path $root 'ctsTraffic.exe') `
+            -Arguments $plan.ServerArguments -Directory $root -LogPrefix (Join-Path $root 'server')
+    } -ArgumentList $State.PeerRoot,$Plan,$Plan.ClientAddress,$State.DropSyn | Out-Null
+}
+
+function Test-RemoteChurnPeer($State,$Plan) {
+    Invoke-Command -Session $State.Session -ErrorAction Stop -ScriptBlock {
+        param($port)
+        if ($global:OwnedChurnPeer.Handle.Process.HasExited) { throw 'Owned peer server exited.' }
+        @(Get-NetTCPConnection -State Listen -ErrorAction Stop | Where-Object {
+            $_.LocalPort -eq $port -and $_.OwningProcess -eq $global:OwnedChurnPeer.Handle.Process.Id
+        }).Count -gt 0
+    } -ArgumentList $Plan.Port
+}
+
+function Read-RemoteChurnCounters($State,$Plan) {
+    $local=Get-NetAdapterStatistics -Name $State.ClientInterface -ErrorAction Stop
+    $received=Invoke-Command -Session $State.Session -ErrorAction Stop -ScriptBlock {
+        param($alias)
+        (Get-NetAdapterStatistics -Name $alias -ErrorAction Stop).ReceivedBytes
+    } -ArgumentList $State.PeerInterface
+    [pscustomobject]@{Transmitted=[long]$local.SentBytes;Received=[long]$received}
+}
+
+function Invoke-RemoteChurnClient($State,$Plan) {
+    $State.Client=Start-ChurnChild $State.Executable $Plan.ClientArguments $State.Directory (Join-Path $State.Directory 'client')
+    if (-not $State.Client.Process.WaitForExit(($Plan.Seconds+20)*1000)) { throw 'Remote-pair client deadline exceeded.' }
+    [pscustomobject]@{ExitCode=$State.Client.Process.ExitCode;Text=$State.Client.Output.GetAwaiter().GetResult()}
+}
+
+function Close-RemoteChurn($State,$Plan) {
+    $failures=[Collections.Generic.List[Exception]]::new()
+    if ($null -ne $State.Client) {
+        try { Close-ChurnChild $State.Client } catch { $failures.Add($_.Exception) }
+        finally { $State.Client=$null }
+    }
+    if ($State.PeerStarted) {
+        try {
+            Invoke-Command -Session $State.Session -ErrorAction Stop -ScriptBlock {
+                $errors=[Collections.Generic.List[Exception]]::new()
+                if ($null -ne $global:OwnedChurnPeer) {
+                    if ($null -ne $global:OwnedChurnPeer.Handle) {
+                        try { Stop-TcpChurnCollector $global:OwnedChurnPeer.Handle } catch { $errors.Add($_.Exception) }
+                    }
+                    foreach($rule in $global:OwnedChurnPeer.Rules) {
+                        try { Remove-NetFirewallRule -Name $rule -ErrorAction Stop } catch { $errors.Add($_.Exception) }
+                    }
+                    $global:OwnedChurnPeer=$null
+                }
+                if ($errors.Count) { throw [AggregateException]::new('Owned peer cleanup failed.',$errors) }
+            } | Out-Null
+        } catch { $failures.Add($_.Exception) }
+        finally { $State.PeerStarted=$false }
+    }
+    if ($failures.Count) { throw [AggregateException]::new('Remote-pair cleanup failed.',$failures) }
+}
+
+function New-RemoteWindowsCtsAdapter {
+    param($Executable,$DiagnosticsDirectory,$ClientInterface,$PeerInterface,$PeerSession,$PeerRoot,[bool]$DropSyn)
+    @{
+        State=@{Executable=$Executable;Directory=$DiagnosticsDirectory;ClientInterface=$ClientInterface
+            PeerInterface=$PeerInterface;Session=$PeerSession;PeerRoot=$PeerRoot;DropSyn=$DropSyn;Client=$null;PeerStarted=$false}
+        StartPeer=${function:Start-RemoteChurnPeer};PeerReady=${function:Test-RemoteChurnPeer}
+        ReadCounters=${function:Read-RemoteChurnCounters};RunClient=${function:Invoke-RemoteChurnClient};Close=${function:Close-RemoteChurn}
+    }
+}
+
+Export-ModuleMember -Function New-WindowsCtsAdapter,New-RemoteWindowsCtsAdapter,Invoke-TcpChurnTool,Start-TcpChurnCollector,Stop-TcpChurnCollector
