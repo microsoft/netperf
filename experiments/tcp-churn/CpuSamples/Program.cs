@@ -6,8 +6,10 @@ using System.IO;
 using System.Linq;
 using Microsoft.Diagnostics.Symbols;
 using Microsoft.Diagnostics.Tracing.Etlx;
+using Microsoft.Diagnostics.Tracing;
 using Microsoft.Diagnostics.Tracing.Parsers.Kernel;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 internal static class Program
 {
@@ -27,6 +29,39 @@ internal static class Program
 
     private static int Main(string[] args)
     {
+        if (args.Length == 7 && args[0] == "--events")
+        {
+            try
+            {
+                var state = JObject.Parse(File.ReadAllText(args[6]));
+                var provider = Guid.Parse((string)state["publicProviderGuid"]);
+                var names = state["publicProviderEvents"].ToDictionary(
+                    item => (int)item["Id"], item => (string)item["Task"]);
+                var counts = names.Values.Distinct().ToDictionary(name => name, name => 0L);
+                var startTime = DateTime.Parse(args[4], null, System.Globalization.DateTimeStyles.RoundtripKind).ToUniversalTime();
+                var endTime = DateTime.Parse(args[5], null, System.Globalization.DateTimeStyles.RoundtripKind).ToUniversalTime();
+                long total = 0;
+                using (var source = new ETWTraceEventSource(args[1]))
+                {
+                    source.AllEvents += record =>
+                    {
+                        if (record.ProviderGuid != provider) return;
+                        var time = record.TimeStamp.ToUniversalTime();
+                        if (time < startTime || time > endTime) return;
+                        total++;
+                        if (names.TryGetValue((int)record.ID, out var name)) Add(counts, name);
+                    };
+                    source.Process();
+                    File.WriteAllText(args[2], JsonConvert.SerializeObject(new {
+                        schema = 1, outcome = "counted", providerEventsInInterval = total,
+                        publicProbeCounts = counts, eventsLost = source.EventsLost,
+                        conclusion = "events-do-not-prove-lock-waiting"
+                    }, Formatting.Indented));
+                }
+                return 0;
+            }
+            catch { Console.Error.WriteLine("Public event analysis failed."); return 1; }
+        }
         if (args.Length == 1 && args[0] == "--self-test")
         {
             var counts = new Dictionary<string, long>();

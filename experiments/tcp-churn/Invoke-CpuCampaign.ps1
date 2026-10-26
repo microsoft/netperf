@@ -19,17 +19,23 @@ if (-not (Test-Path -LiteralPath $analyzer -PathType Leaf)) { throw 'Source-buil
 $key=Get-Item -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters' -ErrorAction Stop
 $value=$key.GetValue('EnablePMTUBHDetect',$null)
 $provider=Get-WinEvent -ListProvider 'Microsoft-Windows-TCPIP' -ErrorAction Stop
+$keywords=0L
 $manifestEvents=@($provider.Events | ForEach-Object {
     $task=if($null -eq $_.Task){''}else{$_.Task.Name}
     if ($task -match '(?i)black|bhdetect|pmtu' -or $_.Description -match '(?i)black.?hole|full.?size.+ack') {
+        foreach ($keyword in $_.Keywords) { $keywords=$keywords -bor $keyword.Value }
         [ordered]@{Id=$_.Id;Version=$_.Version;Task=$task;Description=$_.Description}
     }
 })
 [ordered]@{
     schema=1;bhRegistryOverridePresent=($null -ne $value);bhRegistryOverride=$value
     registryDefaultInference='not-inferred';publicProviderEvents=$manifestEvents
+    publicProviderGuid=[string]$provider.Id;publicProbeKeywordMask=$keywords.ToString('X16')
 } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $PublishDirectory 'tcp-state.json')
 $owned=$false; $failure=$null
+$eventOwned=$false
+$eventSession='TcpChurnProbe-'+[guid]::NewGuid().ToString('N')
+$eventTrace=Join-Path $Diagnostics 'tcp-probes.etl'
 $trace=Join-Path $Diagnostics 'cpu.etl'
 $timing=[ordered]@{}
 $progress=[ordered]@{schema=1;stage='wpr-start';completedBatches=0;connections=0L;failureType=$null;failureCode=0;failureReason='none';traceBytes=0L;profileStopped=$false}
@@ -41,6 +47,11 @@ try {
     $null=Invoke-TcpChurnTool -Program "$env:SystemRoot\System32\wpr.exe" -Arguments @('-start','CPU','-filemode') `
         -Directory $Diagnostics -LogPrefix (Join-Path $Diagnostics 'wpr-start') -TimeoutSeconds 30
     $owned=$true
+    $null=Invoke-TcpChurnTool -Program "$env:SystemRoot\System32\logman.exe" -Arguments @(
+        'create','trace',$eventSession,'-p',[string]$provider.Id,('0x'+$keywords.ToString('X16')),'5'
+        '-o',$eventTrace,'-f','bincirc','-max','128','-ets'
+    ) -Directory $Diagnostics -LogPrefix (Join-Path $Diagnostics 'probes-start') -TimeoutSeconds 30
+    $eventOwned=$true
     $progress.stage='idle'
     $timing.idleStart=[DateTime]::UtcNow.ToString('o')
     Start-Sleep -Seconds 5
@@ -83,6 +94,18 @@ try {
     $timing.loadEnd=[DateTime]::UtcNow.ToString('o')
 }
 finally {
+    if ($eventOwned) {
+        try {
+            $null=Invoke-TcpChurnTool -Program "$env:SystemRoot\System32\logman.exe" -Arguments @('stop',$eventSession,'-ets') `
+                -Directory $Diagnostics -LogPrefix (Join-Path $Diagnostics 'probes-stop') -TimeoutSeconds 30
+        } catch {
+            if ($null -eq $failure) { $failure=$_ }
+            else {
+                $combined=[AggregateException]::new('Traffic and owned probe stop failed.',[Exception[]]@($failure.Exception,$_.Exception))
+                $failure=[Management.Automation.ErrorRecord]::new($combined,'ProbeStopFailed',[Management.Automation.ErrorCategory]::CloseError,$null)
+            }
+        }
+    }
     if ($owned) {
         try {
             $null=Invoke-TcpChurnTool -Program "$env:SystemRoot\System32\wpr.exe" -Arguments @('-stop',$trace) `
@@ -93,6 +116,10 @@ finally {
             if ($null -ne $failure) { throw [AggregateException]::new('Campaign and owned WPR stop failed.',[Exception[]]@($failure.Exception,$_.Exception)) }
             throw
         }
+        $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @(
+            '--events',$eventTrace,(Join-Path $PublishDirectory 'tcp-events.json'),'interval',
+            $timing.loadStart,$timing.loadEnd,(Join-Path $PublishDirectory 'tcp-state.json')
+        ) -Directory $Diagnostics -LogPrefix (Join-Path $Diagnostics 'probe-analysis') -TimeoutSeconds 120
         $progress | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PublishDirectory 'cpu-progress.json')
     }
 }
