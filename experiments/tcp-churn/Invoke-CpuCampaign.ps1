@@ -31,10 +31,16 @@ $manifestEvents=@($provider.Events | ForEach-Object {
     schema=1;bhRegistryOverridePresent=($null -ne $value);bhRegistryOverride=$value
     registryDefaultInference='not-inferred';publicProviderEvents=$manifestEvents
     publicProviderGuid=[string]$provider.Id;publicProbeKeywordMask=$keywords.ToString('X16')
+    fixtureRss=@(foreach($alias in @('duo1','duo2')) {
+        Get-NetAdapterRss -Name $alias -ErrorAction Stop |
+            Select-Object Enabled,NumberOfReceiveQueues,MaxProcessors,BaseProcessorGroup,BaseProcessorNumber,MaxProcessorGroup,MaxProcessorNumber
+    })
 } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $PublishDirectory 'tcp-state.json')
 $owned=$false; $failure=$null
 $eventOwned=$false
-$eventSession='TcpChurnProbe-'+[guid]::NewGuid().ToString('N')
+$collector=$null
+$ready=Join-Path $Diagnostics 'probe-ready'
+$stop=Join-Path $Diagnostics 'probe-stop'
 $eventTrace=Join-Path $Diagnostics 'tcp-probes.etl'
 $trace=Join-Path $Diagnostics 'cpu.etl'
 $timing=[ordered]@{}
@@ -48,11 +54,15 @@ try {
         -Directory $Diagnostics -LogPrefix (Join-Path $Diagnostics 'wpr-start') -TimeoutSeconds 30
     $owned=$true
     $progress.stage='probes-start'
-    $null=Invoke-TcpChurnTool -Program "$env:SystemRoot\System32\logman.exe" -Arguments @(
-        'create','trace',$eventSession,'-p','Microsoft-Windows-TCPIP',('0x'+$keywords.ToString('X16')),'5'
-        '-o',$eventTrace,'-f','bincirc','-max','128','-ets'
-    ) -Directory $Diagnostics -LogPrefix (Join-Path $Diagnostics 'probes-start') -TimeoutSeconds 30
+    $collector=Start-TcpChurnCollector -Program $analyzer -Arguments @(
+        '--capture-probes',$eventTrace,(Join-Path $PublishDirectory 'tcp-state.json'),$ready,$stop,'300'
+    ) -Directory $Diagnostics -LogPrefix (Join-Path $Diagnostics 'probes')
     $eventOwned=$true
+    $readiness=[Diagnostics.Stopwatch]::StartNew()
+    while (-not (Test-Path -LiteralPath $ready)) {
+        if ($collector.Process.HasExited -or $readiness.Elapsed.TotalSeconds -gt 20) { throw 'Exact probe collector did not become ready.' }
+        Start-Sleep -Milliseconds 100
+    }
     $progress.stage='idle'
     $timing.idleStart=[DateTime]::UtcNow.ToString('o')
     Start-Sleep -Seconds 5
@@ -98,13 +108,18 @@ try {
 finally {
     if ($eventOwned) {
         try {
-            $null=Invoke-TcpChurnTool -Program "$env:SystemRoot\System32\logman.exe" -Arguments @('stop',$eventSession,'-ets') `
-                -Directory $Diagnostics -LogPrefix (Join-Path $Diagnostics 'probes-stop') -TimeoutSeconds 30
+            [IO.File]::WriteAllText($stop,'stop')
+            if (-not $collector.Process.WaitForExit(20000)) { throw 'Exact probe collector did not stop.' }
+            if ($collector.Process.ExitCode -ne 0) { throw 'Exact probe collector failed.' }
         } catch {
             if ($null -eq $failure) { $failure=$_ }
             else {
                 $combined=[AggregateException]::new('Traffic and owned probe stop failed.',[Exception[]]@($failure.Exception,$_.Exception))
                 $failure=[Management.Automation.ErrorRecord]::new($combined,'ProbeStopFailed',[Management.Automation.ErrorCategory]::CloseError,$null)
+            }
+            finally {
+                try { Stop-TcpChurnCollector $collector }
+                catch { if ($null -eq $failure) { $failure=$_ } else { Write-Warning 'Owned collector diagnostic cleanup also failed.' } }
             }
         }
     }

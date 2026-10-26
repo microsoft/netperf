@@ -10,6 +10,8 @@ using Microsoft.Diagnostics.Tracing;
 using Microsoft.Diagnostics.Tracing.Parsers.Kernel;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Microsoft.Diagnostics.Tracing.Session;
+using System.Threading;
 
 internal static class Program
 {
@@ -29,6 +31,35 @@ internal static class Program
 
     private static int Main(string[] args)
     {
+        if (args.Length == 6 && args[0] == "--capture-probes")
+        {
+            try
+            {
+                var state = JObject.Parse(File.ReadAllText(args[2]));
+                var ids = state["publicProviderEvents"].Select(item => (int)item["Id"]).Distinct().ToList();
+                if (ids.Count == 0 || ids.Count > 16) throw new InvalidOperationException("Invalid public probe list.");
+                var provider = Guid.Parse((string)state["publicProviderGuid"]);
+                var duration = int.Parse(args[5]);
+                if (duration < 15 || duration > 300) throw new InvalidOperationException("Invalid capture bound.");
+                using (var capture = new TraceEventSession("TcpChurnExact-" + Guid.NewGuid().ToString("N"), args[1]))
+                {
+                    capture.StopOnDispose = true;
+                    capture.BufferSizeMB = 64;
+                    capture.CircularBufferMB = 64;
+                    capture.EnableProvider(provider, TraceEventLevel.Verbose, ulong.MaxValue,
+                        new TraceEventProviderOptions { EventIDsToEnable = ids });
+                    File.WriteAllText(args[3], "ready");
+                    var deadline = DateTime.UtcNow.AddSeconds(duration);
+                    while (!File.Exists(args[4]))
+                    {
+                        if (DateTime.UtcNow >= deadline) return 4;
+                        Thread.Sleep(100);
+                    }
+                }
+                return 0;
+            }
+            catch { Console.Error.WriteLine("Exact public probe capture failed."); return 1; }
+        }
         if (args.Length == 7 && args[0] == "--events")
         {
             try
@@ -103,6 +134,7 @@ internal static class Program
                 var networkStacks = new Dictionary<string, long>();
                 var networkLeaves = new Dictionary<string, long>();
                 var processors = new HashSet<int>();
+                var networkProcessors = new Dictionary<string, long>();
                 stage = "samples";
                 long samples = 0, withStack = 0, network = 0, unresolved = 0;
                 foreach (var record in log.Events)
@@ -144,6 +176,7 @@ internal static class Program
                     }
                     if (!hit) continue;
                     network++;
+                    Add(networkProcessors, sample.ProcessorNumber.ToString());
                     foreach (var frame in seen) Add(networkFrames, frame);
                     if (leaf != null) Add(networkLeaves, leaf);
                     if (frames.Count > 0) Add(networkStacks, string.Join(" <- ", frames.Take(24)));
@@ -155,6 +188,7 @@ internal static class Program
                     cpuSamples = samples, samplesWithStacks = withStack,
                     networkModuleSamples = network, unresolvedNetworkFrames = unresolved,
                     observedProcessorNumbers = processors.OrderBy(value => value).ToArray(),
+                    networkSamplesByProcessor = Top(networkProcessors, 4096),
                     traceProcessorCount = log.NumberOfProcessors, eventsLost = log.EventsLost,
                     publicNetworkFrames = Top(networkFrames, 4096),
                     publicNetworkStackLeaves = Top(networkLeaves, 50),

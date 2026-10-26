@@ -128,4 +128,14 @@ function New-WindowsCtsAdapter {
     }
 }
 
-Export-ModuleMember -Function New-WindowsCtsAdapter,Invoke-TcpChurnTool
+function Start-TcpChurnCollector {
+    param($Program,[string[]]$Arguments,$Directory,$LogPrefix)
+    Start-ChurnChild $Program $Arguments $Directory $LogPrefix
+}
+
+function Stop-TcpChurnCollector {
+    param($Collector)
+    Close-ChurnChild $Collector
+}
+
+Export-ModuleMember -Function New-WindowsCtsAdapter,Invoke-TcpChurnTool,Start-TcpChurnCollector,Stop-TcpChurnCollector

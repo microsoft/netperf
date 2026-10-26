@@ -50,6 +50,16 @@ try {
     $null=Invoke-TcpChurnTool -Program (Get-Process -Id $PID).Path -Arguments @(
         '-NoProfile','-File',(Join-Path $tools 'duonic.ps1'),'-Install','-NumNicPairs','1','-NoFirewallRules'
     ) -Directory $tools -LogPrefix (Join-Path $logs 'setup') -TimeoutSeconds 300
+    if ($ProfileCpu) {
+        $phase='rss-setup'
+        # The pinned public DuoNIC package supports at most 16 RSS processors.
+        # These adapters are newly created and exclusively fixture-owned.
+        foreach ($alias in @('duo1','duo2')) {
+            Set-NetAdapterRss -Name $alias -Enabled $true -BaseProcessorGroup 0 -BaseProcessorNumber 0 `
+                -MaxProcessorGroup 0 -MaxProcessorNumber 15 -MaxProcessors 16 -NumberOfReceiveQueues 16 `
+                -Profile ClosestStatic -ErrorAction Stop
+        }
+    }
     $phase='adapter-check'
     $nics=@(Get-NetAdapter -IncludeHidden -ErrorAction Stop | Where-Object InterfaceDescription -match '(?i)duonic')
     $observations.adapterCount=$nics.Count
