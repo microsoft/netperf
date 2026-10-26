@@ -29,7 +29,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Run inside the existing idle lab VM
-        shell: pwsh
+        shell: powershell
         env:
           GUEST_USER: ${{ secrets.VM_DUMMY_USERNAME }}
           GUEST_PASSWORD: ${{ secrets.VM_DUMMY_PASSWORD }}

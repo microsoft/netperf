@@ -1,6 +1,6 @@
 # Copyright (c) Microsoft Corporation.
 # SPDX-License-Identifier: MIT
-#Requires -Version 7.2
+#Requires -Version 5.1
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$VmName,
