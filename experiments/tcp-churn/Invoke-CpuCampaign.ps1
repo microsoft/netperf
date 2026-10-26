@@ -18,6 +18,7 @@ if (-not (Test-Path -LiteralPath $analyzer -PathType Leaf)) { throw 'Source-buil
 $owned=$false; $failure=$null
 $trace=Join-Path $Diagnostics 'cpu.etl'
 $timing=[ordered]@{}
+$progress=[ordered]@{schema=1;stage='wpr-start';completedBatches=0;connections=0L;failureType=$null;failureCode=0;traceBytes=0L;profileStopped=$false}
 $totals=[ordered]@{ schema=1;workload='tcp-churn';outcome='collected';connections=0L;seconds=0.0;bytesSent=0L
     connectionsPerSecond=0.0;megabitsPerSecond=0.0;adapterTransmitDelta=0L;adapterReceiveDelta=0L
     cpuCoverage='not-measured';targetBranchCoverage='not-measured';mechanismVerified=$false;conclusion='collection-only' }
@@ -26,11 +27,13 @@ try {
     $null=Invoke-TcpChurnTool -Program "$env:SystemRoot\System32\wpr.exe" -Arguments @('-start','CPU','-filemode') `
         -Directory $Diagnostics -LogPrefix (Join-Path $Diagnostics 'wpr-start') -TimeoutSeconds 30
     $owned=$true
+    $progress.stage='idle'
     $timing.idleStart=[DateTime]::UtcNow.ToString('o')
     Start-Sleep -Seconds 5
     $timing.idleEnd=[DateTime]::UtcNow.ToString('o')
     $timing.loadStart=[DateTime]::UtcNow.ToString('o')
     $clock=[Diagnostics.Stopwatch]::StartNew()
+    $progress.stage='traffic'
     $batch=0
     do {
         $directory=Join-Path $Diagnostics "batch-$batch"
@@ -46,28 +49,41 @@ try {
             $totals[$field]+=$result.$field
         }
         $batch++
+        $progress.completedBatches=$batch
+        $progress.connections=$totals.connections
     } while ($clock.Elapsed.TotalSeconds -lt $Seconds -and $batch -lt 200)
     $timing.loadEnd=[DateTime]::UtcNow.ToString('o')
     $totals.seconds=$clock.Elapsed.TotalSeconds
     $totals.connectionsPerSecond=$totals.connections/$totals.seconds
     $totals.megabitsPerSecond=8.0*$totals.bytesSent/1000000.0/$totals.seconds
-} catch { $failure=$_ }
+} catch {
+    $failure=$_
+    $progress.failureType=$_.Exception.GetType().FullName
+    $progress.failureCode=$_.Exception.HResult
+}
 finally {
     if ($owned) {
         try {
             $null=Invoke-TcpChurnTool -Program "$env:SystemRoot\System32\wpr.exe" -Arguments @('-stop',$trace) `
                 -Directory $Diagnostics -LogPrefix (Join-Path $Diagnostics 'wpr-stop') -TimeoutSeconds 120
+            $progress.profileStopped=$true
+            $progress.traceBytes=(Get-Item -LiteralPath $trace).Length
         } catch {
             if ($null -ne $failure) { throw [AggregateException]::new('Campaign and owned WPR stop failed.',[Exception[]]@($failure.Exception,$_.Exception)) }
             throw
         }
+        $progress | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PublishDirectory 'cpu-progress.json')
     }
 }
 $timing | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $Diagnostics 'intervals.json')
 if ($null -ne $failure) { throw $failure }
 foreach ($interval in @('idle','load')) {
+    $progress.stage="analyze-$interval"
+    $progress | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PublishDirectory 'cpu-progress.json')
     $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @(
         $trace,(Join-Path $PublishDirectory "cpu-$interval.json"),$timing["${interval}Start"],$timing["${interval}End"]
     ) -Directory $Diagnostics -LogPrefix (Join-Path $Diagnostics "analysis-$interval") -TimeoutSeconds 300
 }
+$progress.stage='complete'
+$progress | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PublishDirectory 'cpu-progress.json')
 Export-TcpChurnPublicResult -Result ([pscustomobject]$totals) -Path (Join-Path $PublishDirectory 'result.json')

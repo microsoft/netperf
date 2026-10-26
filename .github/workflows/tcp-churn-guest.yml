@@ -94,5 +94,6 @@ jobs:
             ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/result.json
             ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/cpu-idle.json
             ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/cpu-load.json
+            ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/cpu-progress.json
           if-no-files-found: warn
           retention-days: 14

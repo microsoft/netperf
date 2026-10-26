@@ -65,9 +65,12 @@ try {
     $remoteResult=Join-Path $guestRoot 'publish\result.json'
     Copy-Item -LiteralPath $remoteResult -Destination (Join-Path $PublishDirectory 'result.json') -FromSession $session -ErrorAction Stop
     if ($ProfileCpu) {
-        foreach ($file in @('cpu-idle.json','cpu-load.json')) {
-            Copy-Item -LiteralPath (Join-Path $guestRoot "publish\$file") -Destination (Join-Path $PublishDirectory $file) `
-                -FromSession $session -ErrorAction Stop
+        foreach ($file in @('cpu-idle.json','cpu-load.json','cpu-progress.json')) {
+            $remoteFile=Join-Path $guestRoot "publish\$file"
+            if (Invoke-Command -Session $session -ScriptBlock {param($p) Test-Path -LiteralPath $p -PathType Leaf} -ArgumentList $remoteFile) {
+                Copy-Item -LiteralPath $remoteFile -Destination (Join-Path $PublishDirectory $file) `
+                    -FromSession $session -ErrorAction Stop
+            }
         }
     }
     $result=Get-Content -LiteralPath (Join-Path $PublishDirectory 'result.json') -Raw | ConvertFrom-Json

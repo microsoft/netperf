@@ -41,6 +41,7 @@ internal static class Program
             Console.Error.WriteLine("Usage: CpuSamples trace.etl output.json startUtc endUtc");
             return 2;
         }
+        string stage = "open";
         try
         {
             var start = DateTime.Parse(args[2], null, System.Globalization.DateTimeStyles.RoundtripKind).ToUniversalTime();
@@ -55,6 +56,7 @@ internal static class Program
             {
                 // Never consult a private symbol server, symbol path environment, or source server.
                 symbols.Options = SymbolReaderOptions.NoNGenSymbolCreation;
+                stage = "symbols";
                 foreach (var module in log.ModuleFiles)
                 {
                     var name = module.Name ?? "";
@@ -66,6 +68,7 @@ internal static class Program
                 var networkStacks = new Dictionary<string, long>();
                 var networkLeaves = new Dictionary<string, long>();
                 var processors = new HashSet<int>();
+                stage = "samples";
                 long samples = 0, withStack = 0, network = 0, unresolved = 0;
                 foreach (var sample in log.Events.OfType<SampledProfileTraceData>())
                 {
@@ -124,8 +127,12 @@ internal static class Program
                 return samples > 0 ? 0 : 3;
             }
         }
-        catch
+        catch (Exception error)
         {
+            File.WriteAllText(args[1], JsonConvert.SerializeObject(new {
+                schema = 1, outcome = "analysis-failed", stage,
+                errorType = error.GetType().FullName, errorCode = error.HResult
+            }));
             // ETL paths/host/process details belong in guest-local diagnostics, not public logs.
             Console.Error.WriteLine("CPU analysis failed; inspect guest-local symbol-analysis.log.");
             return 1;
