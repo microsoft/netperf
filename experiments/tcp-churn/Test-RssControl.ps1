@@ -27,6 +27,14 @@ $s=New-Settings
 $s.RssProcessorArray=@(0..127|ForEach-Object{"$([int][Math]::Floor($_/64)):$($_%64)/0"})
 $s.IndirectionTable=@(0..127|ForEach-Object{"$([int][Math]::Floor($_/64)):$($_%64)"})
 $null=Assert-RssControlPath -Settings $s;$checks++
+$s=New-Settings
+$s.MaxProcessors=80;$s.RssProcessorArraySize=80;$s.RssProcessorArray=@($s.RssProcessorArray|Select-Object -First 80)
+$s.IndirectionTable=@(0..127|ForEach-Object{
+    [pscustomobject]@{Group=[int][Math]::Floor(($_%80)/64);Number=($_%80)%64}
+})
+$r=Assert-RssControlPath -Settings $s -ExpectedProcessors 80
+if($r.distinctAssignedProcessors -ne 80) { throw 'A non-power-of-two processor count was rejected or miscounted.' }
+$checks++
 foreach($mutate in @(
     {$args[0].Enabled=$false},
     {$args[0].NumberOfReceiveQueues=16},

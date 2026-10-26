@@ -30,7 +30,7 @@ function ConvertTo-RssProcessorKey($Processor) {
 function Assert-RssControlPath {
     param(
         [Parameter(Mandatory)]$Settings,
-        [ValidateSet(1,2,4,8,16,32,64,128)][int]$ExpectedProcessors=128,
+        [ValidateRange(1,128)][int]$ExpectedProcessors=128,
         [ValidateSet(1,2,4,8,16,32,64,128)][int]$ExpectedQueues=128
     )
     if($Settings.Enabled -ne $true) { throw 'RSS is not enabled.' }

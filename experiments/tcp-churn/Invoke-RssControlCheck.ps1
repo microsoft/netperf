@@ -5,7 +5,7 @@
 param(
     [Parameter(Mandatory)][string]$AdapterName,
     [Parameter(Mandatory)][string]$PublishFile,
-    [ValidateSet(1,2,4,8,16,32,64,128)][int]$ExpectedProcessors=128,
+    [ValidateRange(1,128)][int]$ExpectedProcessors=128,
     [ValidateSet(1,2,4,8,16,32,64,128)][int]$ExpectedQueues=128
 )
 $ErrorActionPreference='Stop'
