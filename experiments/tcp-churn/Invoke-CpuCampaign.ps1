@@ -107,6 +107,7 @@ try {
             }
             try {
                 $null=& $adapter.StartPeer $adapter.State $plan
+                if ($null -ne $PeerSession) { $progress['peerFirewall']=$adapter.State.PeerConfig|Select-Object OriginallyEnabledProfiles,TemporarilyEnabledProfiles }
                 $listen=[Diagnostics.Stopwatch]::StartNew()
                 while (-not (& $adapter.PeerReady $adapter.State $plan)) {
                     if ($listen.Elapsed.TotalSeconds -gt 20) { throw 'Owned SYN-drop listener did not become ready.' }
@@ -114,6 +115,7 @@ try {
                 }
                 $execution=& $adapter.RunClient $adapter.State $plan
                 $summary=ConvertFrom-CtsChurnOutput $execution.Text
+                $progress['synOutcomes']=$summary|Select-Object Completed,NetworkErrors,ProtocolErrors,Milliseconds
                 if ($summary.Completed -ne 0 -or $summary.ProtocolErrors -ne 0 -or
                     $summary.NetworkErrors -ne $Connections -or $execution.ExitCode -ne $Connections -or
                     $summary.Milliseconds -lt 3000) {

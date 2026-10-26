@@ -140,19 +140,41 @@ function Stop-TcpChurnCollector {
 
 function Start-RemoteChurnPeer($State,$Plan) {
     $State.PeerStarted=$true
-    Invoke-Command -Session $State.Session -ErrorAction Stop -ScriptBlock {
+    $State.PeerConfig=Invoke-Command -Session $State.Session -ErrorAction Stop -ScriptBlock {
         param($root,$plan,$client,$drop)
         Import-Module (Join-Path $root 'WindowsCts.psm1') -Force
-        $global:OwnedChurnPeer=@{Handle=$null;Rules=@()}
+        $global:OwnedChurnPeer=@{Handle=$null;Rules=@();Profiles=@()}
+        if ($drop) {
+            if ((Get-Service MpsSvc -ErrorAction Stop).Status -ne 'Running') { throw 'Peer firewall service is not running.' }
+            $profiles=@(Get-NetFirewallProfile -ErrorAction Stop|Select-Object Name,Enabled)
+            if (@($profiles|Where-Object{[string]$_.Enabled -notin @('True','False')}).Count) {
+                throw 'Peer firewall profile state cannot be restored exactly.'
+            }
+            $global:OwnedChurnPeer.Profiles=$profiles
+            $management='TcpChurnPeer-'+[guid]::NewGuid().ToString('N')
+            $null=New-NetFirewallRule -Name $management -DisplayName $management -Direction Inbound -Action Allow `
+                -Protocol TCP -LocalPort 5985,5986 -RemoteAddress $client -ErrorAction Stop
+            $global:OwnedChurnPeer.Rules+=$management
+        }
         foreach ($action in $(if($drop){@('Allow','Block')}else{@('Allow')})) {
             $rule='TcpChurnPeer-'+[guid]::NewGuid().ToString('N')
             $null=New-NetFirewallRule -Name $rule -DisplayName $rule -Direction Inbound -Action $action `
                 -Protocol TCP -LocalPort $plan.Port -LocalAddress $plan.ServerAddress -RemoteAddress $client -ErrorAction Stop
             $global:OwnedChurnPeer.Rules+=$rule
         }
+        if ($drop) {
+            foreach($profile in $global:OwnedChurnPeer.Profiles) {
+                if ([string]$profile.Enabled -eq 'False') { Set-NetFirewallProfile -Name $profile.Name -Enabled True -ErrorAction Stop }
+            }
+            if (@(Get-NetFirewallProfile -ErrorAction Stop|Where-Object{[string]$_.Enabled -ne 'True'}).Count) {
+                throw 'Peer firewall policy did not enable the scoped fault.'
+            }
+        }
         $global:OwnedChurnPeer.Handle=Start-TcpChurnCollector -Program (Join-Path $root 'ctsTraffic.exe') `
             -Arguments $plan.ServerArguments -Directory $root -LogPrefix (Join-Path $root 'server')
-    } -ArgumentList $State.PeerRoot,$Plan,$Plan.ClientAddress,$State.DropSyn | Out-Null
+        [pscustomobject]@{OriginallyEnabledProfiles=@($global:OwnedChurnPeer.Profiles|Where-Object{[string]$_.Enabled -eq 'True'}).Count
+            TemporarilyEnabledProfiles=@($global:OwnedChurnPeer.Profiles|Where-Object{[string]$_.Enabled -eq 'False'}).Count}
+    } -ArgumentList $State.PeerRoot,$Plan,$Plan.ClientAddress,$State.DropSyn
 }
 
 function Test-RemoteChurnPeer($State,$Plan) {
@@ -194,6 +216,12 @@ function Close-RemoteChurn($State,$Plan) {
                     if ($null -ne $global:OwnedChurnPeer.Handle) {
                         try { Stop-TcpChurnCollector $global:OwnedChurnPeer.Handle } catch { $errors.Add($_.Exception) }
                     }
+                    $profilesRestored=$true
+                    foreach($profile in $global:OwnedChurnPeer.Profiles) {
+                        try { Set-NetFirewallProfile -Name $profile.Name -Enabled $profile.Enabled -ErrorAction Stop }
+                        catch { $errors.Add($_.Exception);$profilesRestored=$false }
+                    }
+                    if (-not $profilesRestored) { throw [AggregateException]::new('Peer profile restoration failed; scoped recovery rules retained.',$errors) }
                     foreach($rule in $global:OwnedChurnPeer.Rules) {
                         try { Remove-NetFirewallRule -Name $rule -ErrorAction Stop } catch { $errors.Add($_.Exception) }
                     }
@@ -211,7 +239,7 @@ function New-RemoteWindowsCtsAdapter {
     param($Executable,$DiagnosticsDirectory,$ClientInterface,$PeerInterface,$PeerSession,$PeerRoot,[bool]$DropSyn)
     @{
         State=@{Executable=$Executable;Directory=$DiagnosticsDirectory;ClientInterface=$ClientInterface
-            PeerInterface=$PeerInterface;Session=$PeerSession;PeerRoot=$PeerRoot;DropSyn=$DropSyn;Client=$null;PeerStarted=$false}
+            PeerInterface=$PeerInterface;Session=$PeerSession;PeerRoot=$PeerRoot;DropSyn=$DropSyn;Client=$null;PeerStarted=$false;PeerConfig=$null}
         StartPeer=${function:Start-RemoteChurnPeer};PeerReady=${function:Test-RemoteChurnPeer}
         ReadCounters=${function:Read-RemoteChurnCounters};RunClient=${function:Invoke-RemoteChurnClient};Close=${function:Close-RemoteChurn}
     }
