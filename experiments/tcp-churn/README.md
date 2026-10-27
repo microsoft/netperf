@@ -547,6 +547,7 @@ Measured on the dedicated 80-logical-processor machine with a 40-RSS pair:
 | 2,000 | 8,192 | 1,967 | 32 | 0 / 0 |
 | 2,000, repeat | 8,192 | 1,966 | 32 | 0 / 0 |
 | 2,000, with TCP probes | 8,192 | 1,965 | 31 | 0 / 0 |
+| 2,000, end-to-end assertion repeat | 8,192 | 1,964 | 27 | 0 / 0 |
 | 10,000 | 8,192 | 2,185 | 774 | 0 / 0 |
 
 All rows verified 512 MiB of payload with zero application network/protocol
