@@ -133,6 +133,84 @@ function Start-TcpChurnCollector {
     Start-ChurnChild $Program $Arguments $Directory $LogPrefix
 }
 
+function Invoke-WindowsChurnParallelBatch {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Executable,
+        [Parameter(Mandatory)][string]$DiagnosticsDirectory,
+        [Parameter(Mandatory)][string]$ClientInterface,
+        [Parameter(Mandatory)][string]$ServerInterface,
+        [Parameter(Mandatory)][ValidateCount(1,8)][object[]]$Plans
+    )
+    $adapters=[Collections.Generic.List[object]]::new()
+    $bytes=0L;$connections=0L;$failure=$null;$result=$null
+    try {
+        foreach($plan in $Plans) {
+            $directory=Join-Path $DiagnosticsDirectory "worker-$($adapters.Count)"
+            $null=New-Item -ItemType Directory -Path $directory -ErrorAction Stop
+            $adapter=New-WindowsCtsAdapter -Executable $Executable -DiagnosticsDirectory $directory `
+                -ClientInterface $ClientInterface -ServerInterface $ServerInterface
+            $adapters.Add($adapter)
+            Start-WindowsChurnPeer $adapter.State $plan
+        }
+        foreach($index in 0..($Plans.Count-1)) {
+            $ready=[Diagnostics.Stopwatch]::StartNew()
+            while(-not (Test-WindowsChurnPeer $adapters[$index].State $Plans[$index])) {
+                if($ready.Elapsed.TotalSeconds -gt 20) { throw 'Parallel healthy listener readiness deadline exceeded.' }
+                Start-Sleep -Milliseconds 100
+            }
+        }
+        $before=Read-WindowsChurnCounters $adapters[0].State $Plans[0]
+        foreach($index in 0..($Plans.Count-1)) {
+            $state=$adapters[$index].State
+            $state.Client=Start-ChurnChild $state.Executable $Plans[$index].ClientArguments $state.Directory (Join-Path $state.Directory 'client')
+        }
+        $deadline=($Plans|Measure-Object Seconds -Maximum).Maximum+20
+        $wait=[Diagnostics.Stopwatch]::StartNew()
+        do {
+            $active=$false
+            foreach($adapter in $adapters) {
+                if($adapter.State.Server.Process.HasExited) { throw 'Parallel healthy server exited during traffic.' }
+                if(-not $adapter.State.Client.Process.HasExited) { $active=$true }
+            }
+            if(-not $active) { break }
+            if($wait.Elapsed.TotalSeconds -gt $deadline) { throw 'Parallel healthy client deadline exceeded.' }
+            Start-Sleep -Milliseconds 100
+        } while($true)
+        foreach($adapter in $adapters) {
+            $client=$adapter.State.Client
+            if($client.Process.ExitCode -ne 0) { throw 'Parallel healthy client exited with errors.' }
+            $summary=ConvertFrom-CtsChurnOutput $client.Output.GetAwaiter().GetResult()
+            if($summary.Completed -le 0 -or $summary.SentBytes -le 0 -or $summary.NetworkErrors -ne 0 -or $summary.ProtocolErrors -ne 0) {
+                throw 'Parallel healthy traffic did not complete error-free.'
+            }
+            $bytes+=$summary.SentBytes;$connections+=$summary.Completed
+        }
+        $drain=[Diagnostics.Stopwatch]::StartNew()
+        do {
+            $after=Read-WindowsChurnCounters $adapters[0].State $Plans[0]
+            $tx=$after.Transmitted-$before.Transmitted;$rx=$after.Received-$before.Received
+            if($tx -ge $bytes -and $rx -ge $bytes) { break }
+            if($drain.Elapsed.TotalSeconds -gt 5) { throw 'Parallel healthy bytes were not accounted for by the selected pair.' }
+            Start-Sleep -Milliseconds 100
+        } while($true)
+        $result=[pscustomobject]@{connections=$connections;bytesSent=$bytes;adapterTransmitDelta=$tx;adapterReceiveDelta=$rx}
+    } catch {
+        $failure=$_
+    } finally {
+        $errors=[Collections.Generic.List[Exception]]::new()
+        foreach($adapter in $adapters) {
+            try { Close-WindowsChurn $adapter.State $null } catch { $errors.Add($_.Exception) }
+        }
+        if($errors.Count) {
+            if($null -ne $failure) { $errors.Insert(0,$failure.Exception) }
+            throw [AggregateException]::new('Parallel healthy process cleanup failed.',$errors)
+        }
+    }
+    if($null -ne $failure) { throw $failure }
+    $result
+}
+
 function Stop-TcpChurnCollector {
     param($Collector)
     Close-ChurnChild $Collector
@@ -253,4 +331,4 @@ function New-RemoteWindowsCtsAdapter {
     }
 }
 
-Export-ModuleMember -Function New-WindowsCtsAdapter,New-RemoteWindowsCtsAdapter,Invoke-TcpChurnTool,Start-TcpChurnCollector,Stop-TcpChurnCollector
+Export-ModuleMember -Function New-WindowsCtsAdapter,New-RemoteWindowsCtsAdapter,Invoke-TcpChurnTool,Start-TcpChurnCollector,Stop-TcpChurnCollector,Invoke-WindowsChurnParallelBatch

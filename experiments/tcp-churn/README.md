@@ -355,10 +355,92 @@ No native driver, catalog, private source, certificate or raw lab diagnostics
 are published by this experiment. Approved driver provisioning remains external
 to the public workload.
 
+### Healthy traffic without an injected outage
+
+The CPU campaign can also collect a bounded success-only scenario, with
+`SynDrop` omitted. Success means every CTS client summary has zero network
+and protocol errors and the selected NIC byte deltas account for its payload.
+It does **not** mean every packet avoided retransmission or that background
+system-wide TCP activity was absent.
+
+On already prepared, dedicated local adapters:
+
+```powershell
+./Invoke-CpuCampaign.ps1 -Tools C:\PublicTools -Diagnostics C:\Runs\new\diagnostics `
+  -PublishDirectory C:\Runs\new\publish -AnalyzerDirectory C:\PublicAnalyzer `
+  -Seconds 90 -Connections 1024 -MaximumBatches 1 -ClientWorkers 8 `
+  -BaseServerPort 20000 -BytesPerConnection 65536 `
+  -ClientInterface owned-client -PeerInterface owned-server `
+  -ClientAddresses 192.0.2.21,192.0.2.22,192.0.2.23,192.0.2.24,192.0.2.25,192.0.2.26,192.0.2.27,192.0.2.28 `
+  -PeerAddress 192.0.2.12
+```
+
+Create the new diagnostics/publication directories first, provision the owned
+addresses/routes and scoped inbound allow rule, and verify RSS and address
+readiness. This entrypoint does not provision adapters or inject a fault.
+Choose listener ports outside the machine's ephemeral port range and check
+for collisions. Explicit interface arguments are honored for local traffic.
+
+Parallel mode starts all listeners before launching clients, uses distinct
+source addresses, bounds aggregate attempts to **8,192** rather than 8,192 per
+worker, verifies every client summary, accounts for shared NIC counters once,
+and cleans up all owned processes, including partial startup. Parallel mode
+is deliberately limited to one local healthy batch. `MaximumBatches=1` is
+also useful for a finite single-client control; larger payloads are explicit
+through `BytesPerConnection`.
+
+The published workload totals describe the campaign wall interval, including
+listener setup, not an isolated throughput benchmark. Raw client summaries
+remain in diagnostics. `healthy-evidence.json` classifies explicit sampled
+kernel wait loops separately as path-info ACK tracking, shutdown/RTT updates,
+connection-failure updates, path lookup/validation, WFP, endpoint allocation,
+or other. It de-duplicates the same stack appearing under several functions.
+Acquisition-function samples alone and full-size-ACK events do not satisfy
+a wait criterion. Counts are bounded-stack lower bounds, not lock-address
+identification or weighted CPU percentages.
+
+Measured on a dedicated physical 80-logical-processor machine with a
+40-RSS-processor/queue local pair:
+
+| Successful workload | Connections | CPU samples | Full-size-ACK events | WFP wait samples, lower bound | Healthy path-info explicit waits |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| One client, 256 concurrent | 8,192 | 50,423 | 99 | 36 | 0 |
+| Eight clients, 1,024 concurrent each | 8,192 | 127,575 | 353 | 14,811 | 0 |
+| Eight-client repeat | 8,192 | 182,050 | 127 | 14,358 | 0 |
+
+These runs completed all attempts with zero CTS errors and zero CPU/probe event
+loss. No fault rules or TCP global changes were applied. No timeout or BH-entry
+events were counted. Nevertheless, provider-wide retransmission-round counts
+were 229, 88 and 8,017 respectively. The repeat also contained one sampled
+connection-failure path-info wait despite eventual application success. It must
+not be reclassified as a clean ACK-path contention reproduction.
+
+The current finding is **healthy application traffic can reproduce substantial
+network lock waiting, but the observed dominant waits are WFP/port-allocation,
+not the targeted ACK/BH path-cache update**. Shutdown/RTT acquisition samples
+were seen but are not explicit wait-loop proof. Lack of a finite sample does
+not prove absence of short path-cache waits. No before/after improvement is
+claimed. Earlier listener-readiness and port-exhaustion failures were excluded,
+not counted as successful runs.
+
+The tested lab image required matching private symbols and a current DIA reader.
+That reanalysis and its raw traces/symbols stay private and are **not Actions
+artifacts**; only the numeric findings above are recorded here. The default
+public analyzer/workflow still uses the Microsoft public symbol server. An
+explicit `AnalysisSymbolScope=private-lab-only` labels private/manual evidence
+but does not fetch private symbols. Never upload that analysis directory.
+The portable PowerShell runtime used on the manual host was acquired from
+the official release and hash-verified; no machine-wide runtime installation
+was required. Fixture cleanup restored disabled adapters and removed owned
+addresses/routes/firewall rules; driver/trust/physical-network settings were
+unchanged.
+
 ```powershell
 ./Test-TcpChurn.ps1
 ./Test-HyperVTopologyProbe.ps1
 ./Test-RssControl.ps1
+./Test-HealthyParallel.ps1
+./Test-HealthyEvidence.ps1
 ```
 
 Tests use a memory adapter, a bounded owned PowerShell child, mocked Hyper-V

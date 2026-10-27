@@ -11,6 +11,7 @@ function New-TcpChurnPlan {
         [Parameter(Mandatory)][string]$ServerAddress,
         [ValidateRange(1024,65535)][int]$Port=53617,
         [ValidateRange(1,4096)][int]$Connections=16,
+        [ValidateRange(1,8192)][int]$MaximumConnectionAttempts=8192,
         [ValidateRange(5,900)][int]$Seconds=15,
         [ValidateRange(65536,16777216)][int]$BytesPerConnection=65536
     )
@@ -24,9 +25,10 @@ function New-TcpChurnPlan {
         }
     }
     if ($ClientAddress -eq $ServerAddress) { throw 'Distinct endpoint addresses are required.' }
+    if($Connections -gt $MaximumConnectionAttempts) { throw 'The connection budget must cover one concurrent wave.' }
     # Bound this deployment smoke below a typical ephemeral-port range. Sustained
     # churn needs an explicit port-reuse/resource budget, not silent OS tuning.
-    $iterations=[int][Math]::Min(32,[Math]::Floor(8192.0/$Connections))
+    $iterations=[int][Math]::Min(32,[Math]::Floor([double]$MaximumConnectionAttempts/$Connections))
     $base=@('-protocol:tcp','-pattern:push',"-port:$Port","-transfer:$BytesPerConnection")
     [pscustomobject]@{
         Schema=1; Seconds=$Seconds; Port=$Port; Connections=$Connections

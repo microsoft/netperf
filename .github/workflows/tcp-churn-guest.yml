@@ -50,6 +50,10 @@ jobs:
         run: ./experiments/tcp-churn/Test-HyperVTopologyProbe.ps1
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-RssControl.ps1
+      - shell: pwsh
+        run: ./experiments/tcp-churn/Test-HealthyParallel.ps1
+      - shell: pwsh
+        run: ./experiments/tcp-churn/Test-HealthyEvidence.ps1
   build-analyzer:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.profile_cpu }}
     runs-on: windows-2022

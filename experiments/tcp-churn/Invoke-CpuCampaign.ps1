@@ -9,16 +9,29 @@ param(
     [Parameter(Mandatory)][string]$AnalyzerDirectory,
     [ValidateRange(15,120)][int]$Seconds=30,
     [ValidateRange(1,1024)][int]$Connections=256,
+    [ValidateRange(1,200)][int]$MaximumBatches=200,
+    [ValidateRange(1,8)][int]$ClientWorkers=1,
+    [ValidateRange(1024,65336)][int]$BaseServerPort=53617,
+    [ValidateRange(65536,16777216)][int]$BytesPerConnection=65536,
+    [ValidateSet('public','private-lab-only')][string]$AnalysisSymbolScope='public',
     [switch]$SynDrop,
     $PeerSession,
     [string]$PeerRoot,
     [string]$ClientInterface='duo1',
     [string]$PeerInterface='duo2',
     [string]$FixedClientAddress,
+    [string[]]$ClientAddresses=@(),
     [string]$PeerAddress='192.168.1.12'
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
+if($FixedClientAddress -and $ClientAddresses.Count) { throw 'Choose a fixed source or a source-address rotation, not both.' }
+if($ClientWorkers -gt 1 -and ($SynDrop -or $null -ne $PeerSession -or $ClientAddresses.Count -lt $ClientWorkers -or $MaximumBatches -ne 1)) {
+    throw 'Parallel healthy batches require local adapters, distinct supplied sources and MaximumBatches=1.'
+}
+if($ClientWorkers -gt 1 -and @($ClientAddresses|Select-Object -Unique).Count -ne $ClientAddresses.Count) {
+    throw 'Parallel healthy sources must be distinct.'
+}
 Import-Module (Join-Path $PSScriptRoot 'TcpChurn.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'adapters\WindowsCts.psm1') -Force
 $analyzer=Join-Path $AnalyzerDirectory 'CpuSamples.exe'
@@ -84,9 +97,12 @@ try {
     do {
         $directory=Join-Path $Diagnostics "batch-$batch"
         New-Item -ItemType Directory -Path $directory -ErrorAction Stop | Out-Null
-        $source=if($FixedClientAddress){$FixedClientAddress}else{"192.168.1.$(21+($batch%8))"}
+        $source=if($FixedClientAddress){$FixedClientAddress}elseif($ClientAddresses.Count){
+            $ClientAddresses[$batch%$ClientAddresses.Count]
+        }else{"192.168.1.$(21+($batch%8))"}
         $plan=New-TcpChurnPlan -ClientAddress $source -ServerAddress $PeerAddress `
-            -Port (53617+$batch) -Connections $Connections -Seconds ([Math]::Min(120,$Seconds+30))
+            -Port ($BaseServerPort+$batch) -Connections $Connections -Seconds ([Math]::Min(120,$Seconds+30)) `
+            -BytesPerConnection $BytesPerConnection
         # Public documented socket option. No TCP global or registry setting is changed.
         $plan.ClientArguments += '-PortScalability:on'
         if ($null -ne $PeerSession) {
@@ -94,7 +110,7 @@ try {
                 -ClientInterface $ClientInterface -PeerInterface $PeerInterface -PeerSession $PeerSession -PeerRoot $PeerRoot -DropSyn ([bool]$SynDrop)
         } else {
             $adapter=New-WindowsCtsAdapter -Executable (Join-Path $Tools 'ctsTraffic.exe') `
-                -DiagnosticsDirectory $directory -ClientInterface duo1 -ServerInterface duo2
+                -DiagnosticsDirectory $directory -ClientInterface $ClientInterface -ServerInterface $PeerInterface
         }
         if ($SynDrop) {
             $plan.ClientArguments=@($plan.ClientArguments|Where-Object{$_ -notlike '-iterations:*'})
@@ -127,14 +143,24 @@ try {
             } finally { $null=& $adapter.Close $adapter.State $plan }
             break
         }
-        $result=Invoke-TcpChurnExperiment -Plan $plan -Adapter $adapter
+        if($ClientWorkers -gt 1) {
+            $plans=@(foreach($worker in 0..($ClientWorkers-1)) {
+                $workerPlan=New-TcpChurnPlan -ClientAddress $ClientAddresses[$worker] -ServerAddress $PeerAddress `
+                    -Port ($BaseServerPort+$worker) -Connections $Connections -Seconds ([Math]::Min(120,$Seconds+30)) `
+                    -BytesPerConnection $BytesPerConnection -MaximumConnectionAttempts ([int][Math]::Floor(8192.0/$ClientWorkers))
+                $workerPlan.ClientArguments+='-PortScalability:on'
+                $workerPlan
+            })
+            $result=Invoke-WindowsChurnParallelBatch -Executable (Join-Path $Tools 'ctsTraffic.exe') `
+                -DiagnosticsDirectory $directory -ClientInterface $ClientInterface -ServerInterface $PeerInterface -Plans $plans
+        } else { $result=Invoke-TcpChurnExperiment -Plan $plan -Adapter $adapter }
         foreach ($field in @('connections','bytesSent','adapterTransmitDelta','adapterReceiveDelta')) {
             $totals[$field]+=$result.$field
         }
         $batch++
         $progress.completedBatches=$batch
         $progress.connections=$totals.connections
-    } while ($clock.Elapsed.TotalSeconds -lt $Seconds -and $batch -lt 200)
+    } while ($clock.Elapsed.TotalSeconds -lt $Seconds -and $batch -lt $MaximumBatches)
     $timing.loadEnd=[DateTime]::UtcNow.ToString('o')
     $totals.seconds=$clock.Elapsed.TotalSeconds
     $totals.connectionsPerSecond=$totals.connections/$totals.seconds
@@ -224,4 +250,10 @@ if ($SynDrop) {
     }
 } else {
     Export-TcpChurnPublicResult -Result ([pscustomobject]$totals) -Path (Join-Path $PublishDirectory 'result.json')
+    Import-Module (Join-Path $PSScriptRoot 'CpuEvidence.psm1') -Force
+    $evidence=Get-TcpHealthyWaitEvidence `
+        -Cpu (Get-Content -LiteralPath (Join-Path $PublishDirectory 'cpu-load.json') -Raw|ConvertFrom-Json) `
+        -Events (Get-Content -LiteralPath (Join-Path $PublishDirectory 'tcp-events.json') -Raw|ConvertFrom-Json) `
+        -Outcome ([pscustomobject]$totals) -SymbolScope $AnalysisSymbolScope
+    $evidence|ConvertTo-Json -Depth 4|Set-Content -LiteralPath (Join-Path $PublishDirectory 'healthy-evidence.json')
 }
