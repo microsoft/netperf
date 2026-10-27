@@ -133,6 +133,73 @@ function Start-TcpChurnCollector {
     Start-ChurnChild $Program $Arguments $Directory $LogPrefix
 }
 
+function Invoke-WindowsEstablishedTransfer {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][System.Collections.IDictionary]$Adapter,
+        [Parameter(Mandatory)]$Plan,
+        [Parameter(Mandatory)][scriptblock]$Measure,
+        [Parameter(Mandatory)]$MeasurementState
+    )
+    $failure=$null;$result=$null
+    try {
+        $overallBefore=Read-WindowsChurnCounters $Adapter.State $Plan
+        $null=& $Adapter.StartPeer $Adapter.State $Plan
+        $ready=[Diagnostics.Stopwatch]::StartNew()
+        while(-not (& $Adapter.PeerReady $Adapter.State $Plan)) {
+            if($ready.Elapsed.TotalSeconds -gt 20) { throw 'Established-transfer listener readiness deadline exceeded.' }
+            Start-Sleep -Milliseconds 100
+        }
+        $state=$Adapter.State
+        $state.Client=Start-ChurnChild $state.Executable $Plan.ClientArguments $state.Directory (Join-Path $state.Directory 'client')
+        $ready.Restart()
+        do {
+            if($state.Client.Process.HasExited -or $state.Server.Process.HasExited) { throw 'Transfer exited before all connections established.' }
+            $established=@(Get-NetTCPConnection -State Established -ErrorAction Stop|Where-Object{
+                $_.OwningProcess -eq $state.Client.Process.Id -and $_.RemotePort -eq $Plan.Port
+            }).Count
+            if($established -eq $Plan.Connections) { break }
+            if($ready.Elapsed.TotalSeconds -gt 30) { throw 'Not all persistent connections reached Established.' }
+            Start-Sleep -Milliseconds 100
+        } while($true)
+        Start-Sleep -Seconds 3
+        if($state.Client.Process.HasExited -or $state.Server.Process.HasExited) { throw 'Transfer exited during warmup.' }
+        $before=Read-WindowsChurnCounters $state $Plan
+        $MeasurementState.establishedAtStart=$established
+        & $Measure $MeasurementState
+        if($state.Client.Process.HasExited -or $state.Server.Process.HasExited) { throw 'Transfer exited inside the steady measurement window.' }
+        $remaining=@(Get-NetTCPConnection -State Established -ErrorAction Stop|Where-Object{
+            $_.OwningProcess -eq $state.Client.Process.Id -and $_.RemotePort -eq $Plan.Port
+        }).Count
+        if($remaining -ne $Plan.Connections) { throw 'Connections closed during steady measurement.' }
+        $MeasurementState.establishedAtEnd=$remaining
+        $after=Read-WindowsChurnCounters $state $Plan
+        $MeasurementState.transmittedBytes=$after.Transmitted-$before.Transmitted
+        $MeasurementState.receivedBytes=$after.Received-$before.Received
+        if($MeasurementState.transmittedBytes -le 0 -or $MeasurementState.receivedBytes -le 0) { throw 'Persistent traffic made no wire progress.' }
+        if(-not $state.Client.Process.WaitForExit(($Plan.Seconds+20)*1000)) { throw 'Persistent client did not finish within its deadline.' }
+        if($state.Client.Process.ExitCode -ne 0) { throw 'Persistent client returned errors.' }
+        $summary=ConvertFrom-CtsChurnOutput $state.Client.Output.GetAwaiter().GetResult()
+        if($summary.Completed -ne $Plan.Connections -or $summary.NetworkErrors -ne 0 -or $summary.ProtocolErrors -ne 0) {
+            throw 'Persistent transfer did not complete every connection without errors.'
+        }
+        $overallAfter=Read-WindowsChurnCounters $state $Plan
+        $tx=$overallAfter.Transmitted-$overallBefore.Transmitted;$rx=$overallAfter.Received-$overallBefore.Received
+        if($tx -lt $summary.SentBytes -or $rx -lt $summary.SentBytes) { throw 'Completed persistent payload was not accounted for by the selected pair.' }
+        $result=[pscustomobject]@{connections=$summary.Completed;bytesSent=$summary.SentBytes
+            adapterTransmitDelta=$tx;adapterReceiveDelta=$rx}
+    } catch { $failure=$_ }
+    finally {
+        try { $null=& $Adapter.Close $Adapter.State $Plan }
+        catch {
+            if($null -ne $failure) { throw [AggregateException]::new('Established transfer and cleanup failed.',[Exception[]]@($failure.Exception,$_.Exception)) }
+            throw
+        }
+    }
+    if($null -ne $failure) { throw $failure }
+    $result
+}
+
 function Invoke-WindowsChurnParallelBatch {
     [CmdletBinding()]
     param(
@@ -331,4 +398,4 @@ function New-RemoteWindowsCtsAdapter {
     }
 }
 
-Export-ModuleMember -Function New-WindowsCtsAdapter,New-RemoteWindowsCtsAdapter,Invoke-TcpChurnTool,Start-TcpChurnCollector,Stop-TcpChurnCollector,Invoke-WindowsChurnParallelBatch
+Export-ModuleMember -Function New-WindowsCtsAdapter,New-RemoteWindowsCtsAdapter,Invoke-TcpChurnTool,Start-TcpChurnCollector,Stop-TcpChurnCollector,Invoke-WindowsChurnParallelBatch,Invoke-WindowsEstablishedTransfer

@@ -5,7 +5,7 @@ $ErrorActionPreference='Stop'
 Import-Module (Join-Path $PSScriptRoot 'CpuEvidence.psm1') -Force
 $outcome=[pscustomobject]@{outcome='collected';connections=10;bytesSent=655360}
 $events=[pscustomobject]@{outcome='counted';eventsLost=0;publicProbeCounts=[pscustomobject]@{
-    TcpBhDetectFullSizeAck=9;TcpBlackHoleDetectionEntry=0;TcpDisconnectTcbRtoTimeout=0;TcpDataTransferRetransmitRound=0
+    TcpBhDetectFullSizeAck=9;TcpBlackHoleDetectionEntry=0;TcpDisconnectTcbRtoTimeout=0;TcpDataTransferRetransmitRound=0;TcpTcbSynSend=0
 }}
 $cpu=[pscustomobject]@{outcome='sampled';cpuSamples=100;eventsLost=0;unresolvedNetworkFrames=0;publicNetworkFunctionCallers=@()}
 $prefix='nt!KxWaitForSpinLockAndAcquire <- nt!KxAcquireSpinLock <- '
@@ -38,6 +38,16 @@ $cpu.publicNetworkFunctionCallers[0].stacks=@(
 $r=Get-TcpHealthyWaitEvidence -Cpu $cpu -Events $events -Outcome $outcome
 if(-not $r.connectionFailurePathObserved -or $r.healthyPathInfoWaitObserved) {
     throw 'Application success concealed a sampled connection-failure update.'
+}
+$checks++
+$cpu.publicNetworkFunctionCallers=@(
+    [pscustomobject]@{function='tcpip!IpNlpSetPathInfo';stacks=@(
+        [pscustomobject]@{name='nt!KeReleaseInStackQueuedSpinLock <- tcpip!IpNlpSetPathInfo <- tcpip!ExampleSetPathBH <- tcpip!TcpNotifyTcbDelay';samples=4}
+    )}
+)
+$r=Get-TcpHealthyWaitEvidence -Cpu $cpu -Events $events -Outcome $outcome
+if($r.ackConfirmationPathSamplesLowerBound -ne 4 -or $r.healthyPathInfoWaitObserved) {
+    throw 'Confirmation-path execution was mistaken for a sampled wait.'
 }
 $checks++
 foreach($kind in @('failed','cpu-loss','event-loss')) {

@@ -8,13 +8,16 @@ param(
     [Parameter(Mandatory)][string]$PublishDirectory,
     [Parameter(Mandatory)][string]$AnalyzerDirectory,
     [ValidateRange(15,120)][int]$Seconds=30,
-    [ValidateRange(1,1024)][int]$Connections=256,
+    [ValidateRange(1,8192)][int]$Connections=256,
     [ValidateRange(1,200)][int]$MaximumBatches=200,
     [ValidateRange(1,8)][int]$ClientWorkers=1,
     [ValidateRange(1024,65336)][int]$BaseServerPort=53617,
     [ValidateRange(65536,16777216)][int]$BytesPerConnection=65536,
     [ValidateSet('public','private-lab-only')][string]$AnalysisSymbolScope='public',
     [switch]$SynDrop,
+    [switch]$EstablishedOnly,
+    [string]$BarrierExecutable,
+    [ValidateRange(65536,16777216)][int]$RateLimitBytesPerSecond=1048576,
     $PeerSession,
     [string]$PeerRoot,
     [string]$ClientInterface='duo1',
@@ -25,6 +28,17 @@ param(
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
+if($Connections -gt 1024 -and -not $BarrierExecutable) { throw 'More than 1024 connections requires the bounded first-data barrier.' }
+if($EstablishedOnly -and ($SynDrop -or $null -ne $PeerSession -or $ClientWorkers -ne 1 -or $MaximumBatches -ne 1)) {
+    throw 'Established-only measurement requires one local healthy batch and worker.'
+}
+if($BarrierExecutable -and ($EstablishedOnly -or $SynDrop -or $null -ne $PeerSession -or $ClientWorkers -ne 1 -or $MaximumBatches -ne 1)) {
+    throw 'First-data barriers require one local healthy batch without other traffic modes.'
+}
+if($BarrierExecutable -and ($ClientAddresses.Count -eq 0 -or $BytesPerConnection -gt 1048576 -or
+    -not (Test-Path -LiteralPath $BarrierExecutable -PathType Leaf))) {
+    throw 'First-data barriers require supplied source addresses, a compiled helper and at most 1 MiB per connection.'
+}
 if($FixedClientAddress -and $ClientAddresses.Count) { throw 'Choose a fixed source or a source-address rotation, not both.' }
 if($ClientWorkers -gt 1 -and ($SynDrop -or $null -ne $PeerSession -or $ClientAddresses.Count -lt $ClientWorkers -or $MaximumBatches -ne 1)) {
     throw 'Parallel healthy batches require local adapters, distinct supplied sources and MaximumBatches=1.'
@@ -101,7 +115,7 @@ try {
             $ClientAddresses[$batch%$ClientAddresses.Count]
         }else{"192.168.1.$(21+($batch%8))"}
         $plan=New-TcpChurnPlan -ClientAddress $source -ServerAddress $PeerAddress `
-            -Port ($BaseServerPort+$batch) -Connections $Connections -Seconds ([Math]::Min(120,$Seconds+30)) `
+            -Port ($BaseServerPort+$batch) -Connections ([Math]::Min(1024,$Connections)) -Seconds ([Math]::Min(120,$Seconds+30)) `
             -BytesPerConnection $BytesPerConnection
         # Public documented socket option. No TCP global or registry setting is changed.
         $plan.ClientArguments += '-PortScalability:on'
@@ -143,7 +157,65 @@ try {
             } finally { $null=& $adapter.Close $adapter.State $plan }
             break
         }
-        if($ClientWorkers -gt 1) {
+        if($BarrierExecutable) {
+            $control=Join-Path $directory 'barrier'
+            $null=New-Item -ItemType Directory -Path $control
+            $child=$null
+            try {
+                $child=Start-TcpChurnCollector -Program $BarrierExecutable -Arguments @(
+                    ($ClientAddresses -join ','),$PeerAddress,[string]$BaseServerPort,[string]$Connections,
+                    [string]$BytesPerConnection,$control
+                ) -Directory $directory -LogPrefix (Join-Path $directory 'barrier-process')
+                $readyClock=[Diagnostics.Stopwatch]::StartNew()
+                while(-not (Test-Path -LiteralPath (Join-Path $control 'ready'))) {
+                    if($child.Process.HasExited -or $readyClock.Elapsed.TotalSeconds -gt 90) { throw 'First-data connections did not reach the barrier.' }
+                    Start-Sleep -Milliseconds 50
+                }
+                $ownedConnections=@(Get-NetTCPConnection -State Established|Where-Object{
+                    $_.OwningProcess -eq $child.Process.Id -and $_.RemotePort -eq $BaseServerPort
+                }).Count
+                if($ownedConnections -ne $Connections) { throw 'Barrier connection count does not match the request.' }
+                $before=Get-NetAdapterStatistics -Name $ClientInterface
+                $beforePeer=Get-NetAdapterStatistics -Name $PeerInterface
+                $timing.loadStart=[DateTime]::UtcNow.ToString('o')
+                [IO.File]::WriteAllText((Join-Path $control 'go'),'go')
+                $wait=[Diagnostics.Stopwatch]::StartNew()
+                while(-not (Test-Path -LiteralPath (Join-Path $control 'done'))) {
+                    if($child.Process.HasExited -or $wait.Elapsed.TotalSeconds -gt $Seconds) { throw 'First-data verification did not finish in the measurement window.' }
+                    Start-Sleep -Milliseconds 10
+                }
+                Start-Sleep -Seconds 1
+                $timing.loadEnd=[DateTime]::UtcNow.ToString('o')
+                $summary=Get-Content -LiteralPath (Join-Path $control 'result.json') -Raw|ConvertFrom-Json
+                if($summary.connections -ne $Connections -or $summary.bytesSent -ne [long]$Connections*$BytesPerConnection -or
+                    $summary.networkErrors -ne 0 -or $summary.protocolErrors -ne 0) { throw 'Barrier payload verification failed.' }
+                $after=Get-NetAdapterStatistics -Name $ClientInterface
+                $afterPeer=Get-NetAdapterStatistics -Name $PeerInterface
+                $tx=$after.SentBytes-$before.SentBytes;$rx=$afterPeer.ReceivedBytes-$beforePeer.ReceivedBytes
+                if($tx -lt $summary.bytesSent -or $rx -lt $summary.bytesSent) { throw 'Barrier payload was not accounted for by the selected pair.' }
+                $summary|Add-Member -NotePropertyName preEstablishedConnections -NotePropertyValue $ownedConnections
+                $summary|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $PublishDirectory 'first-data.json')
+                [IO.File]::WriteAllText((Join-Path $control 'stop'),'stop')
+                if(-not $child.Process.WaitForExit(10000) -or $child.Process.ExitCode -ne 0) { throw 'Barrier process did not close cleanly.' }
+                $result=[pscustomobject]@{connections=$Connections;bytesSent=$summary.bytesSent;adapterTransmitDelta=$tx;adapterReceiveDelta=$rx}
+            } finally { if($null -ne $child) { Stop-TcpChurnCollector $child } }
+        } elseif($EstablishedOnly) {
+            $transferBytes=[long]$RateLimitBytesPerSecond*($Seconds+30)
+            $plan.ClientArguments=@($plan.ClientArguments|Where-Object{$_ -notlike '-iterations:*' -and $_ -notlike '-transfer:*'})
+            $plan.ServerArguments=@($plan.ServerArguments|Where-Object{$_ -notlike '-transfer:*'})
+            $plan.ClientArguments+=@('-iterations:1',"-transfer:$transferBytes","-RateLimit:$RateLimitBytesPerSecond")
+            $plan.ServerArguments+=@("-transfer:$transferBytes","-RateLimit:$RateLimitBytesPerSecond")
+            $steady=[ordered]@{start=$null;end=$null;seconds=$Seconds;establishedAtStart=0;establishedAtEnd=0
+                transmittedBytes=0L;receivedBytes=0L}
+            $result=Invoke-WindowsEstablishedTransfer -Adapter $adapter -Plan $plan -MeasurementState $steady -Measure {
+                param($state)
+                $state.start=[DateTime]::UtcNow.ToString('o')
+                Start-Sleep -Seconds $state.seconds
+                $state.end=[DateTime]::UtcNow.ToString('o')
+            }
+            $timing.loadStart=$steady.start;$timing.loadEnd=$steady.end
+            $steady|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $PublishDirectory 'steady-state.json')
+        } elseif($ClientWorkers -gt 1) {
             $plans=@(foreach($worker in 0..($ClientWorkers-1)) {
                 $workerPlan=New-TcpChurnPlan -ClientAddress $ClientAddresses[$worker] -ServerAddress $PeerAddress `
                     -Port ($BaseServerPort+$worker) -Connections $Connections -Seconds ([Math]::Min(120,$Seconds+30)) `
@@ -161,7 +233,7 @@ try {
         $progress.completedBatches=$batch
         $progress.connections=$totals.connections
     } while ($clock.Elapsed.TotalSeconds -lt $Seconds -and $batch -lt $MaximumBatches)
-    $timing.loadEnd=[DateTime]::UtcNow.ToString('o')
+    if(-not $EstablishedOnly -and -not $BarrierExecutable) { $timing.loadEnd=[DateTime]::UtcNow.ToString('o') }
     $totals.seconds=$clock.Elapsed.TotalSeconds
     $totals.connectionsPerSecond=$totals.connections/$totals.seconds
     $totals.megabitsPerSecond=8.0*$totals.bytesSent/1000000.0/$totals.seconds

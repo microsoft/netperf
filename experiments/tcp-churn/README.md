@@ -435,12 +435,84 @@ was required. Fixture cleanup restored disabled adapters and removed owned
 addresses/routes/firewall rules; driver/trust/physical-network settings were
 unchanged.
 
+### Isolating the first-data confirmation from ALE
+
+Two additional traffic modes remove connection establishment and teardown from
+the analyzed CPU/event window. Neither disables WFP or changes TCP global policy.
+Use the prepared local-adapter invocation above with one worker and
+`MaximumBatches=1`:
+
+- `EstablishedOnly` establishes every CTS connection, warms up for three seconds,
+  then measures `Seconds` of paced data. `RateLimitBytesPerSecond` defaults to
+  1 MiB/s per connection. All connections must still be established at the end,
+  both selected NICs must show progress, and every CTS connection must eventually
+  finish without errors. `steady-state.json` records window boundaries, counts
+  and byte deltas. Overall result bytes/time still cover the whole workload,
+  not just the steady window.
+- `BarrierExecutable` runs the small, public-source `BarrierTcp.cs` helper.
+  It establishes and accepts every connection **without sending application
+  payload**, signals `ready`, then waits for a `go` file. The campaign checks the
+  established count, starts the analyzed interval and releases the first payloads.
+  The helper verifies every payload byte and completion response, signals `done`,
+  and keeps sockets open until the campaign ends the interval and signals `stop`.
+  This excludes connect/accept and close activity while exercising first-data ACK
+  processing. `first-data.json` records verified totals and the pre-established
+  count. Helper, readiness, measurement and shutdown waits are bounded.
+
+Build the new helper from this public source using the existing .NET Framework
+compiler; no OS source or existing native driver binary is involved:
+
+```powershell
+& "$env:SystemRoot\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo `
+  /target:exe /platform:x64 /out:C:\PublicTools\BarrierTcp.exe .\BarrierTcp.cs
+# In the prepared-adapter CPU campaign, add:
+# -BarrierExecutable C:\PublicTools\BarrierTcp.exe -MaximumBatches 1 `
+# -ClientWorkers 1 -Connections 8192 -BytesPerConnection 65536
+```
+
+The helper supports 1-8 explicitly supplied source addresses and up to 8,192
+connections. No replacement connections are created. It is an experiment
+workload, not a production server. The first-data mode requires 64 KiB-1 MiB
+payloads through the campaign. Do not select `SynDrop`, a remote peer session,
+parallel-worker mode or `EstablishedOnly` at the same time.
+
+Measured results on the dedicated 80-logical-processor machine, with 40 RSS
+queues/processors:
+
+| Mode | Pre-established connections | Analyzed seconds | CPU samples | Full-size-ACK events | Confirmation-path samples, lower bound | Explicit target wait samples |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Paced steady data | 64 | 20.007 | 11,902 | 0 | 0 | 0 |
+| First-data release, one link engine | 1,024 | 1.170 | 4,860 | 330 | 0 | 0 |
+| First-data release, one link engine | 8,192 | 2.526 | 37,658 | 6,468 | 5 | 0 |
+| First-data release, four link engines | 8,192 | 1.599 | 19,440 | 2,977 | 1 | 0 |
+| Four link engines, one source address | 8,192 | 1.642 | 22,878 | 2,964 | 4 | 0 |
+
+Every listed window had zero recorded SYN-send, retransmission-round, timeout
+and BH-entry events, zero sampled WFP/port-allocation waits, zero unresolved
+TCPIP frames and zero CPU/probe event loss. All payloads completed and fixture
+cleanup passed. The 8,192-connection barrier transfers verified 512 MiB each.
+Private symbol-based analysis remains private; only numeric observations are
+published here. A failed high-concurrency paced transfer was excluded.
+
+**Finding:** ordinary steady traffic removed ALE contention but did not exercise
+the first-data confirmation during its measured window. The synchronized
+first-data release does exercise that confirmation path without ALE churn or
+recorded retransmission events. Increasing link-engine concurrency and
+concentrating on one source/destination path retained that coverage. This is a
+better isolated strategy, **not yet a sampled target-lock-wait reproduction**:
+acquisition/release frames establish execution, not waiting. Bounded stack
+retention and finite sampling can miss brief waits. A positive contention claim
+still requires an explicit wait stack or lock-address/timing evidence, not just
+more ACK events. Provider counts remain system-wide rather than flow-correlated.
+
 ```powershell
 ./Test-TcpChurn.ps1
 ./Test-HyperVTopologyProbe.ps1
 ./Test-RssControl.ps1
 ./Test-HealthyParallel.ps1
 ./Test-HealthyEvidence.ps1
+./Test-EstablishedTransfer.ps1
+./Test-BarrierTcp.ps1
 ```
 
 Tests use a memory adapter, a bounded owned PowerShell child, mocked Hyper-V

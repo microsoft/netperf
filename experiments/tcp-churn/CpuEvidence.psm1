@@ -47,9 +47,14 @@ function Get-TcpHealthyWaitEvidence {
     $waits=[ordered]@{pathInfoAckTracking=0L;pathInfoShutdownRtt=0L;pathInfoConnectionFailure=0L
         pathInfoOther=0L;pathLookupOrValidation=0L;wfp=0L;endpointPortAllocation=0L;other=0L}
     $seen=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    $confirmationSamples=0L
     foreach($function in $Cpu.publicNetworkFunctionCallers) {
         foreach($stack in $function.stacks) {
             $name=[string]$stack.name
+            if($function.function -eq 'tcpip!IpNlpSetPathInfo' -and
+                $name -match 'tcpip!IpNlpSetPathInfo <- tcpip![^ <]*SetPathBH[^ <]* <- tcpip!TcpNotifyTcbDelay') {
+                $confirmationSamples+=[long]$stack.samples
+            }
             if(-not $seen.Add($name)) { continue }
             if($name -notmatch '^nt!(?:KeYieldProcessorEx <- nt!)?(?:KxWaitForLockOwnerShip|KxWaitForSpinLockAndAcquire) <- (?:nt![^<]+ <- )*tcpip!(?<owner>[^ <]+)') { continue }
             $owner=$Matches.owner
@@ -73,9 +78,11 @@ function Get-TcpHealthyWaitEvidence {
         pathInfoWaitObserved=(($waits.pathInfoAckTracking+$waits.pathInfoShutdownRtt+$waits.pathInfoConnectionFailure+$waits.pathInfoOther) -gt 0)
         healthyPathInfoWaitObserved=(($waits.pathInfoAckTracking+$waits.pathInfoShutdownRtt+$waits.pathInfoOther) -gt 0)
         connectionFailurePathObserved=($waits.pathInfoConnectionFailure -gt 0)
+        ackConfirmationPathSamplesLowerBound=$confirmationSamples
         fullSizeAckEvents=[long]$Events.publicProbeCounts.TcpBhDetectFullSizeAck
         blackHoleProbeEntryEvents=[long]$Events.publicProbeCounts.TcpBlackHoleDetectionEntry
         timeoutEvents=[long]$Events.publicProbeCounts.TcpDisconnectTcbRtoTimeout
+        synSendEvents=[long]$Events.publicProbeCounts.TcpTcbSynSend
         retransmissionRoundEvents=[long]$Events.publicProbeCounts.TcpDataTransferRetransmitRound
         classification='bounded-stack-lower-bounds-not-lock-address-proof'
         conclusion='success-scenario-sampling-not-performance-improvement'
