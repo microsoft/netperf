@@ -58,6 +58,8 @@ jobs:
         run: ./experiments/tcp-churn/Test-EstablishedTransfer.ps1
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-BarrierTcp.ps1
+      - shell: pwsh
+        run: ./experiments/tcp-churn/Test-ArrivalTcp.ps1
   build-analyzer:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.profile_cpu }}
     runs-on: windows-2022

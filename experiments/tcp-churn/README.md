@@ -505,6 +505,73 @@ retention and finite sampling can miss brief waits. A positive contention claim
 still requires an explicit wait stack or lock-address/timing evidence, not just
 more ACK events. Provider counts remain system-wide rather than flow-correlated.
 
+### Independent-arrival workload and actual lock-collision evidence
+
+The barrier is a diagnostic control, not a realistic service arrival model.
+`ArrivalTcp.cs` provides an alternative: each client connection starts on an
+independently scheduled exponential interarrival time, connects, immediately
+sends a request payload, verifies the server's acknowledgement, then closes.
+There is no preconnection phase or shared release barrier. The server verifies
+every payload byte. A fixed seed makes the offered arrival sequence reproducible.
+Actual launch lag and total duration are reported rather than treating an offered
+rate as achieved throughput.
+
+Build it with the same existing .NET Framework compiler used for `BarrierTcp.cs`,
+substituting `ArrivalTcp.cs` and the desired output executable path. On dedicated,
+already prepared interfaces:
+
+```powershell
+# sources, peer, listener port, total requests, offered requests/sec,
+# payload bytes/request, new result file
+C:\PublicTools\ArrivalTcp.exe 192.0.2.21 192.0.2.12 20000 8192 2000 65536 C:\Runs\new\arrival.json
+```
+
+The helper is bounded to 8,192 requests, 1 MiB per payload, and a 150-second
+process deadline; invalid configurations fail explicitly. It is a synthetic
+request/reply service workload, not a replay of a specific customer application.
+It does not provision adapters, firewall rules, traces or trust policy.
+
+The manual lab investigation supplemented CPU sampling with the existing Windows
+Performance Toolkit **SPINLOCK collision events**, rather than assuming that a
+function-entry sample proves contention. Private analysis matched the exact
+running binary, distinguished the compartment path-cache lock from per-path
+RTT locks, and grouped events by the actual lock address. Only uninterrupted
+events with a **positive recorded spin count** were accepted as collision proof.
+Addresses, disassembly, private symbols, raw trace records and the build-specific
+attribution tooling remain private; this public helper contains none of those.
+
+Measured on the dedicated 80-logical-processor machine with a 40-RSS pair:
+
+| Offered arrivals/sec | Completed requests | Actual requests/sec including drain | Positive-spin events on the identified path-cache lock | Lost events/buffers |
+| --- | ---: | ---: | ---: | ---: |
+| 2,000 | 8,192 | 1,967 | 32 | 0 / 0 |
+| 2,000, repeat | 8,192 | 1,966 | 32 | 0 / 0 |
+| 2,000, with TCP probes | 8,192 | 1,965 | 31 | 0 / 0 |
+| 10,000 | 8,192 | 2,185 | 774 | 0 / 0 |
+
+All rows verified 512 MiB of payload with zero application network/protocol
+errors and no injected fault. The high offered rate was **not achieved** and
+must not be described as a 10,000-connection/sec benchmark. The instrumented
+2,000/sec repeat also verified matching selected NIC byte deltas; mean launch
+lag was 6.65 ms, maximum 50.16 ms, and launch span 4,163.57 ms. These are ordinary
+independent arrivals subject to scheduling delay, not simultaneous payload release.
+
+The TCP-probed run counted zero final timeout/BH-entry events, but 742
+provider-wide retransmission-round events, with zero probe loss. Thus all
+requests succeeded, but **zero packet loss/retransmission is not claimed**,
+and those events are not flow-correlated. No outage or firewall block was injected.
+
+**Finding:** actual contention on the identified compartment path-cache lock
+is reproducible with a plausible independently arriving request/reply workload.
+This is stronger than generic TCP wait stacks or barrier-only mechanism coverage.
+It does **not** establish customer-scale severity, that the BH-confirmation writer
+dominates the workload, or an optimization benefit. The observed collision
+durations at the moderate rate are small. The fixture still has both endpoints
+on one machine and an emulated link; a two-physical-host comparison remains
+necessary before treating it as representative of a remote customer's topology.
+Kernel collision tracing itself adds overhead and is diagnostic evidence, not
+an uninstrumented performance measurement.
+
 ```powershell
 ./Test-TcpChurn.ps1
 ./Test-HyperVTopologyProbe.ps1
@@ -513,6 +580,7 @@ more ACK events. Provider counts remain system-wide rather than flow-correlated.
 ./Test-HealthyEvidence.ps1
 ./Test-EstablishedTransfer.ps1
 ./Test-BarrierTcp.ps1
+./Test-ArrivalTcp.ps1
 ```
 
 Tests use a memory adapter, a bounded owned PowerShell child, mocked Hyper-V
