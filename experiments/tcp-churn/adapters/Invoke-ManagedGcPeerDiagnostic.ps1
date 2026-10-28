@@ -11,13 +11,9 @@ param(
     [ValidateRange(1,1024)][int]$Connections=256
 )
 $ErrorActionPreference='Stop'
-try {$credential=Import-Clixml -LiteralPath $CredentialFile}
-finally {Remove-Item -LiteralPath $CredentialFile -ErrorAction Stop}
 $sourceRoot=Split-Path $PSScriptRoot
-Import-Module (Join-Path $PSScriptRoot 'WindowsCts.psm1') -Force
 $diagnostics=Join-Path $ScratchParent 'managed-gc-diagnostics'
-$null=New-Item -ItemType Directory -Path $diagnostics -ErrorAction Stop
-$null=New-Item -ItemType Directory -Path $PublishDirectory -ErrorAction Stop
+$publishOwned=$false
 $peer=$null;$peerOwned=$false;$profileOwned=$false
 $client=$null;$localServer=$null;$tcpProbe=$null;$clrProbe=$null
 $failure=$null;$cleanupErrors=[Collections.Generic.List[Exception]]::new()
@@ -36,9 +32,20 @@ function Wait-Ready($Child,[string]$File) {
     }
 }
 try {
+    $phase='publication-init'
+    $null=New-Item -ItemType Directory -Path $diagnostics -ErrorAction Stop
+    $null=New-Item -ItemType Directory -Path $PublishDirectory -ErrorAction Stop
+    $publishOwned=$true
+    $phase='credential-import'
+    try {$credential=Import-Clixml -LiteralPath $CredentialFile}
+    finally {if(Test-Path -LiteralPath $CredentialFile){Remove-Item -LiteralPath $CredentialFile -ErrorAction Stop}}
+    $phase='module-load'
+    Import-Module (Join-Path $PSScriptRoot 'WindowsCts.psm1') -Force
+    $phase='preflight'
     if(@(Get-Process -Name Runner.Worker,ctsTraffic,ArrivalTcp -ErrorAction Ignore).Count){throw 'Client guest is busy.'}
     if((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory*1024 -lt $heapMiB*4MB){throw 'Insufficient free guest memory for the bounded GC diagnostic.'}
     if(-not(Test-Path -LiteralPath $analyzer)){throw 'The public-source analyzer is missing.'}
+    $phase='peer-connect'
     $peer=New-PSSession -ComputerName netperf-peer -Credential $credential -ConfigurationName PowerShell.7
     $clientIdentity=(Get-CimInstance Win32_ComputerSystemProduct).UUID
     $peerIdentity=Invoke-Command -Session $peer -ScriptBlock {(Get-CimInstance Win32_ComputerSystemProduct).UUID}
@@ -60,10 +67,12 @@ try {
         Copy-Item -LiteralPath (Join-Path $sourceRoot $file) -Destination (Join-Path $remote $file) -ToSession $peer
     }
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'WindowsCts.psm1') -Destination (Join-Path $remote 'WindowsCts.psm1') -ToSession $peer
+    $phase='compile-client'
     $null=Invoke-TcpChurnTool -Program $compiler -Arguments @('/nologo','/target:exe','/platform:x64',"/out:$exe",(Join-Path $sourceRoot 'ArrivalTcp.cs')) `
         -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'compile')
     Copy-Item -LiteralPath (Join-Path $sourceRoot 'ArrivalTcp.ServerGc.config') -Destination ($exe+'.config')
     $peerOwned=$true
+    $phase='start-remote-peer'
     Invoke-Command -Session $peer -ScriptBlock {
         param($root,$listen,$client,$port,$count,$rate)
         if(@(Get-NetIPAddress -AddressFamily IPv4|Where-Object IPAddress -eq $listen).Count -ne 1){throw 'The peer does not uniquely own the declared listen address.'}
@@ -89,6 +98,7 @@ try {
         }
     } -ArgumentList $remote,$peerAddress,$clientAddress,$port,($count/2),$rate
     $localOutput=Join-Path $diagnostics 'loopback.json'
+    $phase='start-loopback-peer'
     $localServer=Start-TcpChurnCollector -Program $exe -Arguments @(
         '127.0.0.1','127.0.0.2',[string]$port,[string]($count/2),[string]$rate,'65536',$localOutput,'server','65536','14529','256','nodelay'
     ) -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'loopback')
@@ -181,13 +191,20 @@ finally {
     if($null -ne $peer){try{Remove-PSSession $peer -ErrorAction Stop}catch{$cleanupErrors.Add($_.Exception)}}
 }
 if($null -ne $failure -or $cleanupErrors.Count) {
-    @{schema=1;workload='managed-gc-mixed';outcome='failed';phase=$phase;conclusion='no-accepted-measurement'}|
-        ConvertTo-Json|Set-Content (Join-Path $PublishDirectory 'result.json')
+    if($publishOwned) {
+        $type=if($null -ne $failure){$failure.Exception.GetType().FullName}else{'cleanup-failure'}
+        $code=if($null -ne $failure){$failure.Exception.HResult}else{$null}
+        $toolCode=if($null -ne $failure -and $failure.Exception.Data.Contains('ToolExitCode')){$failure.Exception.Data['ToolExitCode']}else{$null}
+        @{schema=1;workload='managed-gc-mixed';outcome='failed';phase=$phase;failureType=$type;failureCode=$code
+            toolExitCode=$toolCode;cleanupErrorCount=$cleanupErrors.Count;cleanupVerified=($cleanupErrors.Count -eq 0)
+            conclusion='no-accepted-measurement'}|ConvertTo-Json|Set-Content (Join-Path $PublishDirectory 'result.json')
+    }
     if($null -ne $failure){$cleanupErrors.Insert(0,$failure.Exception)}
     throw [AggregateException]::new('Managed-GC diagnostic or required cleanup failed.',$cleanupErrors)
 }
 $phase='public-symbol-analysis'
 try {
+    $phase='analyze-whole-cpu'
     $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @((Join-Path $diagnostics 'cpu.etl'),
         (Join-Path $PublishDirectory 'cpu-load.json'),$start,$end) -Directory $diagnostics `
         -LogPrefix (Join-Path $diagnostics 'cpu-analysis') -TimeoutSeconds 300
@@ -195,14 +212,17 @@ try {
     $endUtc=([datetime]$end).ToUniversalTime()
     $postEnd=if($postStart.AddSeconds(2) -lt $endUtc){$postStart.AddSeconds(2)}else{$endUtc}
     if($postEnd -le $postStart){throw 'No positive post-collection window remains.'}
+    $phase='analyze-post-gc-cpu'
     $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @((Join-Path $diagnostics 'cpu.etl'),
         (Join-Path $PublishDirectory 'cpu-after-gc.json'),$postStart.ToString('o'),$postEnd.ToString('o')) `
         -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'post-gc-analysis') -TimeoutSeconds 300
+    $phase='analyze-tcp-events'
     $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @('--events',(Join-Path $diagnostics 'tcp.etl'),
         (Join-Path $PublishDirectory 'tcp-events.json'),'interval',$start,$end,(Join-Path $diagnostics 'tcp-state.json')) `
         -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'tcp-analysis') -TimeoutSeconds 120
     $tcpSummary=Get-Content (Join-Path $PublishDirectory 'tcp-events.json') -Raw|ConvertFrom-Json
     if($tcpSummary.outcome -ne 'counted' -or $tcpSummary.eventsLost -ne 0){throw 'Lossless TCP event coverage is required.'}
+    $phase='analyze-clr-events'
     $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @('--events',(Join-Path $diagnostics 'clr.etl'),
         (Join-Path $diagnostics 'clr-loss.json'),'interval',$start,$end,(Join-Path $diagnostics 'clr-state.json')) `
         -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'clr-loss-analysis') -TimeoutSeconds 120
@@ -225,7 +245,9 @@ try {
     $result.cleanupVerified=$true
     $result|ConvertTo-Json -Depth 6|Set-Content (Join-Path $PublishDirectory 'result.json')
 }catch {
-    @{schema=1;workload='managed-gc-mixed';outcome='failed';phase=$phase;conclusion='analysis-not-accepted'}|
+    $toolCode=if($_.Exception.Data.Contains('ToolExitCode')){$_.Exception.Data['ToolExitCode']}else{$null}
+    @{schema=1;workload='managed-gc-mixed';outcome='failed';phase=$phase;failureType=$_.Exception.GetType().FullName
+        failureCode=$_.Exception.HResult;toolExitCode=$toolCode;cleanupVerified=$true;conclusion='analysis-not-accepted'}|
         ConvertTo-Json|Set-Content (Join-Path $PublishDirectory 'result.json')
     throw
 }
