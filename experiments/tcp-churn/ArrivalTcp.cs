@@ -157,6 +157,7 @@ public static class ArrivalTcp
                 pressureHeap=new byte[gcHeapMiB*1024][];
                 for(int i=0;i<pressureHeap.Length;i++)pressureHeap[i]=new byte[1024];
                 GC.Collect(GC.MaxGeneration,GCCollectionMode.Forced,true,true);
+                for(int i=0;i<pressureHeap.Length;i+=2)pressureHeap[i]=null;
             }
             byte[] data=new byte[size];for(int i=0;i<size;i++)data[i]=(byte)(i%251);
             var senders=new List<Task>();var random=new Random(seed);var clock=Stopwatch.StartNew();
@@ -171,17 +172,18 @@ public static class ArrivalTcp
                 double lag=Math.Max(0,clock.Elapsed.TotalMilliseconds-next);
                 maxLag=Math.Max(maxLag,lag);totalLag+=lag;lastLaunch=clock.Elapsed.TotalMilliseconds;
                 senders.Add(SendWithSlot(capacity,sources[i%sources.Length],peers[i%peers.Length],port,data,response));
-                if(gcHeapMiB>0 && !gcTriggered && i+1>=gcMinimumLaunch &&
-                    Volatile.Read(ref completed)>0 && Volatile.Read(ref inFlight)>0) {
-                    gcLaunched=i+1;gcCompleted=Volatile.Read(ref completed);gcPending=Volatile.Read(ref inFlight);
-                    for(int j=0;j<pressureHeap.Length;j+=2)pressureHeap[j]=null;
-                    gcBefore=GC.CollectionCount(GC.MaxGeneration);
-                    gcStart=DateTime.UtcNow.ToString("o",CultureInfo.InvariantCulture);
-                    var collection=Stopwatch.StartNew();
-                    GC.Collect(GC.MaxGeneration,GCCollectionMode.Forced,true,true);
-                    collection.Stop();gcMilliseconds=collection.Elapsed.TotalMilliseconds;
-                    gcEnd=DateTime.UtcNow.ToString("o",CultureInfo.InvariantCulture);
-                    gcAfter=GC.CollectionCount(GC.MaxGeneration);gcTriggered=true;
+                if(gcHeapMiB>0 && !gcTriggered && i+1>=gcMinimumLaunch) {
+                    int completedNow=Volatile.Read(ref completed),pendingNow=Volatile.Read(ref inFlight);
+                    if(completedNow>0 && pendingNow>0) {
+                        gcLaunched=i+1;gcCompleted=completedNow;gcPending=pendingNow;
+                        gcBefore=GC.CollectionCount(GC.MaxGeneration);
+                        gcStart=DateTime.UtcNow.ToString("o",CultureInfo.InvariantCulture);
+                        var collection=Stopwatch.StartNew();
+                        GC.Collect(GC.MaxGeneration,GCCollectionMode.Forced,true,true);
+                        collection.Stop();gcMilliseconds=collection.Elapsed.TotalMilliseconds;
+                        gcEnd=DateTime.UtcNow.ToString("o",CultureInfo.InvariantCulture);
+                        gcAfter=GC.CollectionCount(GC.MaxGeneration);gcTriggered=true;
+                    }
                 }
                 next+=-Math.Log(1.0-random.NextDouble())*1000.0/rate;
             }

@@ -54,8 +54,8 @@ try {
         $gc.completedBeforeCollection -lt 1 -or $gc.inFlightBeforeCollection -lt 1 -or
         $gc.gen2CollectionsAfter -le $gc.gen2CollectionsBefore -or
         $gc.blockingCollectionMilliseconds -le 0 -or -not $gc.serverGc -or
-        ([datetime]$gc.collectionEndUtc) -le ([datetime]$gc.collectionStartUtc)) {
-        throw 'A real blocking generation-2 collection did not overlap completed and in-flight requests.'
+        ([datetime]$gc.collectionEndUtc) -lt ([datetime]$gc.collectionStartUtc)) {
+        throw "A real blocking generation-2 collection did not overlap completed and in-flight requests: $($gc|ConvertTo-Json -Compress)"
     }
     $checks++
     Close-Owned $client;$client=$null

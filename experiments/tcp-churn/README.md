@@ -562,8 +562,8 @@ The trigger waits until at least the requested number of requests have launched,
 at least one request has completed, and at least one remains in flight. If that
 overlap never occurs, the run fails rather than claiming GC-path coverage.
 
-The heap is allocated and promoted before the arrival clock starts. At the
-trigger, alternate references are discarded and the blocking collection runs.
+The heap is allocated, promoted and given alternating unreachable objects before
+the arrival clock starts. The blocking collection runs at the I/O-overlap trigger.
 There is no preconnection phase, first-payload gate, sleep-based pause or shared
 release barrier. Normal asynchronous completions and the existing arrival
 schedule catch up after the actual runtime collection.
@@ -597,6 +597,8 @@ request counts, server-GC mode and UTC collection-call envelope. Its elapsed
 time is **not** an ETW-verified exact managed-thread suspension duration. Use CLR
 suspension/restart events when establishing pause timing, and correlate the
 post-resume kernel wait stacks. GC's own CPU consumption is not TCP/IP contention.
+UTC envelope timestamps can be equal for short collections; the high-resolution
+stopwatch and generation counter establish that the collection actually ran.
 This is an explicitly forced-GC diagnostic, not natural-allocation/customer
 replay or proof of the target lock's CPU severity.
 

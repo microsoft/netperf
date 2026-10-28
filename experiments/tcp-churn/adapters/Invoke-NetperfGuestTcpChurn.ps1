@@ -28,16 +28,19 @@ try {
         $peerResult=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
             param($credential)
             if (@(Get-Process -Name 'Runner.Worker','ctsTraffic' -ErrorAction Ignore).Count) { throw 'Client guest is busy.' }
+            $clientCpus=(Get-CimInstance Win32_Processor|Measure-Object NumberOfLogicalProcessors -Sum).Sum
+            if($clientCpus -lt 1){throw 'The client processor inventory did not return a positive count.'}
             $peer=New-PSSession -ComputerName netperf-peer -Credential $credential -ConfigurationName PowerShell.7 -ErrorAction Stop
             try {
                 $peerCpus=Invoke-Command -Session $peer -ErrorAction Stop -ScriptBlock {
                     if (@(Get-Process -Name 'Runner.Worker','ctsTraffic' -ErrorAction Ignore).Count) { throw 'Peer guest is busy.' }
                     (Get-CimInstance Win32_Processor | Measure-Object NumberOfLogicalProcessors -Sum).Sum
                 }
-                [pscustomobject]@{schema=1;peerConnected=$true;peerLogicalProcessors=[int]$peerCpus;conclusion='connectivity-only'}
+                if($peerCpus -lt 1){throw 'The peer processor inventory did not return a positive count.'}
+                [pscustomobject]@{schema=1;peerConnected=$true;clientLogicalProcessors=[int]$clientCpus;peerLogicalProcessors=[int]$peerCpus;conclusion='connectivity-only'}
             } finally { Remove-PSSession $peer -ErrorAction Stop }
         } -ArgumentList $Credential
-        $peerResult|Select-Object schema,peerConnected,peerLogicalProcessors,conclusion|ConvertTo-Json |
+        $peerResult|Select-Object schema,peerConnected,clientLogicalProcessors,peerLogicalProcessors,conclusion|ConvertTo-Json |
             Set-Content -LiteralPath (Join-Path $PublishDirectory 'peer-check.json') -Encoding utf8
         return
     }
