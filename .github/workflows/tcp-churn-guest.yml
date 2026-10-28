@@ -61,6 +61,8 @@ jobs:
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-ArrivalTcp.ps1
       - shell: pwsh
+        run: ./experiments/tcp-churn/Test-GcArrivalTcp.ps1
+      - shell: pwsh
         run: ./experiments/tcp-churn/Test-CpuUtilization.ps1
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-CpuCollector.ps1

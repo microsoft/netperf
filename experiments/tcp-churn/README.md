@@ -553,6 +553,53 @@ bind/connect/response/EOF timing. Parallel workers should use different seeds
 Server readiness is a listener-owned ready file, not a first-payload barrier;
 `IsListenerReady` checks the listener's process ownership without a probe connection.
 
+#### Managed-GC and mixed-target diagnostic
+
+The client can optionally perform one real blocking, compacting generation-2
+collection during ongoing verified I/O. Append `gc:heap-MiB:minimum-launched`
+after the socket-pacing argument. The bounded heap must be 16-1,024 MiB.
+The trigger waits until at least the requested number of requests have launched,
+at least one request has completed, and at least one remains in flight. If that
+overlap never occurs, the run fails rather than claiming GC-path coverage.
+
+The heap is allocated and promoted before the arrival clock starts. At the
+trigger, alternate references are discarded and the blocking collection runs.
+There is no preconnection phase, first-payload gate, sleep-based pause or shared
+release barrier. Normal asynchronous completions and the existing arrival
+schedule catch up after the actual runtime collection.
+
+To opt into server GC and all-processor-group runtime support, copy
+`ArrivalTcp.ServerGc.config` beside the compiled executable as
+`ArrivalTcp.exe.config`. The template is not activated automatically.
+
+For mixed traffic in one client process, use up to eight comma-separated peers
+and an equally sized, positionally aligned source-address list. Selection is
+round-robin. Server and `local` roles still require one peer/listen address.
+For example, prepare one server on the remote peer and another on the client
+machine's loopback interface, each expecting half of 8,192 requests:
+
+```powershell
+# On the physical peer:
+C:\PublicTools\ArrivalTcp.exe 192.0.2.21 192.0.2.12 20000 4096 1000 65536 C:\Runs\new\remote.json server 65536 14529 256 nodelay
+# On the client machine, in a separate process:
+C:\PublicTools\ArrivalTcp.exe 127.0.0.1 127.0.0.2 20000 4096 1000 65536 C:\Runs\new\loopback.json server 65536 14529 256 nodelay
+# On the client machine, after both listeners are ready:
+C:\PublicTools\ArrivalTcp.exe '192.0.2.21,127.0.0.1' '192.0.2.12,127.0.0.2' 20000 8192 2000 65536 C:\Runs\new\mixed.json client 65536 14529 256 nodelay gc:512:2048
+```
+
+Client output records per-target index, loopback classification, successful
+connection counts and directional payload bytes, without exporting addresses.
+Only non-loopback target bytes should be compared with physical-NIC counters;
+aggregate mixed payload is not physical-wire accounting.
+
+`managedGc` records the generation-2 counter increment, completed/in-flight
+request counts, server-GC mode and UTC collection-call envelope. Its elapsed
+time is **not** an ETW-verified exact managed-thread suspension duration. Use CLR
+suspension/restart events when establishing pause timing, and correlate the
+post-resume kernel wait stacks. GC's own CPU consumption is not TCP/IP contention.
+This is an explicitly forced-GC diagnostic, not natural-allocation/customer
+replay or proof of the target lock's CPU severity.
+
 The manual lab investigation supplemented CPU sampling with the existing Windows
 Performance Toolkit **SPINLOCK collision events**, rather than assuming that a
 function-entry sample proves contention. Private analysis matched the exact
@@ -741,6 +788,7 @@ generic saturation nor small positive-spin collision counts satisfy that gate.
 ./Test-EstablishedTransfer.ps1
 ./Test-BarrierTcp.ps1
 ./Test-ArrivalTcp.ps1
+./Test-GcArrivalTcp.ps1
 ./Test-CpuUtilization.ps1
 ./Test-CpuCollector.ps1
 ```
