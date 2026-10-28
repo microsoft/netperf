@@ -67,7 +67,20 @@ try {
         if(-not $rejected -or (Test-Path -LiteralPath $directory)){throw 'Invalid data-fixture or recovery-duration selection mutated state.'}
         $checks++
     }
-    foreach($file in @('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1','Invoke-NetperfGuestTcpChurn.ps1','Invoke-ScopedNeighborPulse.ps1','Set-ScopedDataAddresses.ps1')) {
+    foreach($extra in @(@{ManagedGcProcessRole='server'},@{ManagedGc=$true;ProfileCpu=$true;ManagedGcProcessRole='server'},
+        @{ManagedGc=$true;ProfileCpu=$true;ManagedGcProcessRole='server';ManagedGcIsolatedData=$true;ManagedGcPeerRecovery=$true})) {
+        $rejected=$false
+        try {
+            & (Join-Path $PSScriptRoot 'adapters\Invoke-NetperfGuestTcpChurn.ps1') `
+                -VmName 'unused-test-only' -Credential $credential -PublishDirectory $directory @extra
+        }catch {
+            if($_.Exception.Message -notmatch 'Receiver GC requires'){throw}
+            $rejected=$true
+        }
+        if(-not $rejected -or (Test-Path $directory)){throw 'Invalid receiver-GC mode mutated state or was accepted.'}
+        $checks++
+    }
+    foreach($file in @('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1','Invoke-NetperfGuestTcpChurn.ps1','Invoke-ScopedNeighborPulse.ps1','Set-ScopedDataAddresses.ps1','GcReceiverTraffic.psm1')) {
         $tokens=$null;$errors=$null
         $parsed=[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot "adapters\$file"),[ref]$tokens,[ref]$errors)
         if($errors.Count){throw ($errors|Out-String)}
@@ -94,9 +107,10 @@ try {
         $PeerMeasurement=[switch]::new($false);$ManagedGc=[switch]::new($true)
         $ManagedGcPeerRecovery=[switch]::new($true)
         $ManagedGcIsolatedData=[switch]::new($true);$ManagedGcRecoveryMilliseconds=3000
+        $ManagedGcProcessRole='client'
         & ([scriptblock]::Create($launch[0].Extent.Text))
     }
-    if($actual.Count -ne 12 -or $actual[7] -ne 2048 -or $actual[8] -isnot [bool] -or -not $actual[8] -or
+    if($actual.Count -ne 13 -or $actual[11] -ne 'client' -or $actual[7] -ne 2048 -or $actual[8] -isnot [bool] -or -not $actual[8] -or
         $actual[9] -isnot [bool] -or -not $actual[9] -or $actual[10] -ne 3000 -or
         $actual[3] -isnot [bool] -or -not $actual[3] -or
         $actual[4] -isnot [bool] -or $actual[4] -or $actual[5] -isnot [bool] -or $actual[5] -or

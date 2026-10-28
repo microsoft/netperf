@@ -42,6 +42,54 @@ public static class ArrivalTcp
     private static long dispatchTicks,maximumDispatchTicks;
     private static bool noDelay;
     private static int inFlight,peakInFlight,completed,started,connectedCount,acceptedCount;
+    private static int serverInFlight,serverPeakInFlight,serverCompleted,serverStarted;
+    private sealed class GcObservation
+    {
+        private readonly int heapMiB;
+        private int claim,launched,started,completed,pending,before,after;
+        private double milliseconds;
+        private string start="",end="";
+        public GcObservation(int heap) {heapMiB=heap;}
+        public bool Triggered {get {return Volatile.Read(ref claim)==2;}}
+        public void TryCollect(int minimum,int launchedNow,int startedNow,int completedNow,int pendingNow)
+        {
+            if(heapMiB==0 || launchedNow<minimum || completedNow<1 || pendingNow<1 ||
+                Interlocked.CompareExchange(ref claim,1,0)!=0)return;
+            launched=launchedNow;started=startedNow;completed=completedNow;pending=pendingNow;
+            before=GC.CollectionCount(GC.MaxGeneration);
+            start=DateTime.UtcNow.ToString("o",CultureInfo.InvariantCulture);
+            var clock=Stopwatch.StartNew();
+            GC.Collect(GC.MaxGeneration,GCCollectionMode.Forced,true,true);
+            clock.Stop();milliseconds=clock.Elapsed.TotalMilliseconds;
+            end=DateTime.UtcNow.ToString("o",CultureInfo.InvariantCulture);
+            after=GC.CollectionCount(GC.MaxGeneration);
+            Volatile.Write(ref claim,2);
+        }
+        public void Verify()
+        {
+            if(heapMiB>0 && (!Triggered || after<=before))
+                throw new InvalidOperationException("The requested full GC did not overlap completed and in-flight requests.");
+        }
+        public string Json()
+        {
+            return "{\"enabled\":"+(Triggered?"true":"false")+",\"heapMiB\":"+heapMiB+
+                ",\"launchedAtCollection\":"+launched+",\"startedBeforeCollection\":"+started+
+                ",\"completedBeforeCollection\":"+completed+",\"inFlightBeforeCollection\":"+pending+
+                ",\"gen2CollectionsBefore\":"+before+",\"gen2CollectionsAfter\":"+after+
+                ",\"blockingCollectionMilliseconds\":"+milliseconds.ToString("R",CultureInfo.InvariantCulture)+
+                ",\"collectionStartUtc\":\""+start+"\",\"collectionEndUtc\":\""+end+
+                "\",\"serverGc\":"+(System.Runtime.GCSettings.IsServerGC?"true":"false")+"}";
+        }
+    }
+    private static byte[][] PrepareHeap(int heapMiB)
+    {
+        if(heapMiB==0)return null;
+        var heap=new byte[heapMiB*1024][];
+        for(int i=0;i<heap.Length;i++)heap[i]=new byte[1024];
+        GC.Collect(GC.MaxGeneration,GCCollectionMode.Forced,true,true);
+        for(int i=0;i<heap.Length;i+=2)heap[i]=null;
+        return heap;
+    }
     private static async Task SendWithSlot(SemaphoreSlim capacity,string source,IPAddress peer,int port,byte[] data,byte[] expectedResponse,long queuedAt=0)
     {
         long start=Stopwatch.GetTimestamp();
@@ -90,6 +138,17 @@ public static class ArrivalTcp
                 throw new IOException("Unexpected request data after completion.");
         }
     }
+    private static async Task ServeTracked(TcpClient socket,int size,byte[] response)
+    {
+        int active=Interlocked.Increment(ref serverInFlight),prior;
+        Interlocked.Increment(ref serverStarted);
+        do {prior=serverPeakInFlight;if(active<=prior)break;}
+            while(Interlocked.CompareExchange(ref serverPeakInFlight,active,prior)!=prior);
+        try {
+            await Serve(socket,size,response).ConfigureAwait(false);
+            Interlocked.Increment(ref serverCompleted);
+        } finally {Interlocked.Decrement(ref serverInFlight);}
+    }
     private static async Task Send(string source,IPAddress peer,int port,byte[] data,byte[] expectedResponse)
     {
         long start=Stopwatch.GetTimestamp();
@@ -129,13 +188,14 @@ public static class ArrivalTcp
         if(count<1||count>8192||rate<1||rate>10000||size<1||size>1048576||responseSize<1||responseSize>1048576||port<1024||port>65535||
             sources.Length<1||sources.Length>8||(double)count/rate>120||concurrency<1||concurrency>1024)
             throw new ArgumentException("Invalid bounded arrival workload.");
-        int gcHeapMiB=0,gcMinimumLaunch=0;
+        int gcHeapMiB=0,gcMinimumLaunch=0;bool poolDispatch=false;
         if(args.Length==13) {
             string[] gc=args[12].Split(':');
-            if(gc.Length!=3 || gc[0]!="gc" || role!="client" ||
+            if(args[12]=="dispatch:pool" && role=="client")poolDispatch=true;
+            else if(gc.Length!=3 || gc[0]!="gc" || (role!="client" && role!="server") ||
                 !int.TryParse(gc[1],out gcHeapMiB) || !int.TryParse(gc[2],out gcMinimumLaunch) ||
                 gcHeapMiB<16 || gcHeapMiB>1024 || gcMinimumLaunch<1 || gcMinimumLaunch>=count)
-                throw new ArgumentException("GC mode requires client role and gc:heap-MiB:minimum-launched, with 16-1024 MiB and a trigger before the final request.");
+                throw new ArgumentException("GC mode requires client/server role and gc:heap-MiB:minimum-launched, with 16-1024 MiB and a trigger before the final request; dispatch:pool requires client role.");
         }
         if(File.Exists(args[6]))throw new IOException("Use a new result file.");
         TcpListener listener=null;
@@ -143,41 +203,47 @@ public static class ArrivalTcp
             byte[] response=new byte[responseSize];
             for(int i=0;i<response.Length;i++)response[i]=(byte)(i%251);
             if(responseSize==1)response[0]=0x5a;
+            byte[][] pressureHeap=PrepareHeap(gcHeapMiB);
+            var gcObservation=new GcObservation(gcHeapMiB);
             Task receiver=null;
             if(role!="client") {
                 listener=new TcpListener(peer,port);listener.Start(8192);
                 receiver=Task.Run(async delegate {
                     var accepted=new List<Task>();
+                    using(var serverCapacity=new SemaphoreSlim(concurrency)) {
                     for(int i=0;i<count;i++) {
+                        if(gcHeapMiB>0 && role=="server")await serverCapacity.WaitAsync().ConfigureAwait(false);
                         TcpClient connection=await listener.AcceptTcpClientAsync().ConfigureAwait(false);
                         Interlocked.Increment(ref acceptedCount);
-                        accepted.Add(Serve(connection,size,response));
+                        if(gcHeapMiB>0 && role=="server") {
+                            accepted.Add(Task.Run(async delegate {
+                                try {await ServeTracked(connection,size,response).ConfigureAwait(false);}
+                                finally {serverCapacity.Release();}
+                            }));
+                            gcObservation.TryCollect(gcMinimumLaunch,Volatile.Read(ref acceptedCount),Volatile.Read(ref serverStarted),
+                                Volatile.Read(ref serverCompleted),Volatile.Read(ref serverInFlight));
+                        } else accepted.Add(Serve(connection,size,response));
                     }
                     await Task.WhenAll(accepted).ConfigureAwait(false);
+                    }
                 });
             }
             if(role=="server") {
                 if(File.Exists(args[6]+".ready"))throw new IOException("Use a new ready file.");
                 File.WriteAllText(args[6]+".ready","listening");
                 await receiver.ConfigureAwait(false);
+                GC.KeepAlive(pressureHeap);
+                gcObservation.Verify();
                 File.WriteAllText(args[6],"{\"schema\":1,\"outcome\":\"collected\",\"role\":\"server\",\"connections\":"+count+
                     ",\"bytesReceived\":"+((long)count*size)+",\"bytesSent\":"+((long)count*responseSize)+
-                    ",\"networkErrors\":0,\"protocolErrors\":0,\"barrier\":false}");
+                    ",\"networkErrors\":0,\"protocolErrors\":0,\"barrier\":false,\"peakInFlight\":"+serverPeakInFlight+
+                    ",\"requestDispatch\":\""+(gcHeapMiB>0?"thread-pool":"inline")+"\",\"managedGc\":"+gcObservation.Json()+"}");
                 return;
-            }
-            byte[][] pressureHeap=null;
-            if(gcHeapMiB>0) {
-                pressureHeap=new byte[gcHeapMiB*1024][];
-                for(int i=0;i<pressureHeap.Length;i++)pressureHeap[i]=new byte[1024];
-                GC.Collect(GC.MaxGeneration,GCCollectionMode.Forced,true,true);
-                for(int i=0;i<pressureHeap.Length;i+=2)pressureHeap[i]=null;
             }
             byte[] data=new byte[size];for(int i=0;i<size;i++)data[i]=(byte)(i%251);
             if(gcHeapMiB>0)File.WriteAllText(args[6]+".traffic-ready",DateTime.UtcNow.ToString("o",CultureInfo.InvariantCulture));
             var senders=new List<Task>();var random=new Random(seed);var clock=Stopwatch.StartNew();
             double next=0,maxLag=0,totalLag=0,lastLaunch=0;
-            bool gcTriggered=false;int gcLaunched=0,gcStarted=0,gcCompleted=0,gcPending=0,gcBefore=0,gcAfter=0;
-            double gcMilliseconds=0;string gcStart="",gcEnd="";
             using(var capacity=new SemaphoreSlim(concurrency)) {
             for(int i=0;i<count;i++) {
                 int delay=(int)Math.Ceiling(next-clock.Elapsed.TotalMilliseconds);
@@ -186,25 +252,13 @@ public static class ArrivalTcp
                 double lag=Math.Max(0,clock.Elapsed.TotalMilliseconds-next);
                 maxLag=Math.Max(maxLag,lag);totalLag+=lag;lastLaunch=clock.Elapsed.TotalMilliseconds;
                 string requestSource=sources[i%sources.Length];IPAddress targetPeer=peers[i%peers.Length];
-                if(gcHeapMiB>0) {
+                if(gcHeapMiB>0 || poolDispatch) {
                     long queuedAt=Stopwatch.GetTimestamp();
                     senders.Add(Task.Run(()=>SendWithSlot(capacity,requestSource,targetPeer,port,data,response,queuedAt)));
                 } else {
                     senders.Add(SendWithSlot(capacity,requestSource,targetPeer,port,data,response));
                 }
-                if(gcHeapMiB>0 && !gcTriggered && i+1>=gcMinimumLaunch) {
-                    int completedNow=Volatile.Read(ref completed),pendingNow=Volatile.Read(ref inFlight);
-                    if(completedNow>0 && pendingNow>0) {
-                        gcLaunched=i+1;gcStarted=Volatile.Read(ref started);gcCompleted=completedNow;gcPending=pendingNow;
-                        gcBefore=GC.CollectionCount(GC.MaxGeneration);
-                        gcStart=DateTime.UtcNow.ToString("o",CultureInfo.InvariantCulture);
-                        var collection=Stopwatch.StartNew();
-                        GC.Collect(GC.MaxGeneration,GCCollectionMode.Forced,true,true);
-                        collection.Stop();gcMilliseconds=collection.Elapsed.TotalMilliseconds;
-                        gcEnd=DateTime.UtcNow.ToString("o",CultureInfo.InvariantCulture);
-                        gcAfter=GC.CollectionCount(GC.MaxGeneration);gcTriggered=true;
-                    }
-                }
+                gcObservation.TryCollect(gcMinimumLaunch,i+1,Volatile.Read(ref started),Volatile.Read(ref completed),Volatile.Read(ref inFlight));
                 next+=-Math.Log(1.0-random.NextDouble())*1000.0/rate;
             }
             await Task.WhenAll(senders).ConfigureAwait(false);
@@ -212,19 +266,12 @@ public static class ArrivalTcp
             if(receiver!=null)await receiver.ConfigureAwait(false);
             clock.Stop();
             GC.KeepAlive(pressureHeap);
-            if(gcHeapMiB>0 && (!gcTriggered || gcAfter<=gcBefore))
-                throw new InvalidOperationException("The requested full GC did not overlap completed and in-flight requests.");
-            string gcJson="{\"enabled\":"+(gcTriggered?"true":"false")+
-                ",\"heapMiB\":"+gcHeapMiB+",\"launchedAtCollection\":"+gcLaunched+
-                ",\"startedBeforeCollection\":"+gcStarted+",\"completedBeforeCollection\":"+gcCompleted+",\"inFlightBeforeCollection\":"+gcPending+
-                ",\"gen2CollectionsBefore\":"+gcBefore+",\"gen2CollectionsAfter\":"+gcAfter+
-                ",\"blockingCollectionMilliseconds\":"+gcMilliseconds.ToString("R",CultureInfo.InvariantCulture)+
-                ",\"collectionStartUtc\":\""+gcStart+"\",\"collectionEndUtc\":\""+gcEnd+
-                "\",\"serverGc\":"+(System.Runtime.GCSettings.IsServerGC?"true":"false")+"}";
+            gcObservation.Verify();
             var targetJson=new List<string>();
             for(int i=0;i<peers.Length;i++) {
                 int requests=count/peers.Length+(i<count%peers.Length?1:0);
-                targetJson.Add("{\"index\":"+i+",\"loopback\":"+(IPAddress.IsLoopback(peers[i])?"true":"false")+
+                bool loopback=IPAddress.IsLoopback(peers[i]) || (sources.Length==1 && peers[i].Equals(IPAddress.Parse(sources[0])));
+                targetJson.Add("{\"index\":"+i+",\"loopback\":"+(loopback?"true":"false")+
                     ",\"connections\":"+requests+",\"requestBytes\":"+((long)requests*size)+
                     ",\"responseBytes\":"+((long)requests*responseSize)+"}");
             }
@@ -232,7 +279,7 @@ public static class ArrivalTcp
                 ",\"bytesSent\":"+((long)count*size)+",\"networkErrors\":0,\"protocolErrors\":0,\"milliseconds\":"+clock.ElapsedMilliseconds+
                 ",\"bytesReceived\":"+((long)count*responseSize)+
                 ",\"arrivalRate\":"+rate+",\"seed\":"+seed+",\"barrier\":false"+
-                ",\"arrivalDispatch\":\""+(gcHeapMiB>0?"thread-pool":"inline")+"\""+
+                ",\"arrivalDispatch\":\""+(gcHeapMiB>0||poolDispatch?"thread-pool":"inline")+"\""+
                 ",\"meanDispatchQueueMilliseconds\":"+(1000.0*dispatchTicks/Stopwatch.Frequency/count).ToString("R",CultureInfo.InvariantCulture)+
                 ",\"maxDispatchQueueMilliseconds\":"+(1000.0*maximumDispatchTicks/Stopwatch.Frequency).ToString("R",CultureInfo.InvariantCulture)+
                 ",\"maxLaunchLagMilliseconds\":"+maxLag.ToString("R",CultureInfo.InvariantCulture)+
@@ -245,7 +292,7 @@ public static class ArrivalTcp
                 ",\"meanResponseMilliseconds\":"+(1000.0*responseTicks/Stopwatch.Frequency/count).ToString("R",CultureInfo.InvariantCulture)+
                 ",\"meanEofMilliseconds\":"+(1000.0*eofTicks/Stopwatch.Frequency/count).ToString("R",CultureInfo.InvariantCulture)+
                 ",\"noDelay\":"+(noDelay?"true":"false")+
-                ",\"managedGc\":"+gcJson+
+                ",\"managedGc\":"+gcObservation.Json()+
                 ",\"targets\":["+string.Join(",",targetJson)+"]"+
                 ",\"maximumRequestMilliseconds\":"+(1000.0*maximumLatencyTicks/Stopwatch.Frequency).ToString("R",CultureInfo.InvariantCulture)+"}");
         } finally {if(listener!=null)listener.Stop();}
@@ -267,7 +314,7 @@ public static class ArrivalTcp
     {
         try {
             if(args.Length<7 || args.Length>13) {
-                Console.Error.WriteLine("Usage: ArrivalTcp sources peer port count rate request-bytes output.json [role [response-bytes [seed [maximum-in-flight [nodelay|nagle [gc:heap-MiB:minimum-launched]]]]]]");
+                Console.Error.WriteLine("Usage: ArrivalTcp sources peer port count rate request-bytes output.json [role [response-bytes [seed [maximum-in-flight [nodelay|nagle [gc:heap-MiB:minimum-launched|dispatch:pool]]]]]]");
                 return 2;
             }
             if(!Run(args).Wait(TimeSpan.FromSeconds(150))){

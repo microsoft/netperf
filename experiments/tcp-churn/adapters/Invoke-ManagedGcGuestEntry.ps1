@@ -11,7 +11,8 @@ param(
     [int]$PayloadBytes=65536,
     [switch]$PeerRecovery,
     [switch]$IsolatedData,
-    [int]$RecoveryMilliseconds=8000
+    [int]$RecoveryMilliseconds=8000,
+    [ValidateSet('client','server')][string]$GcProcessRole='client'
 )
 $ErrorActionPreference='Stop'
 if($PublishDirectory -ne (Join-Path $ScratchParent 'publish')) {

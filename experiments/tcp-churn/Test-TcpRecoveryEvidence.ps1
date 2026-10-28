@@ -90,4 +90,17 @@ if($normalized.ownedConnectionCompletions -ne 1 -or $normalized.ownedConnectionC
     $normalized.failedAttemptReasonTokenCounts.max -ne 1 -or
     $normalized.failedAttemptReasonTokenCounts.hop -ne 1){throw 'Public-manifest normalization did not preserve owner/lifetime attribution.'}
 $checks++
+$manifest.Events[0].Task.Name='TcpAcceptListenerComplete'
+$serverNormalized=& (Get-Module TcpRecoveryEvidence) {
+    param($items,$metadata,$begin,$finish)
+    function Get-WinEvent {param($Path,[switch]$Oldest) $items}
+    Read-TcpRecoveryEvidence -Provider $metadata -TracePath 'unused-synthetic-trace.etl' `
+        -StartUtc $begin -EndUtc $finish -OwnerProcessId 10 -ExpectedConnections 1 -OwnerEventKind TcpAcceptListenerComplete
+} $events $manifest ($time.AddSeconds(-1)) ($time.AddSeconds(1))
+if($serverNormalized.ownedConnectionCompletions -ne 1 -or $serverNormalized.ownedConnectionClosures -ne 1 -or
+    $serverNormalized.ownerEventKind -ne 'TcpAcceptListenerComplete' -or
+    $serverNormalized.publicProbeCounts.TcpBlackHoleDetectionEntry -ne 1){
+    throw 'Passive receiver ownership or lifetime normalization failed.'
+}
+$checks++
 Write-Output "Passed $checks TCP recovery attribution cases; no trace identities, process IDs, or addresses were exported."

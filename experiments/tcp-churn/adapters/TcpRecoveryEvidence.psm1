@@ -8,7 +8,8 @@ function Get-TcpRecoveryCounts {
     param(
         [Parameter(Mandatory)][object[]]$Records,
         [Parameter(Mandatory)][ValidateRange(1,2147483647)][int]$OwnerProcessId,
-        [Parameter(Mandatory)][ValidateRange(1,8192)][int]$ExpectedConnections
+        [Parameter(Mandatory)][ValidateRange(1,8192)][int]$ExpectedConnections,
+        [ValidateSet('TcpConnectTcbComplete','TcpAcceptListenerComplete')][string]$OwnerEventKind='TcpConnectTcbComplete'
     )
     $owners=@{};$completed=0;$closed=0;$ackFailures=0;$last=[long]::MinValue
     $reasonTokens=[ordered]@{unacked=0;max=0;hop=0}
@@ -25,8 +26,8 @@ function Get-TcpRecoveryCounts {
                 if($owners.ContainsKey($key) -and $owners[$key]){$closed++}
                 $owners.Remove($key)
             }
-            TcpConnectTcbComplete {
-                $owned=$record.status -eq 0 -and $record.processId -eq $OwnerProcessId
+            {$_ -in @('TcpConnectTcbComplete','TcpAcceptListenerComplete')} {
+                $owned=$record.kind -eq $OwnerEventKind -and $record.status -eq 0 -and $record.processId -eq $OwnerProcessId
                 $owners[$key]=$owned
                 if($owned){$completed++}
             }
@@ -48,6 +49,7 @@ function Get-TcpRecoveryCounts {
     if($closed -ne $ExpectedConnections){throw 'Owned-process TCP closure coverage did not match the verified workload.'}
     [pscustomobject]@{schema=1;processAndLifetimeFilterApplied=$true;ownedConnectionCompletions=$completed
         ownedConnectionClosures=$closed;failedAttemptReasonMentionsAckToken=$ackFailures
+        ownerEventKind=$OwnerEventKind
         failedAttemptReasonTokenCounts=$reasonTokens
         publicProbeCounts=$counts;scope='owned-client-only';conclusion='algorithm-coverage-not-lock-wait-proof'}
 }
@@ -59,19 +61,20 @@ function Read-TcpRecoveryEvidence {
         [Parameter(Mandatory)][datetime]$StartUtc,
         [Parameter(Mandatory)][datetime]$EndUtc,
         [Parameter(Mandatory)][ValidateRange(1,2147483647)][int]$OwnerProcessId,
-        [Parameter(Mandatory)][ValidateRange(1,8192)][int]$ExpectedConnections
+        [Parameter(Mandatory)][ValidateRange(1,8192)][int]$ExpectedConnections,
+        [ValidateSet('TcpConnectTcbComplete','TcpAcceptListenerComplete')][string]$OwnerEventKind='TcpConnectTcbComplete'
     )
     $start=$StartUtc.ToUniversalTime();$end=$EndUtc.ToUniversalTime()
     if($end -le $start){throw 'A positive TCP owner-evidence interval is required.'}
     $layouts=@{}
     foreach($metadata in $Provider.Events) {
-        if($null -eq $metadata.Task -or $metadata.Task.Name -notin @('TcpConnectTcbComplete','TcpInsertConnectionTuple','TcpCloseTcbRequest',
+        if($null -eq $metadata.Task -or $metadata.Task.Name -notin @('TcpConnectTcbComplete','TcpAcceptListenerComplete','TcpInsertConnectionTuple','TcpCloseTcbRequest',
             'TcpDataTransferRetransmitRound','TcpBlackHoleDetectionEntry','TcpBlackHoleDetectionExit','TcpBlackHoleDetectionFailed','TcpBhDetectFullSizeAck')){continue}
         $template=[xml]$metadata.Template
         $names=@($template.GetElementsByTagName('data','http://schemas.microsoft.com/win/2004/08/events')|ForEach-Object{$_.GetAttribute('name')})
         $tcb=[array]::IndexOf($names,'Tcb');$pidIndex=[array]::IndexOf($names,'ProcessId')
         $status=[array]::IndexOf($names,'Status');$reason=[array]::IndexOf($names,'TraceString')
-        if($tcb -lt 0 -or ($metadata.Task.Name -eq 'TcpConnectTcbComplete' -and ($pidIndex -lt 0 -or $status -lt 0)) -or
+        if($tcb -lt 0 -or ($metadata.Task.Name -in @('TcpConnectTcbComplete','TcpAcceptListenerComplete') -and ($pidIndex -lt 0 -or $status -lt 0)) -or
             ($metadata.Task.Name -eq 'TcpBlackHoleDetectionFailed' -and $reason -lt 0)){
             throw 'The public TCP manifest lacks required owner/lifetime correlation fields.'
         }
@@ -93,6 +96,6 @@ function Read-TcpRecoveryEvidence {
                 processId=$owner;status=$status;timestampTicks=$_.TimeCreated.ToUniversalTime().Ticks;failureReasonAckToken=$ack;failureReasonTokens=$tokens})
         }
     }
-    Get-TcpRecoveryCounts -Records $rows.ToArray() -OwnerProcessId $OwnerProcessId -ExpectedConnections $ExpectedConnections
+    Get-TcpRecoveryCounts -Records $rows.ToArray() -OwnerProcessId $OwnerProcessId -ExpectedConnections $ExpectedConnections -OwnerEventKind $OwnerEventKind
 }
 Export-ModuleMember -Function Get-TcpRecoveryCounts,Read-TcpRecoveryEvidence

@@ -12,9 +12,13 @@ param(
     [ValidateRange(1,1048576)][int]$PayloadBytes=65536,
     [switch]$PeerRecovery,
     [switch]$IsolatedData,
-    [ValidateRange(100,8000)][int]$RecoveryMilliseconds=8000
+    [ValidateRange(100,8000)][int]$RecoveryMilliseconds=8000,
+    [ValidateSet('client','server')][string]$GcProcessRole='client'
 )
 $ErrorActionPreference='Stop'
+if($GcProcessRole -eq 'server' -and (-not $IsolatedData -or $PeerRecovery)){
+    throw 'Receiver GC requires isolated data and no neighbor pulse.'
+}
 $sourceRoot=Split-Path $PSScriptRoot
 $diagnostics=Join-Path $ScratchParent 'managed-gc-diagnostics'
 $publishOwned=$false
@@ -22,6 +26,7 @@ $peer=$null;$peerOwned=$false;$profileOwned=$false
 $client=$null;$localServer=$null;$tcpProbe=$null;$clrProbe=$null
 $neighborPulse=$null;$neighborArguments=@();$pulseResult=$null;$ownedCounts=$null;$peerDhcpEnabled=$null;$clientFailure=$null
 $localDataStarted=$false;$remoteDataStarted=$false
+$receiverState=$null
 $failure=$null;$cleanupErrors=[Collections.Generic.List[Exception]]::new()
 $phase='preflight';$start=$null;$end=$null;$tcpEnd=$null;$result=$null
 $port=20300;$count=8192;$heapMiB=1024
@@ -139,7 +144,7 @@ try {
     $peerOwned=$true
     $phase='start-remote-peer'
     Invoke-Command -Session $peer -ScriptBlock {
-        param($root,$listen,$client,$port,$count,$rate,$payloadBytes)
+        param($root,$listen,$client,$port,$count,$rate,$payloadBytes,$gcRole)
         if(@(Get-NetIPAddress -AddressFamily IPv4|Where-Object IPAddress -eq $listen).Count -ne 1){throw 'The peer does not uniquely own the declared listen address.'}
         Import-Module (Join-Path $root 'WindowsCts.psm1') -Force
         $global:OwnedManagedGcPeer=@{Process=$null;Rule=$null;Root=$root}
@@ -148,6 +153,7 @@ try {
         $null=Invoke-TcpChurnTool -Program $compiler -Arguments @('/nologo','/target:exe','/platform:x64',"/out:$exe",(Join-Path $root 'ArrivalTcp.cs')) `
             -Directory $root -LogPrefix (Join-Path $root 'compile')
         Copy-Item -LiteralPath (Join-Path $root 'ArrivalTcp.ServerGc.config') -Destination ($exe+'.config')
+        if($gcRole -eq 'server'){return}
         $rule='ManagedGcPeer-'+[guid]::NewGuid().ToString('N')
         $null=New-NetFirewallRule -Name $rule -DisplayName $rule -Direction Inbound -Action Allow `
             -Protocol TCP -LocalPort $port -LocalAddress $listen -RemoteAddress ($client -split ',')
@@ -161,12 +167,23 @@ try {
             if($global:OwnedManagedGcPeer.Process.Process.HasExited -or $clock.Elapsed.TotalSeconds -gt 20){throw 'Peer listener did not become ready.'}
             Start-Sleep -Milliseconds 50
         }
-    } -ArgumentList $remote,$peerAddress,$cohortSources,$port,($count/2),$rate,$payloadBytes
-    $localOutput=Join-Path $diagnostics 'loopback.json'
-    $phase='start-loopback-peer'
-    $localServer=Start-TcpChurnCollector -Program $exe -Arguments @(
-        '127.0.0.1','127.0.0.2',[string]$port,[string]($count/2),[string]$rate,[string]$payloadBytes,$localOutput,'server',[string]$payloadBytes,'14529','256','nodelay'
-    ) -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'loopback')
+    } -ArgumentList $remote,$peerAddress,$cohortSources,$port,($count/2),$rate,$payloadBytes,$GcProcessRole
+    if($GcProcessRole -eq 'server') {
+        $phase='start-profiled-receiver'
+        Import-Module (Join-Path $PSScriptRoot 'GcReceiverTraffic.psm1') -Force
+        $localOutput=Join-Path $diagnostics 'profiled-server.json'
+        $receiverState=@{Peer=$peer;PeerRoot=$remote;Directory=$diagnostics;Executable=$exe
+            ServerAddress=$clientAddress;PeerAddress=$peerAddress;Port=$port;Count=$count;Rate=$rate;Payload=$payloadBytes
+            Connections=$Connections;HeapMiB=$heapMiB;ServerOutput=$localOutput;Rule=$null;Receiver=$null;LocalClient=$null}
+        Start-GcReceiver -State $receiverState
+        $localServer=$receiverState.Receiver
+    } else {
+        $localOutput=Join-Path $diagnostics 'loopback.json'
+        $phase='start-loopback-peer'
+        $localServer=Start-TcpChurnCollector -Program $exe -Arguments @(
+            '127.0.0.1','127.0.0.2',[string]$port,[string]($count/2),[string]$rate,[string]$payloadBytes,$localOutput,'server',[string]$payloadBytes,'14529','256','nodelay'
+        ) -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'loopback')
+    }
     Wait-Ready $localServer ($localOutput+'.ready')
     $phase='trace-start'
     $null=Invoke-TcpChurnTool -Program $wpr -Arguments @('-start','CPU','-filemode') -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'wpr-start')
@@ -175,6 +192,7 @@ try {
     $tasks=@('TcpTcbSynSend','TcpDisconnectTcbRtoTimeout','TcpDataTransferRetransmitRound',
         'TcpBlackHoleDetectionEntry','TcpBlackHoleDetectionExit','TcpBlackHoleDetectionFailed','TcpBhDetectFullSizeAck')
     if($PeerRecovery){$tasks+=@('TcpConnectTcbComplete','TcpInsertConnectionTuple','TcpCloseTcbRequest')}
+    if($GcProcessRole -eq 'server'){$tasks+=@('TcpAcceptListenerComplete','TcpCloseTcbRequest','TcpInsertConnectionTuple')}
     $events=@($provider.Events|Where-Object{$null -ne $_.Task -and $_.Task.Name -in $tasks}|
         ForEach-Object{[pscustomobject]@{Id=$_.Id;Task=$_.Task.Name}})
     foreach($task in $tasks){if($task -notin @($events.Task)){throw 'A required public TCP event is unavailable.'}}
@@ -211,6 +229,11 @@ try {
         Wait-Ready $neighborPulse (Join-Path $diagnostics 'neighbor.ready')
     }
     $phase='managed-gc-traffic'
+    if($GcProcessRole -eq 'server') {
+        $clientPid=$localServer.Process.Id
+        $r=Invoke-GcReceiverTraffic -State $receiverState
+        $end=[DateTime]::UtcNow.ToString('o')
+    } else {
     $client=Start-TcpChurnCollector -Program $exe -Arguments @(
         ($clientSources -join ','),($clientTargets -join ','),[string]$port,[string]$count,[string]$rate,[string]$payloadBytes,
         $clientOutput,'client',[string]$payloadBytes,'14529',[string]$Connections,'nodelay',"gc:${heapMiB}:2048"
@@ -262,6 +285,8 @@ try {
         -not $r.managedGc.enabled -or $r.managedGc.gen2CollectionsAfter -le $r.managedGc.gen2CollectionsBefore) {
         throw 'Mixed-target byte counts or real managed-GC coverage did not verify.'
     }
+    }
+    $remoteTargets=@($r.targets|Where-Object{-not $_.loopback})
     $after=Get-NetAdapterStatistics -Name $alias
     if($after.SentBytes-$before.SentBytes -lt ($remoteTargets|Measure-Object requestBytes -Sum).Sum -or
         $after.ReceivedBytes-$before.ReceivedBytes -lt ($remoteTargets|Measure-Object responseBytes -Sum).Sum){throw 'The non-loopback NIC did not account for the remote payload.'}
@@ -277,9 +302,15 @@ try {
         cpuCoverage='sampled-etw-only';executionTopology='two-existing-guests-plus-client-loopback'
         targetSeverity='not-evaluated';conclusion='diagnostic-not-customer-severity-proof'}
     $result.isolatedDataAddresses=[bool]$IsolatedData
+    $result.profiledProcessRole=$GcProcessRole
+    if($GcProcessRole -eq 'server'){$result.launchSpanScope='maximum-independent-producer-span';$result.workloadScope='both-independent-producers-plus-profiled-receiver'}
     if($PeerRecovery){$result.peerRecovery=$pulseResult;$result.peerDataInterfaceDhcpEnabled=$peerDhcpEnabled}
 }catch{$failure=$_}
 finally {
+    if($null -ne $receiverState) {
+        $client=$receiverState.LocalClient
+        $localServer=$receiverState.Receiver
+    }
     if($null -ne $neighborPulse) {
         try {
             [IO.File]::WriteAllText((Join-Path $diagnostics 'neighbor.stop'),'stop')
@@ -301,6 +332,9 @@ finally {
         }
     }
     foreach($child in @($client,$localServer)){if($null -ne $child){try{Stop-TcpChurnCollector $child}catch{$cleanupErrors.Add($_.Exception)}}}
+    if($null -ne $receiverState -and $receiverState.Rule){
+        try{Remove-NetFirewallRule -Name $receiverState.Rule -ErrorAction Stop}catch{$cleanupErrors.Add($_.Exception)}
+    }
     $tcpEnd=[DateTime]::UtcNow.ToString('o')
     foreach($entry in @(@{child=$tcpProbe;stop='tcp.stop'},@{child=$clrProbe;stop='clr.stop'})) {
         if($null -eq $entry.child){continue}
@@ -399,19 +433,22 @@ try {
         (Join-Path $PublishDirectory 'cpu-after-gc.json'),$postStart.ToString('o'),$postEnd.ToString('o')) `
         -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'post-gc-analysis') -TimeoutSeconds 300
     $phase='analyze-tcp-events'
-    $tcpCoverageEnd=if($PeerRecovery){$tcpEnd}else{$end}
+    $tcpCoverageEnd=if($PeerRecovery -or $GcProcessRole -eq 'server'){$tcpEnd}else{$end}
     $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @('--events',(Join-Path $diagnostics 'tcp.etl'),
         (Join-Path $PublishDirectory 'tcp-events.json'),'interval',$start,$tcpCoverageEnd,(Join-Path $diagnostics 'tcp-state.json')) `
         -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'tcp-analysis') -TimeoutSeconds 120
     $tcpSummary=Get-Content (Join-Path $PublishDirectory 'tcp-events.json') -Raw|ConvertFrom-Json
     if($tcpSummary.outcome -ne 'counted' -or $tcpSummary.eventsLost -ne 0){throw 'Lossless TCP event coverage is required.'}
     $cpuFiles=@('cpu-load.json','cpu-after-gc.json')
-    if($PeerRecovery) {
+    if($PeerRecovery -or $GcProcessRole -eq 'server') {
         $phase='verify-recovery-coverage'
         Import-Module (Join-Path $PSScriptRoot 'TcpRecoveryEvidence.psm1') -Force
+        $ownerEvent=if($GcProcessRole -eq 'server'){'TcpAcceptListenerComplete'}else{'TcpConnectTcbComplete'}
         $ownedCounts=Read-TcpRecoveryEvidence -Provider $provider -TracePath (Join-Path $diagnostics 'tcp.etl') `
-            -StartUtc ([datetime]$start) -EndUtc ([datetime]$tcpCoverageEnd) -OwnerProcessId $clientPid -ExpectedConnections $count
+            -StartUtc ([datetime]$start) -EndUtc ([datetime]$tcpCoverageEnd) -OwnerProcessId $clientPid -ExpectedConnections $count -OwnerEventKind $ownerEvent
         $result.tcpRecovery=$ownedCounts
+    }
+    if($PeerRecovery) {
         $recoveryStart=([datetime]$pulseResult.restoredUtc).ToUniversalTime()
         $recoveryEnd=if($recoveryStart.AddSeconds(2) -lt $endUtc){$recoveryStart.AddSeconds(2)}else{$endUtc}
         if($recoveryEnd -le $recoveryStart){throw 'No positive post-recovery CPU window remains.'}

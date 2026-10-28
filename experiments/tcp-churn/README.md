@@ -555,10 +555,11 @@ Server readiness is a listener-owned ready file, not a first-payload barrier;
 
 #### Managed-GC and mixed-target diagnostic
 
-The client can optionally perform one real blocking, compacting generation-2
+The client or receiving server can optionally perform one real blocking, compacting generation-2
 collection during ongoing verified I/O. Append `gc:heap-MiB:minimum-launched`
 after the socket-pacing argument. The bounded heap must be 16-1,024 MiB.
-The trigger waits until at least the requested number of requests have launched,
+The trigger waits until at least the requested number of requests have launched
+(or connections have been accepted by the receiver),
 at least one request has completed, and at least one remains in flight. If that
 overlap never occurs, the run fails rather than claiming GC-path coverage.
 
@@ -567,6 +568,10 @@ the arrival clock starts. The blocking collection runs at the I/O-overlap trigge
 There is no preconnection phase, first-payload gate, sleep-based pause or shared
 release barrier. Normal asynchronous completions and the existing arrival
 schedule catch up after the actual runtime collection.
+For a receiving process, accepted requests are dispatched through a bounded
+worker pool, and independent client processes continue running during its GC.
+An independent client can explicitly select `dispatch:pool` instead of a GC
+descriptor to use bounded dispatch without triggering a collection.
 
 To opt into server GC and all-processor-group runtime support, copy
 `ArrivalTcp.ServerGc.config` beside the compiled executable as
@@ -696,6 +701,19 @@ wait, target CPU saturation, or equivalence to a physical deployment.
 Post-restoration CPU diagnostics are retained even when the final BH-entry gate
 rejects the run. Fixed DHCP-state flags document the admission constraints for
 possible future data/management isolation; this pulse never changes DHCP.
+
+The separate healthy receiver control selects `managed_gc_process_role=server`
+with isolated data enabled and the neighbor pulse disabled. The profiled guest
+runs one GC receiver, a distinct local producer connects to that guest's own data
+address, and the peer runs another independent producer. Both producers use
+different arrival seeds and no forced GC; only the receiver pauses. Each sends
+half the verified request budget. This is ordinary listener readiness followed
+by independent requests, not a preconnected cohort or shared first-data release.
+The CLR process filter and TCP ownership correlation move to the receiver;
+passive TCBs are attributed using public accept-completion plus close events.
+The result records the profiled process role. The maximum independent-producer
+launch span is not a shared wire-arrival clock; workload duration covers both
+producers and the receiver. Ordinary client-GC mode remains the default.
 
 `managed_gc_isolated_data=true` is a separate, explicit opt-in for fresh data
 paths. It requires both existing guest interfaces to already have DHCP disabled.

@@ -17,7 +17,8 @@ param(
     [ValidateRange(1,1048576)][int]$ManagedGcPayloadBytes=65536,
     [switch]$ManagedGcPeerRecovery,
     [switch]$ManagedGcIsolatedData,
-    [ValidateRange(100,8000)][int]$ManagedGcRecoveryMilliseconds=8000
+    [ValidateRange(100,8000)][int]$ManagedGcRecoveryMilliseconds=8000,
+    [ValidateSet('client','server')][string]$ManagedGcProcessRole='client'
 )
 $ErrorActionPreference='Stop'
 if($ManagedGc -and (-not $ProfileCpu -or $SynDrop -or $ProbePeer -or $PeerMeasurement)){
@@ -29,6 +30,9 @@ if($PSBoundParameters.ContainsKey('ManagedGcPayloadBytes') -and -not $ManagedGc)
 if($Seconds -lt 5 -and -not $ManagedGc){throw 'Intervals below five seconds require managed-GC diagnostic mode.'}
 if($ManagedGcPeerRecovery -and -not $ManagedGc){throw 'Peer recovery requires managed-GC diagnostic mode.'}
 if($ManagedGcIsolatedData -and -not $ManagedGc){throw 'Isolated data addresses require managed-GC diagnostic mode.'}
+if($ManagedGcProcessRole -eq 'server' -and (-not $ManagedGc -or -not $ManagedGcIsolatedData -or $ManagedGcPeerRecovery)){
+    throw 'Receiver GC requires managed-GC mode, isolated data and no neighbor pulse.'
+}
 if($PSBoundParameters.ContainsKey('ManagedGcRecoveryMilliseconds') -and -not $ManagedGcPeerRecovery){
     throw 'Recovery duration selection requires managed-GC peer recovery.'
 }
@@ -87,13 +91,13 @@ try {
             -Recurse -ToSession $session -ErrorAction Stop
     }
     $adapterFiles=@('WindowsCts.psm1','Invoke-NetperfTcpChurn.ps1','Invoke-NetperfPeerCpu.ps1')
-    if($ManagedGc){$adapterFiles+=@('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1','Invoke-ScopedNeighborPulse.ps1','TcpRecoveryEvidence.psm1','Set-ScopedDataAddresses.ps1')}
+    if($ManagedGc){$adapterFiles+=@('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1','Invoke-ScopedNeighborPulse.ps1','TcpRecoveryEvidence.psm1','Set-ScopedDataAddresses.ps1','GcReceiverTraffic.psm1')}
     foreach ($file in $adapterFiles) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $file) -Destination (Join-Path $remoteRoot "adapters\$file") -ToSession $session -ErrorAction Stop
     }
     $phase='guest-traffic'
     $exit=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
-        param($root,$seconds,$connections,$profile,$synDrop,$peerMeasurement,$managedGc,$managedGcPayloadBytes,$peerRecovery,$isolatedData,$recoveryMilliseconds,$credential)
+        param($root,$seconds,$connections,$profile,$synDrop,$peerMeasurement,$managedGc,$managedGcPayloadBytes,$peerRecovery,$isolatedData,$recoveryMilliseconds,$gcProcessRole,$credential)
         if (@(Get-Process -Name 'Runner.Worker','ctsTraffic' -ErrorAction Ignore).Count) {
             throw 'Guest became busy before traffic setup.'
         }
@@ -111,6 +115,7 @@ try {
             if($peerRecovery){$extra+='-PeerRecovery'}
             if($isolatedData){$extra+='-IsolatedData'}
             if($peerRecovery){$extra+=@('-RecoveryMilliseconds',[string]$recoveryMilliseconds)}
+            if($managedGc){$extra+=@('-GcProcessRole',$gcProcessRole)}
         } else {
             $extra=@('-DedicatedLab')
             if ($profile) { $extra+=@('-ProfileCpu','-AnalyzerDirectory',(Join-Path $root 'analyzer')) }
@@ -132,7 +137,7 @@ try {
             $launch|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $root 'child-startup.json')
             if($credentialFile -and (Test-Path -LiteralPath $credentialFile)){Remove-Item -LiteralPath $credentialFile -ErrorAction Stop}
         }
-    } -ArgumentList $guestRoot,$Seconds,$Connections,([bool]$ProfileCpu),([bool]$SynDrop),([bool]$PeerMeasurement),([bool]$ManagedGc),$ManagedGcPayloadBytes,([bool]$ManagedGcPeerRecovery),([bool]$ManagedGcIsolatedData),$ManagedGcRecoveryMilliseconds,$Credential
+    } -ArgumentList $guestRoot,$Seconds,$Connections,([bool]$ProfileCpu),([bool]$SynDrop),([bool]$PeerMeasurement),([bool]$ManagedGc),$ManagedGcPayloadBytes,([bool]$ManagedGcPeerRecovery),([bool]$ManagedGcIsolatedData),$ManagedGcRecoveryMilliseconds,$ManagedGcProcessRole,$Credential
     $startup=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
         param($root)
         Get-Content -LiteralPath (Join-Path $root 'child-startup.json') -Raw|ConvertFrom-Json|
