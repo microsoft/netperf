@@ -695,6 +695,26 @@ notifications, so event totals are not claimed as gateway-state transitions.
 Logical next hops sharing a physical receiver are not independent gateway
 hardware. This closes a mechanism-coverage gap, **not the target-lock severity gate**.
 
+Short outbound sends then placed connection creation and BH confirmations on
+the same host: 8,192 connections transferred 512 MiB. The initial LSO-enabled
+run recorded 455 full-size-ACK events. A no-restart LSO configuration request
+did not demonstrate increased coverage and is not used as a verified LSO-off
+comparison. After applying the setting with a guarded data-adapter restart
+and restoring the benchmark addresses/route, the LSO-off run recorded all
+8,192 full-size ACKs. Client CPU averaged 15.87 busy equivalents, peaked at
+19.15 and had zero logical processors at least 90% busy. Exact analysis found
+eight candidate-setter frame occurrences among 80,433 CPU samples, with zero
+CPU/probe loss or unresolved TCPIP frames. A restarted, original-LSO-restored
+control completed the same transfer and recorded 613 full-size ACKs.
+
+A larger 65,536-connection outbound attempt encountered port-allocation errors
+and is excluded; no global port-range/reuse policy was changed to hide them.
+Both original offload configurations and RSS40 were verified after restoration.
+Temporary service addresses, primary/standby test routes, owned collectors and
+scoped firewall rules were removed; the original isolated physical fixture was
+retained for further work. These experiments still do not reproduce the
+customer-scale target-lock hotspot.
+
 **Acceptance remains open:** plausible traffic must show the identified
 path-cache lock consuming roughly 30 CPUs, with contemporaneous per-CPU
 measurements and exact stack/instruction or lock-identity attribution. Neither
