@@ -246,7 +246,8 @@ try {
         $routeArguments=@('-NoProfile','-NonInteractive','-File',(Join-Path $PSScriptRoot $controlScript),
             '-InterfaceAlias',$alias,'-DataStateFile',(Join-Path $diagnostics 'data-original.clixml'),
             '-StateFile',(Join-Path $diagnostics 'route-control-original.clixml'))
-        if($CacheRetirePaths){$routeArguments+=@('-PathCount',[string]$CacheRetirePaths)}
+        if($CacheRetirePaths){$routeArguments+=@('-PathCount',[string]$CacheRetirePaths,
+            '-ReceiverExecutable',$exe,'-ReceiverProcessId',[string]$localServer.Process.Id)}
         else{$routeArguments+=@('-NextHop',$(if($RouteVariant -eq 'peer-gateway'){'198.19.240.5'}else{'0.0.0.0'}),'-ExpectedPeerMac',$peerMac)}
         $routeAgent=Start-TcpChurnCollector -Program $routeProgram -Arguments ($routeArguments+@(
             '-ReportFile',(Join-Path $diagnostics 'route-control.json'),'-ReadyFile',(Join-Path $diagnostics 'route-control.ready'),
@@ -610,7 +611,10 @@ try {
     @{schema=1;workload='managed-gc-mixed';outcome='failed';phase=$phase;failureType=$_.Exception.GetType().FullName
         failureCode=$_.Exception.HResult;toolExitCode=$toolCode;cleanupVerified=$true
         peerRecovery=$pulseResult;tcpRecovery=$ownedCounts;peerDataInterfaceDhcpEnabled=$peerDhcpEnabled
-        routeRefreshControl=$routeReport;conclusion='analysis-not-accepted'}|
+        routeRefreshControl=$(if($RouteRefresh){$routeReport}else{$null})
+        cacheRetirementControl=$(if($CacheRetirePaths){$routeReport}else{$null})
+        managedGc=$r.managedGc;connections=$r.connections
+        conclusion='analysis-not-accepted'}|
         ConvertTo-Json -Depth 6|Set-Content (Join-Path $PublishDirectory 'result.json')
     throw
 }

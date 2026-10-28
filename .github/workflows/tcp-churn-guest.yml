@@ -130,6 +130,8 @@ jobs:
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-ScopedPathRetirement.ps1
       - shell: pwsh
+        run: ./experiments/tcp-churn/Test-OwnedTcpTable.ps1
+      - shell: pwsh
         run: ./experiments/tcp-churn/Test-TcpRecoveryEvidence.ps1
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-CpuUtilization.ps1

@@ -765,6 +765,10 @@ frames alone and ordinary RTT wait-interval checks do not qualify. These
 are caller signatures, not proof of a particular lock address or owner;
 a periodic timer frame does not by itself establish retransmission or
 black-hole probing.
+The timer-wait summary also reports peak sample density over sliding 10-, 100-,
+500- and 620-ms windows using the trace's recorded positive sampling interval.
+These CPU-equivalent estimates are not proof of simultaneous waiters on one
+identified lock.
 
 The read-only `probe_peer` mode also rejects remaining owned GC processes,
 data aliases, firewall rules or permanent fixture neighbors, and publishes only

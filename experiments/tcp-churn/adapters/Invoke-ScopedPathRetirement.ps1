@@ -8,6 +8,7 @@ param(
     [Parameter(Mandatory)][string]$StateFile,
     [Parameter(Mandatory)][string]$ReportFile,
     [ValidateSet(1024,8192,24576)][int]$PathCount=8192,
+    [string]$ReceiverExecutable,[int]$ReceiverProcessId,
     [string]$ReadyFile,[string]$BeginFile,[string]$StopFile,
     [switch]$RestoreOnly
 )
@@ -106,6 +107,10 @@ foreach($address in Get-NetIPAddress -AddressFamily IPv4 -PolicyStore ActiveStor
 if((@(Read-Defaults)-join '|') -ne (@($data.originalDefaultKeys)-join '|')){
     throw 'Default routing changed before path retirement.'
 }
+if($ReceiverProcessId -lt 1 -or -not(Test-Path -LiteralPath $ReceiverExecutable -PathType Leaf)){
+    throw 'The verified receiver executable and process are required for bounded cohort observation.'
+}
+Add-Type -Path $ReceiverExecutable -ErrorAction Stop
 if((Read-PathCount) -ne 0){throw 'Existing cached paths conflict with the exclusively owned fixture prefix.'}
 @{interfaceGuid=[string]$adapter[0].InterfaceGuid;source=$source;prefix=$prefix
     originalAbsent=$true;originalAddresses=@(Read-Addresses)}|Export-Clixml -LiteralPath $StateFile -NoClobber
@@ -146,10 +151,9 @@ try {
     $sockets.Clear()
     $report.measuredReleasedPaths=Read-PathCount
     if($report.measuredReleasedPaths -lt $PathCount){throw 'Released cached paths did not persist until retirement.'}
-    $report.establishedAtTrigger=@(Get-NetTCPConnection -State Established -ErrorAction Stop|
-        Where-Object{($_.LocalAddress -eq '198.19.240.1' -or $_.RemoteAddress -eq '198.19.240.1') -and
-            ($_.LocalPort -eq 20300 -or $_.RemotePort -eq 20300)}).Count
-    if($report.establishedAtTrigger -lt 8 -or (Test-Path -LiteralPath $StopFile)){
+    $report.establishedAtTrigger=[ArrivalTcp]::CountEstablishedConnections($ReceiverProcessId,20300)
+    $report.controlStoppedBeforeRetirement=Test-Path -LiteralPath $StopFile
+    if($report.establishedAtTrigger -lt 8 -or $report.controlStoppedBeforeRetirement){
         throw 'No verified live TCP cohort remains for the source-retirement control.'
     }
     $report.applyStartUtc=[DateTime]::UtcNow.ToString('o')

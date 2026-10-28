@@ -17,23 +17,35 @@ public static class ArrivalTcp
     private static extern uint GetExtendedTcpTable(IntPtr table,ref uint bytes,bool order,int family,int tableClass,uint reserved);
     public static bool IsListenerReady(int processId,int port)
     {
+        return CountOwnedTcpRows(processId,port,true)>0;
+    }
+    public static int CountEstablishedConnections(int processId,int port)
+    {
+        return CountOwnedTcpRows(processId,port,false);
+    }
+    private static int CountOwnedTcpRows(int processId,int port,bool listenerOnly)
+    {
         if(processId<1 || port<1 || port>65535)throw new ArgumentException("Valid listener process and port are required.");
         uint bytes=0;
-        uint status=GetExtendedTcpTable(IntPtr.Zero,ref bytes,false,2,3,0);
-        if(status!=122 || bytes<4 || bytes>1048576)throw new InvalidOperationException("Cannot size the owned-listener table.");
+        int tableClass=listenerOnly?3:4;
+        uint status=GetExtendedTcpTable(IntPtr.Zero,ref bytes,false,2,tableClass,0);
+        if(status!=122 || bytes<4 || bytes>1048576)throw new InvalidOperationException("Cannot size the owned TCP table.");
+        bytes=Math.Min(bytes+65536,1048576);
         IntPtr table=Marshal.AllocHGlobal((int)bytes);
         try {
-            status=GetExtendedTcpTable(table,ref bytes,false,2,3,0);
-            if(status!=0)throw new InvalidOperationException("Cannot read the owned-listener table.");
+            status=GetExtendedTcpTable(table,ref bytes,false,2,tableClass,0);
+            if(status!=0)throw new InvalidOperationException("Cannot read the owned TCP table.");
             int count=Marshal.ReadInt32(table);
             if(count<0 || count>(bytes-4)/24)throw new InvalidOperationException("Invalid listener-table bounds.");
+            int matched=0;
             for(int i=0;i<count;i++) {
                 IntPtr row=IntPtr.Add(table,4+i*24);
                 uint encoded=(uint)Marshal.ReadInt32(row,8);
                 int localPort=(int)(((encoded&255)<<8)|((encoded>>8)&255));
-                if(localPort==port && Marshal.ReadInt32(row,20)==processId)return true;
+                if(localPort==port && Marshal.ReadInt32(row,20)==processId &&
+                    (listenerOnly || Marshal.ReadInt32(row)==5))matched++;
             }
-            return false;
+            return matched;
         } finally {Marshal.FreeHGlobal(table);}
     }
 

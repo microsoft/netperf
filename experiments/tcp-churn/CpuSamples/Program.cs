@@ -34,6 +34,17 @@ internal static class Program
         frames.Any(frame => frame.EndsWith("!TcpTcbHeaderSend", StringComparison.Ordinal)) &&
         frames.Any(frame => frame.EndsWith("!TcpPeriodicTimeoutHandler", StringComparison.Ordinal));
 
+    private static int PeakSampleCount(IReadOnlyList<long> sortedTicks, long windowTicks)
+    {
+        int left = 0, peak = 0;
+        for (int right = 0; right < sortedTicks.Count; right++)
+        {
+            while (sortedTicks[right] - sortedTicks[left] >= windowTicks) left++;
+            peak = Math.Max(peak, right - left + 1);
+        }
+        return peak;
+    }
+
     private static object[] Top(Dictionary<string, long> counts, int limit) =>
         counts.OrderByDescending(pair => pair.Value).ThenBy(pair => pair.Key)
             .Take(limit).Select(pair => (object)new { name = pair.Key, samples = pair.Value }).ToArray();
@@ -116,6 +127,10 @@ internal static class Program
                 IsPathRefreshWait(new[] { "tcpip!TcpIsRttSampleInWaitInterval", "tcpip!TcpUpdatePathInfoTcb" }) ||
                 IsTimerPathRefreshWait(new[] { "nt!KxWaitForLockOwnerShip", "tcpip!TcpUpdatePathInfoTcb" }))
                 return 1;
+            if (PeakSampleCount(new long[] { 0, 9, 10, 19 }, 10) != 2 ||
+                PeakSampleCount(new long[] { 5, 5, 5 }, 10) != 3 ||
+                PeakSampleCount(new long[0], 10) != 0)
+                return 1;
             Console.WriteLine("CPU analyzer contract checks passed.");
             return 0;
         }
@@ -156,6 +171,7 @@ internal static class Program
                 stage = "samples";
                 long samples = 0, withStack = 0, network = 0, unresolved = 0;
                 long pathRefreshWait = 0, timerPathRefreshWait = 0, hypervisorNotifiedPathRefreshWait = 0;
+                var timerWaitTicks = new List<long>();
                 foreach (var record in log.Events)
                 {
                     var sample = record as SampledProfileTraceData;
@@ -210,13 +226,20 @@ internal static class Program
                     if (IsPathRefreshWait(frames))
                     {
                         pathRefreshWait++;
-                        if (IsTimerPathRefreshWait(frames)) timerPathRefreshWait++;
+                        if (IsTimerPathRefreshWait(frames))
+                        {
+                            timerPathRefreshWait++;
+                            timerWaitTicks.Add((utc - start).Ticks);
+                        }
                         if (frames.Any(frame => frame.EndsWith("!HvlNotifyLongSpinWait", StringComparison.Ordinal)))
                             hypervisorNotifiedPathRefreshWait++;
                     }
                     if (leaf != null) Add(networkLeaves, leaf);
                     if (frames.Count > 0) Add(networkStacks, string.Join(" <- ", frames.Take(24)));
                 }
+                double profileIntervalMs = log.SampleProfileInterval.TotalMilliseconds;
+                if (profileIntervalMs <= 0) throw new InvalidOperationException("A positive profile sampling interval is required.");
+                timerWaitTicks.Sort();
                 File.WriteAllText(args[1], JsonConvert.SerializeObject(new
                 {
                     schema = 1, outcome = samples > 0 ? "sampled" : "no-samples",
@@ -226,6 +249,14 @@ internal static class Program
                     publicPathRefreshWaitSamples = pathRefreshWait,
                     publicTimerPathRefreshWaitSamples = timerPathRefreshWait,
                     publicHypervisorNotifiedPathRefreshWaitSamples = hypervisorNotifiedPathRefreshWait,
+                    profileIntervalMilliseconds = profileIntervalMs,
+                    timerPathRefreshWaitPeaks = new[] { 10.0, 100.0, 500.0, 620.0 }.Select(window =>
+                    {
+                        int peak = PeakSampleCount(timerWaitTicks, TimeSpan.FromMilliseconds(window).Ticks);
+                        return new { windowMilliseconds = window, samples = peak,
+                            sampledWaitingCpuEquivalents = peak * profileIntervalMs / window };
+                    }).ToArray(),
+                    timerWaitPeakConclusion = "sample-density-not-simultaneous-lock-waiter-proof",
                     pathRefreshWaitConclusion = "caller-signature-only-not-lock-address-or-owner-proof",
                     observedProcessorNumbers = processors.OrderBy(value => value).ToArray(),
                     networkSamplesByProcessor = Top(networkProcessors, 4096),
