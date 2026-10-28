@@ -16,7 +16,8 @@ param(
     [ValidateSet('client','server')][string]$GcProcessRole='client',
     [ValidateSet('arrays','graph')][string]$HeapLayout='arrays',
     [switch]$RouteRefresh,
-    [ValidateSet('onlink','peer-gateway')][string]$RouteVariant='onlink'
+    [ValidateSet('onlink','peer-gateway')][string]$RouteVariant='onlink',
+    [ValidateSet(0,16384)][int]$ReceiveBudgetBytes=0
 )
 $ErrorActionPreference='Stop'
 if($GcProcessRole -eq 'server' -and (-not $IsolatedData -or $PeerRecovery)){
@@ -26,6 +27,7 @@ if($RouteRefresh -and ($GcProcessRole -ne 'server' -or -not $IsolatedData -or $P
     throw 'Route refresh requires isolated receiver-GC mode without a neighbor pulse.'
 }
 if($RouteVariant -ne 'onlink' -and -not $RouteRefresh){throw 'Logical gateway selection requires the owned route-refresh control.'}
+if($ReceiveBudgetBytes -and $GcProcessRole -ne 'server'){throw 'A bounded receive budget requires receiver-GC mode.'}
 $sourceRoot=Split-Path $PSScriptRoot
 $diagnostics=Join-Path $ScratchParent 'managed-gc-diagnostics'
 $publishOwned=$false
@@ -189,7 +191,8 @@ try {
         $localOutput=Join-Path $diagnostics 'profiled-server.json'
         $receiverState=@{Peer=$peer;PeerRoot=$remote;Directory=$diagnostics;Executable=$exe
             ServerAddress=$clientAddress;PeerAddress=$peerAddress;Port=$port;Count=$count;Rate=$rate;Payload=$payloadBytes
-            Connections=$Connections;HeapMiB=$heapMiB;HeapLayout=$HeapLayout;ServerOutput=$localOutput;Rule=$null;Receiver=$null;LocalClient=$null}
+            Connections=$Connections;HeapMiB=$heapMiB;HeapLayout=$HeapLayout;ReceiveBudgetBytes=$ReceiveBudgetBytes
+            ServerOutput=$localOutput;Rule=$null;Receiver=$null;LocalClient=$null}
         Start-GcReceiver -State $receiverState
         $localServer=$receiverState.Receiver
     } else {

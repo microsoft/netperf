@@ -1,7 +1,8 @@
 # Copyright (c) Microsoft Corporation.
 # SPDX-License-Identifier: MIT
 #Requires -Version 7.2
-param([ValidateSet('arrays','graph')][string]$HeapLayout='arrays')
+param([ValidateSet('arrays','graph')][string]$HeapLayout='arrays',
+    [ValidateSet(0,16384)][int]$ReceiveBudgetBytes=0)
 $ErrorActionPreference='Stop'
 $directory=Join-Path ([IO.Path]::GetTempPath()) ('server-gc-arrival-'+[guid]::NewGuid().ToString('N'))
 $null=New-Item -ItemType Directory -Path $directory
@@ -23,8 +24,10 @@ try {
     $probe=[Net.Sockets.TcpListener]::new([Net.IPAddress]::Parse('127.0.0.2'),0)
     $probe.Start();$port=$probe.LocalEndpoint.Port;$probe.Stop()
     $serverOutput=Join-Path $directory 'server.json'
+    $descriptor="gc:32:32:{0}" -f $HeapLayout
+    if($ReceiveBudgetBytes){$descriptor+=':'+$ReceiveBudgetBytes}
     $server=Start-Child @('127.0.0.1','127.0.0.2',[string]$port,'128','4000','65536',
-        $serverOutput,'server','262144','14529','64','nodelay',("gc:32:32:{0}" -f $HeapLayout))
+        $serverOutput,'server','262144','14529','64','nodelay',$descriptor)
     $wait=[Diagnostics.Stopwatch]::StartNew()
     while(-not(Test-Path ($serverOutput+'.ready'))) {
         if($server.process.HasExited -or $wait.Elapsed.TotalSeconds -gt 15){throw 'The GC receiver did not become ready.'}
@@ -53,6 +56,10 @@ try {
         throw 'Receiver dispatch, capacity, or endpoint byte accounting failed.'
     }
     $gc=$r.managedGc
+    if($gc.configuredReceiveBudgetBytes -ne $ReceiveBudgetBytes -or $gc.maximumPostedReadBytes -ne $ReceiveBudgetBytes -or
+        $gc.observedMaximumPostedReadBytes -ne $ReceiveBudgetBytes){
+        throw 'Receiver socket/read budgets did not verify.'
+    }
     $observed=Get-Content ($serverOutput+'.gc.json') -Raw|ConvertFrom-Json
     if((Get-Content ($serverOutput+'.gc.json.begin') -Raw) -ne 'pre-collection-call' -or
         $observed.heapLayout -ne $HeapLayout -or $observed.collectionEndUtc -ne $gc.collectionEndUtc -or

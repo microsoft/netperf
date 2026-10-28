@@ -64,6 +64,11 @@ on:
         type: choice
         options: ['arrays', 'graph']
         default: 'arrays'
+      managed_gc_receive_budget_bytes:
+        description: Receiver-only socket and posted-read budget; 0 preserves defaults
+        type: choice
+        options: ['0', '16384']
+        default: '0'
       managed_gc_route_refresh:
         description: One owned equivalent host-route control; requires isolated receiver GC without neighbor pulse
         type: boolean
@@ -107,6 +112,8 @@ jobs:
         run: ./experiments/tcp-churn/Test-ServerGcArrivalTcp.ps1
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-ServerGcArrivalTcp.ps1 -HeapLayout graph
+      - shell: pwsh
+        run: ./experiments/tcp-churn/Test-ServerGcArrivalTcp.ps1 -HeapLayout graph -ReceiveBudgetBytes 16384
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-GcGuestAdapter.ps1
       - shell: pwsh
@@ -178,11 +185,13 @@ jobs:
           MANAGED_GC_RECOVERY_MS: ${{ inputs.managed_gc_recovery_ms }}
           MANAGED_GC_PROCESS_ROLE: ${{ inputs.managed_gc_process_role }}
           MANAGED_GC_HEAP_LAYOUT: ${{ inputs.managed_gc_heap_layout }}
+          MANAGED_GC_RECEIVE_BUDGET_BYTES: ${{ inputs.managed_gc_receive_budget_bytes }}
           MANAGED_GC_ROUTE_REFRESH: ${{ inputs.managed_gc_route_refresh }}
           MANAGED_GC_ROUTE_VARIANT: ${{ inputs.managed_gc_route_variant }}
         run: |
           $publish = Join-Path $env:RUNNER_TEMP "tcp-churn-guest-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           if ($env:PROBE_128_TOPOLOGY -eq 'true') {
+            if ($env:MANAGED_GC_RECEIVE_BUDGET_BYTES -ne '0') { throw 'Receive-budget selection is separate from topology probing.' }
             if (Test-Path Env:\GUEST_PASSWORD) { Remove-Item Env:\GUEST_PASSWORD }
             if (Test-Path Env:\GUEST_USER) { Remove-Item Env:\GUEST_USER }
             if ($env:PROFILE_CPU -eq 'true' -or $env:SYN_DROP -eq 'true' -or $env:PEER_MEASUREMENT -eq 'true' -or $env:PROBE_PEER -eq 'true' -or $env:MANAGED_GC_MIXED -eq 'true' -or $env:MANAGED_GC_PEER_RECOVERY -eq 'true' -or $env:MANAGED_GC_ISOLATED_DATA -eq 'true' -or $env:MANAGED_GC_RECOVERY_MS -ne '8000' -or $env:MANAGED_GC_PROCESS_ROLE -ne 'client' -or $env:MANAGED_GC_HEAP_LAYOUT -ne 'arrays' -or $env:MANAGED_GC_ROUTE_REFRESH -eq 'true' -or $env:MANAGED_GC_ROUTE_VARIANT -ne 'onlink') {
@@ -219,6 +228,7 @@ jobs:
             $extra.ManagedGcPayloadBytes = [int]$env:MANAGED_GC_PAYLOAD_BYTES
             $extra.ManagedGcProcessRole = $env:MANAGED_GC_PROCESS_ROLE
             $extra.ManagedGcHeapLayout = $env:MANAGED_GC_HEAP_LAYOUT
+            $extra.ManagedGcReceiveBudgetBytes = [int]$env:MANAGED_GC_RECEIVE_BUDGET_BYTES
           }
           if ($env:MANAGED_GC_PEER_RECOVERY -eq 'true') {
             if ($env:MANAGED_GC_MIXED -ne 'true') { throw 'Peer recovery requires managed-GC diagnostic mode.' }
@@ -237,6 +247,9 @@ jobs:
           }
           if ($env:MANAGED_GC_HEAP_LAYOUT -ne 'arrays' -and $env:MANAGED_GC_MIXED -ne 'true') {
             throw 'GC heap layout selection requires managed-GC diagnostic mode.'
+          }
+          if ($env:MANAGED_GC_RECEIVE_BUDGET_BYTES -ne '0' -and ($env:MANAGED_GC_MIXED -ne 'true' -or $env:MANAGED_GC_PROCESS_ROLE -ne 'server')) {
+            throw 'A bounded receive budget requires receiver-GC diagnostic mode.'
           }
           if ($env:MANAGED_GC_ROUTE_REFRESH -eq 'true') {
             if ($env:MANAGED_GC_MIXED -ne 'true' -or $env:MANAGED_GC_PROCESS_ROLE -ne 'server' -or $env:MANAGED_GC_ISOLATED_DATA -ne 'true' -or $env:MANAGED_GC_PEER_RECOVERY -eq 'true') {

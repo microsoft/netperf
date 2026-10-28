@@ -98,6 +98,19 @@ try {
         if(-not $rejected -or (Test-Path $directory)){throw 'Invalid route-control mode mutated state or was accepted.'}
         $checks++
     }
+    foreach($extra in @(@{ManagedGcReceiveBudgetBytes=16384},
+        @{ManagedGc=$true;ProfileCpu=$true;ManagedGcReceiveBudgetBytes=16384})){
+        $rejected=$false
+        try {
+            & (Join-Path $PSScriptRoot 'adapters\Invoke-NetperfGuestTcpChurn.ps1') `
+                -VmName 'unused-test-only' -Credential $credential -PublishDirectory $directory @extra
+        }catch{
+            if($_.Exception.Message -notmatch 'bounded receive budget requires receiver-GC'){throw}
+            $rejected=$true
+        }
+        if(-not $rejected -or (Test-Path $directory)){throw 'Invalid receive-budget mode mutated state or was accepted.'}
+        $checks++
+    }
     foreach($file in @('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1','Invoke-NetperfGuestTcpChurn.ps1','Invoke-ScopedNeighborPulse.ps1','Set-ScopedDataAddresses.ps1','GcReceiverTraffic.psm1','Invoke-ScopedPathRefresh.ps1')) {
         $tokens=$null;$errors=$null
         $parsed=[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot "adapters\$file"),[ref]$tokens,[ref]$errors)
@@ -129,9 +142,11 @@ try {
         $ManagedGcHeapLayout='graph'
         $ManagedGcRouteRefresh=[switch]::new($true)
         $ManagedGcRouteVariant='peer-gateway'
+        $ManagedGcReceiveBudgetBytes=16384
         & ([scriptblock]::Create($launch[0].Extent.Text))
     }
-    if($actual.Count -ne 16 -or $actual[14] -ne 'peer-gateway' -or $actual[13] -isnot [bool] -or -not $actual[13] -or
+    if($actual.Count -ne 17 -or $actual[15] -isnot [int] -or $actual[15] -ne 16384 -or
+        $actual[14] -ne 'peer-gateway' -or $actual[13] -isnot [bool] -or -not $actual[13] -or
         $actual[12] -ne 'graph' -or $actual[11] -ne 'client' -or $actual[7] -ne 2048 -or $actual[8] -isnot [bool] -or -not $actual[8] -or
         $actual[9] -isnot [bool] -or -not $actual[9] -or $actual[10] -ne 3000 -or
         $actual[3] -isnot [bool] -or -not $actual[3] -or

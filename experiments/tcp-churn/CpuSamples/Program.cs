@@ -25,6 +25,15 @@ internal static class Program
         string.Equals(name, "tcpip", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(name, "tcpip.sys", StringComparison.OrdinalIgnoreCase);
 
+    private static bool IsPathRefreshWait(IEnumerable<string> frames) =>
+        frames.Any(frame => frame.EndsWith("!TcpUpdatePathInfoTcb", StringComparison.Ordinal)) &&
+        frames.Any(frame => frame.IndexOf("!KxWaitForLockOwnerShip", StringComparison.OrdinalIgnoreCase) >= 0);
+
+    private static bool IsTimerPathRefreshWait(IEnumerable<string> frames) =>
+        IsPathRefreshWait(frames) &&
+        frames.Any(frame => frame.EndsWith("!TcpTcbHeaderSend", StringComparison.Ordinal)) &&
+        frames.Any(frame => frame.EndsWith("!TcpPeriodicTimeoutHandler", StringComparison.Ordinal));
+
     private static object[] Top(Dictionary<string, long> counts, int limit) =>
         counts.OrderByDescending(pair => pair.Value).ThenBy(pair => pair.Key)
             .Take(limit).Select(pair => (object)new { name = pair.Key, samples = pair.Value }).ToArray();
@@ -99,6 +108,14 @@ internal static class Program
             Add(counts, "public"); Add(counts, "public");
             if (!IsNetwork("tcpip.sys") || IsNetwork("other.sys") || counts["public"] != 2)
                 return 1;
+            var delayedOutputWait = new[] { "nt!KeYieldProcessorEx", "nt!KxWaitForLockOwnerShipWithIrql",
+                "nt!KiAcquireQueuedSpinLockInstrumented", "tcpip!TcpUpdatePathInfoTcb",
+                "tcpip!TcpTcbHeaderSend", "tcpip!TcpPeriodicTimeoutHandler" };
+            if (!IsPathRefreshWait(delayedOutputWait) || !IsTimerPathRefreshWait(delayedOutputWait) ||
+                IsPathRefreshWait(new[] { "nt!KeAcquireInStackQueuedSpinLock", "tcpip!TcpUpdatePathInfoTcb" }) ||
+                IsPathRefreshWait(new[] { "tcpip!TcpIsRttSampleInWaitInterval", "tcpip!TcpUpdatePathInfoTcb" }) ||
+                IsTimerPathRefreshWait(new[] { "nt!KxWaitForLockOwnerShip", "tcpip!TcpUpdatePathInfoTcb" }))
+                return 1;
             Console.WriteLine("CPU analyzer contract checks passed.");
             return 0;
         }
@@ -138,6 +155,7 @@ internal static class Program
                 var callers = new Dictionary<string, Dictionary<string, long>>();
                 stage = "samples";
                 long samples = 0, withStack = 0, network = 0, unresolved = 0;
+                long pathRefreshWait = 0, timerPathRefreshWait = 0, hypervisorNotifiedPathRefreshWait = 0;
                 foreach (var record in log.Events)
                 {
                     var sample = record as SampledProfileTraceData;
@@ -189,6 +207,13 @@ internal static class Program
                         }
                         Add(frameStacks, publicStack);
                     }
+                    if (IsPathRefreshWait(frames))
+                    {
+                        pathRefreshWait++;
+                        if (IsTimerPathRefreshWait(frames)) timerPathRefreshWait++;
+                        if (frames.Any(frame => frame.EndsWith("!HvlNotifyLongSpinWait", StringComparison.Ordinal)))
+                            hypervisorNotifiedPathRefreshWait++;
+                    }
                     if (leaf != null) Add(networkLeaves, leaf);
                     if (frames.Count > 0) Add(networkStacks, string.Join(" <- ", frames.Take(24)));
                 }
@@ -198,6 +223,10 @@ internal static class Program
                     intervalSeconds = (end - start).TotalSeconds,
                     cpuSamples = samples, samplesWithStacks = withStack,
                     networkModuleSamples = network, unresolvedNetworkFrames = unresolved,
+                    publicPathRefreshWaitSamples = pathRefreshWait,
+                    publicTimerPathRefreshWaitSamples = timerPathRefreshWait,
+                    publicHypervisorNotifiedPathRefreshWaitSamples = hypervisorNotifiedPathRefreshWait,
+                    pathRefreshWaitConclusion = "caller-signature-only-not-lock-address-or-owner-proof",
                     observedProcessorNumbers = processors.OrderBy(value => value).ToArray(),
                     networkSamplesByProcessor = Top(networkProcessors, 4096),
                     traceProcessorCount = log.NumberOfProcessors, eventsLost = log.EventsLost,

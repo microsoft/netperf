@@ -12,10 +12,12 @@ function Start-GcReceiver {
     $null=New-NetFirewallRule -Name $rule -DisplayName $rule -Direction Inbound -Action Allow `
         -Protocol TCP -LocalPort $State.Port -LocalAddress $State.ServerAddress -RemoteAddress $State.PeerAddress,$State.ServerAddress
     $State.Rule=$rule
+    $gcDescriptor="gc:{0}:2048:{1}" -f $State.HeapMiB,$State.HeapLayout
+    if($State.ReceiveBudgetBytes){$gcDescriptor+=':'+$State.ReceiveBudgetBytes}
     $State.Receiver=Start-TcpChurnCollector -Program $State.Executable -Arguments @(
         $State.PeerAddress,$State.ServerAddress,[string]$State.Port,[string]$State.Count,[string]$State.Rate,
         [string]$State.Payload,$State.ServerOutput,'server',[string]$State.Payload,'14529',
-        [string]$State.Connections,'nodelay',("gc:{0}:2048:{1}" -f $State.HeapMiB,$State.HeapLayout)
+        [string]$State.Connections,'nodelay',$gcDescriptor
     ) -Directory $State.Directory -LogPrefix (Join-Path $State.Directory 'gc-receiver')
 }
 function Invoke-GcReceiverTraffic {
@@ -69,6 +71,10 @@ function Invoke-GcReceiverTraffic {
         $server.bytesSent -ne $local.bytesReceived+$remote.bytesReceived -or
         -not $server.managedGc.enabled -or $server.managedGc.gen2CollectionsAfter -le $server.managedGc.gen2CollectionsBefore -or
         $server.requestDispatch -ne 'thread-pool' -or $server.peakInFlight -gt $State.Connections -or
+        $server.managedGc.configuredReceiveBudgetBytes -ne $State.ReceiveBudgetBytes -or
+        $server.managedGc.maximumPostedReadBytes -ne $State.ReceiveBudgetBytes -or
+        ($State.ReceiveBudgetBytes -and ($server.managedGc.observedMaximumPostedReadBytes -lt 1 -or
+            $server.managedGc.observedMaximumPostedReadBytes -gt $State.ReceiveBudgetBytes)) -or
         $local.managedGc.enabled -or $remote.managedGc.enabled -or $local.arrivalDispatch -ne 'thread-pool' -or $remote.arrivalDispatch -ne 'thread-pool' -or
         $local.targets.Count -ne 1 -or $remote.targets.Count -ne 1 -or -not $local.targets[0].loopback -or $remote.targets[0].loopback){
         throw 'Receiver-GC byte counts, real collection, independent producers or loopback classification did not verify.'

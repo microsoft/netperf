@@ -41,6 +41,8 @@ public static class ArrivalTcp
     private static long bindTicks,connectTicks,responseTicks,eofTicks;
     private static long dispatchTicks,maximumDispatchTicks;
     private static bool noDelay;
+    private static int receiveBudgetBytes;
+    private static int observedMaximumPostedReadBytes;
     private static int inFlight,peakInFlight,completed,started,connectedCount,acceptedCount;
     private static int serverInFlight,serverPeakInFlight,serverCompleted,serverStarted;
     private sealed class GcGraphNode
@@ -82,6 +84,8 @@ public static class ArrivalTcp
         public string Json()
         {
             return "{\"enabled\":"+(Triggered?"true":"false")+",\"heapMiB\":"+heapMiB+",\"heapLayout\":\""+heapLayout+"\""+
+                ",\"configuredReceiveBudgetBytes\":"+receiveBudgetBytes+",\"maximumPostedReadBytes\":"+receiveBudgetBytes+
+                ",\"observedMaximumPostedReadBytes\":"+observedMaximumPostedReadBytes+
                 ",\"launchedAtCollection\":"+launched+",\"startedBeforeCollection\":"+started+
                 ",\"completedBeforeCollection\":"+completed+",\"inFlightBeforeCollection\":"+pending+
                 ",\"gen2CollectionsBefore\":"+before+",\"gen2CollectionsAfter\":"+after+
@@ -141,7 +145,14 @@ public static class ArrivalTcp
     {
         int offset=0;
         while(offset<buffer.Length) {
-            int n=await stream.ReadAsync(buffer,offset,buffer.Length-offset).ConfigureAwait(false);
+            int remaining=buffer.Length-offset;
+            int posted=receiveBudgetBytes>0?Math.Min(remaining,receiveBudgetBytes):remaining;
+            if(receiveBudgetBytes>0) {
+                int prior;
+                do {prior=observedMaximumPostedReadBytes;if(posted<=prior)break;}
+                    while(Interlocked.CompareExchange(ref observedMaximumPostedReadBytes,posted,prior)!=prior);
+            }
+            int n=await stream.ReadAsync(buffer,offset,posted).ConfigureAwait(false);
             if(n==0)throw new IOException("Unexpected EOF.");
             offset+=n;
         }
@@ -150,6 +161,11 @@ public static class ArrivalTcp
     {
         using(socket) {
             socket.NoDelay=noDelay;
+            if(receiveBudgetBytes>0) {
+                socket.ReceiveBufferSize=receiveBudgetBytes;
+                if(socket.ReceiveBufferSize!=receiveBudgetBytes)
+                    throw new InvalidOperationException("The accepted socket receive budget did not read back exactly.");
+            }
             var stream=socket.GetStream();
             byte[] data=new byte[size];
             await ReadAll(stream,data).ConfigureAwait(false);
@@ -214,14 +230,17 @@ public static class ArrivalTcp
         if(args.Length==13) {
             string[] gc=args[12].Split(':');
             if(args[12]=="dispatch:pool" && role=="client")poolDispatch=true;
-            else if((gc.Length!=3 && gc.Length!=4) || gc[0]!="gc" || (role!="client" && role!="server") ||
+            else if((gc.Length!=3 && gc.Length!=4 && gc.Length!=5) || gc[0]!="gc" || (role!="client" && role!="server") ||
                 !int.TryParse(gc[1],out gcHeapMiB) || !int.TryParse(gc[2],out gcMinimumLaunch) ||
                 gcHeapMiB<16 || gcHeapMiB>1024 || gcMinimumLaunch<1 || gcMinimumLaunch>=count)
                 throw new ArgumentException("GC mode requires client/server role and gc:heap-MiB:minimum-launched, with 16-1024 MiB and a trigger before the final request; dispatch:pool requires client role.");
-            if(!poolDispatch && gc.Length==4) {
+            if(!poolDispatch && gc.Length>=4) {
                 heapLayout=gc[3];
                 if(heapLayout!="arrays" && heapLayout!="graph")throw new ArgumentException("Unknown GC heap layout.");
             }
+            if(!poolDispatch && gc.Length==5 &&
+                (role!="server" || !int.TryParse(gc[4],out receiveBudgetBytes) || receiveBudgetBytes!=16384))
+                throw new ArgumentException("The bounded receive budget requires GC server role and an explicit 16384-byte budget.");
         }
         if(File.Exists(args[6]))throw new IOException("Use a new result file.");
         if(gcHeapMiB>0 && File.Exists(args[6]+".gc.json"))throw new IOException("Use a new GC observation file.");
@@ -235,7 +254,13 @@ public static class ArrivalTcp
             var gcObservation=new GcObservation(gcHeapMiB,heapLayout,args[6]+".gc.json");
             Task receiver=null;
             if(role!="client") {
-                listener=new TcpListener(peer,port);listener.Start(8192);
+                listener=new TcpListener(peer,port);
+                if(receiveBudgetBytes>0) {
+                    listener.Server.ReceiveBufferSize=receiveBudgetBytes;
+                    if(listener.Server.ReceiveBufferSize!=receiveBudgetBytes)
+                        throw new InvalidOperationException("The listener receive budget did not read back exactly.");
+                }
+                listener.Start(8192);
                 receiver=Task.Run(async delegate {
                     var accepted=new List<Task>();
                     using(var serverCapacity=new SemaphoreSlim(concurrency)) {

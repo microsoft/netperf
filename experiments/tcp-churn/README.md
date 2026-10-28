@@ -725,6 +725,25 @@ passive TCBs are attributed using public accept-completion plus close events.
 The result records the profiled process role. The maximum independent-producer
 launch span is not a shared wire-arrival clock; workload duration covers both
 producers and the receiver. Ordinary client-GC mode remains the default.
+
+The opt-in `managed_gc_receive_budget_bytes=16384` receiver control sets and
+verifies a 16-KiB socket receive buffer on the listener and every accepted
+socket, and caps each posted request read at 16 KiB. Both limits matter:
+an already-posted full-request read can otherwise absorb data while the
+application is collecting. The default `0` leaves socket and posted-read
+behavior unchanged; the GC result records both configured limits (`0` means
+the default, not a zero-length receive). This is a backpressure experiment,
+not proof that TCP advertised a zero window or sent a probe. No producer
+barrier, application sleep, neighbor pulse or route mutation is added.
+
+CPU summaries separately count queued lock-owner waits under path refresh
+and the narrower timer/header-send/path-refresh signature, including a
+separate count for hypervisor long-spin notification stacks. Acquisition
+frames alone and ordinary RTT wait-interval checks do not qualify. These
+are caller signatures, not proof of a particular lock address or owner;
+a periodic timer frame does not by itself establish retransmission or
+black-hole probing.
+
 The read-only `probe_peer` mode also rejects remaining owned GC processes,
 data aliases, firewall rules or permanent fixture neighbors, and publishes only
 numeric residual counts. It never removes resources or changes guest policy.
