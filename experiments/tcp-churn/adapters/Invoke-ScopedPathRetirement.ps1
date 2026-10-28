@@ -86,13 +86,16 @@ function Restore-Control {
         throw 'The original static IPv4 policy changed during path retirement.'
     }
 }
-function Read-PathCount {
+function Read-PrefixPathCount {
     $rows=@(& "$env:SystemRoot\System32\netsh.exe" interface ipv4 show destinationcache "interface=$InterfaceAlias")
     if($LASTEXITCODE){throw 'Cannot enumerate the owned cached paths.'}
     @($rows|Where-Object{
         if($_ -match '^\s*\d+\s+198\.19\.(\d+)\.') {return [int]$Matches[1] -lt 128}
         return $false
     }).Count
+}
+function Read-PathCount {
+    [ArrivalTcp]::CountIpv4Paths($adapter[0].ifIndex,$source)
 }
 if($RestoreOnly){
     Restore-Control
@@ -121,7 +124,7 @@ if($ReceiverProcessId -lt 1 -or -not(Test-Path -LiteralPath $ReceiverExecutable 
     throw 'The verified receiver executable and process are required for bounded cohort observation.'
 }
 $null=[Reflection.Assembly]::Load([IO.File]::ReadAllBytes($ReceiverExecutable))
-if((Read-PathCount) -ne 0){throw 'Existing cached paths conflict with the exclusively owned fixture prefix.'}
+if((Read-PrefixPathCount) -ne 0){throw 'Existing cached paths conflict with the exclusively owned fixture prefix.'}
 @{interfaceGuid=[string]$adapter[0].InterfaceGuid;source=$source;prefix=$prefix
     originalAbsent=$true;originalAddresses=@(Read-Addresses)}|Export-Clixml -LiteralPath $StateFile -NoClobber
 $sockets=[Collections.Generic.List[Net.Sockets.UdpClient]]::new()

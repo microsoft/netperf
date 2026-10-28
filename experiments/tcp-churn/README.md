@@ -757,6 +757,10 @@ reported separately from sampled lock waits. This deliberately tests address
 retirement/cache maintenance; it is not evidence that an unobserved application
 pause causes address changes or that this trigger occurred elsewhere.
 No VM CPU settings or host scheduling policies are changed.
+Path-population snapshots use the documented IP Helper path table, filtered
+by the owned interface and source, rather than launching a command-line
+enumerator in the GC-triggered interval. The native structure layout and
+ordinary loopback path enumeration are validated by the source tests.
 
 CPU summaries separately count queued lock-owner waits under path refresh
 and the narrower timer/header-send/path-refresh signature, including a

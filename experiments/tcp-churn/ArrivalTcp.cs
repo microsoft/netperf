@@ -15,6 +15,59 @@ public static class ArrivalTcp
 {
     [DllImport("iphlpapi.dll")]
     private static extern uint GetExtendedTcpTable(IntPtr table,ref uint bytes,bool order,int family,int tableClass,uint reserved);
+    [DllImport("iphlpapi.dll")]
+    private static extern uint GetIpPathTable(ushort family,out IntPtr table);
+    [DllImport("iphlpapi.dll")]
+    private static extern void FreeMibTable(IntPtr table);
+    [StructLayout(LayoutKind.Explicit,Size=28)]
+    private struct SockaddrInet
+    {
+        [FieldOffset(0)]public ushort Family;
+        [FieldOffset(4)]public uint Ipv4;
+    }
+    [StructLayout(LayoutKind.Sequential)]
+    private struct IpPathRow
+    {
+        public SockaddrInet Source,Destination;
+        public ulong InterfaceLuid;
+        public uint InterfaceIndex;
+        public SockaddrInet NextHop;
+        public uint PathMtu,RttMean,RttDeviation,LastReachable;
+        public byte IsReachable;
+        public ulong TransmitSpeed,ReceiveSpeed;
+    }
+    [StructLayout(LayoutKind.Sequential)]
+    private struct IpPathTable
+    {
+        public uint Count;
+        public IpPathRow FirstRow;
+    }
+    public static int CountIpv4Paths(int interfaceIndex,string sourceAddress)
+    {
+        IPAddress source;
+        if(interfaceIndex<1 || !IPAddress.TryParse(sourceAddress,out source) ||
+            source.AddressFamily!=AddressFamily.InterNetwork)throw new ArgumentException("An IPv4 source and interface index are required.");
+        IntPtr table;
+        uint status=GetIpPathTable(2,out table);
+        if(status!=0)throw new InvalidOperationException("Cannot read the IPv4 path table: "+status);
+        if(table==IntPtr.Zero)throw new InvalidOperationException("The IPv4 path table is missing.");
+        try {
+            int count=Marshal.ReadInt32(table);
+            if(count<0 || count>1000000)throw new InvalidOperationException("Invalid IPv4 path-table bounds.");
+            int stride=Marshal.SizeOf(typeof(IpPathRow));
+            int offset=Marshal.OffsetOf(typeof(IpPathTable),"FirstRow").ToInt32();
+            if(stride!=136 || offset!=8)throw new InvalidOperationException("The documented x64 IP-path layout did not verify.");
+            uint sourceValue=BitConverter.ToUInt32(source.GetAddressBytes(),0);
+            int matched=0;
+            for(int i=0;i<count;i++){
+                var row=(IpPathRow)Marshal.PtrToStructure(IntPtr.Add(table,offset+i*stride),typeof(IpPathRow));
+                if(row.Source.Family!=2 || row.Destination.Family!=2)
+                    throw new InvalidOperationException("Unexpected address family in the IPv4 path table.");
+                if(row.InterfaceIndex==(uint)interfaceIndex && row.Source.Ipv4==sourceValue)matched++;
+            }
+            return matched;
+        }finally{FreeMibTable(table);}
+    }
     public static bool IsListenerReady(int processId,int port)
     {
         return CountOwnedTcpRows(processId,port,true)>0;

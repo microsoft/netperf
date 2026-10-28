@@ -26,7 +26,12 @@ try {
         [ArrivalTcp]::CountEstablishedConnections(($PID+1000000),$port) -ne 0){
         throw 'The fast table reader did not isolate established server endpoints by PID and port.'
     }
-    Write-Host 'Passed owned listener/established-table checks with two ordinary loopback connections.'
+    $loopback=@([Net.NetworkInformation.NetworkInterface]::GetAllNetworkInterfaces()|
+        Where-Object NetworkInterfaceType -eq Loopback)
+    if($loopback.Count -ne 1 -or [ArrivalTcp]::CountIpv4Paths($loopback[0].GetIPProperties().GetIPv4Properties().Index,'127.0.0.1') -lt 1){
+        throw 'The native path-table reader did not find the ordinary loopback path.'
+    }
+    Write-Host 'Passed owned TCP-table and native IP-path enumeration checks with ordinary loopback connections.'
 }finally{
     foreach($socket in $sockets){$socket.Dispose()}
     if($null -ne $listener){$listener.Stop()}
