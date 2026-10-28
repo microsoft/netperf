@@ -23,9 +23,11 @@ param(
     [switch]$ManagedGcRouteRefresh,
     [ValidateSet('onlink','peer-gateway')][string]$ManagedGcRouteVariant='onlink',
     [ValidateSet(0,16384)][int]$ManagedGcReceiveBudgetBytes=0,
-    [ValidateSet(0,1024,8192,24576)][int]$ManagedGcCacheRetirePaths=0
+    [ValidateSet(0,1024,8192,24576)][int]$ManagedGcCacheRetirePaths=0,
+    [switch]$ManagedGcWprProbes
 )
 $ErrorActionPreference='Stop'
+if($ManagedGcWprProbes -and -not $ManagedGc){throw 'Exact WPR probes require managed-GC diagnostic mode.'}
 if($ManagedGc -and (-not $ProfileCpu -or $SynDrop -or $ProbePeer -or $PeerMeasurement)){
     throw 'Managed-GC diagnostics require CPU profiling and are separate from peer probes and fault campaigns.'
 }
@@ -158,13 +160,13 @@ try {
             -Recurse -ToSession $session -ErrorAction Stop
     }
     $adapterFiles=@('WindowsCts.psm1','Invoke-NetperfTcpChurn.ps1','Invoke-NetperfPeerCpu.ps1')
-    if($ManagedGc){$adapterFiles+=@('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1','Invoke-ScopedNeighborPulse.ps1','TcpRecoveryEvidence.psm1','Set-ScopedDataAddresses.ps1','GcReceiverTraffic.psm1','Invoke-ScopedPathRefresh.ps1','Invoke-ScopedPathRetirement.ps1')}
+    if($ManagedGc){$adapterFiles+=@('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1','Invoke-ScopedNeighborPulse.ps1','TcpRecoveryEvidence.psm1','Set-ScopedDataAddresses.ps1','GcReceiverTraffic.psm1','Invoke-ScopedPathRefresh.ps1','Invoke-ScopedPathRetirement.ps1','New-GcProbeWprProfile.ps1')}
     foreach ($file in $adapterFiles) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $file) -Destination (Join-Path $remoteRoot "adapters\$file") -ToSession $session -ErrorAction Stop
     }
     $phase='guest-traffic'
     $exit=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
-        param($root,$seconds,$connections,$profile,$synDrop,$peerMeasurement,$managedGc,$managedGcPayloadBytes,$peerRecovery,$isolatedData,$recoveryMilliseconds,$gcProcessRole,$heapLayout,$routeRefresh,$routeVariant,$receiveBudgetBytes,$cacheRetirePaths,$credential)
+        param($root,$seconds,$connections,$profile,$synDrop,$peerMeasurement,$managedGc,$managedGcPayloadBytes,$peerRecovery,$isolatedData,$recoveryMilliseconds,$gcProcessRole,$heapLayout,$routeRefresh,$routeVariant,$receiveBudgetBytes,$cacheRetirePaths,$wprProbes,$credential)
         if (@(Get-Process -Name 'Runner.Worker','ctsTraffic' -ErrorAction Ignore).Count) {
             throw 'Guest became busy before traffic setup.'
         }
@@ -186,6 +188,7 @@ try {
             if($managedGc){$extra+=@('-HeapLayout',$heapLayout)}
             if($receiveBudgetBytes){$extra+=@('-ReceiveBudgetBytes',[string]$receiveBudgetBytes)}
             if($cacheRetirePaths){$extra+=@('-CacheRetirePaths',[string]$cacheRetirePaths)}
+            if($wprProbes){$extra+='-WprProbes'}
             if($routeRefresh){$extra+='-RouteRefresh'}
             if($routeRefresh){$extra+=@('-RouteVariant',$routeVariant)}
         } else {
@@ -209,7 +212,7 @@ try {
             $launch|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $root 'child-startup.json')
             if($credentialFile -and (Test-Path -LiteralPath $credentialFile)){Remove-Item -LiteralPath $credentialFile -ErrorAction Stop}
         }
-    } -ArgumentList $guestRoot,$Seconds,$Connections,([bool]$ProfileCpu),([bool]$SynDrop),([bool]$PeerMeasurement),([bool]$ManagedGc),$ManagedGcPayloadBytes,([bool]$ManagedGcPeerRecovery),([bool]$ManagedGcIsolatedData),$ManagedGcRecoveryMilliseconds,$ManagedGcProcessRole,$ManagedGcHeapLayout,([bool]$ManagedGcRouteRefresh),$ManagedGcRouteVariant,$ManagedGcReceiveBudgetBytes,$ManagedGcCacheRetirePaths,$Credential
+    } -ArgumentList $guestRoot,$Seconds,$Connections,([bool]$ProfileCpu),([bool]$SynDrop),([bool]$PeerMeasurement),([bool]$ManagedGc),$ManagedGcPayloadBytes,([bool]$ManagedGcPeerRecovery),([bool]$ManagedGcIsolatedData),$ManagedGcRecoveryMilliseconds,$ManagedGcProcessRole,$ManagedGcHeapLayout,([bool]$ManagedGcRouteRefresh),$ManagedGcRouteVariant,$ManagedGcReceiveBudgetBytes,$ManagedGcCacheRetirePaths,([bool]$ManagedGcWprProbes),$Credential
     $startup=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
         param($root)
         Get-Content -LiteralPath (Join-Path $root 'child-startup.json') -Raw|ConvertFrom-Json|

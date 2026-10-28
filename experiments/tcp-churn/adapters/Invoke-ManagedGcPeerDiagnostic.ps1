@@ -18,7 +18,8 @@ param(
     [switch]$RouteRefresh,
     [ValidateSet('onlink','peer-gateway')][string]$RouteVariant='onlink',
     [ValidateSet(0,16384)][int]$ReceiveBudgetBytes=0,
-    [ValidateSet(0,1024,8192,24576)][int]$CacheRetirePaths=0
+    [ValidateSet(0,1024,8192,24576)][int]$CacheRetirePaths=0,
+    [switch]$WprProbes
 )
 $ErrorActionPreference='Stop'
 if($GcProcessRole -eq 'server' -and (-not $IsolatedData -or $PeerRecovery)){
@@ -51,6 +52,8 @@ $analyzer=Join-Path $AnalyzerDirectory 'CpuSamples.exe'
 $exe=Join-Path $diagnostics 'ArrivalTcp.exe'
 $compiler="$env:SystemRoot\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
 $wpr="$env:SystemRoot\System32\wpr.exe"
+$tcpTrace=Join-Path $diagnostics $(if($WprProbes){'cpu.etl'}else{'tcp.etl'})
+$clrTrace=Join-Path $diagnostics $(if($WprProbes){'cpu.etl'}else{'clr.etl'})
 function Wait-Ready($Child,[string]$File,[int]$TimeoutSeconds=20) {
     $clock=[Diagnostics.Stopwatch]::StartNew()
     while(-not(Test-Path -LiteralPath $File)) {
@@ -213,8 +216,10 @@ try {
     $receiverReadySeconds=if($GcProcessRole -eq 'server' -and $HeapLayout -eq 'graph'){60}else{20}
     Wait-Ready $localServer ($localOutput+'.ready') $receiverReadySeconds
     $phase='trace-start'
-    $null=Invoke-TcpChurnTool -Program $wpr -Arguments @('-start','CPU','-filemode') -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'wpr-start')
-    $profileOwned=$true
+    if(-not $WprProbes){
+        $null=Invoke-TcpChurnTool -Program $wpr -Arguments @('-start','CPU','-filemode') -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'wpr-start')
+        $profileOwned=$true
+    }
     $phase='tcp-provider-snapshot'
     $provider=Get-WinEvent -ListProvider Microsoft-Windows-TCPIP
     $tasks=@('TcpTcbSynSend','TcpDisconnectTcbRtoTimeout','TcpDataTransferRetransmitRound',
@@ -232,16 +237,25 @@ try {
         @{Id=1;Task='GCStart'},@{Id=2;Task='GCStop'},@{Id=3;Task='GCRestartEEEnd'},
         @{Id=7;Task='GCRestartEEBegin'},@{Id=8;Task='GCSuspendEEEnd'},@{Id=9;Task='GCSuspendEEBegin'}
     )}|ConvertTo-Json -Depth 4|Set-Content $clrState
+    if($WprProbes){
+        $phase='wpr-exact-probe-start'
+        $wprProfile=Join-Path $diagnostics 'gc-probes.wprp'
+        & (Join-Path $PSScriptRoot 'New-GcProbeWprProfile.ps1') -TcpStateFile $tcpState -ClrStateFile $clrState -Output $wprProfile
+        $null=Invoke-TcpChurnTool -Program $wpr -Arguments @('-start','CPU','-start',($wprProfile+'!GcProbeEvents'),'-filemode') `
+            -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'wpr-start')
+        $profileOwned=$true
+    }else{
     $phase='tcp-probe-start'
-    $tcpProbe=Start-TcpChurnCollector -Program $analyzer -Arguments @('--capture-probes',(Join-Path $diagnostics 'tcp.etl'),
+    $tcpProbe=Start-TcpChurnCollector -Program $analyzer -Arguments @('--capture-probes',$tcpTrace,
         $tcpState,(Join-Path $diagnostics 'tcp.ready'),(Join-Path $diagnostics 'tcp.stop'),'300') `
         -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'tcp-capture')
     Wait-Ready $tcpProbe (Join-Path $diagnostics 'tcp.ready')
     $phase='clr-probe-start'
-    $clrProbe=Start-TcpChurnCollector -Program $analyzer -Arguments @('--capture-probes',(Join-Path $diagnostics 'clr.etl'),
+    $clrProbe=Start-TcpChurnCollector -Program $analyzer -Arguments @('--capture-probes',$clrTrace,
         $clrState,(Join-Path $diagnostics 'clr.ready'),(Join-Path $diagnostics 'clr.stop'),'300') `
         -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'clr-capture')
     Wait-Ready $clrProbe (Join-Path $diagnostics 'clr.ready')
+    }
     $before=Get-NetAdapterStatistics -Name $alias
     $start=[DateTime]::UtcNow.ToString('o')
     $phase='managed-gc-traffic'
@@ -350,6 +364,7 @@ try {
         targetSeverity='not-evaluated';conclusion='diagnostic-not-customer-severity-proof'}
     $result.isolatedDataAddresses=[bool]$IsolatedData
     $result.profiledProcessRole=$GcProcessRole
+    $result.probeCollectorBackend=$(if($WprProbes){'wpr-exact-events'}else{'traceevent-exact-events'})
     if($GcProcessRole -eq 'server'){$result.launchSpanScope='maximum-independent-producer-span';$result.workloadScope='both-independent-producers-plus-profiled-receiver'}
     if($PeerRecovery){$result.peerRecovery=$pulseResult;$result.peerDataInterfaceDhcpEnabled=$peerDhcpEnabled}
 }catch{$failure=$_}
@@ -473,7 +488,7 @@ if($null -ne $failure -or $cleanupErrors.Count) {
             $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @((Join-Path $diagnostics 'cpu.etl'),
                 (Join-Path $PublishDirectory 'cpu-load.json'),$start,$end) -Directory $diagnostics `
                 -LogPrefix (Join-Path $diagnostics 'failed-workload-cpu') -TimeoutSeconds 300
-            $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @('--events',(Join-Path $diagnostics 'tcp.etl'),
+            $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @('--events',$tcpTrace,
                 (Join-Path $PublishDirectory 'tcp-events.json'),'interval',$start,$tcpEnd,(Join-Path $diagnostics 'tcp-state.json')) `
                 -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'failed-workload-tcp') -TimeoutSeconds 120
             $cpu=Get-Content (Join-Path $PublishDirectory 'cpu-load.json') -Raw|ConvertFrom-Json
@@ -484,7 +499,7 @@ if($null -ne $failure -or $cleanupErrors.Count) {
             }
             if($PeerRecovery -and $clientFailure.connectionsConnected -gt 0) {
                 Import-Module (Join-Path $PSScriptRoot 'TcpRecoveryEvidence.psm1') -Force
-                $ownedCounts=Read-TcpRecoveryEvidence -Provider $provider -TracePath (Join-Path $diagnostics 'tcp.etl') `
+                $ownedCounts=Read-TcpRecoveryEvidence -Provider $provider -TracePath $tcpTrace `
                     -StartUtc ([datetime]$start) -EndUtc ([datetime]$tcpEnd) -OwnerProcessId $clientPid `
                     -ExpectedConnections $clientFailure.connectionsConnected
             }
@@ -574,7 +589,7 @@ try {
         -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'post-gc-analysis') -TimeoutSeconds 300
     $phase='analyze-tcp-events'
     $tcpCoverageEnd=if($PeerRecovery -or $GcProcessRole -eq 'server'){$tcpEnd}else{$end}
-    $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @('--events',(Join-Path $diagnostics 'tcp.etl'),
+    $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @('--events',$tcpTrace,
         (Join-Path $PublishDirectory 'tcp-events.json'),'interval',$start,$tcpCoverageEnd,(Join-Path $diagnostics 'tcp-state.json')) `
         -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'tcp-analysis') -TimeoutSeconds 120
     $tcpSummary=Get-Content (Join-Path $PublishDirectory 'tcp-events.json') -Raw|ConvertFrom-Json
@@ -584,7 +599,7 @@ try {
         $phase='verify-recovery-coverage'
         Import-Module (Join-Path $PSScriptRoot 'TcpRecoveryEvidence.psm1') -Force
         $ownerEvent=if($GcProcessRole -eq 'server'){'TcpAcceptListenerComplete'}else{'TcpConnectTcbComplete'}
-        $ownedCounts=Read-TcpRecoveryEvidence -Provider $provider -TracePath (Join-Path $diagnostics 'tcp.etl') `
+        $ownedCounts=Read-TcpRecoveryEvidence -Provider $provider -TracePath $tcpTrace `
             -StartUtc ([datetime]$start) -EndUtc ([datetime]$tcpCoverageEnd) -OwnerProcessId $clientPid -ExpectedConnections $count -OwnerEventKind $ownerEvent
         $result.tcpRecovery=$ownedCounts
     }
@@ -599,13 +614,13 @@ try {
         $cpuFiles+='cpu-after-recovery.json'
     }
     $phase='analyze-clr-events'
-    $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @('--events',(Join-Path $diagnostics 'clr.etl'),
+    $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @('--events',$clrTrace,
         (Join-Path $diagnostics 'clr-loss.json'),'interval',$start,$end,(Join-Path $diagnostics 'clr-state.json')) `
         -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'clr-loss-analysis') -TimeoutSeconds 120
     $clrSummary=Get-Content (Join-Path $diagnostics 'clr-loss.json') -Raw|ConvertFrom-Json
     if($clrSummary.outcome -ne 'counted' -or $clrSummary.eventsLost -ne 0){throw 'Lossless CLR event coverage is required.'}
     $startUtc=([datetime]$start).ToUniversalTime()
-    $gcRecords=@(Get-WinEvent -Path (Join-Path $diagnostics 'clr.etl') -Oldest|Where-Object{
+    $gcRecords=@(Get-WinEvent -FilterHashtable @{Path=$clrTrace;ProviderName='Microsoft-Windows-DotNETRuntime'} -Oldest|Where-Object{
         $_.ProcessId -eq $clientPid -and $_.TimeCreated.ToUniversalTime() -ge $startUtc -and $_.TimeCreated.ToUniversalTime() -le $endUtc
     })
     if(-not $gcRecords.Count -or $gcRecords.Count -gt 1024){throw 'Owned-process CLR event coverage is missing or exceeds its bound.'}

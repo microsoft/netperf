@@ -79,7 +79,13 @@ $events=@((Trace-Record 1 @(1,10,0)),(Trace-Record 4 @(1,'ACK unacked maximum ho
     (Trace-Record 2 @(2)),(Trace-Record 3 @(2)))
 $normalized=& (Get-Module TcpRecoveryEvidence) {
     param($items,$metadata,$begin,$finish)
-    function Get-WinEvent {param($Path,[switch]$Oldest) $items}
+    function Get-WinEvent {
+        param($FilterHashtable,[switch]$Oldest)
+        if($FilterHashtable.Path -ne 'unused-synthetic-trace.etl' -or $FilterHashtable.ProviderName -ne 'Microsoft-Windows-TCPIP'){
+            throw 'TCP ownership normalization must restrict the provider even in a merged ETL.'
+        }
+        $items
+    }
     Read-TcpRecoveryEvidence -Provider $metadata -TracePath 'unused-synthetic-trace.etl' `
         -StartUtc $begin -EndUtc $finish -OwnerProcessId 10 -ExpectedConnections 1
 } $events $manifest ($time.AddSeconds(-1)) ($time.AddSeconds(1))
@@ -93,7 +99,13 @@ $checks++
 $manifest.Events[0].Task.Name='TcpAcceptListenerComplete'
 $serverNormalized=& (Get-Module TcpRecoveryEvidence) {
     param($items,$metadata,$begin,$finish)
-    function Get-WinEvent {param($Path,[switch]$Oldest) $items}
+    function Get-WinEvent {
+        param($FilterHashtable,[switch]$Oldest)
+        if($FilterHashtable.Path -ne 'unused-synthetic-trace.etl' -or $FilterHashtable.ProviderName -ne 'Microsoft-Windows-TCPIP'){
+            throw 'TCP ownership normalization must restrict the provider even in a merged ETL.'
+        }
+        $items
+    }
     Read-TcpRecoveryEvidence -Provider $metadata -TracePath 'unused-synthetic-trace.etl' `
         -StartUtc $begin -EndUtc $finish -OwnerProcessId 10 -ExpectedConnections 1 -OwnerEventKind TcpAcceptListenerComplete
 } $events $manifest ($time.AddSeconds(-1)) ($time.AddSeconds(1))

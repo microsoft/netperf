@@ -74,6 +74,10 @@ on:
         type: choice
         options: ['0', '1024', '8192', '24576']
         default: '0'
+      managed_gc_wpr_probes:
+        description: Explicit alternate WPR controller for exact TCP/CLR event filters
+        type: boolean
+        default: false
       managed_gc_route_refresh:
         description: One owned equivalent host-route control; requires isolated receiver GC without neighbor pulse
         type: boolean
@@ -131,6 +135,8 @@ jobs:
         run: ./experiments/tcp-churn/Test-ScopedPathRetirement.ps1
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-OwnedTcpTable.ps1
+      - shell: pwsh
+        run: ./experiments/tcp-churn/Test-GcProbeWprProfile.ps1
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-TcpRecoveryEvidence.ps1
       - shell: pwsh
@@ -196,11 +202,13 @@ jobs:
           MANAGED_GC_HEAP_LAYOUT: ${{ inputs.managed_gc_heap_layout }}
           MANAGED_GC_RECEIVE_BUDGET_BYTES: ${{ inputs.managed_gc_receive_budget_bytes }}
           MANAGED_GC_CACHE_RETIRE_PATHS: ${{ inputs.managed_gc_cache_retire_paths }}
+          MANAGED_GC_WPR_PROBES: ${{ inputs.managed_gc_wpr_probes }}
           MANAGED_GC_ROUTE_REFRESH: ${{ inputs.managed_gc_route_refresh }}
           MANAGED_GC_ROUTE_VARIANT: ${{ inputs.managed_gc_route_variant }}
         run: |
           $publish = Join-Path $env:RUNNER_TEMP "tcp-churn-guest-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           if ($env:PROBE_128_TOPOLOGY -eq 'true') {
+            if ($env:MANAGED_GC_WPR_PROBES -eq 'true') { throw 'Exact WPR probes are separate from topology probing.' }
             if ($env:MANAGED_GC_CACHE_RETIRE_PATHS -ne '0') { throw 'Cache retirement is separate from topology probing.' }
             if ($env:MANAGED_GC_RECEIVE_BUDGET_BYTES -ne '0') { throw 'Receive-budget selection is separate from topology probing.' }
             if (Test-Path Env:\GUEST_PASSWORD) { Remove-Item Env:\GUEST_PASSWORD }
@@ -241,6 +249,7 @@ jobs:
             $extra.ManagedGcHeapLayout = $env:MANAGED_GC_HEAP_LAYOUT
             $extra.ManagedGcReceiveBudgetBytes = [int]$env:MANAGED_GC_RECEIVE_BUDGET_BYTES
             $extra.ManagedGcCacheRetirePaths = [int]$env:MANAGED_GC_CACHE_RETIRE_PATHS
+            if ($env:MANAGED_GC_WPR_PROBES -eq 'true') { $extra.ManagedGcWprProbes = $true }
           }
           if ($env:MANAGED_GC_PEER_RECOVERY -eq 'true') {
             if ($env:MANAGED_GC_MIXED -ne 'true') { throw 'Peer recovery requires managed-GC diagnostic mode.' }
@@ -265,6 +274,9 @@ jobs:
           }
           if ($env:MANAGED_GC_CACHE_RETIRE_PATHS -ne '0' -and ($env:MANAGED_GC_MIXED -ne 'true' -or $env:MANAGED_GC_PROCESS_ROLE -ne 'server' -or $env:MANAGED_GC_ISOLATED_DATA -ne 'true' -or $env:MANAGED_GC_PEER_RECOVERY -eq 'true' -or $env:MANAGED_GC_ROUTE_REFRESH -eq 'true')) {
             throw 'Cache retirement requires isolated receiver GC without another fault or route control.'
+          }
+          if ($env:MANAGED_GC_WPR_PROBES -eq 'true' -and $env:MANAGED_GC_MIXED -ne 'true') {
+            throw 'Exact WPR probes require managed-GC diagnostic mode.'
           }
           if ($env:MANAGED_GC_ROUTE_REFRESH -eq 'true') {
             if ($env:MANAGED_GC_MIXED -ne 'true' -or $env:MANAGED_GC_PROCESS_ROLE -ne 'server' -or $env:MANAGED_GC_ISOLATED_DATA -ne 'true' -or $env:MANAGED_GC_PEER_RECOVERY -eq 'true') {

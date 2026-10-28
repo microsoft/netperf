@@ -786,6 +786,12 @@ Failed TCP/CLR collector startup reports a fixed capture stage, exception
 type and numeric error code. Provider discovery, TCP startup and CLR startup
 remain separate adapter phases; private exception messages and raw ETLs are
 not copied into the numeric result.
+The explicit `managed_gc_wpr_probes=true` alternative uses WPR to enable the
+same exact public TCP/CLR event-ID filters alongside CPU profiling. It does
+not silently fall back from another controller. The providers are strict,
+the generated profile is schema-validated, and CPU/TCP/CLR analysis reads the
+single merged ETL while preserving the existing integrity, symbol and loss
+gates. Default controller selection is unchanged.
 It also reports numeric free-space admission information for the guest temporary
 drives; busy or residual-resource failures retain fixed failure categories rather
 than exporting process names, paths or exception messages.

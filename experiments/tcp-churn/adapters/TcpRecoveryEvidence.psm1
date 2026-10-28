@@ -81,7 +81,7 @@ function Read-TcpRecoveryEvidence {
         $layouts[([string]$metadata.Id+':'+$metadata.Version)]=@{task=$metadata.Task.Name;tcb=$tcb;pid=$pidIndex;status=$status;reason=$reason}
     }
     $rows=[Collections.Generic.List[object]]::new()
-    Get-WinEvent -Path $TracePath -Oldest|ForEach-Object{
+    Get-WinEvent -FilterHashtable @{Path=$TracePath;ProviderName='Microsoft-Windows-TCPIP'} -Oldest|ForEach-Object{
         $key=[string]$_.Id+':'+$_.Version
         if($_.TimeCreated.ToUniversalTime() -ge $start -and $_.TimeCreated.ToUniversalTime() -le $end -and $layouts.ContainsKey($key)){
             if($rows.Count -ge 200000){throw 'TCP owner/lifetime evidence exceeded its bound.'}
