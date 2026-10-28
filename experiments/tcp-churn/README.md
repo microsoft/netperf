@@ -640,6 +640,32 @@ Failures report a bounded phase, exception type and numeric error code; child
 startup failures also include a filtered error identifier and source line.
 Exception messages and raw child logs are not published.
 
+Healthy mixed-GC guest controls completed 8,192 requests each, split equally
+between remote and loopback targets, with lossless probe coverage:
+
+| Request/reply size | Full-size ACK events | Public run |
+|---|---:|---|
+| 64 KiB | 10 | [40640981126](https://github.com/microsoft/netperf/actions/runs/40640981126) |
+| 1 MiB | 57 | [40641594223](https://github.com/microsoft/netperf/actions/runs/40641594223) |
+| 2 KiB | 0 | [40642676715](https://github.com/microsoft/netperf/actions/runs/40642676715) |
+| 1460 bytes | 4096 | [40643240259](https://github.com/microsoft/netperf/actions/runs/40643240259) |
+
+These are coverage contrasts, not evidence that larger messages cause more
+confirmations. The 1460-byte control exercised a confirmation for every remote
+request without changing offloads; it did not reproduce a cache-lock hotspot.
+No BH-entry or retransmission events occurred.
+
+The [parallel-dispatch control](https://github.com/microsoft/netperf/actions/runs/40644395035)
+observed 71 requests in flight at a 51 ms collection and a peak of 419, but
+still had only 11 setter-frame occurrences in 371,052 whole-window CPU samples.
+The [1 GiB heap contrast](https://github.com/microsoft/netperf/actions/runs/40645010719)
+observed a 99 ms collection, all 4,096 remote full-size ACK confirmations, and
+only three setter-frame occurrences in 148,630 samples over 9.48 seconds.
+Both verified endpoint accounting and cleanup. An offered 8,192 requests/second
+did not establish that achieved rate: the latter workload took 5.064 seconds.
+Acquisition/release frames are not proof of spinning on a particular lock.
+These virtualized healthy-GC trials do **not** establish target-lock saturation.
+
 The manual lab investigation supplemented CPU sampling with the existing Windows
 Performance Toolkit **SPINLOCK collision events**, rather than assuming that a
 function-entry sample proves contention. Private analysis matched the exact
