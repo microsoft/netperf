@@ -15,7 +15,7 @@ function Start-GcReceiver {
     $State.Receiver=Start-TcpChurnCollector -Program $State.Executable -Arguments @(
         $State.PeerAddress,$State.ServerAddress,[string]$State.Port,[string]$State.Count,[string]$State.Rate,
         [string]$State.Payload,$State.ServerOutput,'server',[string]$State.Payload,'14529',
-        [string]$State.Connections,'nodelay',("gc:{0}:2048" -f $State.HeapMiB)
+        [string]$State.Connections,'nodelay',("gc:{0}:2048:{1}" -f $State.HeapMiB,$State.HeapLayout)
     ) -Directory $State.Directory -LogPrefix (Join-Path $State.Directory 'gc-receiver')
 }
 function Invoke-GcReceiverTraffic {

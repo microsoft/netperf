@@ -43,13 +43,19 @@ public static class ArrivalTcp
     private static bool noDelay;
     private static int inFlight,peakInFlight,completed,started,connectedCount,acceptedCount;
     private static int serverInFlight,serverPeakInFlight,serverCompleted,serverStarted;
+    private sealed class GcGraphNode
+    {
+        public GcGraphNode Next;
+        public GcGraphNode Other;
+    }
     private sealed class GcObservation
     {
         private readonly int heapMiB;
+        private readonly string heapLayout;
         private int claim,launched,started,completed,pending,before,after;
         private double milliseconds;
         private string start="",end="";
-        public GcObservation(int heap) {heapMiB=heap;}
+        public GcObservation(int heap,string layout) {heapMiB=heap;heapLayout=layout;}
         public bool Triggered {get {return Volatile.Read(ref claim)==2;}}
         public void TryCollect(int minimum,int launchedNow,int startedNow,int completedNow,int pendingNow)
         {
@@ -72,7 +78,7 @@ public static class ArrivalTcp
         }
         public string Json()
         {
-            return "{\"enabled\":"+(Triggered?"true":"false")+",\"heapMiB\":"+heapMiB+
+            return "{\"enabled\":"+(Triggered?"true":"false")+",\"heapMiB\":"+heapMiB+",\"heapLayout\":\""+heapLayout+"\""+
                 ",\"launchedAtCollection\":"+launched+",\"startedBeforeCollection\":"+started+
                 ",\"completedBeforeCollection\":"+completed+",\"inFlightBeforeCollection\":"+pending+
                 ",\"gen2CollectionsBefore\":"+before+",\"gen2CollectionsAfter\":"+after+
@@ -81,9 +87,22 @@ public static class ArrivalTcp
                 "\",\"serverGc\":"+(System.Runtime.GCSettings.IsServerGC?"true":"false")+"}";
         }
     }
-    private static byte[][] PrepareHeap(int heapMiB)
+    private static object PrepareHeap(int heapMiB,string layout)
     {
         if(heapMiB==0)return null;
+        if(layout=="graph") {
+            // An x64 two-reference node plus its root slot nominally occupies 40 bytes.
+            int count=(heapMiB*1024*1024/40)&~1;
+            var nodes=new GcGraphNode[count];
+            for(int i=0;i<count;i++)nodes[i]=new GcGraphNode();
+            for(int i=0;i<count;i++) {
+                nodes[i].Next=nodes[(i+2)%count];
+                nodes[i].Other=nodes[(i+1024)%count];
+            }
+            GC.Collect(GC.MaxGeneration,GCCollectionMode.Forced,true,true);
+            for(int i=0;i<count;i+=2)nodes[i]=null;
+            return nodes;
+        }
         var heap=new byte[heapMiB*1024][];
         for(int i=0;i<heap.Length;i++)heap[i]=new byte[1024];
         GC.Collect(GC.MaxGeneration,GCCollectionMode.Forced,true,true);
@@ -188,14 +207,18 @@ public static class ArrivalTcp
         if(count<1||count>8192||rate<1||rate>10000||size<1||size>1048576||responseSize<1||responseSize>1048576||port<1024||port>65535||
             sources.Length<1||sources.Length>8||(double)count/rate>120||concurrency<1||concurrency>1024)
             throw new ArgumentException("Invalid bounded arrival workload.");
-        int gcHeapMiB=0,gcMinimumLaunch=0;bool poolDispatch=false;
+        int gcHeapMiB=0,gcMinimumLaunch=0;bool poolDispatch=false;string heapLayout="arrays";
         if(args.Length==13) {
             string[] gc=args[12].Split(':');
             if(args[12]=="dispatch:pool" && role=="client")poolDispatch=true;
-            else if(gc.Length!=3 || gc[0]!="gc" || (role!="client" && role!="server") ||
+            else if((gc.Length!=3 && gc.Length!=4) || gc[0]!="gc" || (role!="client" && role!="server") ||
                 !int.TryParse(gc[1],out gcHeapMiB) || !int.TryParse(gc[2],out gcMinimumLaunch) ||
                 gcHeapMiB<16 || gcHeapMiB>1024 || gcMinimumLaunch<1 || gcMinimumLaunch>=count)
                 throw new ArgumentException("GC mode requires client/server role and gc:heap-MiB:minimum-launched, with 16-1024 MiB and a trigger before the final request; dispatch:pool requires client role.");
+            if(!poolDispatch && gc.Length==4) {
+                heapLayout=gc[3];
+                if(heapLayout!="arrays" && heapLayout!="graph")throw new ArgumentException("Unknown GC heap layout.");
+            }
         }
         if(File.Exists(args[6]))throw new IOException("Use a new result file.");
         TcpListener listener=null;
@@ -203,8 +226,8 @@ public static class ArrivalTcp
             byte[] response=new byte[responseSize];
             for(int i=0;i<response.Length;i++)response[i]=(byte)(i%251);
             if(responseSize==1)response[0]=0x5a;
-            byte[][] pressureHeap=PrepareHeap(gcHeapMiB);
-            var gcObservation=new GcObservation(gcHeapMiB);
+            object pressureHeap=PrepareHeap(gcHeapMiB,heapLayout);
+            var gcObservation=new GcObservation(gcHeapMiB,heapLayout);
             Task receiver=null;
             if(role!="client") {
                 listener=new TcpListener(peer,port);listener.Start(8192);

@@ -13,7 +13,8 @@ param(
     [switch]$PeerRecovery,
     [switch]$IsolatedData,
     [ValidateRange(100,8000)][int]$RecoveryMilliseconds=8000,
-    [ValidateSet('client','server')][string]$GcProcessRole='client'
+    [ValidateSet('client','server')][string]$GcProcessRole='client',
+    [ValidateSet('arrays','graph')][string]$HeapLayout='arrays'
 )
 $ErrorActionPreference='Stop'
 if($GcProcessRole -eq 'server' -and (-not $IsolatedData -or $PeerRecovery)){
@@ -35,10 +36,10 @@ $analyzer=Join-Path $AnalyzerDirectory 'CpuSamples.exe'
 $exe=Join-Path $diagnostics 'ArrivalTcp.exe'
 $compiler="$env:SystemRoot\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
 $wpr="$env:SystemRoot\System32\wpr.exe"
-function Wait-Ready($Child,[string]$File) {
+function Wait-Ready($Child,[string]$File,[int]$TimeoutSeconds=20) {
     $clock=[Diagnostics.Stopwatch]::StartNew()
     while(-not(Test-Path -LiteralPath $File)) {
-        if($Child.Process.HasExited -or $clock.Elapsed.TotalSeconds -gt 20){throw 'An owned diagnostic process did not become ready.'}
+        if($Child.Process.HasExited -or $clock.Elapsed.TotalSeconds -gt $TimeoutSeconds){throw 'An owned diagnostic process did not become ready.'}
         Start-Sleep -Milliseconds 50
     }
 }
@@ -174,7 +175,7 @@ try {
         $localOutput=Join-Path $diagnostics 'profiled-server.json'
         $receiverState=@{Peer=$peer;PeerRoot=$remote;Directory=$diagnostics;Executable=$exe
             ServerAddress=$clientAddress;PeerAddress=$peerAddress;Port=$port;Count=$count;Rate=$rate;Payload=$payloadBytes
-            Connections=$Connections;HeapMiB=$heapMiB;ServerOutput=$localOutput;Rule=$null;Receiver=$null;LocalClient=$null}
+            Connections=$Connections;HeapMiB=$heapMiB;HeapLayout=$HeapLayout;ServerOutput=$localOutput;Rule=$null;Receiver=$null;LocalClient=$null}
         Start-GcReceiver -State $receiverState
         $localServer=$receiverState.Receiver
     } else {
@@ -184,7 +185,8 @@ try {
             '127.0.0.1','127.0.0.2',[string]$port,[string]($count/2),[string]$rate,[string]$payloadBytes,$localOutput,'server',[string]$payloadBytes,'14529','256','nodelay'
         ) -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'loopback')
     }
-    Wait-Ready $localServer ($localOutput+'.ready')
+    $receiverReadySeconds=if($GcProcessRole -eq 'server' -and $HeapLayout -eq 'graph'){60}else{20}
+    Wait-Ready $localServer ($localOutput+'.ready') $receiverReadySeconds
     $phase='trace-start'
     $null=Invoke-TcpChurnTool -Program $wpr -Arguments @('-start','CPU','-filemode') -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'wpr-start')
     $profileOwned=$true
@@ -236,7 +238,7 @@ try {
     } else {
     $client=Start-TcpChurnCollector -Program $exe -Arguments @(
         ($clientSources -join ','),($clientTargets -join ','),[string]$port,[string]$count,[string]$rate,[string]$payloadBytes,
-        $clientOutput,'client',[string]$payloadBytes,'14529',[string]$Connections,'nodelay',"gc:${heapMiB}:2048"
+        $clientOutput,'client',[string]$payloadBytes,'14529',[string]$Connections,'nodelay',"gc:${heapMiB}:2048:${HeapLayout}"
     ) -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'client')
     $clientPid=$client.Process.Id
     if(-not $client.Process.WaitForExit(180000)){throw 'The GC client did not complete before its deadline.'}

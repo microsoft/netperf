@@ -12,7 +12,8 @@ param(
     [switch]$PeerRecovery,
     [switch]$IsolatedData,
     [int]$RecoveryMilliseconds=8000,
-    [ValidateSet('client','server')][string]$GcProcessRole='client'
+    [ValidateSet('client','server')][string]$GcProcessRole='client',
+    [ValidateSet('arrays','graph')][string]$HeapLayout='arrays'
 )
 $ErrorActionPreference='Stop'
 if($PublishDirectory -ne (Join-Path $ScratchParent 'publish')) {

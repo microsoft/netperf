@@ -1,6 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # SPDX-License-Identifier: MIT
 #Requires -Version 7.2
+param([ValidateSet('arrays','graph')][string]$HeapLayout='arrays')
 $ErrorActionPreference='Stop'
 $directory=Join-Path ([IO.Path]::GetTempPath()) ('server-gc-arrival-'+[guid]::NewGuid().ToString('N'))
 $null=New-Item -ItemType Directory -Path $directory
@@ -23,7 +24,7 @@ try {
     $probe.Start();$port=$probe.LocalEndpoint.Port;$probe.Stop()
     $serverOutput=Join-Path $directory 'server.json'
     $server=Start-Child @('127.0.0.1','127.0.0.2',[string]$port,'128','4000','65536',
-        $serverOutput,'server','262144','14529','64','nodelay','gc:32:32')
+        $serverOutput,'server','262144','14529','64','nodelay',("gc:32:32:{0}" -f $HeapLayout))
     $wait=[Diagnostics.Stopwatch]::StartNew()
     while(-not(Test-Path ($serverOutput+'.ready'))) {
         if($server.process.HasExited -or $wait.Elapsed.TotalSeconds -gt 15){throw 'The GC receiver did not become ready.'}
@@ -52,7 +53,7 @@ try {
         throw 'Receiver dispatch, capacity, or endpoint byte accounting failed.'
     }
     $gc=$r.managedGc
-    if(-not $gc.enabled -or -not $gc.serverGc -or $gc.heapMiB -ne 32 -or
+    if(-not $gc.enabled -or -not $gc.serverGc -or $gc.heapMiB -ne 32 -or $gc.heapLayout -ne $HeapLayout -or
         $gc.gen2CollectionsAfter -le $gc.gen2CollectionsBefore -or $gc.blockingCollectionMilliseconds -le 0 -or
         $gc.completedBeforeCollection -lt 1 -or $gc.inFlightBeforeCollection -lt 1 -or $gc.launchedAtCollection -lt 32){
         throw 'A real receiver GC did not overlap completed and in-flight requests.'

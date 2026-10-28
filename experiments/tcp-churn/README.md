@@ -572,6 +572,13 @@ For a receiving process, accepted requests are dispatched through a bounded
 worker pool, and independent client processes continue running during its GC.
 An independent client can explicitly select `dispatch:pool` instead of a GC
 descriptor to use bounded dispatch without triggering a collection.
+An optional fourth GC-descriptor element selects `arrays` (default) or `graph`,
+for example `gc:1024:2048:graph`. The graph uses a nominally equivalent x64 heap
+budget with two-reference nodes and parity-separated links; discarding alternate
+roots leaves real unreachable object graphs to mark and compact. It does not
+add a sleep or suspension primitive. `managed_gc_heap_layout=graph` selects this
+contrast in the guest workflow. Heap policy and observed collection time are
+reported separately; changing layout does not guarantee a longer pause.
 
 To opt into server GC and all-processor-group runtime support, copy
 `ArrivalTcp.ServerGc.config` beside the compiled executable as

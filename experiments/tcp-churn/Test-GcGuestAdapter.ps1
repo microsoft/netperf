@@ -61,13 +61,13 @@ try {
     }
     if(-not $rejected -or (Test-Path -LiteralPath $directory)){throw 'Peer recovery outside managed-GC mode mutated state or was accepted.'}
     $checks++
-    foreach($extra in @(@{ManagedGcIsolatedData=$true},@{ManagedGcRecoveryMilliseconds=3000})) {
+    foreach($extra in @(@{ManagedGcIsolatedData=$true},@{ManagedGcRecoveryMilliseconds=3000},@{ManagedGcHeapLayout='graph'})) {
         $rejected=$false
         try {
             & (Join-Path $PSScriptRoot 'adapters\Invoke-NetperfGuestTcpChurn.ps1') `
                 -VmName 'unused-test-only' -Credential $credential -PublishDirectory $directory @extra
         }catch {
-            if($_.Exception.Message -notmatch 'Isolated data addresses require|Recovery duration selection requires'){throw}
+            if($_.Exception.Message -notmatch 'Isolated data addresses require|Recovery duration selection requires|GC heap layout selection requires'){throw}
             $rejected=$true
         }
         if(-not $rejected -or (Test-Path -LiteralPath $directory)){throw 'Invalid data-fixture or recovery-duration selection mutated state.'}
@@ -114,9 +114,10 @@ try {
         $ManagedGcPeerRecovery=[switch]::new($true)
         $ManagedGcIsolatedData=[switch]::new($true);$ManagedGcRecoveryMilliseconds=3000
         $ManagedGcProcessRole='client'
+        $ManagedGcHeapLayout='graph'
         & ([scriptblock]::Create($launch[0].Extent.Text))
     }
-    if($actual.Count -ne 13 -or $actual[11] -ne 'client' -or $actual[7] -ne 2048 -or $actual[8] -isnot [bool] -or -not $actual[8] -or
+    if($actual.Count -ne 14 -or $actual[12] -ne 'graph' -or $actual[11] -ne 'client' -or $actual[7] -ne 2048 -or $actual[8] -isnot [bool] -or -not $actual[8] -or
         $actual[9] -isnot [bool] -or -not $actual[9] -or $actual[10] -ne 3000 -or
         $actual[3] -isnot [bool] -or -not $actual[3] -or
         $actual[4] -isnot [bool] -or $actual[4] -or $actual[5] -isnot [bool] -or $actual[5] -or

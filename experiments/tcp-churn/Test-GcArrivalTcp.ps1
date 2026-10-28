@@ -139,8 +139,8 @@ try {
     $checks++
     Close-Owned $client;$client=$null
     foreach($child in $multiServers){Close-Owned $child};$multiServers.Clear()
-    foreach($case in @('zero-heap','oversize-heap','late-trigger','local-role','invalid-pacing','misaligned-peers')) {
-        $mode=switch($case){zero-heap {'gc:0:32'} oversize-heap {'gc:1025:32'} late-trigger {'gc:32:128'} default {'gc:32:32'}}
+    foreach($case in @('zero-heap','oversize-heap','late-trigger','local-role','invalid-pacing','misaligned-peers','heap-layout')) {
+        $mode=switch($case){zero-heap {'gc:0:32'} oversize-heap {'gc:1025:32'} late-trigger {'gc:32:128'} heap-layout {'gc:32:32:invalid'} default {'gc:32:32'}}
         $role=if($case -eq 'local-role'){'local'}else{'client'}
         $pacing=if($case -eq 'invalid-pacing'){'invalid'}else{'nodelay'}
         $arguments=@($common)

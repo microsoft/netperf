@@ -59,6 +59,11 @@ on:
         type: choice
         options: ['client', 'server']
         default: 'client'
+      managed_gc_heap_layout:
+        description: Bounded GC pressure layout; graph uses same nominal heap budget with many linked objects
+        type: choice
+        options: ['arrays', 'graph']
+        default: 'arrays'
   push:
     branches: [main, 'user/mtfriesen/tcp-churn-public']
     paths: ['.github/workflows/tcp-churn-guest.yml', 'experiments/tcp-churn/**']
@@ -91,6 +96,8 @@ jobs:
         run: ./experiments/tcp-churn/Test-GcArrivalTcp.ps1
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-ServerGcArrivalTcp.ps1
+      - shell: pwsh
+        run: ./experiments/tcp-churn/Test-ServerGcArrivalTcp.ps1 -HeapLayout graph
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-GcGuestAdapter.ps1
       - shell: pwsh
@@ -159,12 +166,13 @@ jobs:
           MANAGED_GC_ISOLATED_DATA: ${{ inputs.managed_gc_isolated_data }}
           MANAGED_GC_RECOVERY_MS: ${{ inputs.managed_gc_recovery_ms }}
           MANAGED_GC_PROCESS_ROLE: ${{ inputs.managed_gc_process_role }}
+          MANAGED_GC_HEAP_LAYOUT: ${{ inputs.managed_gc_heap_layout }}
         run: |
           $publish = Join-Path $env:RUNNER_TEMP "tcp-churn-guest-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           if ($env:PROBE_128_TOPOLOGY -eq 'true') {
             if (Test-Path Env:\GUEST_PASSWORD) { Remove-Item Env:\GUEST_PASSWORD }
             if (Test-Path Env:\GUEST_USER) { Remove-Item Env:\GUEST_USER }
-            if ($env:PROFILE_CPU -eq 'true' -or $env:SYN_DROP -eq 'true' -or $env:PEER_MEASUREMENT -eq 'true' -or $env:PROBE_PEER -eq 'true' -or $env:MANAGED_GC_MIXED -eq 'true' -or $env:MANAGED_GC_PEER_RECOVERY -eq 'true' -or $env:MANAGED_GC_ISOLATED_DATA -eq 'true' -or $env:MANAGED_GC_RECOVERY_MS -ne '8000' -or $env:MANAGED_GC_PROCESS_ROLE -ne 'client') {
+            if ($env:PROFILE_CPU -eq 'true' -or $env:SYN_DROP -eq 'true' -or $env:PEER_MEASUREMENT -eq 'true' -or $env:PROBE_PEER -eq 'true' -or $env:MANAGED_GC_MIXED -eq 'true' -or $env:MANAGED_GC_PEER_RECOVERY -eq 'true' -or $env:MANAGED_GC_ISOLATED_DATA -eq 'true' -or $env:MANAGED_GC_RECOVERY_MS -ne '8000' -or $env:MANAGED_GC_PROCESS_ROLE -ne 'client' -or $env:MANAGED_GC_HEAP_LAYOUT -ne 'arrays') {
               throw 'Topology probing is separate from traffic and profiling.'
             }
             ./experiments/tcp-churn/adapters/Invoke-HyperVTopologyProbe.ps1 `
@@ -197,6 +205,7 @@ jobs:
             $extra.ManagedGc = $true
             $extra.ManagedGcPayloadBytes = [int]$env:MANAGED_GC_PAYLOAD_BYTES
             $extra.ManagedGcProcessRole = $env:MANAGED_GC_PROCESS_ROLE
+            $extra.ManagedGcHeapLayout = $env:MANAGED_GC_HEAP_LAYOUT
           }
           if ($env:MANAGED_GC_PEER_RECOVERY -eq 'true') {
             if ($env:MANAGED_GC_MIXED -ne 'true') { throw 'Peer recovery requires managed-GC diagnostic mode.' }
@@ -212,6 +221,9 @@ jobs:
           }
           if ($env:MANAGED_GC_PROCESS_ROLE -ne 'client' -and $env:MANAGED_GC_MIXED -ne 'true') {
             throw 'Receiver GC requires managed-GC diagnostic mode.'
+          }
+          if ($env:MANAGED_GC_HEAP_LAYOUT -ne 'arrays' -and $env:MANAGED_GC_MIXED -ne 'true') {
+            throw 'GC heap layout selection requires managed-GC diagnostic mode.'
           }
           ./experiments/tcp-churn/adapters/Invoke-NetperfGuestTcpChurn.ps1 `
             -VmName netperf-windows-2022-client -Credential $credential `
