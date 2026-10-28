@@ -170,6 +170,10 @@ try {
         dataInterfaceMtuBytes=$mtu
         targets=$r.targets;managedGc=$r.managedGc
         arrivalRate=$r.arrivalRate;maxLaunchLagMilliseconds=$r.maxLaunchLagMilliseconds
+        arrivalDispatch=$r.arrivalDispatch;meanDispatchQueueMilliseconds=$r.meanDispatchQueueMilliseconds
+        maxDispatchQueueMilliseconds=$r.maxDispatchQueueMilliseconds;launchSpanMilliseconds=$r.launchSpanMilliseconds
+        workloadMilliseconds=$r.milliseconds;peakInFlight=$r.peakInFlight
+        meanBindMilliseconds=$r.meanBindMilliseconds;meanConnectMilliseconds=$r.meanConnectMilliseconds
         cpuCoverage='sampled-etw-only';executionTopology='two-existing-guests-plus-client-loopback'
         targetSeverity='not-evaluated';conclusion='diagnostic-not-customer-severity-proof'}
 }catch{$failure=$_}

@@ -619,6 +619,12 @@ negotiated TCP options or a customer-equivalent application message size.
 Managed-GC mode alone permits `seconds=1` for a denser independently scheduled
 arrival stream; other guest campaigns retain their five-second minimum.
 This changes offered rate, not a shared connection or first-data release barrier.
+GC mode dispatches each due request onto the runtime thread pool after reserving
+its shared in-flight slot, rather than serializing synchronous socket setup on
+the arrival scheduler. Ordinary non-GC arrivals retain inline dispatch. Launch
+lag and dispatch-queue delay are separate measurements; reports include actual
+started requests at collection, peak in-flight work and achieved launch span.
+Queued work is not proof of wire-level arrival or target-lock CPU utilization.
 
 This mode captures kernel CPU samples, exact TCP probes and CLR GC events.
 It publishes only allowlisted numeric/fixed-label results, public-symbol CPU

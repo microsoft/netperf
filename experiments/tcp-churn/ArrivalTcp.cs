@@ -39,14 +39,22 @@ public static class ArrivalTcp
 
     private static long latencyTicks,maximumLatencyTicks;
     private static long bindTicks,connectTicks,responseTicks,eofTicks;
+    private static long dispatchTicks,maximumDispatchTicks;
     private static bool noDelay;
-    private static int inFlight,peakInFlight,completed;
-    private static async Task SendWithSlot(SemaphoreSlim capacity,string source,IPAddress peer,int port,byte[] data,byte[] expectedResponse)
+    private static int inFlight,peakInFlight,completed,started;
+    private static async Task SendWithSlot(SemaphoreSlim capacity,string source,IPAddress peer,int port,byte[] data,byte[] expectedResponse,long queuedAt=0)
     {
+        long start=Stopwatch.GetTimestamp();
+        if(queuedAt!=0) {
+            long delay=start-queuedAt,prior;
+            Interlocked.Add(ref dispatchTicks,delay);
+            do {prior=Interlocked.Read(ref maximumDispatchTicks);if(delay<=prior)break;}
+                while(Interlocked.CompareExchange(ref maximumDispatchTicks,delay,prior)!=prior);
+        }
         int active=Interlocked.Increment(ref inFlight);
+        Interlocked.Increment(ref started);
         int previous;
         do {previous=peakInFlight;if(active<=previous)break;} while(Interlocked.CompareExchange(ref peakInFlight,active,previous)!=previous);
-        long start=Stopwatch.GetTimestamp();
         try {
             await Send(source,peer,port,data,expectedResponse).ConfigureAwait(false);
             Interlocked.Increment(ref completed);
@@ -162,7 +170,7 @@ public static class ArrivalTcp
             byte[] data=new byte[size];for(int i=0;i<size;i++)data[i]=(byte)(i%251);
             var senders=new List<Task>();var random=new Random(seed);var clock=Stopwatch.StartNew();
             double next=0,maxLag=0,totalLag=0,lastLaunch=0;
-            bool gcTriggered=false;int gcLaunched=0,gcCompleted=0,gcPending=0,gcBefore=0,gcAfter=0;
+            bool gcTriggered=false;int gcLaunched=0,gcStarted=0,gcCompleted=0,gcPending=0,gcBefore=0,gcAfter=0;
             double gcMilliseconds=0;string gcStart="",gcEnd="";
             using(var capacity=new SemaphoreSlim(concurrency)) {
             for(int i=0;i<count;i++) {
@@ -171,11 +179,17 @@ public static class ArrivalTcp
                 await capacity.WaitAsync().ConfigureAwait(false);
                 double lag=Math.Max(0,clock.Elapsed.TotalMilliseconds-next);
                 maxLag=Math.Max(maxLag,lag);totalLag+=lag;lastLaunch=clock.Elapsed.TotalMilliseconds;
-                senders.Add(SendWithSlot(capacity,sources[i%sources.Length],peers[i%peers.Length],port,data,response));
+                string requestSource=sources[i%sources.Length];IPAddress targetPeer=peers[i%peers.Length];
+                if(gcHeapMiB>0) {
+                    long queuedAt=Stopwatch.GetTimestamp();
+                    senders.Add(Task.Run(()=>SendWithSlot(capacity,requestSource,targetPeer,port,data,response,queuedAt)));
+                } else {
+                    senders.Add(SendWithSlot(capacity,requestSource,targetPeer,port,data,response));
+                }
                 if(gcHeapMiB>0 && !gcTriggered && i+1>=gcMinimumLaunch) {
                     int completedNow=Volatile.Read(ref completed),pendingNow=Volatile.Read(ref inFlight);
                     if(completedNow>0 && pendingNow>0) {
-                        gcLaunched=i+1;gcCompleted=completedNow;gcPending=pendingNow;
+                        gcLaunched=i+1;gcStarted=Volatile.Read(ref started);gcCompleted=completedNow;gcPending=pendingNow;
                         gcBefore=GC.CollectionCount(GC.MaxGeneration);
                         gcStart=DateTime.UtcNow.ToString("o",CultureInfo.InvariantCulture);
                         var collection=Stopwatch.StartNew();
@@ -196,7 +210,7 @@ public static class ArrivalTcp
                 throw new InvalidOperationException("The requested full GC did not overlap completed and in-flight requests.");
             string gcJson="{\"enabled\":"+(gcTriggered?"true":"false")+
                 ",\"heapMiB\":"+gcHeapMiB+",\"launchedAtCollection\":"+gcLaunched+
-                ",\"completedBeforeCollection\":"+gcCompleted+",\"inFlightBeforeCollection\":"+gcPending+
+                ",\"startedBeforeCollection\":"+gcStarted+",\"completedBeforeCollection\":"+gcCompleted+",\"inFlightBeforeCollection\":"+gcPending+
                 ",\"gen2CollectionsBefore\":"+gcBefore+",\"gen2CollectionsAfter\":"+gcAfter+
                 ",\"blockingCollectionMilliseconds\":"+gcMilliseconds.ToString("R",CultureInfo.InvariantCulture)+
                 ",\"collectionStartUtc\":\""+gcStart+"\",\"collectionEndUtc\":\""+gcEnd+
@@ -212,6 +226,9 @@ public static class ArrivalTcp
                 ",\"bytesSent\":"+((long)count*size)+",\"networkErrors\":0,\"protocolErrors\":0,\"milliseconds\":"+clock.ElapsedMilliseconds+
                 ",\"bytesReceived\":"+((long)count*responseSize)+
                 ",\"arrivalRate\":"+rate+",\"seed\":"+seed+",\"barrier\":false"+
+                ",\"arrivalDispatch\":\""+(gcHeapMiB>0?"thread-pool":"inline")+"\""+
+                ",\"meanDispatchQueueMilliseconds\":"+(1000.0*dispatchTicks/Stopwatch.Frequency/count).ToString("R",CultureInfo.InvariantCulture)+
+                ",\"maxDispatchQueueMilliseconds\":"+(1000.0*maximumDispatchTicks/Stopwatch.Frequency).ToString("R",CultureInfo.InvariantCulture)+
                 ",\"maxLaunchLagMilliseconds\":"+maxLag.ToString("R",CultureInfo.InvariantCulture)+
                 ",\"meanLaunchLagMilliseconds\":"+(totalLag/count).ToString("R",CultureInfo.InvariantCulture)+
                 ",\"launchSpanMilliseconds\":"+lastLaunch.ToString("R",CultureInfo.InvariantCulture)+",\"role\":\""+role+"\",\"maximumInFlight\":"+concurrency+

@@ -49,6 +49,14 @@ try {
         throw 'GC request/reply integrity, pacing or no-barrier contract failed.'
     }
     $checks++
+    if($r.arrivalDispatch -ne 'thread-pool' -or $null -eq $r.meanDispatchQueueMilliseconds -or
+        $null -eq $r.maxDispatchQueueMilliseconds -or $r.meanDispatchQueueMilliseconds -lt 0 -or
+        $r.maxDispatchQueueMilliseconds -lt $r.meanDispatchQueueMilliseconds -or
+        $r.managedGc.startedBeforeCollection -lt $r.managedGc.completedBeforeCollection -or
+        $r.managedGc.startedBeforeCollection -gt $r.managedGc.launchedAtCollection) {
+        throw 'Bounded GC dispatch timing or actual-start accounting failed.'
+    }
+    $checks++
     $gc=$r.managedGc
     if(-not $gc.enabled -or $gc.heapMiB -ne 32 -or $gc.launchedAtCollection -lt 32 -or
         $gc.completedBeforeCollection -lt 1 -or $gc.inFlightBeforeCollection -lt 1 -or
