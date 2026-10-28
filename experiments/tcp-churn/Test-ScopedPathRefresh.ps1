@@ -13,7 +13,7 @@ $beginFile=Join-Path $directory 'begin'
 $stopFile=Join-Path $directory 'stop'
 $checks=0
 try {
-    foreach($case in @('cycle','gateway-cycle','mac-mismatch','already-absent','bad-data','host-conflict','changed-route','add-failure','remove-failure','default-drift')) {
+    foreach($case in @('cycle','gateway-cycle','verification-lag','mac-mismatch','already-absent','bad-data','host-conflict','changed-route','add-failure','remove-failure','default-drift')) {
         $data=@{interfaceGuid='test-interface';originalDhcpDisabled=$true;addresses=@('198.19.240.1')
             originalDefaultKeys=@('5/192.0.2.254/10')}
         if($case -eq 'bad-data'){$data.interfaceGuid='unowned-interface'}
@@ -56,6 +56,11 @@ try {
                 }
                 function Get-NetRoute {
                     [CmdletBinding()]param($AddressFamily,$PolicyStore)
+                    if($case -eq 'verification-lag' -and $fixture.adds -gt 0 -and -not $fixture.ContainsKey('verifyStartedUtc')){
+                        $fixture.verifyStartedUtc=[DateTime]::UtcNow
+                        Start-Sleep -Milliseconds 100
+                        $fixture.verifyCompletedUtc=[DateTime]::UtcNow
+                    }
                     $fixture.routes
                 }
                 function New-NetRoute {
@@ -95,8 +100,8 @@ try {
             if($_.Exception.Message -notmatch $pattern){throw}
             $failed=$true
         }
-        if($failed -ne ($case -notin @('cycle','gateway-cycle','already-absent'))){throw "Unexpected route-control verdict: $case"}
-        if($case -in @('cycle','gateway-cycle')) {
+        if($failed -ne ($case -notin @('cycle','gateway-cycle','verification-lag','already-absent'))){throw "Unexpected route-control verdict: $case"}
+        if($case -in @('cycle','gateway-cycle','verification-lag')) {
             $r=Get-Content $reportFile -Raw|ConvertFrom-Json
             if($r.outcome -ne 'completed' -or -not $r.added -or -not $r.removed -or -not $r.defaultRoutesPreserved -or
                 $fixture.adds -ne 1 -or $fixture.removes -ne 1 -or $fixture.routes.Count -ne 2){
@@ -104,6 +109,14 @@ try {
             }
             if($case -eq 'gateway-cycle' -and (-not $r.peerMacVerified -or $r.sameInterfaceAndNextHop -or $r.nextHopKind -ne 'owned-peer-gateway')){
                 throw 'The owned logical-gateway control was not distinctly verified.'
+            }
+            if($case -eq 'verification-lag'){
+                if(-not $r.applyEndUtc -or
+                    ([DateTime]$r.applyEndUtc).ToUniversalTime() -lt ([DateTime]$r.applyStartUtc).ToUniversalTime() -or
+                    ([DateTime]$r.applyEndUtc).ToUniversalTime() -gt $fixture.verifyStartedUtc -or
+                    ([DateTime]$r.addedUtc).ToUniversalTime() -lt $fixture.verifyCompletedUtc){
+                    throw 'Route application timing includes verification latency.'
+                }
             }
         }
         if($case -in @('bad-data','host-conflict','changed-route','mac-mismatch') -and ($fixture.adds -or $fixture.removes)){

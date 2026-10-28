@@ -103,6 +103,7 @@ try {
     $changed=$true
     $null=New-NetRoute -InterfaceIndex $adapter[0].ifIndex -DestinationPrefix $prefix -NextHop $NextHop `
         -RouteMetric 1 -PolicyStore ActiveStore -ErrorAction Stop
+    $report.applyEndUtc=[DateTime]::UtcNow.ToString('o')
     $current=@(Read-ControlRoute)
     if($current.Count -ne 1 -or $current[0].InterfaceIndex -ne $adapter[0].ifIndex -or
         $current[0].NextHop -ne $NextHop -or $current[0].RouteMetric -ne 1){throw 'The owned route addition did not verify.'}

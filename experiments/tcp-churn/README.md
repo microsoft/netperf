@@ -750,6 +750,10 @@ the logical next hop changed. The packet destination remains the peer's own
 data address; this is not an independent physical gateway or a DGD-transition
 claim. Both peer aliases and the host route are ownership-checked and removed.
 The default `onlink` variant retains the original on-link next-hop semantics.
+The `applyStartUtc`/`applyEndUtc` envelope brackets the route-addition API call;
+`addedUtc` follows independent route verification. Neither timestamp is an exact
+kernel cache-invalidation time. A verification timestamp after GC does not by
+itself establish that the route was applied after GC.
 
 `managed_gc_isolated_data=true` is a separate, explicit opt-in for fresh data
 paths. It requires both existing guest interfaces to already have DHCP disabled.
