@@ -12,6 +12,7 @@ param(
     [string]$ReadyFile,
     [string]$TrafficReadyFile,
     [string]$StopFile,
+    [string]$CohortSources,
     [ValidateRange(1,65535)][int]$Port=20300,
     [ValidateRange(100,8000)][int]$DurationMilliseconds=8000,
     [switch]$RestoreOnly
@@ -47,6 +48,13 @@ $addresses=@(Get-NetIPAddress -InterfaceIndex $adapter[0].ifIndex -AddressFamily
 $interfaces=@(Get-NetIPInterface -InterfaceIndex $adapter[0].ifIndex -AddressFamily IPv4 -ErrorAction Stop)
 if($addresses.Count -ne 1 -or $interfaces.Count -ne 1 -or [string]$interfaces[0].Forwarding -ne 'Disabled'){
     throw 'A unique owned client IPv4 address with forwarding disabled is required.'
+}
+if(!$CohortSources){$CohortSources=$LocalAddress}
+$sources=@($CohortSources.Split(','))
+if($sources.Count -gt 4 -or $LocalAddress -notin $sources){throw 'The pulse requires its owned cohort source addresses.'}
+foreach($source in $sources) {
+    $owned=@(Get-NetIPAddress -InterfaceIndex $adapter[0].ifIndex -AddressFamily IPv4 -ErrorAction Stop|Where-Object IPAddress -eq $source)
+    if($owned.Count -ne 1){throw 'A cohort source address is not uniquely owned by the data interface.'}
 }
 if([string]$interfaces[0].Dhcp -notin @('Enabled','Disabled')){throw 'The client data-interface DHCP state is unavailable.'}
 function Read-Neighbor {
@@ -109,7 +117,8 @@ try {
     $baseline=Get-NetAdapterStatistics -Name $InterfaceAlias -ErrorAction Stop
     [IO.File]::WriteAllText($ReadyFile,'ready')
     $wait=[Diagnostics.Stopwatch]::StartNew()
-    $pattern='^\s*TCP\s+'+[regex]::Escape($LocalAddress)+':\d+\s+'+[regex]::Escape($PeerAddress)+':'+$Port+'\s+ESTABLISHED\s*$'
+    $sourcePattern=(@($sources|ForEach-Object{[regex]::Escape($_)}) -join '|')
+    $pattern='^\s*TCP\s+(?:'+$sourcePattern+'):\d+\s+'+[regex]::Escape($PeerAddress)+':'+$Port+'\s+ESTABLISHED\s*$'
     do {
         if(Test-Path -LiteralPath $StopFile){throw 'The workload stopped before the scoped pulse.'}
         if(Test-Path -LiteralPath $TrafficReadyFile) {

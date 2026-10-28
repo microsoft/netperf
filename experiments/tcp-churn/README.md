@@ -672,12 +672,14 @@ neighbor, verified against the owned peer adapter, and disabled client forwardin
 After the client has finished heap preparation and ordinary traffic reaches at
 least eight established remote connections plus 64 KiB of adapter sends, an
 independent local agent substitutes the **owned client adapter's MAC** for that
-one peer for eight seconds. Requests are never held at a connection/data barrier.
+one peer for the selected `managed_gc_recovery_ms` hold interval (3, 5 or 8
+seconds; default 8). Apply/restore operations are separately timestamped and can
+extend the overall interruption beyond that hold. Requests are never held at a connection/data barrier.
 This models a temporary stale L2 mapping, not a size-selective MTU black hole.
 
 The agent restores the verified peer MAC and original dynamic-neighbor policy
 in `finally`; the controller also performs an ownership-checked restoration pass.
-No route, link, firewall profile, offload or trust setting is changed.
+The pulse itself changes no route, link, firewall profile, offload or trust setting.
 The peer's in-band management session may also pause, so algorithm coverage is
 counted only for TCB lifetimes correlated to the owned client's completion
 and close events, excluding management traffic and invalidating reused TCB identities.
@@ -693,6 +695,19 @@ wait, target CPU saturation, or equivalence to a physical deployment.
 Post-restoration CPU diagnostics are retained even when the final BH-entry gate
 rejects the run. Fixed DHCP-state flags document the admission constraints for
 possible future data/management isolation; this pulse never changes DHCP.
+
+`managed_gc_isolated_data=true` is a separate, explicit opt-in for fresh data
+paths. It requires both existing guest interfaces to already have DHCP disabled.
+It transactionally adds four client aliases and one peer alias, all ActiveStore
+and SkipAsSource, within a dedicated benchmark /29. Existing address or route
+overlaps reject admission; management addresses, DHCP state and default routes
+are snapshotted and verified unchanged. Cleanup removes only the owned aliases
+and their connected prefix, then verifies exact original management policy.
+It does not create an adapter, VM or host switch. Four remote source/target
+pairs plus four loopback pairs retain the same aggregate endpoint and wire-byte
+checks. WinRM continues to use the original addresses rather than priming the
+TCP data paths before the experiment. These temporary guest address/connected-route
+changes occur only in this opt-in fixture, not in ordinary healthy or recovery runs.
 
 The manual lab investigation supplemented CPU sampling with the existing Windows
 Performance Toolkit **SPINLOCK collision events**, rather than assuming that a

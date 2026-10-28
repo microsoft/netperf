@@ -103,6 +103,42 @@ try {
     $checks++
     Close-Owned $client;$client=$null
     foreach($child in $multiServers){Close-Owned $child};$multiServers.Clear()
+    foreach($index in 0..1) {
+        $peer="127.0.0.$(2+$index)"
+        $result=Join-Path $directory "eight-server-$index.json"
+        $targetCount=if($index -eq 0){65}else{64}
+        $child=Start-Workload @('127.0.0.1',$peer,[string]$port,[string]$targetCount,'4000','1048576',$result,'server','1048576','14529','64','nodelay')
+        $multiServers.Add($child);$watch.Restart()
+        while(-not(Test-Path -LiteralPath ($result+'.ready'))) {
+            if($child.process.HasExited -or $watch.Elapsed.TotalSeconds -gt 10){throw 'An eight-target fixture listener did not become ready.'}
+            Start-Sleep -Milliseconds 20
+        }
+    }
+    $eightOutput=Join-Path $directory 'eight-client.json'
+    $eightSources=(1..8|ForEach-Object{"127.0.1.$_"}) -join ','
+    $eightPeers=(@('127.0.0.2','127.0.0.2','127.0.0.2','127.0.0.2','127.0.0.3','127.0.0.3','127.0.0.3','127.0.0.3') -join ',')
+    $client=Start-Workload @($eightSources,$eightPeers,[string]$port,'129','4000','1048576',
+        $eightOutput,'client','1048576','14529','64','nodelay','gc:32:32')
+    if(-not $client.process.WaitForExit(30000) -or $client.process.ExitCode -ne 0){throw 'Eight-target GC request delivery failed.'}
+    foreach($child in $multiServers){if(-not $child.process.WaitForExit(5000) -or $child.process.ExitCode -ne 0){throw 'An eight-target fixture server failed.'}}
+    $eight=Get-Content $eightOutput -Raw|ConvertFrom-Json
+    if($eight.targets.Count -ne 8 -or $eight.bytesSent -ne 129MB -or $eight.bytesReceived -ne 129MB -or
+        ($eight.targets[0..3]|Measure-Object connections -Sum).Sum -ne 65 -or
+        ($eight.targets[4..7]|Measure-Object connections -Sum).Sum -ne 64){
+        throw 'Eight-target duplicate-peer allocation or byte accounting failed.'
+    }
+    foreach($index in 0..1) {
+        $observed=Get-Content (Join-Path $directory "eight-server-$index.json") -Raw|ConvertFrom-Json
+        $members=if($index -eq 0){$eight.targets[0..3]}else{$eight.targets[4..7]}
+        if($observed.connections -ne ($members|Measure-Object connections -Sum).Sum -or
+            $observed.bytesReceived -ne ($members|Measure-Object requestBytes -Sum).Sum -or
+            $observed.bytesSent -ne ($members|Measure-Object responseBytes -Sum).Sum){
+            throw 'Eight-target endpoint verification failed.'
+        }
+    }
+    $checks++
+    Close-Owned $client;$client=$null
+    foreach($child in $multiServers){Close-Owned $child};$multiServers.Clear()
     foreach($case in @('zero-heap','oversize-heap','late-trigger','server-role','invalid-pacing','misaligned-peers')) {
         $mode=switch($case){zero-heap {'gc:0:32'} oversize-heap {'gc:1025:32'} late-trigger {'gc:32:128'} default {'gc:32:32'}}
         $role=if($case -eq 'server-role'){'server'}else{'client'}
@@ -121,6 +157,10 @@ try {
         if(Test-Path -LiteralPath $file){Remove-Item -LiteralPath $file -ErrorAction Stop}
     }
     foreach($file in @('multi-client.json','multi-client.json.traffic-ready','multi-server-0.json','multi-server-0.json.ready','multi-server-1.json','multi-server-1.json.ready')) {
+        $path=Join-Path $directory $file
+        if(Test-Path -LiteralPath $path){Remove-Item -LiteralPath $path -ErrorAction Stop}
+    }
+    foreach($file in @('eight-client.json','eight-client.json.traffic-ready','eight-server-0.json','eight-server-0.json.ready','eight-server-1.json','eight-server-1.json.ready')) {
         $path=Join-Path $directory $file
         if(Test-Path -LiteralPath $path){Remove-Item -LiteralPath $path -ErrorAction Stop}
     }

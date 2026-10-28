@@ -9,7 +9,9 @@ param(
     [int]$Seconds=5,
     [int]$Connections=256,
     [int]$PayloadBytes=65536,
-    [switch]$PeerRecovery
+    [switch]$PeerRecovery,
+    [switch]$IsolatedData,
+    [int]$RecoveryMilliseconds=8000
 )
 $ErrorActionPreference='Stop'
 if($PublishDirectory -ne (Join-Path $ScratchParent 'publish')) {

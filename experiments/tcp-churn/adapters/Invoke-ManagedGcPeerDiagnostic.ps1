@@ -10,7 +10,9 @@ param(
     [ValidateRange(1,120)][int]$Seconds=5,
     [ValidateRange(1,1024)][int]$Connections=256,
     [ValidateRange(1,1048576)][int]$PayloadBytes=65536,
-    [switch]$PeerRecovery
+    [switch]$PeerRecovery,
+    [switch]$IsolatedData,
+    [ValidateRange(100,8000)][int]$RecoveryMilliseconds=8000
 )
 $ErrorActionPreference='Stop'
 $sourceRoot=Split-Path $PSScriptRoot
@@ -19,8 +21,9 @@ $publishOwned=$false
 $peer=$null;$peerOwned=$false;$profileOwned=$false
 $client=$null;$localServer=$null;$tcpProbe=$null;$clrProbe=$null
 $neighborPulse=$null;$neighborArguments=@();$pulseResult=$null;$ownedCounts=$null;$peerDhcpEnabled=$null
+$localDataStarted=$false;$remoteDataStarted=$false
 $failure=$null;$cleanupErrors=[Collections.Generic.List[Exception]]::new()
-$phase='preflight';$start=$null;$end=$null;$result=$null
+$phase='preflight';$start=$null;$end=$null;$tcpEnd=$null;$result=$null
 $port=20300;$count=8192;$heapMiB=1024
 $rate=[int][Math]::Ceiling($count/[double]$Seconds)
 $analyzer=Join-Path $AnalyzerDirectory 'CpuSamples.exe'
@@ -63,7 +66,7 @@ try {
     $ipInterface=@(Get-NetIPInterface -InterfaceIndex $route[0].InterfaceIndex -AddressFamily IPv4)
     if($ipInterface.Count -ne 1 -or $ipInterface[0].NlMtu -lt 1){throw 'A unique client data interface with positive MTU is required.'}
     $mtu=$ipInterface[0].NlMtu
-    if($PeerRecovery) {
+    if($PeerRecovery -or $IsolatedData) {
         $peerData=Invoke-Command -Session $peer -ScriptBlock {
             param($address)
             $ip=@(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop|Where-Object IPAddress -eq $address)
@@ -74,7 +77,7 @@ try {
             if($network.Count -ne 1 -or [string]$network[0].Dhcp -notin @('Enabled','Disabled')){
                 throw 'The peer data-interface DHCP state is unavailable.'
             }
-            [pscustomobject]@{mac=[string]$nic[0].MacAddress;dhcpEnabled=([string]$network[0].Dhcp -eq 'Enabled')}
+            [pscustomobject]@{mac=[string]$nic[0].MacAddress;alias=[string]$nic[0].Name;dhcpEnabled=([string]$network[0].Dhcp -eq 'Enabled')}
         } -ArgumentList $peerAddress
         $peerMac=$peerData.mac;$peerDhcpEnabled=$peerData.dhcpEnabled
     }
@@ -88,6 +91,47 @@ try {
         Copy-Item -LiteralPath (Join-Path $sourceRoot $file) -Destination (Join-Path $remote $file) -ToSession $peer
     }
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'WindowsCts.psm1') -Destination (Join-Path $remote 'WindowsCts.psm1') -ToSession $peer
+    $cohortSources=$clientAddress
+    $clientSources=@($clientAddress,'127.0.0.1')
+    $clientTargets=@($peerAddress,'127.0.0.2')
+    if($IsolatedData) {
+        $phase='prepare-client-data'
+        if([string]$ipInterface[0].Dhcp -ne 'Disabled' -or $peerDhcpEnabled -ne $false){
+            throw 'Isolated data aliases require already-static interfaces on both guests.'
+        }
+        Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Set-ScopedDataAddresses.ps1') `
+            -Destination (Join-Path $remote 'Set-ScopedDataAddresses.ps1') -ToSession $peer
+        $cohortSources='198.19.240.1,198.19.240.2,198.19.240.3,198.19.240.4'
+        $localDataStarted=$true
+        & (Join-Path $PSScriptRoot 'Set-ScopedDataAddresses.ps1') -Action add -InterfaceAlias $alias `
+            -Addresses $cohortSources -StateFile (Join-Path $diagnostics 'data-original.clixml') `
+            -ReportFile (Join-Path $diagnostics 'data-prepare.json')
+        $remoteDataStarted=$true
+        $phase='prepare-peer-data'
+        Invoke-Command -Session $peer -ScriptBlock {
+            param($root,$alias)
+            & (Join-Path $root 'Set-ScopedDataAddresses.ps1') -Action add -InterfaceAlias $alias `
+                -Addresses '198.19.240.6' -StateFile (Join-Path $root 'data-original.clixml') `
+                -ReportFile (Join-Path $root 'data-prepare.json')
+        } -ArgumentList $remote,$peerData.alias
+        $clientAddress='198.19.240.1';$peerAddress='198.19.240.6'
+        $clientSources=@($cohortSources.Split(','))+@('127.0.0.1','127.0.0.1','127.0.0.1','127.0.0.1')
+        $clientTargets=@($peerAddress,$peerAddress,$peerAddress,$peerAddress,'127.0.0.2','127.0.0.2','127.0.0.2','127.0.0.2')
+        $phase='resolve-data-neighbor'
+        try {
+            $null=Invoke-TcpChurnTool -Program "$env:SystemRoot\System32\ping.exe" `
+                -Arguments @('-n','1','-w','500','-S',$clientAddress,$peerAddress) -Directory $diagnostics `
+                -LogPrefix (Join-Path $diagnostics 'data-neighbor-resolution') -TimeoutSeconds 10
+        }catch [InvalidOperationException] {
+            if($_.Exception.Data['ToolExitCode'] -ne 1){throw}
+            Write-Verbose 'ICMP echo did not complete; independently verified owned-neighbor resolution is still required.'
+        }
+        $learned=@(Get-NetNeighbor -InterfaceAlias $alias -AddressFamily IPv4 -PolicyStore ActiveStore|
+            Where-Object IPAddress -eq $peerAddress)
+        if($learned.Count -ne 1 -or $learned[0].LinkLayerAddress -ne $peerMac){
+            throw 'The isolated data peer did not resolve to its verified owned MAC.'
+        }
+    }
     $phase='compile-client'
     $null=Invoke-TcpChurnTool -Program $compiler -Arguments @('/nologo','/target:exe','/platform:x64',"/out:$exe",(Join-Path $sourceRoot 'ArrivalTcp.cs')) `
         -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'compile')
@@ -106,7 +150,7 @@ try {
         Copy-Item -LiteralPath (Join-Path $root 'ArrivalTcp.ServerGc.config') -Destination ($exe+'.config')
         $rule='ManagedGcPeer-'+[guid]::NewGuid().ToString('N')
         $null=New-NetFirewallRule -Name $rule -DisplayName $rule -Direction Inbound -Action Allow `
-            -Protocol TCP -LocalPort $port -LocalAddress $listen -RemoteAddress $client
+            -Protocol TCP -LocalPort $port -LocalAddress $listen -RemoteAddress ($client -split ',')
         $global:OwnedManagedGcPeer.Rule=$rule
         $output=Join-Path $root 'server.json'
         $global:OwnedManagedGcPeer.Process=Start-TcpChurnCollector -Program $exe -Arguments @(
@@ -117,7 +161,7 @@ try {
             if($global:OwnedManagedGcPeer.Process.Process.HasExited -or $clock.Elapsed.TotalSeconds -gt 20){throw 'Peer listener did not become ready.'}
             Start-Sleep -Milliseconds 50
         }
-    } -ArgumentList $remote,$peerAddress,$clientAddress,$port,($count/2),$rate,$payloadBytes
+    } -ArgumentList $remote,$peerAddress,$cohortSources,$port,($count/2),$rate,$payloadBytes
     $localOutput=Join-Path $diagnostics 'loopback.json'
     $phase='start-loopback-peer'
     $localServer=Start-TcpChurnCollector -Program $exe -Arguments @(
@@ -162,12 +206,13 @@ try {
         $neighborPulse=Start-TcpChurnCollector -Program $pulseProgram -Arguments ($neighborArguments+@(
             '-ReportFile',(Join-Path $diagnostics 'neighbor-pulse.json'),'-ReadyFile',(Join-Path $diagnostics 'neighbor.ready'),
             '-TrafficReadyFile',($clientOutput+'.traffic-ready'),'-StopFile',(Join-Path $diagnostics 'neighbor.stop'),
+            '-CohortSources',$cohortSources,'-DurationMilliseconds',[string]$RecoveryMilliseconds,
             '-Port',[string]$port)) -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'neighbor-agent')
         Wait-Ready $neighborPulse (Join-Path $diagnostics 'neighbor.ready')
     }
     $phase='managed-gc-traffic'
     $client=Start-TcpChurnCollector -Program $exe -Arguments @(
-        "$clientAddress,127.0.0.1","$peerAddress,127.0.0.2",[string]$port,[string]$count,[string]$rate,[string]$payloadBytes,
+        ($clientSources -join ','),($clientTargets -join ','),[string]$port,[string]$count,[string]$rate,[string]$payloadBytes,
         $clientOutput,'client',[string]$payloadBytes,'14529',[string]$Connections,'nodelay',"gc:${heapMiB}:2048"
     ) -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'client')
     $clientPid=$client.Process.Id
@@ -178,7 +223,7 @@ try {
         if(-not $neighborPulse.Process.WaitForExit(15000) -or $neighborPulse.Process.ExitCode -ne 0){throw 'The scoped peer pulse did not complete successfully.'}
         $pulseResult=Get-Content (Join-Path $diagnostics 'neighbor-pulse.json') -Raw|ConvertFrom-Json
         if($pulseResult.outcome -ne 'recovered' -or -not $pulseResult.applied -or -not $pulseResult.restored -or
-            $pulseResult.establishedAtTrigger -lt 8 -or $pulseResult.verifiedHoldMilliseconds -lt 8000){
+            $pulseResult.establishedAtTrigger -lt 8 -or $pulseResult.verifiedHoldMilliseconds -lt $RecoveryMilliseconds){
             throw 'The verified established-flow recovery pulse did not cover its requested interval.'
         }
     }
@@ -195,16 +240,22 @@ try {
             throw 'A mixed-traffic endpoint failed verification.'
         }
     }
-    if($r.targets.Count -ne 2 -or $r.targets[0].loopback -or -not $r.targets[1].loopback -or
-        $r.targets[0].connections -ne $remoteResult.connections -or $r.targets[1].connections -ne $l.connections -or
-        $r.targets[0].requestBytes -ne $remoteResult.bytesReceived -or $r.targets[0].responseBytes -ne $remoteResult.bytesSent -or
-        $r.targets[1].requestBytes -ne $l.bytesReceived -or $r.targets[1].responseBytes -ne $l.bytesSent -or
+    $remoteTargets=@($r.targets|Where-Object{-not $_.loopback})
+    $localTargets=@($r.targets|Where-Object loopback)
+    if($r.targets.Count -ne $clientTargets.Count -or $remoteTargets.Count -ne $clientTargets.Count/2 -or
+        $localTargets.Count -ne $clientTargets.Count/2 -or
+        ($remoteTargets|Measure-Object connections -Sum).Sum -ne $remoteResult.connections -or
+        ($localTargets|Measure-Object connections -Sum).Sum -ne $l.connections -or
+        ($remoteTargets|Measure-Object requestBytes -Sum).Sum -ne $remoteResult.bytesReceived -or
+        ($remoteTargets|Measure-Object responseBytes -Sum).Sum -ne $remoteResult.bytesSent -or
+        ($localTargets|Measure-Object requestBytes -Sum).Sum -ne $l.bytesReceived -or
+        ($localTargets|Measure-Object responseBytes -Sum).Sum -ne $l.bytesSent -or
         -not $r.managedGc.enabled -or $r.managedGc.gen2CollectionsAfter -le $r.managedGc.gen2CollectionsBefore) {
         throw 'Mixed-target byte counts or real managed-GC coverage did not verify.'
     }
     $after=Get-NetAdapterStatistics -Name $alias
-    if($after.SentBytes-$before.SentBytes -lt $r.targets[0].requestBytes -or
-        $after.ReceivedBytes-$before.ReceivedBytes -lt $r.targets[0].responseBytes){throw 'The non-loopback NIC did not account for the remote payload.'}
+    if($after.SentBytes-$before.SentBytes -lt ($remoteTargets|Measure-Object requestBytes -Sum).Sum -or
+        $after.ReceivedBytes-$before.ReceivedBytes -lt ($remoteTargets|Measure-Object responseBytes -Sum).Sum){throw 'The non-loopback NIC did not account for the remote payload.'}
     $result=[ordered]@{schema=1;workload='managed-gc-mixed';outcome='collected';connections=$r.connections
         bytesSent=$r.bytesSent;bytesReceived=$r.bytesReceived;payloadBytesPerDirection=$payloadBytes
         dataInterfaceMtuBytes=$mtu
@@ -216,6 +267,7 @@ try {
         meanBindMilliseconds=$r.meanBindMilliseconds;meanConnectMilliseconds=$r.meanConnectMilliseconds
         cpuCoverage='sampled-etw-only';executionTopology='two-existing-guests-plus-client-loopback'
         targetSeverity='not-evaluated';conclusion='diagnostic-not-customer-severity-proof'}
+    $result.isolatedDataAddresses=[bool]$IsolatedData
     if($PeerRecovery){$result.peerRecovery=$pulseResult;$result.peerDataInterfaceDhcpEnabled=$peerDhcpEnabled}
 }catch{$failure=$_}
 finally {
@@ -240,6 +292,7 @@ finally {
         }
     }
     foreach($child in @($client,$localServer)){if($null -ne $child){try{Stop-TcpChurnCollector $child}catch{$cleanupErrors.Add($_.Exception)}}}
+    $tcpEnd=[DateTime]::UtcNow.ToString('o')
     foreach($entry in @(@{child=$tcpProbe;stop='tcp.stop'},@{child=$clrProbe;stop='clr.stop'})) {
         if($null -eq $entry.child){continue}
         try {
@@ -258,6 +311,23 @@ finally {
             try {if($null -ne $global:OwnedManagedGcPeer.Process){Stop-TcpChurnCollector $global:OwnedManagedGcPeer.Process}}
             finally {if($global:OwnedManagedGcPeer.Rule){Remove-NetFirewallRule -Name $global:OwnedManagedGcPeer.Rule -ErrorAction Stop}}
         }}catch{$cleanupErrors.Add($_.Exception)}
+    }
+    if($remoteDataStarted -and $null -ne $peer) {
+        try {Invoke-Command -Session $peer -ScriptBlock {
+            param($root,$alias)
+            if(Test-Path -LiteralPath (Join-Path $root 'data-original.clixml')) {
+                & (Join-Path $root 'Set-ScopedDataAddresses.ps1') -Action remove -InterfaceAlias $alias `
+                    -Addresses '198.19.240.6' -StateFile (Join-Path $root 'data-original.clixml') `
+                    -ReportFile (Join-Path $root 'data-restored.json')
+            }
+        } -ArgumentList $remote,$peerData.alias}catch{$cleanupErrors.Add($_.Exception)}
+    }
+    if($localDataStarted -and (Test-Path -LiteralPath (Join-Path $diagnostics 'data-original.clixml'))) {
+        try {
+            & (Join-Path $PSScriptRoot 'Set-ScopedDataAddresses.ps1') -Action remove -InterfaceAlias $alias `
+                -Addresses $cohortSources -StateFile (Join-Path $diagnostics 'data-original.clixml') `
+                -ReportFile (Join-Path $diagnostics 'data-restored.json')
+        }catch{$cleanupErrors.Add($_.Exception)}
     }
     if($null -ne $peer){try{Remove-PSSession $peer -ErrorAction Stop}catch{$cleanupErrors.Add($_.Exception)}}
 }
@@ -292,8 +362,9 @@ try {
         (Join-Path $PublishDirectory 'cpu-after-gc.json'),$postStart.ToString('o'),$postEnd.ToString('o')) `
         -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'post-gc-analysis') -TimeoutSeconds 300
     $phase='analyze-tcp-events'
+    $tcpCoverageEnd=if($PeerRecovery){$tcpEnd}else{$end}
     $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @('--events',(Join-Path $diagnostics 'tcp.etl'),
-        (Join-Path $PublishDirectory 'tcp-events.json'),'interval',$start,$end,(Join-Path $diagnostics 'tcp-state.json')) `
+        (Join-Path $PublishDirectory 'tcp-events.json'),'interval',$start,$tcpCoverageEnd,(Join-Path $diagnostics 'tcp-state.json')) `
         -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'tcp-analysis') -TimeoutSeconds 120
     $tcpSummary=Get-Content (Join-Path $PublishDirectory 'tcp-events.json') -Raw|ConvertFrom-Json
     if($tcpSummary.outcome -ne 'counted' -or $tcpSummary.eventsLost -ne 0){throw 'Lossless TCP event coverage is required.'}
@@ -319,9 +390,10 @@ try {
         }
         $tcpRows=[Collections.Generic.List[object]]::new()
         $startUtc=([datetime]$start).ToUniversalTime()
+        $tcpEndUtc=([datetime]$tcpCoverageEnd).ToUniversalTime()
         Get-WinEvent -Path (Join-Path $diagnostics 'tcp.etl') -Oldest|ForEach-Object{
             $key=[string]$_.Id+':'+$_.Version
-            if($_.TimeCreated.ToUniversalTime() -ge $startUtc -and $_.TimeCreated.ToUniversalTime() -le $endUtc -and $layouts.ContainsKey($key)){
+            if($_.TimeCreated.ToUniversalTime() -ge $startUtc -and $_.TimeCreated.ToUniversalTime() -le $tcpEndUtc -and $layouts.ContainsKey($key)){
                 if($tcpRows.Count -ge 200000){throw 'TCP owner/lifetime evidence exceeded its bound.'}
                 $layout=$layouts[$key]
                 $owner=if($layout.pid -ge 0){[uint32]$_.Properties[$layout.pid].Value}else{0}
