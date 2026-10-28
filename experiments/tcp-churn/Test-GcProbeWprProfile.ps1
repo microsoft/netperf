@@ -7,15 +7,16 @@ $directory=Join-Path ([IO.Path]::GetTempPath()) ('gc-wpr-profile-'+[guid]::NewGu
 $null=New-Item -ItemType Directory -Path $directory
 try{
     $tcp=Join-Path $directory 'tcp.json';$clr=Join-Path $directory 'clr.json';$profile=Join-Path $directory 'probes.wprp'
-    @{publicProviderGuid='2f07e2ee-15db-40f1-90ef-9d7ba282188a';publicProviderEvents=@(@{Id=100},@{Id=101},@{Id=100})}|
+    @{publicProviderGuid='2f07e2ee-15db-40f1-90ef-9d7ba282188a';publicProviderKeywords='0x500000084';publicProviderEvents=@(@{Id=100},@{Id=101},@{Id=100})}|
         ConvertTo-Json -Depth 4|Set-Content -LiteralPath $tcp
-    @{publicProviderGuid='e13c0d23-ccbc-4e12-931b-d9cc2eee27e4';publicProviderEvents=@(@{Id=1},@{Id=2},@{Id=9})}|
+    @{publicProviderGuid='e13c0d23-ccbc-4e12-931b-d9cc2eee27e4';publicProviderKeywords='0x1';publicProviderEvents=@(@{Id=1},@{Id=2},@{Id=9})}|
         ConvertTo-Json -Depth 4|Set-Content -LiteralPath $clr
     $program=Join-Path $PSScriptRoot 'adapters\New-GcProbeWprProfile.ps1'
     & $program -TcpStateFile $tcp -ClrStateFile $clr -Output $profile
     [xml]$xml=Get-Content -LiteralPath $profile -Raw
     $providers=@($xml.WindowsPerformanceRecorder.Profiles.EventProvider)
     if($providers.Count -ne 2 -or $providers[0].Strict -ne 'true' -or
+        $providers[0].Keywords.Keyword.Value -ne '0x500000084' -or $providers[1].Keywords.Keyword.Value -ne '0x1' -or
         (@($providers[0].EventFilters.EventId.Value)-join ',') -ne '100,101' -or
         (@($providers[1].EventFilters.EventId.Value)-join ',') -ne '1,2,9'){
         throw 'The WPR profile did not preserve the exact public provider/event filters.'
@@ -38,14 +39,14 @@ try{
             if($LASTEXITCODE){throw 'Dedicated-runner exact-event recording could not stop.'}
             $attempted=$false
         }finally{
-            if($attempted){
+            if($attempted -and ((@(& $wpr -status)-join "`n") -notmatch 'WPR is not recording')){
                 & $wpr -cancel
                 if($LASTEXITCODE){throw 'The dedicated smoke recording could not be cancelled.'}
             }
         }
     }
     Remove-Item -LiteralPath $profile
-    @{publicProviderGuid='2f07e2ee-15db-40f1-90ef-9d7ba282188a';publicProviderEvents=@(@{Id=65536})}|
+    @{publicProviderGuid='2f07e2ee-15db-40f1-90ef-9d7ba282188a';publicProviderKeywords='0x500000084';publicProviderEvents=@(@{Id=65536})}|
         ConvertTo-Json -Depth 4|Set-Content -LiteralPath $tcp
     $rejected=$false
     try{& $program -TcpStateFile $tcp -ClrStateFile $clr -Output $profile}catch{

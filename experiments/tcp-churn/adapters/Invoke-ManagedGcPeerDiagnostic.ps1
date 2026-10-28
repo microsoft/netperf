@@ -230,10 +230,17 @@ try {
     $events=@($provider.Events|Where-Object{$null -ne $_.Task -and $_.Task.Name -in $tasks}|
         ForEach-Object{[pscustomobject]@{Id=$_.Id;Task=$_.Task.Name}})
     foreach($task in $tasks){if($task -notin @($events.Task)){throw 'A required public TCP event is unavailable.'}}
+    # Diagnosis, send, connect and TCB events; do not request unrelated rundown/control keywords.
+    $tcpKeywords=[long]0x500000084
+    foreach($event in @($provider.Events|Where-Object{$null -ne $_.Task -and $_.Task.Name -in $tasks})){
+        if(@($event.Keywords).Count -and -not @($event.Keywords|Where-Object{($_.Value -band $tcpKeywords) -ne 0}).Count){
+            throw 'The bounded TCP keyword selection does not cover a required public event.'
+        }
+    }
     $tcpState=Join-Path $diagnostics 'tcp-state.json'
-    @{publicProviderGuid=[string]$provider.Id;publicProviderEvents=$events}|ConvertTo-Json -Depth 4|Set-Content $tcpState
+    @{publicProviderGuid=[string]$provider.Id;publicProviderKeywords='0x500000084';publicProviderEvents=$events}|ConvertTo-Json -Depth 4|Set-Content $tcpState
     $clrState=Join-Path $diagnostics 'clr-state.json'
-    @{publicProviderGuid='e13c0d23-ccbc-4e12-931b-d9cc2eee27e4';publicProviderEvents=@(
+    @{publicProviderGuid='e13c0d23-ccbc-4e12-931b-d9cc2eee27e4';publicProviderKeywords='0x1';publicProviderEvents=@(
         @{Id=1;Task='GCStart'},@{Id=2;Task='GCStop'},@{Id=3;Task='GCRestartEEEnd'},
         @{Id=7;Task='GCRestartEEBegin'},@{Id=8;Task='GCSuspendEEEnd'},@{Id=9;Task='GCSuspendEEBegin'}
     )}|ConvertTo-Json -Depth 4|Set-Content $clrState

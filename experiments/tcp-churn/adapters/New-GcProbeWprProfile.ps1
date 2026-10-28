@@ -13,6 +13,10 @@ $definitions=[Collections.Generic.List[string]]::new()
 foreach($entry in @(@{Id='Tcp';Path=$TcpStateFile},@{Id='Clr';Path=$ClrStateFile})){
     $state=Get-Content -LiteralPath $entry.Path -Raw|ConvertFrom-Json
     $guid=[guid]::Parse($state.publicProviderGuid).ToString('D')
+    $keywords=[string]$state.publicProviderKeywords
+    if($keywords -notmatch '^0x[0-9a-fA-F]{1,16}$' -or [Convert]::ToUInt64($keywords.Substring(2),16) -eq 0){
+        throw 'Exact WPR probes require explicit nonzero public provider keywords.'
+    }
     $ids=@($state.publicProviderEvents|ForEach-Object{
         $id=[int]$_.Id
         if($id -lt 1 -or $id -gt 65535){throw 'Public event IDs must be positive 16-bit integers.'}
@@ -20,7 +24,7 @@ foreach($entry in @(@{Id='Tcp';Path=$TcpStateFile},@{Id='Clr';Path=$ClrStateFile
     }|Sort-Object -Unique)
     if($ids.Count -lt 1 -or $ids.Count -gt 16){throw 'Each provider requires one to sixteen distinct public event IDs.'}
     $filters=($ids|ForEach-Object{'<EventId Value="{0}" />' -f $_}) -join ''
-    $definitions.Add(('<EventProvider Id="{0}" Name="{1}" Level="5" Strict="true"><Keywords><Keyword Value="0xffffffffffffffff" /></Keywords><EventFilters FilterIn="true">{2}</EventFilters></EventProvider>' -f $entry.Id,$guid,$filters))
+    $definitions.Add(('<EventProvider Id="{0}" Name="{1}" Level="5" Strict="true"><Keywords><Keyword Value="{3}" /></Keywords><EventFilters FilterIn="true">{2}</EventFilters></EventProvider>' -f $entry.Id,$guid,$filters,$keywords))
 }
 $xml=@"
 <?xml version="1.0" encoding="utf-8"?>

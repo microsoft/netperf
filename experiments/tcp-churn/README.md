@@ -792,6 +792,11 @@ not silently fall back from another controller. The providers are strict,
 the generated profile is schema-validated, and CPU/TCP/CLR analysis reads the
 single merged ETL while preserving the existing integrity, symbol and loss
 gates. Default controller selection is unchanged.
+Managed-GC capture explicitly requests the TCP diagnosis/send/connect/TCB
+keywords needed by the selected events and the CLR GC keyword, rather than
+all provider keywords. The TCP selection is checked against the installed
+manifest. Event-ID filtering alone does not constrain provider-enable
+callbacks or unrelated rundown/control operations.
 It also reports numeric free-space admission information for the guest temporary
 drives; busy or residual-resource failures retain fixed failure categories rather
 than exporting process names, paths or exception messages.

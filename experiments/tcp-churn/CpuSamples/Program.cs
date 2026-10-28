@@ -63,6 +63,12 @@ internal static class Program
                 var ids = state["publicProviderEvents"].Select(item => (int)item["Id"]).Distinct().ToList();
                 if (ids.Count == 0 || ids.Count > 16) throw new InvalidOperationException("Invalid public probe list.");
                 var provider = Guid.Parse((string)state["publicProviderGuid"]);
+                var keywordText = (string)state["publicProviderKeywords"];
+                ulong keywords = ulong.MaxValue;
+                if (keywordText != null && (!keywordText.StartsWith("0x", StringComparison.Ordinal) ||
+                    !ulong.TryParse(keywordText.Substring(2), System.Globalization.NumberStyles.HexNumber,
+                        System.Globalization.CultureInfo.InvariantCulture, out keywords)))
+                    throw new InvalidOperationException("Invalid explicit public provider keywords.");
                 var duration = int.Parse(args[5]);
                 if (duration < 15 || duration > 300) throw new InvalidOperationException("Invalid capture bound.");
                 captureStage = "session-create";
@@ -74,7 +80,7 @@ internal static class Program
                     capture.CircularBufferMB = 64;
                     captureStage = "provider-enable";
                     progress(captureStage);
-                    capture.EnableProvider(provider, TraceEventLevel.Verbose, ulong.MaxValue,
+                    capture.EnableProvider(provider, TraceEventLevel.Verbose, keywords,
                         new TraceEventProviderOptions { EventIDsToEnable = ids });
                     captureStage = "ready";
                     File.WriteAllText(args[3], "ready");
