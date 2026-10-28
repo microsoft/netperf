@@ -665,6 +665,36 @@ resets/deadlines; it is excluded from successful-transfer results. On-link
 traffic also does not exercise route-level DGD failover. More CPU load or more
 retransmissions alone cannot close either mechanism or severity gate.
 
+The next matched pair used 32 routed service addresses on the same isolated
+physical link. Both the no-fault and requested 1,500 ms recovery runs completed
+8,192 connections and 64 GiB. Client CPU averaged 31.07 and 30.32 busy equivalents,
+respectively, but exact profiles attributed substantial waits to receive/buffer
+management rather than the target cache. No BH-entry event was recorded.
+
+A separate cache-cardinality diagnostic connected and closed 7,872 UDP sockets
+without sending payloads, increasing the measured server data-interface cache
+from 71 to 7,941 entries. This is **lookup-conditioned state, not 7,872 active
+peers or a customer traffic replay**. The resulting matched control and recovery
+both completed 8,192 connections and 64 GiB. Server averages were 9.65 and 7.45
+busy CPU equivalents, respectively. Explicit DGD state-change events were
+captured (2,362 control / 1,836 recovery, provider-wide); these counts do not
+alone establish distinct state transitions, causality or lock waiting.
+The recovery still recorded zero BH-entry events, with zero CPU/probe loss and
+zero unresolved TCPIP frames. Its candidate setter and path-suspicion functions
+remained sparsely sampled. Cache conditioning did **not** close the severity gate.
+
+A sender-side diagnostic then used a logical standby next hop on the same
+physical receiver. An eight-second-requested stale primary mapping was restored,
+and all 8,192 connections / 64 GiB completed. Unlike the earlier ACK-direction
+faults, this recorded **347 actual BH-entry events** and 316 BH-exit events.
+It is a heuristic BH-probing reproduction, not proof of size-selective MTU loss.
+Server CPU averaged 10.57 busy equivalents; exact sampling still found only
+sparse target-path candidates, with zero CPU/probe loss or unresolved TCPIP
+frames. DGD event payloads in the measured window were unchanged-state
+notifications, so event totals are not claimed as gateway-state transitions.
+Logical next hops sharing a physical receiver are not independent gateway
+hardware. This closes a mechanism-coverage gap, **not the target-lock severity gate**.
+
 **Acceptance remains open:** plausible traffic must show the identified
 path-cache lock consuming roughly 30 CPUs, with contemporaneous per-CPU
 measurements and exact stack/instruction or lock-identity attribution. Neither

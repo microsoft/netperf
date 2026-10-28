@@ -23,7 +23,8 @@ $typed=[pscustomobject]@{outcome='collected';snapshot='coherent-pdh-query';times
 $r=Measure-LogicalProcessorUtilization -Capture $typed -StartUtc $start.AddMilliseconds(250) -EndUtc $start.AddMilliseconds(750)
 if($r.coveredSeconds -ne 0.5 -or $r.busyCpuSeconds -ne 0.5){throw 'Typed JSON timestamps lost subsecond precision.'}
 $checks++
-foreach($case in @('loss-of-coverage','bad-value','duplicate-instance','incomplete','overlap','sequential-counter-vector','unverified-provider-clock')) {
+foreach($case in @('loss-of-coverage','bad-value','duplicate-instance','incomplete','overlap','sequential-counter-vector','unverified-provider-clock',
+    'null-value','boolean-value','text-value','null-query-bound','text-query-bound')) {
     $data=$capture|ConvertTo-Json -Depth 5|ConvertFrom-Json
     switch($case) {
         loss-of-coverage {$data.intervals=@($data.intervals[0])}
@@ -33,6 +34,11 @@ foreach($case in @('loss-of-coverage','bad-value','duplicate-instance','incomple
         overlap {$data.intervals[1].startUtc=$start.ToString('o')}
         sequential-counter-vector {$data.snapshot='sequential-counter-reads'}
         unverified-provider-clock {$data.timestampSource='PdhCollectQueryDataWithTime'}
+        null-value {$data.intervals[0].percentBusy[0]=$null}
+        boolean-value {$data.intervals[0].percentBusy[0]=$true}
+        text-value {$data.intervals[0].percentBusy[0]='100'}
+        null-query-bound {$data.maximumQueryMilliseconds=$null}
+        text-query-bound {$data.maximumQueryMilliseconds='1'}
     }
     $rejected=$false
     try{$null=Measure-LogicalProcessorUtilization -Capture $data -StartUtc $start -EndUtc $start.AddSeconds(3)}catch{$rejected=$true}

@@ -13,6 +13,8 @@ function Measure-LogicalProcessorUtilization {
     if($null -eq $Capture.PSObject.Properties['timestampSource'] -or
         $Capture.timestampSource -ne 'Utc-bracketed-PdhCollectQueryDataWithTime' -or
         $null -eq $Capture.PSObject.Properties['maximumQueryMilliseconds'] -or
+        $null -eq $Capture.maximumQueryMilliseconds -or
+        $Capture.maximumQueryMilliseconds -is [bool] -or $Capture.maximumQueryMilliseconds -is [string] -or
         -not [double]::IsFinite([double]$Capture.maximumQueryMilliseconds) -or
         $Capture.maximumQueryMilliseconds -lt 0 -or $Capture.maximumQueryMilliseconds -gt 100) {
         throw 'CPU snapshots require bounded UTC alignment; opaque provider timestamps are not accepted as UTC.'
@@ -37,6 +39,8 @@ function Measure-LogicalProcessorUtilization {
         if(@($row.percentBusy).Count -ne $names.Count){throw 'CPU vector length differs from the instance list.'}
         $sum=0.0;$count=0
         foreach($index in 0..($names.Count-1)) {
+            if($null -eq $row.percentBusy[$index] -or $row.percentBusy[$index] -is [bool] -or
+                $row.percentBusy[$index] -is [string]){throw 'CPU utilization must be numeric, not null, Boolean or text.'}
             $value=[double]$row.percentBusy[$index]
             if(-not [double]::IsFinite($value) -or $value -lt -1 -or $value -gt 101){throw 'Invalid CPU utilization sample.'}
             if($value -lt 0 -or $value -gt 100){$clipped++;$value=[Math]::Clamp($value,0,100)}
