@@ -666,6 +666,27 @@ did not establish that achieved rate: the latter workload took 5.064 seconds.
 Acquisition/release frames are not proof of spinning on a particular lock.
 These virtualized healthy-GC trials do **not** establish target-lock saturation.
 
+For an explicitly separate recovery contrast, also select
+`managed_gc_peer_recovery=true`. This requires an existing dynamic on-link peer
+neighbor, verified against the owned peer adapter, and disabled client forwarding.
+After the client has finished heap preparation and ordinary traffic reaches at
+least eight established remote connections plus 64 KiB of adapter sends, an
+independent local agent substitutes the **owned client adapter's MAC** for that
+one peer for eight seconds. Requests are never held at a connection/data barrier.
+This models a temporary stale L2 mapping, not a size-selective MTU black hole.
+
+The agent restores the verified peer MAC and original dynamic-neighbor policy
+in `finally`; the controller also performs an ownership-checked restoration pass.
+No route, link, firewall profile, offload or trust setting is changed.
+The peer's in-band management session may also pause, so algorithm coverage is
+counted only for TCB lifetimes correlated to the owned client's completion
+events, excluding management traffic and invalidating reused TCB identities.
+The contrast is accepted only with complete verified transfers, data
+retransmission **and actual BH entry** on those client connections, lossless
+traces and verified cleanup. It adds `cpu-after-recovery.json` for the immediate
+post-restoration window. Algorithm coverage still does not establish a cache-lock
+wait, target CPU saturation, or equivalence to a physical deployment.
+
 The manual lab investigation supplemented CPU sampling with the existing Windows
 Performance Toolkit **SPINLOCK collision events**, rather than assuming that a
 function-entry sample proves contention. Private analysis matched the exact

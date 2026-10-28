@@ -49,7 +49,8 @@ try {
         throw 'GC request/reply integrity, pacing or no-barrier contract failed.'
     }
     $checks++
-    if($r.arrivalDispatch -ne 'thread-pool' -or $null -eq $r.meanDispatchQueueMilliseconds -or
+    if(-not(Test-Path -LiteralPath ($clientOutput+'.traffic-ready')) -or
+        $r.arrivalDispatch -ne 'thread-pool' -or $null -eq $r.meanDispatchQueueMilliseconds -or
         $null -eq $r.maxDispatchQueueMilliseconds -or $r.meanDispatchQueueMilliseconds -lt 0 -or
         $r.maxDispatchQueueMilliseconds -lt $r.meanDispatchQueueMilliseconds -or
         $r.managedGc.startedBeforeCollection -lt $r.managedGc.completedBeforeCollection -or
@@ -116,10 +117,10 @@ try {
 } finally {
     foreach($child in @($client,$server)){if($null -ne $child){Close-Owned $child}}
     foreach($child in $multiServers){Close-Owned $child}
-    foreach($file in @($exe,($exe+'.config'),$clientOutput,$serverOutput,($serverOutput+'.ready'))) {
+    foreach($file in @($exe,($exe+'.config'),$clientOutput,($clientOutput+'.traffic-ready'),$serverOutput,($serverOutput+'.ready'))) {
         if(Test-Path -LiteralPath $file){Remove-Item -LiteralPath $file -ErrorAction Stop}
     }
-    foreach($file in @('multi-client.json','multi-server-0.json','multi-server-0.json.ready','multi-server-1.json','multi-server-1.json.ready')) {
+    foreach($file in @('multi-client.json','multi-client.json.traffic-ready','multi-server-0.json','multi-server-0.json.ready','multi-server-1.json','multi-server-1.json.ready')) {
         $path=Join-Path $directory $file
         if(Test-Path -LiteralPath $path){Remove-Item -LiteralPath $path -ErrorAction Stop}
     }

@@ -45,7 +45,17 @@ try {
     }
     if(-not $rejected -or (Test-Path -LiteralPath $directory)){throw 'A short interval outside managed-GC mode mutated state or was accepted.'}
     $checks++
-    foreach($file in @('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1','Invoke-NetperfGuestTcpChurn.ps1')) {
+    $rejected=$false
+    try {
+        & (Join-Path $PSScriptRoot 'adapters\Invoke-NetperfGuestTcpChurn.ps1') `
+            -VmName 'unused-test-only' -Credential $credential -PublishDirectory $directory -ManagedGcPeerRecovery
+    }catch {
+        if($_.Exception.Message -notmatch 'Peer recovery requires managed-GC'){throw}
+        $rejected=$true
+    }
+    if(-not $rejected -or (Test-Path -LiteralPath $directory)){throw 'Peer recovery outside managed-GC mode mutated state or was accepted.'}
+    $checks++
+    foreach($file in @('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1','Invoke-NetperfGuestTcpChurn.ps1','Invoke-ScopedNeighborPulse.ps1')) {
         $tokens=$null;$errors=$null
         $parsed=[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot "adapters\$file"),[ref]$tokens,[ref]$errors)
         if($errors.Count){throw ($errors|Out-String)}
@@ -70,9 +80,11 @@ try {
         $session=$null;$guestRoot='unused-test-root';$Seconds=5;$Connections=1024;$ManagedGcPayloadBytes=2048
         $ProfileCpu=[switch]::new($true);$SynDrop=[switch]::new($false)
         $PeerMeasurement=[switch]::new($false);$ManagedGc=[switch]::new($true)
+        $ManagedGcPeerRecovery=[switch]::new($true)
         & ([scriptblock]::Create($launch[0].Extent.Text))
     }
-    if($actual.Count -ne 9 -or $actual[7] -ne 2048 -or $actual[3] -isnot [bool] -or -not $actual[3] -or
+    if($actual.Count -ne 10 -or $actual[7] -ne 2048 -or $actual[8] -isnot [bool] -or -not $actual[8] -or
+        $actual[3] -isnot [bool] -or -not $actual[3] -or
         $actual[4] -isnot [bool] -or $actual[4] -or $actual[5] -isnot [bool] -or $actual[5] -or
         $actual[6] -isnot [bool] -or -not $actual[6]){
         throw 'The actual guest launch must transport Boolean mode flags, not truthy literal strings.'

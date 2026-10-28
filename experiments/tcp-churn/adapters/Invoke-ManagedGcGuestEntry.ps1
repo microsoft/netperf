@@ -8,7 +8,8 @@ param(
     [Parameter(Mandatory)][string]$AnalyzerDirectory,
     [int]$Seconds=5,
     [int]$Connections=256,
-    [int]$PayloadBytes=65536
+    [int]$PayloadBytes=65536,
+    [switch]$PeerRecovery
 )
 $ErrorActionPreference='Stop'
 if($PublishDirectory -ne (Join-Path $ScratchParent 'publish')) {

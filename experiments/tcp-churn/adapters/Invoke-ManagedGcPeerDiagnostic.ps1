@@ -9,7 +9,8 @@ param(
     [Parameter(Mandatory)][string]$AnalyzerDirectory,
     [ValidateRange(1,120)][int]$Seconds=5,
     [ValidateRange(1,1024)][int]$Connections=256,
-    [ValidateRange(1,1048576)][int]$PayloadBytes=65536
+    [ValidateRange(1,1048576)][int]$PayloadBytes=65536,
+    [switch]$PeerRecovery
 )
 $ErrorActionPreference='Stop'
 $sourceRoot=Split-Path $PSScriptRoot
@@ -17,6 +18,7 @@ $diagnostics=Join-Path $ScratchParent 'managed-gc-diagnostics'
 $publishOwned=$false
 $peer=$null;$peerOwned=$false;$profileOwned=$false
 $client=$null;$localServer=$null;$tcpProbe=$null;$clrProbe=$null
+$neighborPulse=$null;$neighborArguments=@();$pulseResult=$null;$ownedCounts=$null
 $failure=$null;$cleanupErrors=[Collections.Generic.List[Exception]]::new()
 $phase='preflight';$start=$null;$end=$null;$result=$null
 $port=20300;$count=8192;$heapMiB=1024
@@ -61,6 +63,16 @@ try {
     $ipInterface=@(Get-NetIPInterface -InterfaceIndex $route[0].InterfaceIndex -AddressFamily IPv4)
     if($ipInterface.Count -ne 1 -or $ipInterface[0].NlMtu -lt 1){throw 'A unique client data interface with positive MTU is required.'}
     $mtu=$ipInterface[0].NlMtu
+    if($PeerRecovery) {
+        $peerMac=Invoke-Command -Session $peer -ScriptBlock {
+            param($address)
+            $ip=@(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop|Where-Object IPAddress -eq $address)
+            if($ip.Count -ne 1){throw 'A unique owned peer data address is required.'}
+            $nic=@(Get-NetAdapter -Name $ip[0].InterfaceAlias -ErrorAction Stop)
+            if($nic.Count -ne 1){throw 'A unique owned peer data adapter is required.'}
+            [string]$nic[0].MacAddress
+        } -ArgumentList $peerAddress
+    }
     $remote=Invoke-Command -Session $peer -ScriptBlock {
         if(@(Get-Process -Name Runner.Worker,ctsTraffic,ArrivalTcp -ErrorAction Ignore).Count){throw 'Peer guest is busy.'}
         $root=Join-Path $env:TEMP ('managed-gc-peer-'+[guid]::NewGuid().ToString('N'))
@@ -113,6 +125,7 @@ try {
     $provider=Get-WinEvent -ListProvider Microsoft-Windows-TCPIP
     $tasks=@('TcpTcbSynSend','TcpDisconnectTcbRtoTimeout','TcpDataTransferRetransmitRound',
         'TcpBlackHoleDetectionEntry','TcpBlackHoleDetectionExit','TcpBlackHoleDetectionFailed','TcpBhDetectFullSizeAck')
+    if($PeerRecovery){$tasks+=@('TcpConnectTcbComplete','TcpInsertConnectionTuple')}
     $events=@($provider.Events|Where-Object{$null -ne $_.Task -and $_.Task.Name -in $tasks}|
         ForEach-Object{[pscustomobject]@{Id=$_.Id;Task=$_.Task.Name}})
     foreach($task in $tasks){if($task -notin @($events.Task)){throw 'A required public TCP event is unavailable.'}}
@@ -135,6 +148,19 @@ try {
     $start=[DateTime]::UtcNow.ToString('o')
     $phase='managed-gc-traffic'
     $clientOutput=Join-Path $diagnostics 'client.json'
+    if($PeerRecovery) {
+        $phase='neighbor-pulse-start'
+        $pulseProgram=(Get-Command pwsh -CommandType Application -ErrorAction Stop).Source
+        $neighborArguments=@('-NoProfile','-NonInteractive','-File',(Join-Path $PSScriptRoot 'Invoke-ScopedNeighborPulse.ps1'),
+            '-InterfaceAlias',$alias,'-LocalAddress',$clientAddress,'-PeerAddress',$peerAddress,'-ExpectedMac',$peerMac,
+            '-StateFile',(Join-Path $diagnostics 'neighbor-original.clixml'))
+        $neighborPulse=Start-TcpChurnCollector -Program $pulseProgram -Arguments ($neighborArguments+@(
+            '-ReportFile',(Join-Path $diagnostics 'neighbor-pulse.json'),'-ReadyFile',(Join-Path $diagnostics 'neighbor.ready'),
+            '-TrafficReadyFile',($clientOutput+'.traffic-ready'),'-StopFile',(Join-Path $diagnostics 'neighbor.stop'),
+            '-Port',[string]$port)) -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'neighbor-agent')
+        Wait-Ready $neighborPulse (Join-Path $diagnostics 'neighbor.ready')
+    }
+    $phase='managed-gc-traffic'
     $client=Start-TcpChurnCollector -Program $exe -Arguments @(
         "$clientAddress,127.0.0.1","$peerAddress,127.0.0.2",[string]$port,[string]$count,[string]$rate,[string]$payloadBytes,
         $clientOutput,'client',[string]$payloadBytes,'14529',[string]$Connections,'nodelay',"gc:${heapMiB}:2048"
@@ -142,6 +168,15 @@ try {
     $clientPid=$client.Process.Id
     if(-not $client.Process.WaitForExit(180000) -or $client.Process.ExitCode -ne 0){throw 'The GC client did not complete successfully.'}
     $end=[DateTime]::UtcNow.ToString('o')
+    if($PeerRecovery) {
+        $phase='neighbor-pulse-result'
+        if(-not $neighborPulse.Process.WaitForExit(15000) -or $neighborPulse.Process.ExitCode -ne 0){throw 'The scoped peer pulse did not complete successfully.'}
+        $pulseResult=Get-Content (Join-Path $diagnostics 'neighbor-pulse.json') -Raw|ConvertFrom-Json
+        if($pulseResult.outcome -ne 'recovered' -or -not $pulseResult.applied -or -not $pulseResult.restored -or
+            $pulseResult.establishedAtTrigger -lt 8 -or $pulseResult.verifiedHoldMilliseconds -lt 8000){
+            throw 'The verified established-flow recovery pulse did not cover its requested interval.'
+        }
+    }
     if(-not $localServer.Process.WaitForExit(10000) -or $localServer.Process.ExitCode -ne 0){throw 'The owned loopback server did not complete.'}
     $remoteResult=Invoke-Command -Session $peer -ScriptBlock {
         $child=$global:OwnedManagedGcPeer.Process
@@ -176,8 +211,29 @@ try {
         meanBindMilliseconds=$r.meanBindMilliseconds;meanConnectMilliseconds=$r.meanConnectMilliseconds
         cpuCoverage='sampled-etw-only';executionTopology='two-existing-guests-plus-client-loopback'
         targetSeverity='not-evaluated';conclusion='diagnostic-not-customer-severity-proof'}
+    if($PeerRecovery){$result.peerRecovery=$pulseResult}
 }catch{$failure=$_}
 finally {
+    if($null -ne $neighborPulse) {
+        try {
+            [IO.File]::WriteAllText((Join-Path $diagnostics 'neighbor.stop'),'stop')
+            if(-not $neighborPulse.Process.WaitForExit(30000)){
+                $neighborPulse.Process.Kill($true)
+                if(-not $neighborPulse.Process.WaitForExit(10000)){throw 'The owned pulse process tree did not terminate.'}
+                throw 'The scoped pulse exceeded its graceful restoration deadline.'
+            }
+        }catch{$cleanupErrors.Add($_.Exception)}
+        finally {
+            try{Stop-TcpChurnCollector $neighborPulse}catch{$cleanupErrors.Add($_.Exception)}
+            if(Test-Path -LiteralPath (Join-Path $diagnostics 'neighbor-original.clixml')) {
+                try {
+                    $null=Invoke-TcpChurnTool -Program $pulseProgram -Arguments ($neighborArguments+@('-RestoreOnly',
+                        '-ReportFile',(Join-Path $diagnostics 'neighbor-restore.json'))) -Directory $diagnostics `
+                        -LogPrefix (Join-Path $diagnostics 'neighbor-restore') -TimeoutSeconds 30
+                }catch{$cleanupErrors.Add($_.Exception)}
+            }
+        }
+    }
     foreach($child in @($client,$localServer)){if($null -ne $child){try{Stop-TcpChurnCollector $child}catch{$cleanupErrors.Add($_.Exception)}}}
     foreach($entry in @(@{child=$tcpProbe;stop='tcp.stop'},@{child=$clrProbe;stop='clr.stop'})) {
         if($null -eq $entry.child){continue}
@@ -232,6 +288,52 @@ try {
         -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'tcp-analysis') -TimeoutSeconds 120
     $tcpSummary=Get-Content (Join-Path $PublishDirectory 'tcp-events.json') -Raw|ConvertFrom-Json
     if($tcpSummary.outcome -ne 'counted' -or $tcpSummary.eventsLost -ne 0){throw 'Lossless TCP event coverage is required.'}
+    $cpuFiles=@('cpu-load.json','cpu-after-gc.json')
+    if($PeerRecovery) {
+        $phase='verify-recovery-coverage'
+        Import-Module (Join-Path $PSScriptRoot 'TcpRecoveryEvidence.psm1') -Force
+        $layouts=@{}
+        foreach($metadata in $provider.Events) {
+            if($null -eq $metadata.Task -or $metadata.Task.Name -notin @('TcpConnectTcbComplete','TcpInsertConnectionTuple',
+                'TcpDataTransferRetransmitRound','TcpBlackHoleDetectionEntry','TcpBlackHoleDetectionExit','TcpBhDetectFullSizeAck')){continue}
+            $template=[xml]$metadata.Template
+            $names=@($template.GetElementsByTagName('data','http://schemas.microsoft.com/win/2004/08/events')|ForEach-Object{$_.GetAttribute('name')})
+            $tcbIndex=[array]::IndexOf($names,'Tcb')
+            $pidIndex=[array]::IndexOf($names,'ProcessId')
+            $statusIndex=[array]::IndexOf($names,'Status')
+            if($tcbIndex -lt 0 -or ($metadata.Task.Name -eq 'TcpConnectTcbComplete' -and ($pidIndex -lt 0 -or $statusIndex -lt 0))){
+                throw 'The public TCP manifest lacks required owner/lifetime correlation fields.'
+            }
+            $layouts[([string]$metadata.Id+':'+$metadata.Version)]=@{task=$metadata.Task.Name;tcb=$tcbIndex;pid=$pidIndex;status=$statusIndex}
+        }
+        $tcpRows=[Collections.Generic.List[object]]::new()
+        $startUtc=([datetime]$start).ToUniversalTime()
+        Get-WinEvent -Path (Join-Path $diagnostics 'tcp.etl') -Oldest|ForEach-Object{
+            $key=[string]$_.Id+':'+$_.Version
+            if($_.TimeCreated.ToUniversalTime() -ge $startUtc -and $_.TimeCreated.ToUniversalTime() -le $endUtc -and $layouts.ContainsKey($key)){
+                if($tcpRows.Count -ge 200000){throw 'TCP owner/lifetime evidence exceeded its bound.'}
+                $layout=$layouts[$key]
+                $owner=if($layout.pid -ge 0){[uint32]$_.Properties[$layout.pid].Value}else{0}
+                $status=if($layout.status -ge 0){[uint32]$_.Properties[$layout.status].Value}else{0}
+                $tcpRows.Add([pscustomobject]@{kind=$layout.task;tcb=[uint64]$_.Properties[$layout.tcb].Value
+                    processId=$owner;status=$status;timestampTicks=$_.TimeCreated.ToUniversalTime().Ticks})
+            }
+        }
+        $ownedCounts=Get-TcpRecoveryCounts -Records $tcpRows.ToArray() -OwnerProcessId $clientPid -ExpectedConnections $count
+        $result.tcpRecovery=$ownedCounts
+        if($ownedCounts.publicProbeCounts.TcpDataTransferRetransmitRound -lt 1 -or
+            $ownedCounts.publicProbeCounts.TcpBlackHoleDetectionEntry -lt 1){
+            throw 'The recovery experiment did not verify data retransmission and actual BH entry.'
+        }
+        $recoveryStart=([datetime]$pulseResult.restoredUtc).ToUniversalTime()
+        $recoveryEnd=if($recoveryStart.AddSeconds(2) -lt $endUtc){$recoveryStart.AddSeconds(2)}else{$endUtc}
+        if($recoveryEnd -le $recoveryStart){throw 'No positive post-recovery CPU window remains.'}
+        $phase='analyze-post-recovery-cpu'
+        $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @((Join-Path $diagnostics 'cpu.etl'),
+            (Join-Path $PublishDirectory 'cpu-after-recovery.json'),$recoveryStart.ToString('o'),$recoveryEnd.ToString('o')) `
+            -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'recovery-cpu-analysis') -TimeoutSeconds 300
+        $cpuFiles+='cpu-after-recovery.json'
+    }
     $phase='analyze-clr-events'
     $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @('--events',(Join-Path $diagnostics 'clr.etl'),
         (Join-Path $diagnostics 'clr-loss.json'),'interval',$start,$end,(Join-Path $diagnostics 'clr-state.json')) `
@@ -248,7 +350,7 @@ try {
     if(-not $gcCounts.ContainsKey('8') -or -not $gcCounts.ContainsKey('7')){throw 'CLR suspension/restart events did not verify.'}
     @{schema=1;processFilterApplied=$true;eventCounts=$gcCounts;eventsLost=0;scope='owned-client-process-workload-interval';
         conclusion='event-coverage-not-exact-pause-correlation'}|ConvertTo-Json -Depth 4|Set-Content (Join-Path $PublishDirectory 'clr-events.json')
-    foreach($file in @('cpu-load.json','cpu-after-gc.json')) {
+    foreach($file in $cpuFiles) {
         $cpu=Get-Content (Join-Path $PublishDirectory $file) -Raw|ConvertFrom-Json
         if($cpu.outcome -ne 'sampled' -or $cpu.eventsLost -ne 0 -or $cpu.unresolvedNetworkFrames -ne 0){throw 'Lossless matching public-symbol CPU attribution is required.'}
     }
@@ -257,7 +359,8 @@ try {
 }catch {
     $toolCode=if($_.Exception.Data.Contains('ToolExitCode')){$_.Exception.Data['ToolExitCode']}else{$null}
     @{schema=1;workload='managed-gc-mixed';outcome='failed';phase=$phase;failureType=$_.Exception.GetType().FullName
-        failureCode=$_.Exception.HResult;toolExitCode=$toolCode;cleanupVerified=$true;conclusion='analysis-not-accepted'}|
-        ConvertTo-Json|Set-Content (Join-Path $PublishDirectory 'result.json')
+        failureCode=$_.Exception.HResult;toolExitCode=$toolCode;cleanupVerified=$true
+        peerRecovery=$pulseResult;tcpRecovery=$ownedCounts;conclusion='analysis-not-accepted'}|
+        ConvertTo-Json -Depth 6|Set-Content (Join-Path $PublishDirectory 'result.json')
     throw
 }

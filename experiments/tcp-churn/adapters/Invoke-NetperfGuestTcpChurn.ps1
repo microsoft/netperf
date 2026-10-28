@@ -14,7 +14,8 @@ param(
     [switch]$ProbePeer,
     [switch]$PeerMeasurement,
     [switch]$ManagedGc,
-    [ValidateRange(1,1048576)][int]$ManagedGcPayloadBytes=65536
+    [ValidateRange(1,1048576)][int]$ManagedGcPayloadBytes=65536,
+    [switch]$ManagedGcPeerRecovery
 )
 $ErrorActionPreference='Stop'
 if($ManagedGc -and (-not $ProfileCpu -or $SynDrop -or $ProbePeer -or $PeerMeasurement)){
@@ -24,6 +25,7 @@ if($PSBoundParameters.ContainsKey('ManagedGcPayloadBytes') -and -not $ManagedGc)
     throw 'Managed-GC payload selection requires managed-GC diagnostic mode.'
 }
 if($Seconds -lt 5 -and -not $ManagedGc){throw 'Intervals below five seconds require managed-GC diagnostic mode.'}
+if($ManagedGcPeerRecovery -and -not $ManagedGc){throw 'Peer recovery requires managed-GC diagnostic mode.'}
 if (Test-Path -LiteralPath $PublishDirectory) { throw 'Use a new publication directory.' }
 New-Item -ItemType Directory -Path $PublishDirectory -ErrorAction Stop | Out-Null
 $session=$null; $guestRoot=$null; $phase='guest-connect'; $success=$false; $startup=$null
@@ -79,13 +81,13 @@ try {
             -Recurse -ToSession $session -ErrorAction Stop
     }
     $adapterFiles=@('WindowsCts.psm1','Invoke-NetperfTcpChurn.ps1','Invoke-NetperfPeerCpu.ps1')
-    if($ManagedGc){$adapterFiles+=@('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1')}
+    if($ManagedGc){$adapterFiles+=@('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1','Invoke-ScopedNeighborPulse.ps1','TcpRecoveryEvidence.psm1')}
     foreach ($file in $adapterFiles) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $file) -Destination (Join-Path $remoteRoot "adapters\$file") -ToSession $session -ErrorAction Stop
     }
     $phase='guest-traffic'
     $exit=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
-        param($root,$seconds,$connections,$profile,$synDrop,$peerMeasurement,$managedGc,$managedGcPayloadBytes,$credential)
+        param($root,$seconds,$connections,$profile,$synDrop,$peerMeasurement,$managedGc,$managedGcPayloadBytes,$peerRecovery,$credential)
         if (@(Get-Process -Name 'Runner.Worker','ctsTraffic' -ErrorAction Ignore).Count) {
             throw 'Guest became busy before traffic setup.'
         }
@@ -100,6 +102,7 @@ try {
             $credential|Export-Clixml -LiteralPath $credentialFile -ErrorAction Stop
             $extra=@('-CredentialFile',$credentialFile,'-AnalyzerDirectory',(Join-Path $root 'analyzer'))
             if($managedGc){$extra+=@('-PayloadBytes',[string]$managedGcPayloadBytes)}
+            if($peerRecovery){$extra+='-PeerRecovery'}
         } else {
             $extra=@('-DedicatedLab')
             if ($profile) { $extra+=@('-ProfileCpu','-AnalyzerDirectory',(Join-Path $root 'analyzer')) }
@@ -121,7 +124,7 @@ try {
             $launch|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $root 'child-startup.json')
             if($credentialFile -and (Test-Path -LiteralPath $credentialFile)){Remove-Item -LiteralPath $credentialFile -ErrorAction Stop}
         }
-    } -ArgumentList $guestRoot,$Seconds,$Connections,([bool]$ProfileCpu),([bool]$SynDrop),([bool]$PeerMeasurement),([bool]$ManagedGc),$ManagedGcPayloadBytes,$Credential
+    } -ArgumentList $guestRoot,$Seconds,$Connections,([bool]$ProfileCpu),([bool]$SynDrop),([bool]$PeerMeasurement),([bool]$ManagedGc),$ManagedGcPayloadBytes,([bool]$ManagedGcPeerRecovery),$Credential
     $startup=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
         param($root)
         Get-Content -LiteralPath (Join-Path $root 'child-startup.json') -Raw|ConvertFrom-Json|
@@ -132,7 +135,7 @@ try {
     $remoteResult=Join-Path $guestRoot 'publish\result.json'
     Copy-Item -LiteralPath $remoteResult -Destination (Join-Path $PublishDirectory 'result.json') -FromSession $session -ErrorAction Stop
     if ($ProfileCpu) {
-        foreach ($file in @('cpu-idle.json','cpu-load.json','cpu-after-gc.json','clr-events.json','cpu-progress.json','tcp-state.json','tcp-events.json','lock-evidence.json')) {
+        foreach ($file in @('cpu-idle.json','cpu-load.json','cpu-after-gc.json','cpu-after-recovery.json','clr-events.json','cpu-progress.json','tcp-state.json','tcp-events.json','lock-evidence.json')) {
             $remoteFile=Join-Path $guestRoot "publish\$file"
             if (Invoke-Command -Session $session -ScriptBlock {param($p) Test-Path -LiteralPath $p -PathType Leaf} -ArgumentList $remoteFile) {
                 Copy-Item -LiteralPath $remoteFile -Destination (Join-Path $PublishDirectory $file) `

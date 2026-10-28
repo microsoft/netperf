@@ -168,6 +168,7 @@ public static class ArrivalTcp
                 for(int i=0;i<pressureHeap.Length;i+=2)pressureHeap[i]=null;
             }
             byte[] data=new byte[size];for(int i=0;i<size;i++)data[i]=(byte)(i%251);
+            if(gcHeapMiB>0)File.WriteAllText(args[6]+".traffic-ready",DateTime.UtcNow.ToString("o",CultureInfo.InvariantCulture));
             var senders=new List<Task>();var random=new Random(seed);var clock=Stopwatch.StartNew();
             double next=0,maxLag=0,totalLag=0,lastLaunch=0;
             bool gcTriggered=false;int gcLaunched=0,gcStarted=0,gcCompleted=0,gcPending=0,gcBefore=0,gcAfter=0;
