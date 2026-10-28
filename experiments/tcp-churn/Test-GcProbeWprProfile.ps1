@@ -1,6 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # SPDX-License-Identifier: MIT
 #Requires -Version 7.2
+param([switch]$CaptureSmoke)
 $ErrorActionPreference='Stop'
 $directory=Join-Path ([IO.Path]::GetTempPath()) ('gc-wpr-profile-'+[guid]::NewGuid().ToString('N'))
 $null=New-Item -ItemType Directory -Path $directory
@@ -21,6 +22,28 @@ try{
     }
     & "$env:SystemRoot\System32\wpr.exe" -profiles $profile
     if($LASTEXITCODE){throw 'The installed WPR rejected the generated schema.'}
+    if($CaptureSmoke){
+        $wpr="$env:SystemRoot\System32\wpr.exe"
+        $status=@(& $wpr -status)
+        if($LASTEXITCODE -ne 0 -or ($status -join "`n") -notmatch 'WPR is not recording'){
+            throw 'The dedicated capture-smoke runner already has a recording; refusing interference.'
+        }
+        $attempted=$false
+        try{
+            $attempted=$true
+            & $wpr -start CPU -start ($profile+'!GcProbeEvents') -filemode
+            if($LASTEXITCODE){throw 'Dedicated-runner exact-event recording could not start.'}
+            Start-Sleep -Milliseconds 250
+            & $wpr -stop (Join-Path $directory 'smoke.etl')
+            if($LASTEXITCODE){throw 'Dedicated-runner exact-event recording could not stop.'}
+            $attempted=$false
+        }finally{
+            if($attempted){
+                & $wpr -cancel
+                if($LASTEXITCODE){throw 'The dedicated smoke recording could not be cancelled.'}
+            }
+        }
+    }
     Remove-Item -LiteralPath $profile
     @{publicProviderGuid='2f07e2ee-15db-40f1-90ef-9d7ba282188a';publicProviderEvents=@(@{Id=65536})}|
         ConvertTo-Json -Depth 4|Set-Content -LiteralPath $tcp
@@ -30,9 +53,10 @@ try{
         $rejected=$true
     }
     if(-not $rejected -or (Test-Path -LiteralPath $profile)){throw 'Invalid public event IDs produced a WPR profile.'}
-    Write-Output 'Passed exact-event WPR schema and invalid-ID checks; no recording was started.'
+    Write-Output $(if($CaptureSmoke){'Passed exact-event WPR activation, shutdown, schema and invalid-ID checks.'}
+        else{'Passed exact-event WPR schema and invalid-ID checks; no recording was started.'})
 }finally{
-    foreach($name in @('tcp.json','clr.json','probes.wprp')){
+    foreach($name in @('tcp.json','clr.json','probes.wprp','smoke.etl')){
         $file=Join-Path $directory $name
         if(Test-Path -LiteralPath $file){Remove-Item -LiteralPath $file}
     }

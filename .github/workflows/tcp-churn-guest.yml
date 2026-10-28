@@ -136,7 +136,7 @@ jobs:
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-OwnedTcpTable.ps1
       - shell: pwsh
-        run: ./experiments/tcp-churn/Test-GcProbeWprProfile.ps1
+        run: ./experiments/tcp-churn/Test-GcProbeWprProfile.ps1 -CaptureSmoke
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-TcpRecoveryEvidence.ps1
       - shell: pwsh
