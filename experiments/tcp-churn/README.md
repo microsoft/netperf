@@ -735,6 +735,9 @@ behavior unchanged; the GC result records both configured limits (`0` means
 the default, not a zero-length receive). This is a backpressure experiment,
 not proof that TCP advertised a zero window or sent a probe. No producer
 barrier, application sleep, neighbor pulse or route mutation is added.
+This option also requires and captures the public zero-window probing
+begin/end events. Whole-machine event counts remain distinct from
+ownership-correlated events and from sampled lock-wait evidence.
 
 CPU summaries separately count queued lock-owner waits under path refresh
 and the narrower timer/header-send/path-refresh signature, including a

@@ -210,6 +210,7 @@ try {
     $provider=Get-WinEvent -ListProvider Microsoft-Windows-TCPIP
     $tasks=@('TcpTcbSynSend','TcpDisconnectTcbRtoTimeout','TcpDataTransferRetransmitRound',
         'TcpBlackHoleDetectionEntry','TcpBlackHoleDetectionExit','TcpBlackHoleDetectionFailed','TcpBhDetectFullSizeAck')
+    if($ReceiveBudgetBytes){$tasks+=@('TcpZeroWindowProbingBegin','TcpZeroWindowProbingEnd')}
     if($PeerRecovery){$tasks+=@('TcpConnectTcbComplete','TcpInsertConnectionTuple','TcpCloseTcbRequest')}
     if($GcProcessRole -eq 'server'){$tasks+=@('TcpAcceptListenerComplete','TcpCloseTcbRequest','TcpInsertConnectionTuple')}
     $events=@($provider.Events|Where-Object{$null -ne $_.Task -and $_.Task.Name -in $tasks}|
