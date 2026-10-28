@@ -64,6 +64,7 @@ try {
             $clientRoutes=@(Get-NetRoute -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|Where-Object DestinationPrefix -eq '198.19.240.6/32').Count
             if($clientAliases -or $clientRules -or $clientStatic -or $clientRoutes){throw 'Owned client GC resources require restoration before further tests.'}
             $clientCpus=(Get-CimInstance Win32_Processor|Measure-Object NumberOfLogicalProcessors -Sum).Sum
+            $clientFree=[Math]::Floor(([IO.DriveInfo]::new([IO.Path]::GetPathRoot($env:TEMP))).AvailableFreeSpace/1MB)
             if($clientCpus -lt 1){throw 'The client processor inventory did not return a positive count.'}
             $peer=New-PSSession -ComputerName netperf-peer -Credential $credential -ConfigurationName PowerShell.7 -ErrorAction Stop
             try {
@@ -76,18 +77,21 @@ try {
                     $routes=@(Get-NetRoute -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|Where-Object DestinationPrefix -eq '198.19.240.6/32').Count
                     if($aliases -or $rules -or $static -or $routes){throw 'Owned peer GC resources require restoration before further tests.'}
                     [pscustomobject]@{cpus=(Get-CimInstance Win32_Processor|Measure-Object NumberOfLogicalProcessors -Sum).Sum
-                        aliases=$aliases;rules=$rules;static=$static;routes=$routes}
+                        aliases=$aliases;rules=$rules;static=$static;routes=$routes
+                        tempFreeMiB=[Math]::Floor(([IO.DriveInfo]::new([IO.Path]::GetPathRoot($env:TEMP))).AvailableFreeSpace/1MB)}
                 }
                 $peerCpus=$peerState.cpus
                 if($peerCpus -lt 1){throw 'The peer processor inventory did not return a positive count.'}
                 [pscustomobject]@{schema=1;peerConnected=$true;clientLogicalProcessors=[int]$clientCpus;peerLogicalProcessors=[int]$peerCpus
                     clientOwnedAliases=$clientAliases;peerOwnedAliases=$peerState.aliases;clientOwnedRules=$clientRules;peerOwnedRules=$peerState.rules
                     clientOwnedStaticPeers=$clientStatic;peerOwnedStaticPeers=$peerState.static
+                    clientTempFreeMiB=$clientFree;peerTempFreeMiB=$peerState.tempFreeMiB
                     clientOwnedControlRoutes=$clientRoutes;peerOwnedControlRoutes=$peerState.routes;conclusion='connectivity-and-owned-resource-check'}
             } finally { Remove-PSSession $peer -ErrorAction Stop }
         } -ArgumentList $Credential
         $peerResult|Select-Object schema,peerConnected,clientLogicalProcessors,peerLogicalProcessors,clientOwnedAliases,peerOwnedAliases,
-            clientOwnedRules,peerOwnedRules,clientOwnedStaticPeers,peerOwnedStaticPeers,clientOwnedControlRoutes,peerOwnedControlRoutes,conclusion|ConvertTo-Json |
+            clientOwnedRules,peerOwnedRules,clientOwnedStaticPeers,peerOwnedStaticPeers,clientOwnedControlRoutes,peerOwnedControlRoutes,
+            clientTempFreeMiB,peerTempFreeMiB,conclusion|ConvertTo-Json |
             Set-Content -LiteralPath (Join-Path $PublishDirectory 'peer-check.json') -Encoding utf8
         return
     }
@@ -191,8 +195,15 @@ try {
     $success=$true
 } catch {
     if (-not (Test-Path -LiteralPath (Join-Path $PublishDirectory 'result.json'))) {
+        $reason='unclassified'
+        if($_.Exception.Message -match 'Guest has an active Actions worker or CTS process|Client guest is busy|Peer guest is busy|Guest became busy'){
+            $reason='guest-busy'
+        }elseif($_.Exception.Message -match 'Owned client GC resources require restoration|Owned peer GC resources require restoration'){
+            $reason='owned-resources-require-restoration'
+        }
         [ordered]@{schema=1;workload='tcp-churn';outcome='failed';phase=$phase
             failureType=$_.Exception.GetType().FullName;failureCode=$_.Exception.HResult
+            failureReason=$reason
             startup=$startup;conclusion='no-measurement'} |
             ConvertTo-Json -Depth 3 | Set-Content -LiteralPath (Join-Path $PublishDirectory 'result.json') -Encoding utf8
     }

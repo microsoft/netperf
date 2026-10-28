@@ -728,6 +728,9 @@ producers and the receiver. Ordinary client-GC mode remains the default.
 The read-only `probe_peer` mode also rejects remaining owned GC processes,
 data aliases, firewall rules or permanent fixture neighbors, and publishes only
 numeric residual counts. It never removes resources or changes guest policy.
+It also reports numeric free-space admission information for the guest temporary
+drives; busy or residual-resource failures retain fixed failure categories rather
+than exporting process names, paths or exception messages.
 
 The optional `managed_gc_route_refresh=true` mechanism control requires isolated
 receiver GC and no neighbor pulse. An independent agent observes a pre-call GC
