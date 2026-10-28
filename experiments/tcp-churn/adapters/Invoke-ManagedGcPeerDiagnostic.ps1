@@ -42,6 +42,7 @@ $localDataStarted=$false;$remoteDataStarted=$false
 $peerAddressPlan=if($RouteVariant -eq 'peer-gateway'){'198.19.240.5,198.19.240.6'}else{'198.19.240.6'}
 $receiverState=$null;$receiverEvidence=$null
 $routeAgent=$null;$routeArguments=@();$routeReport=$null
+$probeStartup=[ordered]@{}
 $failure=$null;$cleanupErrors=[Collections.Generic.List[Exception]]::new()
 $phase='preflight';$start=$null;$end=$null;$tcpEnd=$null;$result=$null
 $port=20300;$count=8192;$heapMiB=1024
@@ -211,6 +212,7 @@ try {
     $phase='trace-start'
     $null=Invoke-TcpChurnTool -Program $wpr -Arguments @('-start','CPU','-filemode') -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'wpr-start')
     $profileOwned=$true
+    $phase='tcp-provider-snapshot'
     $provider=Get-WinEvent -ListProvider Microsoft-Windows-TCPIP
     $tasks=@('TcpTcbSynSend','TcpDisconnectTcbRtoTimeout','TcpDataTransferRetransmitRound',
         'TcpBlackHoleDetectionEntry','TcpBlackHoleDetectionExit','TcpBlackHoleDetectionFailed','TcpBhDetectFullSizeAck')
@@ -227,10 +229,12 @@ try {
         @{Id=1;Task='GCStart'},@{Id=2;Task='GCStop'},@{Id=3;Task='GCRestartEEEnd'},
         @{Id=7;Task='GCRestartEEBegin'},@{Id=8;Task='GCSuspendEEEnd'},@{Id=9;Task='GCSuspendEEBegin'}
     )}|ConvertTo-Json -Depth 4|Set-Content $clrState
+    $phase='tcp-probe-start'
     $tcpProbe=Start-TcpChurnCollector -Program $analyzer -Arguments @('--capture-probes',(Join-Path $diagnostics 'tcp.etl'),
         $tcpState,(Join-Path $diagnostics 'tcp.ready'),(Join-Path $diagnostics 'tcp.stop'),'300') `
         -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'tcp-capture')
     Wait-Ready $tcpProbe (Join-Path $diagnostics 'tcp.ready')
+    $phase='clr-probe-start'
     $clrProbe=Start-TcpChurnCollector -Program $analyzer -Arguments @('--capture-probes',(Join-Path $diagnostics 'clr.etl'),
         $clrState,(Join-Path $diagnostics 'clr.ready'),(Join-Path $diagnostics 'clr.stop'),'300') `
         -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'clr-capture')
@@ -347,6 +351,15 @@ try {
     if($PeerRecovery){$result.peerRecovery=$pulseResult;$result.peerDataInterfaceDhcpEnabled=$peerDhcpEnabled}
 }catch{$failure=$_}
 finally {
+    foreach($name in @('tcp','clr')){
+        $startupFile=Join-Path $diagnostics ($name+'.ready.failure.json')
+        if(Test-Path -LiteralPath $startupFile){
+            try{
+                $probeStartup[$name]=Get-Content -LiteralPath $startupFile -Raw|ConvertFrom-Json|
+                    Select-Object schema,outcome,stage,errorType,errorCode
+            }catch{$probeStartup[$name]=@{outcome='diagnostic-read-failed';errorType=$_.Exception.GetType().FullName}}
+        }
+    }
     if($null -ne $receiverState) {
         $receiverEvidence=[ordered]@{stage=$receiverState.Stage;receiver=$null;localProducer=$null;gcObservation=$null;diagnosticErrorType=$null}
         try {
@@ -499,6 +512,8 @@ if($null -ne $failure -or $cleanupErrors.Count) {
         $code=if($null -ne $failure){$failure.Exception.HResult}else{$null}
         $toolCode=if($null -ne $failure -and $failure.Exception.Data.Contains('ToolExitCode')){$failure.Exception.Data['ToolExitCode']}else{$null}
         @{schema=1;workload='managed-gc-mixed';outcome='failed';phase=$phase;failureType=$type;failureCode=$code
+            failureSourceLine=$(if($null -ne $failure){$failure.InvocationInfo.ScriptLineNumber}else{$null})
+            probeStartup=$probeStartup
             toolExitCode=$toolCode;cleanupErrorCount=$cleanupErrors.Count;cleanupVerified=($cleanupErrors.Count -eq 0)
             cleanupErrorTypes=@($cleanupErrors|ForEach-Object{$_.GetType().FullName})
             peerRecovery=$pulseResult;peerDataInterfaceDhcpEnabled=$peerDhcpEnabled;clientFailure=$clientFailure

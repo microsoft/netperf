@@ -53,6 +53,7 @@ internal static class Program
     {
         if (args.Length == 6 && args[0] == "--capture-probes")
         {
+            string captureStage = "input";
             try
             {
                 var state = JObject.Parse(File.ReadAllText(args[2]));
@@ -61,13 +62,16 @@ internal static class Program
                 var provider = Guid.Parse((string)state["publicProviderGuid"]);
                 var duration = int.Parse(args[5]);
                 if (duration < 15 || duration > 300) throw new InvalidOperationException("Invalid capture bound.");
+                captureStage = "session-create";
                 using (var capture = new TraceEventSession("TcpChurnExact-" + Guid.NewGuid().ToString("N"), args[1]))
                 {
                     capture.StopOnDispose = true;
                     capture.BufferSizeMB = 64;
                     capture.CircularBufferMB = 64;
+                    captureStage = "provider-enable";
                     capture.EnableProvider(provider, TraceEventLevel.Verbose, ulong.MaxValue,
                         new TraceEventProviderOptions { EventIDsToEnable = ids });
+                    captureStage = "ready";
                     File.WriteAllText(args[3], "ready");
                     var deadline = DateTime.UtcNow.AddSeconds(duration);
                     while (!File.Exists(args[4]))
@@ -78,7 +82,15 @@ internal static class Program
                 }
                 return 0;
             }
-            catch { Console.Error.WriteLine("Exact public probe capture failed."); return 1; }
+            catch (Exception error)
+            {
+                File.WriteAllText(args[3] + ".failure.json", JsonConvert.SerializeObject(new {
+                    schema = 1, outcome = "capture-failed", stage = captureStage,
+                    errorType = error.GetType().FullName, errorCode = error.HResult
+                }));
+                Console.Error.WriteLine("Exact public probe capture failed; inspect its numeric startup diagnostic.");
+                return 1;
+            }
         }
         if (args.Length == 7 && args[0] == "--events")
         {

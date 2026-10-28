@@ -780,6 +780,10 @@ numeric residual counts. It never removes resources or changes guest policy.
 It also reports the read-only WPR status exit code and recognized CPU-profile
 or not-recording flags. Unrecognized status is not evidence that recording is
 idle; the probe never cancels or stops a capture.
+Failed TCP/CLR collector startup reports a fixed capture stage, exception
+type and numeric error code. Provider discovery, TCP startup and CLR startup
+remain separate adapter phases; private exception messages and raw ETLs are
+not copied into the numeric result.
 It also reports numeric free-space admission information for the guest temporary
 drives; busy or residual-resource failures retain fixed failure categories rather
 than exporting process names, paths or exception messages.
