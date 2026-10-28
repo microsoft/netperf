@@ -150,6 +150,16 @@ try {
             [string]::IsNullOrWhiteSpace($client.error.GetAwaiter().GetResult())){throw "Invalid GC case accepted or not diagnosed: $case"}
         Close-Owned $client;$client=$null;$checks++
     }
+    $failureOutput=Join-Path $directory 'refused-client.json'
+    $client=Start-Workload @('127.0.0.1','127.0.0.2',[string]$port,'1','1','1',
+        $failureOutput,'client','1','14529','1','nodelay')
+    if(-not $client.process.WaitForExit(5000) -or $client.process.ExitCode -eq 0){throw 'The closed-listener failure test did not fail promptly.'}
+    $failed=Get-Content $failureOutput -Raw|ConvertFrom-Json
+    if($failed.outcome -ne 'failed' -or $failed.connectionsStarted -ne 1 -or $failed.connectionsConnected -ne 0 -or
+        $failed.connectionsCompleted -ne 0 -or $failed.socketError -ne 10061 -or $failed.errorType -ne 'System.Net.Sockets.SocketException'){
+        throw 'A real connection failure was not reported explicitly with sanitized numeric evidence.'
+    }
+    Close-Owned $client;$client=$null;$checks++
 } finally {
     foreach($child in @($client,$server)){if($null -ne $child){Close-Owned $child}}
     foreach($child in $multiServers){Close-Owned $child}
@@ -164,6 +174,8 @@ try {
         $path=Join-Path $directory $file
         if(Test-Path -LiteralPath $path){Remove-Item -LiteralPath $path -ErrorAction Stop}
     }
+    $failedPath=Join-Path $directory 'refused-client.json'
+    if(Test-Path -LiteralPath $failedPath){Remove-Item -LiteralPath $failedPath -ErrorAction Stop}
     Remove-Item -LiteralPath $directory -ErrorAction Stop
 }
 Write-Output "Passed $checks managed-GC arrival cases; loopback checks are functional coverage, not kernel-contention evidence."

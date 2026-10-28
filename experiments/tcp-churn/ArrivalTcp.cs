@@ -41,7 +41,7 @@ public static class ArrivalTcp
     private static long bindTicks,connectTicks,responseTicks,eofTicks;
     private static long dispatchTicks,maximumDispatchTicks;
     private static bool noDelay;
-    private static int inFlight,peakInFlight,completed,started;
+    private static int inFlight,peakInFlight,completed,started,connectedCount,acceptedCount;
     private static async Task SendWithSlot(SemaphoreSlim capacity,string source,IPAddress peer,int port,byte[] data,byte[] expectedResponse,long queuedAt=0)
     {
         long start=Stopwatch.GetTimestamp();
@@ -97,6 +97,7 @@ public static class ArrivalTcp
             long bound=Stopwatch.GetTimestamp();Interlocked.Add(ref bindTicks,bound-start);
             socket.NoDelay=noDelay;
             await socket.ConnectAsync(peer,port).ConfigureAwait(false);
+            Interlocked.Increment(ref connectedCount);
             long connected=Stopwatch.GetTimestamp();Interlocked.Add(ref connectTicks,connected-bound);
             await socket.GetStream().WriteAsync(data,0,data.Length).ConfigureAwait(false);
             var reply=new byte[expectedResponse.Length];
@@ -147,7 +148,11 @@ public static class ArrivalTcp
                 listener=new TcpListener(peer,port);listener.Start(8192);
                 receiver=Task.Run(async delegate {
                     var accepted=new List<Task>();
-                    for(int i=0;i<count;i++)accepted.Add(Serve(await listener.AcceptTcpClientAsync().ConfigureAwait(false),size,response));
+                    for(int i=0;i<count;i++) {
+                        TcpClient connection=await listener.AcceptTcpClientAsync().ConfigureAwait(false);
+                        Interlocked.Increment(ref acceptedCount);
+                        accepted.Add(Serve(connection,size,response));
+                    }
                     await Task.WhenAll(accepted).ConfigureAwait(false);
                 });
             }
@@ -245,6 +250,19 @@ public static class ArrivalTcp
                 ",\"maximumRequestMilliseconds\":"+(1000.0*maximumLatencyTicks/Stopwatch.Frequency).ToString("R",CultureInfo.InvariantCulture)+"}");
         } finally {if(listener!=null)listener.Stop();}
     }
+    private static void WriteFailure(string[] args,Exception error)
+    {
+        if(args.Length<7 || (Volatile.Read(ref started)==0 && Volatile.Read(ref acceptedCount)==0))return;
+        Exception cause=error;
+        while(cause is AggregateException && ((AggregateException)cause).InnerExceptions.Count>0)
+            cause=((AggregateException)cause).InnerExceptions[0];
+        cause=cause.GetBaseException();
+        SocketException socket=cause as SocketException;
+        File.WriteAllText(args[6],"{\"schema\":1,\"outcome\":\"failed\",\"connectionsStarted\":"+Volatile.Read(ref started)+
+            ",\"connectionsConnected\":"+Volatile.Read(ref connectedCount)+",\"connectionsCompleted\":"+Volatile.Read(ref completed)+
+            ",\"acceptedConnections\":"+Volatile.Read(ref acceptedCount)+",\"errorType\":\""+cause.GetType().FullName+
+            "\",\"errorCode\":"+cause.HResult+",\"socketError\":"+(socket==null?"null":socket.NativeErrorCode.ToString(CultureInfo.InvariantCulture))+"}");
+    }
     private static int Main(string[] args)
     {
         try {
@@ -252,8 +270,14 @@ public static class ArrivalTcp
                 Console.Error.WriteLine("Usage: ArrivalTcp sources peer port count rate request-bytes output.json [role [response-bytes [seed [maximum-in-flight [nodelay|nagle [gc:heap-MiB:minimum-launched]]]]]]");
                 return 2;
             }
-            if(!Run(args).Wait(TimeSpan.FromSeconds(150))){Console.Error.WriteLine("Arrival workload deadline exceeded.");return 3;}
+            if(!Run(args).Wait(TimeSpan.FromSeconds(150))){
+                WriteFailure(args,new TimeoutException("Arrival workload deadline exceeded."));
+                Console.Error.WriteLine("Arrival workload deadline exceeded.");return 3;
+            }
             return 0;
-        }catch(Exception error){Console.Error.WriteLine(error.GetBaseException().ToString());return 1;}
+        }catch(Exception error){
+            WriteFailure(args,error);
+            Console.Error.WriteLine(error.GetBaseException().ToString());return 1;
+        }
     }
 }

@@ -20,7 +20,7 @@ $diagnostics=Join-Path $ScratchParent 'managed-gc-diagnostics'
 $publishOwned=$false
 $peer=$null;$peerOwned=$false;$profileOwned=$false
 $client=$null;$localServer=$null;$tcpProbe=$null;$clrProbe=$null
-$neighborPulse=$null;$neighborArguments=@();$pulseResult=$null;$ownedCounts=$null;$peerDhcpEnabled=$null
+$neighborPulse=$null;$neighborArguments=@();$pulseResult=$null;$ownedCounts=$null;$peerDhcpEnabled=$null;$clientFailure=$null
 $localDataStarted=$false;$remoteDataStarted=$false
 $failure=$null;$cleanupErrors=[Collections.Generic.List[Exception]]::new()
 $phase='preflight';$start=$null;$end=$null;$tcpEnd=$null;$result=$null
@@ -216,8 +216,17 @@ try {
         $clientOutput,'client',[string]$payloadBytes,'14529',[string]$Connections,'nodelay',"gc:${heapMiB}:2048"
     ) -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'client')
     $clientPid=$client.Process.Id
-    if(-not $client.Process.WaitForExit(180000) -or $client.Process.ExitCode -ne 0){throw 'The GC client did not complete successfully.'}
+    if(-not $client.Process.WaitForExit(180000)){throw 'The GC client did not complete before its deadline.'}
     $end=[DateTime]::UtcNow.ToString('o')
+    if($client.Process.ExitCode -ne 0) {
+        if(Test-Path -LiteralPath $clientOutput) {
+            $failedClient=Get-Content $clientOutput -Raw|ConvertFrom-Json
+            if($failedClient.outcome -eq 'failed'){
+                $clientFailure=$failedClient|Select-Object schema,outcome,connectionsStarted,connectionsConnected,connectionsCompleted,acceptedConnections,errorType,errorCode,socketError
+            }
+        }
+        throw 'The GC client did not complete successfully.'
+    }
     if($PeerRecovery) {
         $phase='neighbor-pulse-result'
         if(-not $neighborPulse.Process.WaitForExit(15000) -or $neighborPulse.Process.ExitCode -ne 0){throw 'The scoped peer pulse did not complete successfully.'}
@@ -332,6 +341,24 @@ finally {
     if($null -ne $peer){try{Remove-PSSession $peer -ErrorAction Stop}catch{$cleanupErrors.Add($_.Exception)}}
 }
 if($null -ne $failure -or $cleanupErrors.Count) {
+    $diagnosticVerified=$false;$diagnosticFailure=$null
+    if($null -ne $clientFailure -and $cleanupErrors.Count -eq 0 -and $profileOwned) {
+        try {
+            $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @((Join-Path $diagnostics 'cpu.etl'),
+                (Join-Path $PublishDirectory 'cpu-load.json'),$start,$end) -Directory $diagnostics `
+                -LogPrefix (Join-Path $diagnostics 'failed-workload-cpu') -TimeoutSeconds 300
+            $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @('--events',(Join-Path $diagnostics 'tcp.etl'),
+                (Join-Path $PublishDirectory 'tcp-events.json'),'interval',$start,$tcpEnd,(Join-Path $diagnostics 'tcp-state.json')) `
+                -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'failed-workload-tcp') -TimeoutSeconds 120
+            $cpu=Get-Content (Join-Path $PublishDirectory 'cpu-load.json') -Raw|ConvertFrom-Json
+            $tcp=Get-Content (Join-Path $PublishDirectory 'tcp-events.json') -Raw|ConvertFrom-Json
+            if($cpu.outcome -ne 'sampled' -or $cpu.eventsLost -ne 0 -or $cpu.unresolvedNetworkFrames -ne 0 -or
+                $tcp.outcome -ne 'counted' -or $tcp.eventsLost -ne 0){
+                throw 'The rejected-workload diagnostic did not verify lossless matching CPU/TCP coverage.'
+            }
+            $diagnosticVerified=$true
+        }catch{$diagnosticFailure=$_}
+    }
     if($publishOwned) {
         if($PeerRecovery -and (Test-Path -LiteralPath (Join-Path $diagnostics 'neighbor-pulse.json'))) {
             $pulseResult=Get-Content (Join-Path $diagnostics 'neighbor-pulse.json') -Raw|ConvertFrom-Json
@@ -341,10 +368,13 @@ if($null -ne $failure -or $cleanupErrors.Count) {
         $toolCode=if($null -ne $failure -and $failure.Exception.Data.Contains('ToolExitCode')){$failure.Exception.Data['ToolExitCode']}else{$null}
         @{schema=1;workload='managed-gc-mixed';outcome='failed';phase=$phase;failureType=$type;failureCode=$code
             toolExitCode=$toolCode;cleanupErrorCount=$cleanupErrors.Count;cleanupVerified=($cleanupErrors.Count -eq 0)
-            peerRecovery=$pulseResult;peerDataInterfaceDhcpEnabled=$peerDhcpEnabled
+            peerRecovery=$pulseResult;peerDataInterfaceDhcpEnabled=$peerDhcpEnabled;clientFailure=$clientFailure
+            rejectedWorkloadCpuTcpVerified=$diagnosticVerified
+            diagnosticFailureType=$(if($null -ne $diagnosticFailure){$diagnosticFailure.Exception.GetType().FullName}else{$null})
             conclusion='no-accepted-measurement'}|ConvertTo-Json -Depth 5|Set-Content (Join-Path $PublishDirectory 'result.json')
     }
     if($null -ne $failure){$cleanupErrors.Insert(0,$failure.Exception)}
+    if($null -ne $diagnosticFailure){$cleanupErrors.Add($diagnosticFailure.Exception)}
     throw [AggregateException]::new('Managed-GC diagnostic or required cleanup failed.',$cleanupErrors)
 }
 $phase='public-symbol-analysis'

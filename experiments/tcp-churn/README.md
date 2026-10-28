@@ -708,6 +708,12 @@ pairs plus four loopback pairs retain the same aggregate endpoint and wire-byte
 checks. WinRM continues to use the original addresses rather than priming the
 TCP data paths before the experiment. These temporary guest address/connected-route
 changes occur only in this opt-in fixture, not in ordinary healthy or recovery runs.
+Runtime socket failures now produce an explicitly failed result with framework
+exception type, numeric error/socket codes and started/connected/completed
+counts, while retaining a nonzero process exit. No exception message, endpoint
+address or stack is exported. A rejected transfer can retain quality-checked
+whole-window CPU/TCP diagnostics after verified cleanup; this never changes its
+failed outcome or makes it an accepted recovery/severity result.
 
 The manual lab investigation supplemented CPU sampling with the existing Windows
 Performance Toolkit **SPINLOCK collision events**, rather than assuming that a
