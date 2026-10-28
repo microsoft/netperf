@@ -4,7 +4,8 @@
 $ErrorActionPreference='Stop'
 Import-Module (Join-Path $PSScriptRoot 'adapters\TcpRecoveryEvidence.psm1') -Force
 function Record($Kind,$Tcb,$Process=0,$Status=0) {
-    [pscustomobject]@{kind=$Kind;tcb=$Tcb;processId=$Process;status=$Status;timestampTicks=1;failureReasonAckToken=$true}
+    [pscustomobject]@{kind=$Kind;tcb=$Tcb;processId=$Process;status=$Status;timestampTicks=1;failureReasonAckToken=$true
+        failureReasonTokens=@{unacked=$false;max=$false;hop=$false}}
 }
 $records=@(
     (Record TcpConnectTcbComplete 1 10),
@@ -73,7 +74,7 @@ $time=[datetime]::UtcNow
 function Trace-Record($Id,[object[]]$Values) {
     [pscustomobject]@{Id=$Id;Version=0;TimeCreated=$time;Properties=@($Values|ForEach-Object{[pscustomobject]@{Value=$_}})}
 }
-$events=@((Trace-Record 1 @(1,10,0)),(Trace-Record 4 @(1,'ACK token only')),
+$events=@((Trace-Record 1 @(1,10,0)),(Trace-Record 4 @(1,'ACK unacked maximum hop token projection')),
     (Trace-Record 2 @(1)),(Trace-Record 3 @(1)),(Trace-Record 1 @(2,20,0)),
     (Trace-Record 2 @(2)),(Trace-Record 3 @(2)))
 $normalized=& (Get-Module TcpRecoveryEvidence) {
@@ -84,6 +85,9 @@ $normalized=& (Get-Module TcpRecoveryEvidence) {
 } $events $manifest ($time.AddSeconds(-1)) ($time.AddSeconds(1))
 if($normalized.ownedConnectionCompletions -ne 1 -or $normalized.ownedConnectionClosures -ne 1 -or
     $normalized.publicProbeCounts.TcpBlackHoleDetectionEntry -ne 1 -or
-    $normalized.failedAttemptReasonMentionsAckToken -ne 1){throw 'Public-manifest normalization did not preserve owner/lifetime attribution.'}
+    $normalized.failedAttemptReasonMentionsAckToken -ne 1 -or
+    $normalized.failedAttemptReasonTokenCounts.unacked -ne 1 -or
+    $normalized.failedAttemptReasonTokenCounts.max -ne 1 -or
+    $normalized.failedAttemptReasonTokenCounts.hop -ne 1){throw 'Public-manifest normalization did not preserve owner/lifetime attribution.'}
 $checks++
 Write-Output "Passed $checks TCP recovery attribution cases; no trace identities, process IDs, or addresses were exported."

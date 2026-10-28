@@ -11,6 +11,7 @@ function Get-TcpRecoveryCounts {
         [Parameter(Mandatory)][ValidateRange(1,8192)][int]$ExpectedConnections
     )
     $owners=@{};$completed=0;$closed=0;$ackFailures=0;$last=[long]::MinValue
+    $reasonTokens=[ordered]@{unacked=0;max=0;hop=0}
     $counts=[ordered]@{TcpDataTransferRetransmitRound=0;TcpBlackHoleDetectionEntry=0
         TcpBlackHoleDetectionExit=0;TcpBlackHoleDetectionFailed=0;TcpBhDetectFullSizeAck=0}
     foreach($record in $Records) {
@@ -33,7 +34,12 @@ function Get-TcpRecoveryCounts {
                 if(-not $counts.Contains($record.kind)){throw 'An unsupported TCP evidence task was supplied.'}
                 if($owners.ContainsKey($key) -and $owners[$key]){
                     $counts[$record.kind]++
-                    if($record.kind -eq 'TcpBlackHoleDetectionFailed' -and $record.failureReasonAckToken){$ackFailures++}
+                    if($record.kind -eq 'TcpBlackHoleDetectionFailed'){
+                        if($record.failureReasonAckToken){$ackFailures++}
+                        foreach($token in @('unacked','max','hop')){
+                            if($record.failureReasonTokens[$token]){$reasonTokens[$token]++}
+                        }
+                    }
                 }
             }
         }
@@ -42,6 +48,7 @@ function Get-TcpRecoveryCounts {
     if($closed -ne $ExpectedConnections){throw 'Owned-process TCP closure coverage did not match the verified workload.'}
     [pscustomobject]@{schema=1;processAndLifetimeFilterApplied=$true;ownedConnectionCompletions=$completed
         ownedConnectionClosures=$closed;failedAttemptReasonMentionsAckToken=$ackFailures
+        failedAttemptReasonTokenCounts=$reasonTokens
         publicProbeCounts=$counts;scope='owned-client-only';conclusion='algorithm-coverage-not-lock-wait-proof'}
 }
 function Read-TcpRecoveryEvidence {
@@ -78,9 +85,12 @@ function Read-TcpRecoveryEvidence {
             $layout=$layouts[$key]
             $owner=if($layout.pid -ge 0){[uint32]$_.Properties[$layout.pid].Value}else{0}
             $status=if($layout.status -ge 0){[uint32]$_.Properties[$layout.status].Value}else{0}
-            $ack=if($layout.reason -ge 0){[regex]::IsMatch([string]$_.Properties[$layout.reason].Value,'(?i)\bACK\b')}else{$false}
+            $text=if($layout.reason -ge 0){[string]$_.Properties[$layout.reason].Value}else{''}
+            $ack=[regex]::IsMatch($text,'(?i)\bACK\b')
+            $tokens=@{unacked=[regex]::IsMatch($text,'(?i)\bunacked\b|\bunacknowledged\b')
+                max=[regex]::IsMatch($text,'(?i)\bmax\b|\bmaximum\b');hop=[regex]::IsMatch($text,'(?i)\bhop\b')}
             $rows.Add([pscustomobject]@{kind=$layout.task;tcb=[uint64]$_.Properties[$layout.tcb].Value
-                processId=$owner;status=$status;timestampTicks=$_.TimeCreated.ToUniversalTime().Ticks;failureReasonAckToken=$ack})
+                processId=$owner;status=$status;timestampTicks=$_.TimeCreated.ToUniversalTime().Ticks;failureReasonAckToken=$ack;failureReasonTokens=$tokens})
         }
     }
     Get-TcpRecoveryCounts -Records $rows.ToArray() -OwnerProcessId $OwnerProcessId -ExpectedConnections $ExpectedConnections

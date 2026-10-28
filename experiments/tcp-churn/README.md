@@ -685,8 +685,9 @@ counted only for TCB lifetimes correlated to the owned client's completion
 and close events, excluding management traffic and invalidating reused TCB identities.
 Owned close-event coverage must also match the completed workload. Failed BH
 attempts are counted separately from probe entry; a numeric count of failure
-messages mentioning an `ACK` token is reported without exporting message text.
-That lexical count is not by itself a complete reason classification.
+messages mentioning an `ACK` token and generic unacked/max/hop tokens is reported
+without exporting message text. These lexical counts may overlap and are not by
+themselves a complete reason classification.
 The contrast is accepted only with complete verified transfers, data
 retransmission **and actual BH entry** on those client connections, lossless
 traces and verified cleanup. It adds `cpu-after-recovery.json` for the immediate
