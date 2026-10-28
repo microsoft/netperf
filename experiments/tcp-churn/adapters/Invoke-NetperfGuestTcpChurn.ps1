@@ -21,7 +21,7 @@ if($ManagedGc -and (-not $ProfileCpu -or $SynDrop -or $ProbePeer -or $PeerMeasur
 }
 if (Test-Path -LiteralPath $PublishDirectory) { throw 'Use a new publication directory.' }
 New-Item -ItemType Directory -Path $PublishDirectory -ErrorAction Stop | Out-Null
-$session=$null; $guestRoot=$null; $phase='guest-connect'; $success=$false
+$session=$null; $guestRoot=$null; $phase='guest-connect'; $success=$false; $startup=$null
 try {
     if ((Get-VM -Name $VmName -ErrorAction Stop).State -ne 'Running') {
         throw 'The documented guest must already be running; this adapter does not reset other workloads.'
@@ -99,15 +99,29 @@ try {
             if ($profile) { $extra+=@('-ProfileCpu','-AnalyzerDirectory',(Join-Path $root 'analyzer')) }
         }
         if ($synDrop) { $extra+='-SynDrop' }
+        $launch=[ordered]@{managedGc=[bool]$managedGc;peerMeasurement=[bool]$peerMeasurement
+            programExists=(Test-Path -LiteralPath $program -PathType Leaf);extraArgumentCount=$extra.Count
+            childExitCode=$null;resultExists=$false;logBytes=0}
         try {
             & pwsh -NoProfile -NonInteractive -File $program -ScratchParent $root `
                 -PublishDirectory (Join-Path $root 'publish') -Seconds $seconds `
                 -Connections $connections @extra *> (Join-Path $root 'adapter.log')
+            $launch.childExitCode=$LASTEXITCODE
             $LASTEXITCODE
         } finally {
+            $launch.resultExists=Test-Path -LiteralPath (Join-Path $root 'publish\result.json') -PathType Leaf
+            $log=Join-Path $root 'adapter.log'
+            if(Test-Path -LiteralPath $log){$launch.logBytes=(Get-Item -LiteralPath $log).Length}
+            $launch|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $root 'child-startup.json')
             if($credentialFile -and (Test-Path -LiteralPath $credentialFile)){Remove-Item -LiteralPath $credentialFile -ErrorAction Stop}
         }
     } -ArgumentList $guestRoot,$Seconds,$Connections,[bool]$ProfileCpu,[bool]$SynDrop,[bool]$PeerMeasurement,[bool]$ManagedGc,$Credential
+    $startup=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
+        param($root)
+        Get-Content -LiteralPath (Join-Path $root 'child-startup.json') -Raw|ConvertFrom-Json|
+            Select-Object managedGc,peerMeasurement,programExists,extraArgumentCount,childExitCode,resultExists,logBytes
+    } -ArgumentList $guestRoot |
+        Select-Object managedGc,peerMeasurement,programExists,extraArgumentCount,childExitCode,resultExists,logBytes
     $phase='guest-result'
     $remoteResult=Join-Path $guestRoot 'publish\result.json'
     Copy-Item -LiteralPath $remoteResult -Destination (Join-Path $PublishDirectory 'result.json') -FromSession $session -ErrorAction Stop
@@ -126,8 +140,10 @@ try {
     $success=$true
 } catch {
     if (-not (Test-Path -LiteralPath (Join-Path $PublishDirectory 'result.json'))) {
-        [ordered]@{schema=1;workload='tcp-churn';outcome='failed';phase=$phase;conclusion='no-measurement'} |
-            ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PublishDirectory 'result.json') -Encoding utf8
+        [ordered]@{schema=1;workload='tcp-churn';outcome='failed';phase=$phase
+            failureType=$_.Exception.GetType().FullName;failureCode=$_.Exception.HResult
+            startup=$startup;conclusion='no-measurement'} |
+            ConvertTo-Json -Depth 3 | Set-Content -LiteralPath (Join-Path $PublishDirectory 'result.json') -Encoding utf8
     }
 } finally {
     if ($null -ne $session) { Remove-PSSession $session -ErrorAction Stop }
