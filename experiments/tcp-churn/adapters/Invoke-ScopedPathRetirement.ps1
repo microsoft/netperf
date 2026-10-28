@@ -14,6 +14,15 @@ param(
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
+trap {
+    if(-not(Test-Path -LiteralPath $ReportFile)){
+        @{schema=1;scenario='owned-secondary-source-address-retirement';outcome='failed'
+            phase='control-preflight';failureType=$_.Exception.GetType().FullName
+            failureCode=$_.Exception.HResult;sourceLine=$_.InvocationInfo.ScriptLineNumber
+            retired=$false;restored=$false}|ConvertTo-Json|Set-Content -LiteralPath $ReportFile
+    }
+    break
+}
 if(-not $RestoreOnly -and (!$ReadyFile -or !$BeginFile -or !$StopFile)){
     throw 'Path retirement requires owned lifecycle files.'
 }
@@ -56,6 +65,7 @@ function Restore-Control {
     }
     $current=@(Read-OwnedAddress)
     if($current.Count -gt 1){throw 'The owned source address is no longer unique.'}
+    if($MeasureRetirement -and $current.Count -ne 1){throw 'The owned source disappeared before measured retirement.'}
     if($current.Count) {
         if($current[0].InterfaceIndex -ne $adapter[0].ifIndex -or $current[0].PrefixLength -ne 17 -or
             -not $current[0].SkipAsSource){throw 'The retirement address changed ownership; refusing removal.'}
@@ -110,7 +120,7 @@ if((@(Read-Defaults)-join '|') -ne (@($data.originalDefaultKeys)-join '|')){
 if($ReceiverProcessId -lt 1 -or -not(Test-Path -LiteralPath $ReceiverExecutable -PathType Leaf)){
     throw 'The verified receiver executable and process are required for bounded cohort observation.'
 }
-Add-Type -Path $ReceiverExecutable -ErrorAction Stop
+$null=[Reflection.Assembly]::Load([IO.File]::ReadAllBytes($ReceiverExecutable))
 if((Read-PathCount) -ne 0){throw 'Existing cached paths conflict with the exclusively owned fixture prefix.'}
 @{interfaceGuid=[string]$adapter[0].InterfaceGuid;source=$source;prefix=$prefix
     originalAbsent=$true;originalAddresses=@(Read-Addresses)}|Export-Clixml -LiteralPath $StateFile -NoClobber

@@ -4,10 +4,10 @@
 $ErrorActionPreference='Stop'
 $directory=Join-Path ([IO.Path]::GetTempPath()) ('owned-tcp-table-'+[guid]::NewGuid().ToString('N'))
 $null=New-Item -ItemType Directory -Path $directory
-$assembly=Join-Path $directory 'OwnedTcpTable.dll'
+$assembly=Join-Path $directory 'OwnedTcpTable.exe'
 $listener=$null;$sockets=[Collections.Generic.List[IDisposable]]::new()
 try {
-    & "$env:SystemRoot\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /target:library /platform:x64 `
+    & "$env:SystemRoot\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /target:exe /platform:x64 `
         "/out:$assembly" (Join-Path $PSScriptRoot 'ArrivalTcp.cs')
     if($LASTEXITCODE){throw 'Owned TCP table helper compilation failed.'}
     $null=[Reflection.Assembly]::Load([IO.File]::ReadAllBytes($assembly))

@@ -522,8 +522,8 @@ try {
         if($routeReport.outcome -ne 'completed' -or -not $routeReport.retired -or -not $routeReport.restored -or
             -not $routeReport.dataAndManagementAddressesPreserved -or -not $routeReport.defaultRoutesPreserved -or
             $routeReport.measuredReleasedPaths -lt $CacheRetirePaths -or $routeReport.establishedAtTrigger -lt 8 -or
-            ([datetime]$routeReport.applyStartUtc).ToUniversalTime() -lt ([datetime]$start).ToUniversalTime() -or
-            ([datetime]$routeReport.applyEndUtc).ToUniversalTime() -gt ([datetime]$end).ToUniversalTime()){
+            ([datetime]$routeReport.removeApiStartUtc).ToUniversalTime() -lt ([datetime]$start).ToUniversalTime() -or
+            ([datetime]$routeReport.removeApiEndUtc).ToUniversalTime() -gt ([datetime]$end).ToUniversalTime()){
             throw 'The bounded source-retirement population, live cohort, timing or restoration did not verify.'
         }
         $result.cacheRetirementControl=$routeReport
