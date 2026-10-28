@@ -26,7 +26,7 @@ $peer=$null;$peerOwned=$false;$profileOwned=$false
 $client=$null;$localServer=$null;$tcpProbe=$null;$clrProbe=$null
 $neighborPulse=$null;$neighborArguments=@();$pulseResult=$null;$ownedCounts=$null;$peerDhcpEnabled=$null;$clientFailure=$null
 $localDataStarted=$false;$remoteDataStarted=$false
-$receiverState=$null
+$receiverState=$null;$receiverEvidence=$null
 $failure=$null;$cleanupErrors=[Collections.Generic.List[Exception]]::new()
 $phase='preflight';$start=$null;$end=$null;$tcpEnd=$null;$result=$null
 $port=20300;$count=8192;$heapMiB=1024
@@ -308,6 +308,17 @@ try {
 }catch{$failure=$_}
 finally {
     if($null -ne $receiverState) {
+        $receiverEvidence=[ordered]@{stage=$receiverState.Stage;receiver=$null;localProducer=$null;diagnosticErrorType=$null}
+        try {
+            foreach($entry in @(@{key='receiver';path=$receiverState.ServerOutput},
+                @{key='localProducer';path=(Join-Path $diagnostics 'receiver-local-client.json')})) {
+                if(Test-Path -LiteralPath $entry.path) {
+                    $receiverEvidence[$entry.key]=Get-Content $entry.path -Raw|ConvertFrom-Json|
+                        Select-Object schema,outcome,role,connections,connectionsStarted,connectionsConnected,connectionsCompleted,
+                            acceptedConnections,errorType,errorCode,socketError,managedGc,requestDispatch,peakInFlight
+                }
+            }
+        }catch{$receiverEvidence.diagnosticErrorType=$_.Exception.GetType().FullName}
         $client=$receiverState.LocalClient
         $localServer=$receiverState.Receiver
     }
@@ -332,6 +343,7 @@ finally {
         }
     }
     foreach($child in @($client,$localServer)){if($null -ne $child){try{Stop-TcpChurnCollector $child}catch{$cleanupErrors.Add($_.Exception)}}}
+    if($null -eq $end -and $null -ne $receiverState){$end=[DateTime]::UtcNow.ToString('o')}
     if($null -ne $receiverState -and $receiverState.Rule){
         try{Remove-NetFirewallRule -Name $receiverState.Rule -ErrorAction Stop}catch{$cleanupErrors.Add($_.Exception)}
     }
@@ -376,7 +388,7 @@ finally {
 }
 if($null -ne $failure -or $cleanupErrors.Count) {
     $diagnosticVerified=$false;$diagnosticFailure=$null
-    if($null -ne $clientFailure -and $cleanupErrors.Count -eq 0 -and $profileOwned) {
+    if(($null -ne $clientFailure -or $null -ne $receiverState) -and $cleanupErrors.Count -eq 0 -and $profileOwned) {
         try {
             $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @((Join-Path $diagnostics 'cpu.etl'),
                 (Join-Path $PublishDirectory 'cpu-load.json'),$start,$end) -Directory $diagnostics `
@@ -410,6 +422,7 @@ if($null -ne $failure -or $cleanupErrors.Count) {
             toolExitCode=$toolCode;cleanupErrorCount=$cleanupErrors.Count;cleanupVerified=($cleanupErrors.Count -eq 0)
             cleanupErrorTypes=@($cleanupErrors|ForEach-Object{$_.GetType().FullName})
             peerRecovery=$pulseResult;peerDataInterfaceDhcpEnabled=$peerDhcpEnabled;clientFailure=$clientFailure
+            receiverEvidence=$receiverEvidence
             tcpRecovery=$ownedCounts
             rejectedWorkloadCpuTcpVerified=$diagnosticVerified
             diagnosticFailureType=$(if($null -ne $diagnosticFailure){$diagnosticFailure.Exception.GetType().FullName}else{$null})

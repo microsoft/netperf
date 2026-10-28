@@ -7,6 +7,7 @@ Import-Module (Join-Path $PSScriptRoot 'WindowsCts.psm1')
 function Start-GcReceiver {
     [CmdletBinding()]
     param([Parameter(Mandatory)][hashtable]$State)
+    $State.Stage='start-receiver'
     $rule='ManagedGcReceiver-'+[guid]::NewGuid().ToString('N')
     $null=New-NetFirewallRule -Name $rule -DisplayName $rule -Direction Inbound -Action Allow `
         -Protocol TCP -LocalPort $State.Port -LocalAddress $State.ServerAddress -RemoteAddress $State.PeerAddress,$State.ServerAddress
@@ -21,6 +22,7 @@ function Invoke-GcReceiverTraffic {
     [CmdletBinding()]
     param([Parameter(Mandatory)][hashtable]$State)
     $clock=[Diagnostics.Stopwatch]::StartNew()
+    $State.Stage='start-remote-producer'
     Invoke-Command -Session $State.Peer -ScriptBlock {
         param($root,$source,$target,$port,$count,$rate,$payload,$concurrency)
         $output=Join-Path $root 'client.json'
@@ -30,14 +32,17 @@ function Invoke-GcReceiverTraffic {
         ) -Directory $root -LogPrefix (Join-Path $root 'receiver-remote-client')
     } -ArgumentList $State.PeerRoot,$State.PeerAddress,$State.ServerAddress,$State.Port,($State.Count/2),([int][Math]::Ceiling($State.Rate/2.0)),$State.Payload,$State.Connections
     $localOutput=Join-Path $State.Directory 'receiver-local-client.json'
+    $State.Stage='start-local-producer'
     $State.LocalClient=Start-TcpChurnCollector -Program $State.Executable -Arguments @(
         $State.ServerAddress,$State.ServerAddress,[string]$State.Port,[string]($State.Count/2),
         [string]([int][Math]::Ceiling($State.Rate/2.0)),[string]$State.Payload,$localOutput,
         'client',[string]$State.Payload,'14529',[string]$State.Connections,'nodelay','dispatch:pool'
     ) -Directory $State.Directory -LogPrefix (Join-Path $State.Directory 'receiver-local-client')
+    $State.Stage='wait-local-producer'
     if(-not $State.LocalClient.Process.WaitForExit(180000) -or $State.LocalClient.Process.ExitCode -ne 0){
         throw 'The independent local producer did not complete successfully.'
     }
+    $State.Stage='wait-remote-producer'
     $remote=Invoke-Command -Session $State.Peer -ScriptBlock {
         $child=$global:OwnedManagedGcPeer.Process
         if(-not $child.Process.WaitForExit(180000) -or $child.Process.ExitCode -ne 0){
@@ -45,17 +50,20 @@ function Invoke-GcReceiverTraffic {
         }
         Get-Content (Join-Path $global:OwnedManagedGcPeer.Root 'client.json') -Raw|ConvertFrom-Json
     }
+    $State.Stage='wait-receiver'
     if(-not $State.Receiver.Process.WaitForExit(15000) -or $State.Receiver.Process.ExitCode -ne 0){
         throw 'The profiled GC receiver did not complete successfully.'
     }
     $clock.Stop()
     $local=Get-Content $localOutput -Raw|ConvertFrom-Json
     $server=Get-Content $State.ServerOutput -Raw|ConvertFrom-Json
+    $State.Stage='verify-endpoints'
     foreach($endpoint in @($local,$remote,$server)) {
         if($endpoint.outcome -ne 'collected' -or $endpoint.networkErrors -ne 0 -or $endpoint.protocolErrors -ne 0 -or $endpoint.barrier){
             throw 'A receiver-GC endpoint failed protocol verification.'
         }
     }
+    $State.Stage='verify-receiver-coverage'
     if($local.connections -ne $State.Count/2 -or $remote.connections -ne $State.Count/2 -or
         $server.connections -ne $State.Count -or $server.bytesReceived -ne $local.bytesSent+$remote.bytesSent -or
         $server.bytesSent -ne $local.bytesReceived+$remote.bytesReceived -or
@@ -65,6 +73,7 @@ function Invoke-GcReceiverTraffic {
         $local.targets.Count -ne 1 -or $remote.targets.Count -ne 1 -or -not $local.targets[0].loopback -or $remote.targets[0].loopback){
         throw 'Receiver-GC byte counts, real collection, independent producers or loopback classification did not verify.'
     }
+    $State.Stage='verified'
     [pscustomobject]@{
         connections=$server.connections;bytesSent=$server.bytesSent;bytesReceived=$server.bytesReceived;managedGc=$server.managedGc
         arrivalRate=(2*[Math]::Ceiling($State.Rate/2.0));arrivalDispatch='independent-client-processes';peakInFlight=$server.peakInFlight
