@@ -740,6 +740,13 @@ control route. Workload CPU windows exclude route-removal cleanup.
 This tests cached-path invalidation separately from ordinary receive pressure;
 it is not a claim that the route update exactly overlaps CLR suspension, causes
 a cache epoch change by itself, or represents a customer network event.
+`managed_gc_route_variant=peer-gateway` adds a second owned peer alias and uses
+it as a logical next hop for that host route. The agent verifies that it resolves
+to the same owned peer NIC/MAC and retains the interface, while reporting that
+the logical next hop changed. The packet destination remains the peer's own
+data address; this is not an independent physical gateway or a DGD-transition
+claim. Both peer aliases and the host route are ownership-checked and removed.
+The default `onlink` variant retains the original on-link next-hop semantics.
 
 `managed_gc_isolated_data=true` is a separate, explicit opt-in for fresh data
 paths. It requires both existing guest interfaces to already have DHCP disabled.

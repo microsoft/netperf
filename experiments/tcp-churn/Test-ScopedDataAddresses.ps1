@@ -9,7 +9,7 @@ $stateFile=Join-Path $directory 'state.clixml'
 $reportFile=Join-Path $directory 'report.json'
 $checks=0
 try {
-    foreach($case in @('roundtrip','dhcp','overlap','existing-address','invalid-address','partial-add',
+    foreach($case in @('roundtrip','peer-roundtrip','dhcp','overlap','existing-address','invalid-address','partial-add',
         'bad-manifest','changed-address','remove-failure','policy-drift')) {
         $fixture=@{dhcp='Disabled';newCalls=0;removes=0;failAdd=($case -eq 'partial-add');failRemove=($case -eq 'remove-failure')
             addresses=[Collections.Generic.List[object]]::new();routes=[Collections.Generic.List[object]]::new()}
@@ -21,7 +21,8 @@ try {
             overlap {$fixture.routes.Add([pscustomobject]@{DestinationPrefix='198.18.0.0/15';NextHop='192.0.2.254';RouteMetric=20;InterfaceIndex=5})}
             existing-address {$fixture.addresses.Add([pscustomobject]@{IPAddress='198.19.240.2';PrefixLength=32;SkipAsSource=$true;AddressState='Preferred';InterfaceIndex=7})}
         }
-        $plan=if($case -eq 'invalid-address'){'198.19.240.7'}else{'198.19.240.1,198.19.240.2,198.19.240.3,198.19.240.4'}
+        $plan=if($case -eq 'invalid-address'){'198.19.240.7'}elseif($case -eq 'peer-roundtrip'){'198.19.240.5,198.19.240.6'}else{'198.19.240.1,198.19.240.2,198.19.240.3,198.19.240.4'}
+        $expectedCount=$plan.Split(',').Count
         $failed=$false
         try {
             & {
@@ -57,7 +58,7 @@ try {
                 function Remove-NetIPAddress {
                     [CmdletBinding(SupportsShouldProcess=$true)]
                     param($InterfaceIndex,$IPAddress,$PolicyStore)
-                    if($InterfaceIndex -ne 5 -or $IPAddress -notmatch '^198\.19\.240\.[1-4]$' -or $PolicyStore -ne 'ActiveStore'){
+                    if($InterfaceIndex -ne 5 -or $IPAddress -notin $plan.Split(',') -or $PolicyStore -ne 'ActiveStore'){
                         throw 'An unowned address removal was attempted.'
                     }
                     $fixture.removes++
@@ -69,7 +70,7 @@ try {
                 }
                 & $program -Action add -InterfaceAlias 'test-only-interface' -Addresses $plan -StateFile $stateFile -ReportFile $reportFile
                 $prepared=Get-Content $reportFile -Raw|ConvertFrom-Json
-                if(-not $prepared.added -or $prepared.ownedAddressCount -ne 4){throw 'Data-address preparation did not report its exact plan.'}
+                if(-not $prepared.added -or $prepared.ownedAddressCount -ne $expectedCount){throw 'Data-address preparation did not report its exact plan.'}
                 Remove-Item -LiteralPath $reportFile
                 switch($case) {
                     bad-manifest {$saved=Import-Clixml $stateFile;$saved.interfaceGuid='other-interface';$saved|Export-Clixml $stateFile}
@@ -94,11 +95,11 @@ try {
             if($_.Exception.Message -notmatch $pattern){throw}
             $failed=$true
         }
-        if($failed -ne ($case -ne 'roundtrip')){throw "Unexpected data-fixture verdict: $case"}
-        if($case -eq 'roundtrip') {
+        if($failed -ne ($case -notin @('roundtrip','peer-roundtrip'))){throw "Unexpected data-fixture verdict: $case"}
+        if($case -in @('roundtrip','peer-roundtrip')) {
             $r=Get-Content $reportFile -Raw|ConvertFrom-Json
             if(-not $r.removed -or -not $r.managementPolicyPreserved -or
-                $fixture.addresses.Count -ne 1 -or $fixture.newCalls -ne 4 -or $fixture.removes -ne 4){
+                $fixture.addresses.Count -ne 1 -or $fixture.newCalls -ne $expectedCount -or $fixture.removes -ne $expectedCount){
                 throw 'The exact data fixture was not removed without changing management.'
             }
         }elseif(Test-Path $reportFile){throw 'A failed fixture operation published success.'}

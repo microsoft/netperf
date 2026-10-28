@@ -10,6 +10,8 @@ param(
     [string]$ReadyFile,
     [string]$BeginFile,
     [string]$StopFile,
+    [ValidateSet('0.0.0.0','198.19.240.5')][string]$NextHop='0.0.0.0',
+    [string]$ExpectedPeerMac,
     [ValidateRange(100,180000)][int]$MaximumHoldMilliseconds=180000,
     [switch]$RestoreOnly
 )
@@ -38,7 +40,7 @@ function Read-ControlRoute {
 function Remove-ControlRoute {
     $saved=Import-Clixml -LiteralPath $StateFile -ErrorAction Stop
     if($saved.interfaceGuid -ne [string]$adapter[0].InterfaceGuid -or $saved.prefix -ne $prefix -or
-        $saved.nextHop -ne '0.0.0.0' -or $saved.metric -ne 1 -or -not $saved.originalAbsent){
+        $saved.nextHop -ne $NextHop -or $saved.metric -ne 1 -or -not $saved.originalAbsent){
         throw 'The route snapshot does not match the owned control.'
     }
     $current=@(Read-ControlRoute)
@@ -46,7 +48,7 @@ function Remove-ControlRoute {
     if($current.Count) {
         if($current[0].InterfaceIndex -ne $adapter[0].ifIndex -or $current[0].NextHop -ne $saved.nextHop -or
             $current[0].RouteMetric -ne $saved.metric){throw 'The control route changed ownership; refusing removal.'}
-        Remove-NetRoute -InterfaceIndex $adapter[0].ifIndex -DestinationPrefix $prefix -NextHop '0.0.0.0' `
+        Remove-NetRoute -InterfaceIndex $adapter[0].ifIndex -DestinationPrefix $prefix -NextHop $NextHop `
             -PolicyStore ActiveStore -Confirm:$false -ErrorAction Stop
     }
     if(@(Read-ControlRoute).Count -or
@@ -71,11 +73,23 @@ if($connected.Count -ne 1 -or $network.Count -ne 1 -or [string]$network[0].Dhcp 
     (@(Read-Defaults) -join '|') -ne (@($data.originalDefaultKeys) -join '|')){
     throw 'Owned data-prefix and unchanged static management policy must verify before route refresh.'
 }
-@{interfaceGuid=[string]$adapter[0].InterfaceGuid;prefix=$prefix;nextHop='0.0.0.0';metric=1;originalAbsent=$true}|
+$peerVerified=$false
+if($NextHop -ne '0.0.0.0') {
+    if([string]::IsNullOrWhiteSpace($ExpectedPeerMac)){throw 'An owned logical gateway requires the verified peer MAC.'}
+    $neighbor=@(Get-NetNeighbor -InterfaceAlias $InterfaceAlias -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|
+        Where-Object IPAddress -eq $NextHop)
+    if($neighbor.Count -ne 1 -or $neighbor[0].LinkLayerAddress -ne $ExpectedPeerMac){
+        throw 'The logical gateway does not match the verified owned peer MAC.'
+    }
+    $peerVerified=$true
+}
+@{interfaceGuid=[string]$adapter[0].InterfaceGuid;prefix=$prefix;nextHop=$NextHop;metric=1;originalAbsent=$true}|
     Export-Clixml -LiteralPath $StateFile -NoClobber
 $changed=$false;$failure=$null;$restoreFailure=$null
 $report=[ordered]@{schema=1;scenario='equivalent-owned-host-route-control';added=$false;removed=$false
-    sameInterfaceAndNextHop=$true;defaultRoutesPreserved=$false;routeAdditions=0;scope='owned-benchmark-peer-only'}
+    sameInterfaceAndNextHop=($NextHop -eq '0.0.0.0');sameInterface=$true;peerMacVerified=$peerVerified
+    nextHopKind=$(if($NextHop -eq '0.0.0.0'){'onlink'}else{'owned-peer-gateway'})
+    defaultRoutesPreserved=$false;routeAdditions=0;scope='owned-benchmark-peer-only'}
 try {
     [IO.File]::WriteAllText($ReadyFile,'ready')
     $wait=[Diagnostics.Stopwatch]::StartNew()
@@ -87,11 +101,11 @@ try {
     if(Test-Path -LiteralPath $StopFile){throw 'The workload stopped before the owned route addition.'}
     $report.applyStartUtc=[DateTime]::UtcNow.ToString('o')
     $changed=$true
-    $null=New-NetRoute -InterfaceIndex $adapter[0].ifIndex -DestinationPrefix $prefix -NextHop '0.0.0.0' `
+    $null=New-NetRoute -InterfaceIndex $adapter[0].ifIndex -DestinationPrefix $prefix -NextHop $NextHop `
         -RouteMetric 1 -PolicyStore ActiveStore -ErrorAction Stop
     $current=@(Read-ControlRoute)
     if($current.Count -ne 1 -or $current[0].InterfaceIndex -ne $adapter[0].ifIndex -or
-        $current[0].NextHop -ne '0.0.0.0' -or $current[0].RouteMetric -ne 1){throw 'The owned route addition did not verify.'}
+        $current[0].NextHop -ne $NextHop -or $current[0].RouteMetric -ne 1){throw 'The owned route addition did not verify.'}
     $report.added=$true;$report.routeAdditions=1;$report.addedUtc=[DateTime]::UtcNow.ToString('o')
     $hold=[Diagnostics.Stopwatch]::StartNew()
     while(-not(Test-Path -LiteralPath $StopFile) -and $hold.Elapsed.TotalMilliseconds -lt $MaximumHoldMilliseconds){

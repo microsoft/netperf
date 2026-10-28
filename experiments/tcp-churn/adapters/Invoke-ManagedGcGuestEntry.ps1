@@ -14,7 +14,8 @@ param(
     [int]$RecoveryMilliseconds=8000,
     [ValidateSet('client','server')][string]$GcProcessRole='client',
     [ValidateSet('arrays','graph')][string]$HeapLayout='arrays',
-    [switch]$RouteRefresh
+    [switch]$RouteRefresh,
+    [ValidateSet('onlink','peer-gateway')][string]$RouteVariant='onlink'
 )
 $ErrorActionPreference='Stop'
 if($PublishDirectory -ne (Join-Path $ScratchParent 'publish')) {

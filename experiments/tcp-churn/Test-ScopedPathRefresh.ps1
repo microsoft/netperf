@@ -13,7 +13,7 @@ $beginFile=Join-Path $directory 'begin'
 $stopFile=Join-Path $directory 'stop'
 $checks=0
 try {
-    foreach($case in @('cycle','already-absent','bad-data','host-conflict','changed-route','add-failure','remove-failure','default-drift')) {
+    foreach($case in @('cycle','gateway-cycle','mac-mismatch','already-absent','bad-data','host-conflict','changed-route','add-failure','remove-failure','default-drift')) {
         $data=@{interfaceGuid='test-interface';originalDhcpDisabled=$true;addresses=@('198.19.240.1')
             originalDefaultKeys=@('5/192.0.2.254/10')}
         if($case -eq 'bad-data'){$data.interfaceGuid='unowned-interface'}
@@ -23,6 +23,7 @@ try {
         $fixture.routes.Add([pscustomobject]@{DestinationPrefix='0.0.0.0/0';NextHop='192.0.2.254';RouteMetric=10;InterfaceIndex=5})
         $fixture.routes.Add([pscustomobject]@{DestinationPrefix='198.19.240.0/29';NextHop='0.0.0.0';RouteMetric=256;InterfaceIndex=5})
         $restore=$case -in @('already-absent','changed-route','default-drift')
+        $plannedHop=if($case -in @('gateway-cycle','mac-mismatch')){'198.19.240.5'}else{'0.0.0.0'}
         if($restore) {
             @{interfaceGuid='test-interface';prefix='198.19.240.6/32';nextHop='0.0.0.0';metric=1;originalAbsent=$true}|
                 Export-Clixml -LiteralPath $stateFile
@@ -48,6 +49,11 @@ try {
                     [CmdletBinding()]param($InterfaceIndex,$AddressFamily,$PolicyStore)
                     [pscustomobject]@{IPAddress='198.19.240.1';PrefixLength=29;SkipAsSource=$true}
                 }
+                function Get-NetNeighbor {
+                    [CmdletBinding()]param($InterfaceAlias,$AddressFamily,$PolicyStore)
+                    $mac=if($case -eq 'mac-mismatch'){'02-00-00-00-00-03'}else{'02-00-00-00-00-02'}
+                    [pscustomobject]@{IPAddress='198.19.240.5';LinkLayerAddress=$mac}
+                }
                 function Get-NetRoute {
                     [CmdletBinding()]param($AddressFamily,$PolicyStore)
                     $fixture.routes
@@ -55,7 +61,7 @@ try {
                 function New-NetRoute {
                     [CmdletBinding()]param($InterfaceIndex,$DestinationPrefix,$NextHop,$RouteMetric,$PolicyStore)
                     if($InterfaceIndex -ne 5 -or $DestinationPrefix -ne '198.19.240.6/32' -or
-                        $NextHop -ne '0.0.0.0' -or $RouteMetric -ne 1 -or $PolicyStore -ne 'ActiveStore'){
+                        $NextHop -ne $plannedHop -or $RouteMetric -ne 1 -or $PolicyStore -ne 'ActiveStore'){
                         throw 'An unowned route addition was attempted.'
                     }
                     $fixture.adds++
@@ -66,18 +72,20 @@ try {
                     [CmdletBinding(SupportsShouldProcess=$true)]
                     param($InterfaceIndex,$DestinationPrefix,$NextHop,$PolicyStore)
                     if($InterfaceIndex -ne 5 -or $DestinationPrefix -ne '198.19.240.6/32' -or
-                        $NextHop -ne '0.0.0.0' -or $PolicyStore -ne 'ActiveStore'){throw 'An unowned route removal was attempted.'}
+                        $NextHop -ne $plannedHop -or $PolicyStore -ne 'ActiveStore'){throw 'An unowned route removal was attempted.'}
                     $fixture.removes++
                     if($fixture.failRemove){throw 'Mock route removal failed.'}
                     foreach($entry in @($fixture.routes|Where-Object DestinationPrefix -eq $DestinationPrefix)){$null=$fixture.routes.Remove($entry)}
                 }
                 $extra=if($restore){@{RestoreOnly=$true}}else{@{ReadyFile=$readyFile;BeginFile=$beginFile;StopFile=$stopFile;MaximumHoldMilliseconds=100}}
-                & $program -InterfaceAlias 'test-only-interface' -DataStateFile $dataFile -StateFile $stateFile -ReportFile $reportFile @extra
+                & $program -InterfaceAlias 'test-only-interface' -DataStateFile $dataFile -StateFile $stateFile `
+                    -ReportFile $reportFile -NextHop $plannedHop -ExpectedPeerMac '02-00-00-00-00-02' @extra
             }
         }catch {
             $pattern=switch($case) {
                 bad-data {'verified owned client data fixture'}
                 host-conflict {'existing host route conflicts'}
+                mac-mismatch {'verified owned peer MAC'}
                 changed-route {'changed ownership'}
                 default-drift {'unchanged default routing'}
                 add-failure {'control or restoration failed'}
@@ -87,15 +95,18 @@ try {
             if($_.Exception.Message -notmatch $pattern){throw}
             $failed=$true
         }
-        if($failed -ne ($case -notin @('cycle','already-absent'))){throw "Unexpected route-control verdict: $case"}
-        if($case -eq 'cycle') {
+        if($failed -ne ($case -notin @('cycle','gateway-cycle','already-absent'))){throw "Unexpected route-control verdict: $case"}
+        if($case -in @('cycle','gateway-cycle')) {
             $r=Get-Content $reportFile -Raw|ConvertFrom-Json
             if($r.outcome -ne 'completed' -or -not $r.added -or -not $r.removed -or -not $r.defaultRoutesPreserved -or
                 $fixture.adds -ne 1 -or $fixture.removes -ne 1 -or $fixture.routes.Count -ne 2){
                 throw 'The one-route control did not preserve original routing.'
             }
+            if($case -eq 'gateway-cycle' -and (-not $r.peerMacVerified -or $r.sameInterfaceAndNextHop -or $r.nextHopKind -ne 'owned-peer-gateway')){
+                throw 'The owned logical-gateway control was not distinctly verified.'
+            }
         }
-        if($case -in @('bad-data','host-conflict','changed-route') -and ($fixture.adds -or $fixture.removes)){
+        if($case -in @('bad-data','host-conflict','changed-route','mac-mismatch') -and ($fixture.adds -or $fixture.removes)){
             throw 'Rejected ownership or route conflict mutated state.'
         }
         if($case -eq 'remove-failure') {

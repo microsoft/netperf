@@ -15,7 +15,8 @@ param(
     [ValidateRange(100,8000)][int]$RecoveryMilliseconds=8000,
     [ValidateSet('client','server')][string]$GcProcessRole='client',
     [ValidateSet('arrays','graph')][string]$HeapLayout='arrays',
-    [switch]$RouteRefresh
+    [switch]$RouteRefresh,
+    [ValidateSet('onlink','peer-gateway')][string]$RouteVariant='onlink'
 )
 $ErrorActionPreference='Stop'
 if($GcProcessRole -eq 'server' -and (-not $IsolatedData -or $PeerRecovery)){
@@ -24,6 +25,7 @@ if($GcProcessRole -eq 'server' -and (-not $IsolatedData -or $PeerRecovery)){
 if($RouteRefresh -and ($GcProcessRole -ne 'server' -or -not $IsolatedData -or $PeerRecovery)){
     throw 'Route refresh requires isolated receiver-GC mode without a neighbor pulse.'
 }
+if($RouteVariant -ne 'onlink' -and -not $RouteRefresh){throw 'Logical gateway selection requires the owned route-refresh control.'}
 $sourceRoot=Split-Path $PSScriptRoot
 $diagnostics=Join-Path $ScratchParent 'managed-gc-diagnostics'
 $publishOwned=$false
@@ -31,6 +33,7 @@ $peer=$null;$peerOwned=$false;$profileOwned=$false
 $client=$null;$localServer=$null;$tcpProbe=$null;$clrProbe=$null
 $neighborPulse=$null;$neighborArguments=@();$pulseResult=$null;$ownedCounts=$null;$peerDhcpEnabled=$null;$clientFailure=$null
 $localDataStarted=$false;$remoteDataStarted=$false
+$peerAddressPlan=if($RouteVariant -eq 'peer-gateway'){'198.19.240.5,198.19.240.6'}else{'198.19.240.6'}
 $receiverState=$null;$receiverEvidence=$null
 $routeAgent=$null;$routeArguments=@();$routeReport=$null
 $failure=$null;$cleanupErrors=[Collections.Generic.List[Exception]]::new()
@@ -120,27 +123,33 @@ try {
         $remoteDataStarted=$true
         $phase='prepare-peer-data'
         Invoke-Command -Session $peer -ScriptBlock {
-            param($root,$alias)
+            param($root,$alias,$addresses)
             & (Join-Path $root 'Set-ScopedDataAddresses.ps1') -Action add -InterfaceAlias $alias `
-                -Addresses '198.19.240.6' -StateFile (Join-Path $root 'data-original.clixml') `
+                -Addresses $addresses -StateFile (Join-Path $root 'data-original.clixml') `
                 -ReportFile (Join-Path $root 'data-prepare.json')
-        } -ArgumentList $remote,$peerData.alias
+        } -ArgumentList $remote,$peerData.alias,$peerAddressPlan
         $clientAddress='198.19.240.1';$peerAddress='198.19.240.6'
         $clientSources=@($cohortSources.Split(','))+@('127.0.0.1','127.0.0.1','127.0.0.1','127.0.0.1')
         $clientTargets=@($peerAddress,$peerAddress,$peerAddress,$peerAddress,'127.0.0.2','127.0.0.2','127.0.0.2','127.0.0.2')
         $phase='resolve-data-neighbor'
+        $neighborTargets=@($peerAddress)
+        if($RouteVariant -eq 'peer-gateway'){$neighborTargets+='198.19.240.5'}
+        $neighborNumber=0
+        foreach($neighborTarget in $neighborTargets) {
         try {
             $null=Invoke-TcpChurnTool -Program "$env:SystemRoot\System32\ping.exe" `
-                -Arguments @('-n','1','-w','500','-S',$clientAddress,$peerAddress) -Directory $diagnostics `
-                -LogPrefix (Join-Path $diagnostics 'data-neighbor-resolution') -TimeoutSeconds 10
+                -Arguments @('-n','1','-w','500','-S',$clientAddress,$neighborTarget) -Directory $diagnostics `
+                -LogPrefix (Join-Path $diagnostics "data-neighbor-resolution-$neighborNumber") -TimeoutSeconds 10
         }catch [InvalidOperationException] {
             if($_.Exception.Data['ToolExitCode'] -ne 1){throw}
             Write-Verbose 'ICMP echo did not complete; independently verified owned-neighbor resolution is still required.'
         }
         $learned=@(Get-NetNeighbor -InterfaceAlias $alias -AddressFamily IPv4 -PolicyStore ActiveStore|
-            Where-Object IPAddress -eq $peerAddress)
+            Where-Object IPAddress -eq $neighborTarget)
         if($learned.Count -ne 1 -or $learned[0].LinkLayerAddress -ne $peerMac){
             throw 'The isolated data peer did not resolve to its verified owned MAC.'
+        }
+        $neighborNumber++
         }
     }
     $phase='compile-client'
@@ -227,7 +236,8 @@ try {
         $routeProgram=(Get-Command pwsh -CommandType Application -ErrorAction Stop).Source
         $routeArguments=@('-NoProfile','-NonInteractive','-File',(Join-Path $PSScriptRoot 'Invoke-ScopedPathRefresh.ps1'),
             '-InterfaceAlias',$alias,'-DataStateFile',(Join-Path $diagnostics 'data-original.clixml'),
-            '-StateFile',(Join-Path $diagnostics 'route-control-original.clixml'))
+            '-StateFile',(Join-Path $diagnostics 'route-control-original.clixml'),
+            '-NextHop',$(if($RouteVariant -eq 'peer-gateway'){'198.19.240.5'}else{'0.0.0.0'}),'-ExpectedPeerMac',$peerMac)
         $routeAgent=Start-TcpChurnCollector -Program $routeProgram -Arguments ($routeArguments+@(
             '-ReportFile',(Join-Path $diagnostics 'route-control.json'),'-ReadyFile',(Join-Path $diagnostics 'route-control.ready'),
             '-BeginFile',($localOutput+'.gc.json.begin'),'-StopFile',(Join-Path $diagnostics 'route-control.stop')
@@ -411,13 +421,13 @@ finally {
     }
     if($remoteDataStarted -and $null -ne $peer) {
         try {Invoke-Command -Session $peer -ScriptBlock {
-            param($root,$alias)
+            param($root,$alias,$addresses)
             if(Test-Path -LiteralPath (Join-Path $root 'data-original.clixml')) {
                 & (Join-Path $root 'Set-ScopedDataAddresses.ps1') -Action remove -InterfaceAlias $alias `
-                    -Addresses '198.19.240.6' -StateFile (Join-Path $root 'data-original.clixml') `
+                    -Addresses $addresses -StateFile (Join-Path $root 'data-original.clixml') `
                     -ReportFile (Join-Path $root 'data-restored.json')
             }
-        } -ArgumentList $remote,$peerData.alias}catch{$cleanupErrors.Add($_.Exception)}
+        } -ArgumentList $remote,$peerData.alias,$peerAddressPlan}catch{$cleanupErrors.Add($_.Exception)}
     }
     if($localDataStarted -and (Test-Path -LiteralPath (Join-Path $diagnostics 'data-original.clixml'))) {
         try {
@@ -498,7 +508,9 @@ try {
         $phase='verify-route-control'
         $routeReport=Get-Content (Join-Path $diagnostics 'route-control.json') -Raw|ConvertFrom-Json
         if($routeReport.outcome -ne 'completed' -or -not $routeReport.added -or -not $routeReport.removed -or
-            -not $routeReport.sameInterfaceAndNextHop -or -not $routeReport.defaultRoutesPreserved -or
+            -not $routeReport.sameInterface -or -not $routeReport.defaultRoutesPreserved -or
+            ($RouteVariant -eq 'onlink' -and -not $routeReport.sameInterfaceAndNextHop) -or
+            ($RouteVariant -eq 'peer-gateway' -and (-not $routeReport.peerMacVerified -or $routeReport.nextHopKind -ne 'owned-peer-gateway')) -or
             ([datetime]$routeReport.addedUtc).ToUniversalTime() -lt ([datetime]$start).ToUniversalTime() -or
             ([datetime]$routeReport.addedUtc).ToUniversalTime() -gt ([datetime]$end).ToUniversalTime()){
             throw 'The owned route control did not apply within the workload and restore unchanged default routing.'

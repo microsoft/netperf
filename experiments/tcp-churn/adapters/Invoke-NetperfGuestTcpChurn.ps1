@@ -20,7 +20,8 @@ param(
     [ValidateRange(100,8000)][int]$ManagedGcRecoveryMilliseconds=8000,
     [ValidateSet('client','server')][string]$ManagedGcProcessRole='client',
     [ValidateSet('arrays','graph')][string]$ManagedGcHeapLayout='arrays',
-    [switch]$ManagedGcRouteRefresh
+    [switch]$ManagedGcRouteRefresh,
+    [ValidateSet('onlink','peer-gateway')][string]$ManagedGcRouteVariant='onlink'
 )
 $ErrorActionPreference='Stop'
 if($ManagedGc -and (-not $ProfileCpu -or $SynDrop -or $ProbePeer -or $PeerMeasurement)){
@@ -39,6 +40,7 @@ if($ManagedGcHeapLayout -ne 'arrays' -and -not $ManagedGc){throw 'GC heap layout
 if($ManagedGcRouteRefresh -and (-not $ManagedGc -or $ManagedGcProcessRole -ne 'server' -or -not $ManagedGcIsolatedData -or $ManagedGcPeerRecovery)){
     throw 'Route refresh requires isolated receiver-GC mode without a neighbor pulse.'
 }
+if($ManagedGcRouteVariant -ne 'onlink' -and -not $ManagedGcRouteRefresh){throw 'Logical gateway selection requires the owned route-refresh control.'}
 if($PSBoundParameters.ContainsKey('ManagedGcRecoveryMilliseconds') -and -not $ManagedGcPeerRecovery){
     throw 'Recovery duration selection requires managed-GC peer recovery.'
 }
@@ -121,7 +123,7 @@ try {
     }
     $phase='guest-traffic'
     $exit=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
-        param($root,$seconds,$connections,$profile,$synDrop,$peerMeasurement,$managedGc,$managedGcPayloadBytes,$peerRecovery,$isolatedData,$recoveryMilliseconds,$gcProcessRole,$heapLayout,$routeRefresh,$credential)
+        param($root,$seconds,$connections,$profile,$synDrop,$peerMeasurement,$managedGc,$managedGcPayloadBytes,$peerRecovery,$isolatedData,$recoveryMilliseconds,$gcProcessRole,$heapLayout,$routeRefresh,$routeVariant,$credential)
         if (@(Get-Process -Name 'Runner.Worker','ctsTraffic' -ErrorAction Ignore).Count) {
             throw 'Guest became busy before traffic setup.'
         }
@@ -142,6 +144,7 @@ try {
             if($managedGc){$extra+=@('-GcProcessRole',$gcProcessRole)}
             if($managedGc){$extra+=@('-HeapLayout',$heapLayout)}
             if($routeRefresh){$extra+='-RouteRefresh'}
+            if($routeRefresh){$extra+=@('-RouteVariant',$routeVariant)}
         } else {
             $extra=@('-DedicatedLab')
             if ($profile) { $extra+=@('-ProfileCpu','-AnalyzerDirectory',(Join-Path $root 'analyzer')) }
@@ -163,7 +166,7 @@ try {
             $launch|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $root 'child-startup.json')
             if($credentialFile -and (Test-Path -LiteralPath $credentialFile)){Remove-Item -LiteralPath $credentialFile -ErrorAction Stop}
         }
-    } -ArgumentList $guestRoot,$Seconds,$Connections,([bool]$ProfileCpu),([bool]$SynDrop),([bool]$PeerMeasurement),([bool]$ManagedGc),$ManagedGcPayloadBytes,([bool]$ManagedGcPeerRecovery),([bool]$ManagedGcIsolatedData),$ManagedGcRecoveryMilliseconds,$ManagedGcProcessRole,$ManagedGcHeapLayout,([bool]$ManagedGcRouteRefresh),$Credential
+    } -ArgumentList $guestRoot,$Seconds,$Connections,([bool]$ProfileCpu),([bool]$SynDrop),([bool]$PeerMeasurement),([bool]$ManagedGc),$ManagedGcPayloadBytes,([bool]$ManagedGcPeerRecovery),([bool]$ManagedGcIsolatedData),$ManagedGcRecoveryMilliseconds,$ManagedGcProcessRole,$ManagedGcHeapLayout,([bool]$ManagedGcRouteRefresh),$ManagedGcRouteVariant,$Credential
     $startup=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
         param($root)
         Get-Content -LiteralPath (Join-Path $root 'child-startup.json') -Raw|ConvertFrom-Json|
