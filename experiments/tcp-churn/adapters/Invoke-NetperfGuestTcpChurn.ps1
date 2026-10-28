@@ -66,6 +66,23 @@ try {
         $peerResult=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
             param($credential)
             if (@(Get-Process -Name 'Runner.Worker','ctsTraffic','ArrivalTcp','CpuSamples' -ErrorAction Ignore).Count) { throw 'Client guest is busy.' }
+            $probePrefix=Join-Path $env:TEMP ('netperf-wpr-status-'+[guid]::NewGuid().ToString('N'))
+            $probeOut=$probePrefix+'.out';$probeErr=$probePrefix+'.err'
+            try{
+                $query=Start-Process -FilePath "$env:SystemRoot\System32\wpr.exe" -ArgumentList '-status' `
+                    -RedirectStandardOutput $probeOut -RedirectStandardError $probeErr -PassThru -NoNewWindow
+                if(-not $query.WaitForExit(15000)){
+                    $query.Kill()
+                    throw 'The read-only WPR status query exceeded its deadline.'
+                }
+                $query.WaitForExit()
+                $wprExit=$query.ExitCode
+                $status=(Get-Content -LiteralPath $probeOut -Raw)+(Get-Content -LiteralPath $probeErr -Raw)
+                $wprNotRunning=$status -match '(?i)recording is not running'
+                $wprCpu=$status -match '(?im)^\s*CPU(?:\.|\s*$)'
+            }finally{
+                foreach($file in @($probeOut,$probeErr)){if(Test-Path -LiteralPath $file){Remove-Item -LiteralPath $file}}
+            }
             $clientAliases=@(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop|Where-Object{$_.IPAddress -match '^198\.19\.240\.[1-6]$' -or $_.IPAddress -eq '198.19.0.1'}).Count
             $clientRules=@(Get-NetFirewallRule -PolicyStore ActiveStore -ErrorAction Stop|Where-Object{$_.Name -like 'ManagedGcPeer-*' -or $_.Name -like 'ManagedGcReceiver-*'}).Count
             $clientStatic=@(Get-NetNeighbor -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|
@@ -95,11 +112,14 @@ try {
                     clientOwnedAliases=$clientAliases;peerOwnedAliases=$peerState.aliases;clientOwnedRules=$clientRules;peerOwnedRules=$peerState.rules
                     clientOwnedStaticPeers=$clientStatic;peerOwnedStaticPeers=$peerState.static
                     clientTempFreeMiB=$clientFree;peerTempFreeMiB=$peerState.tempFreeMiB
+                    clientWprStatusExitCode=$wprExit;clientWprRecordingNotRunning=[bool]$wprNotRunning
+                    clientWprCpuProfileReported=[bool]$wprCpu
                     clientOwnedControlRoutes=$clientRoutes;peerOwnedControlRoutes=$peerState.routes;conclusion='connectivity-and-owned-resource-check'}
             } finally { Remove-PSSession $peer -ErrorAction Stop }
         } -ArgumentList $Credential
         $peerResult|Select-Object schema,peerConnected,clientLogicalProcessors,peerLogicalProcessors,clientOwnedAliases,peerOwnedAliases,
             clientOwnedRules,peerOwnedRules,clientOwnedStaticPeers,peerOwnedStaticPeers,clientOwnedControlRoutes,peerOwnedControlRoutes,
+            clientWprStatusExitCode,clientWprRecordingNotRunning,clientWprCpuProfileReported,
             clientTempFreeMiB,peerTempFreeMiB,conclusion|ConvertTo-Json |
             Set-Content -LiteralPath (Join-Path $PublishDirectory 'peer-check.json') -Encoding utf8
         return

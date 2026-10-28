@@ -777,6 +777,9 @@ identified lock.
 The read-only `probe_peer` mode also rejects remaining owned GC processes,
 data aliases, firewall rules or permanent fixture neighbors, and publishes only
 numeric residual counts. It never removes resources or changes guest policy.
+It also reports the read-only WPR status exit code and recognized CPU-profile
+or not-recording flags. Unrecognized status is not evidence that recording is
+idle; the probe never cancels or stops a capture.
 It also reports numeric free-space admission information for the guest temporary
 drives; busy or residual-resource failures retain fixed failure categories rather
 than exporting process names, paths or exception messages.
