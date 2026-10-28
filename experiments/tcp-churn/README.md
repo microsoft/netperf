@@ -780,6 +780,8 @@ numeric residual counts. It never removes resources or changes guest policy.
 It also reports the read-only WPR status exit code and recognized CPU-profile
 or not-recording flags. Unrecognized status is not evidence that recording is
 idle; the probe never cancels or stops a capture.
+The read-only probe also counts exact-probe ETW loggers independently of WPR;
+an idle WPR status does not establish that these separate loggers are absent.
 Failed TCP/CLR collector startup reports a fixed capture stage, exception
 type and numeric error code. Provider discovery, TCP startup and CLR startup
 remain separate adapter phases; private exception messages and raw ETLs are

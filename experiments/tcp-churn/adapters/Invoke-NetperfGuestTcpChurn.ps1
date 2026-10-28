@@ -86,6 +86,9 @@ try {
             }finally{
                 foreach($file in @($probeOut,$probeErr)){if(Test-Path -LiteralPath $file){Remove-Item -LiteralPath $file}}
             }
+            $loggerRows=@(& "$env:SystemRoot\System32\logman.exe" query -ets)
+            if($LASTEXITCODE -ne 0){throw 'The read-only ETW session query failed.'}
+            $exactLoggers=@($loggerRows|Where-Object{$_ -match '^\s*TcpChurnExact-[0-9a-fA-F]{32}\s'}).Count
             $clientAliases=@(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop|Where-Object{$_.IPAddress -match '^198\.19\.240\.[1-6]$' -or $_.IPAddress -eq '198.19.0.1'}).Count
             $clientRules=@(Get-NetFirewallRule -PolicyStore ActiveStore -ErrorAction Stop|Where-Object{$_.Name -like 'ManagedGcPeer-*' -or $_.Name -like 'ManagedGcReceiver-*'}).Count
             $clientStatic=@(Get-NetNeighbor -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|
@@ -117,12 +120,14 @@ try {
                     clientTempFreeMiB=$clientFree;peerTempFreeMiB=$peerState.tempFreeMiB
                     clientWprStatusExitCode=$wprExit;clientWprRecordingNotRunning=[bool]$wprNotRunning
                     clientWprCpuProfileReported=[bool]$wprCpu
+                    clientExactProbeLoggerCount=$exactLoggers
                     clientOwnedControlRoutes=$clientRoutes;peerOwnedControlRoutes=$peerState.routes;conclusion='connectivity-and-owned-resource-check'}
             } finally { Remove-PSSession $peer -ErrorAction Stop }
         } -ArgumentList $Credential
         $peerResult|Select-Object schema,peerConnected,clientLogicalProcessors,peerLogicalProcessors,clientOwnedAliases,peerOwnedAliases,
             clientOwnedRules,peerOwnedRules,clientOwnedStaticPeers,peerOwnedStaticPeers,clientOwnedControlRoutes,peerOwnedControlRoutes,
             clientWprStatusExitCode,clientWprRecordingNotRunning,clientWprCpuProfileReported,
+            clientExactProbeLoggerCount,
             clientTempFreeMiB,peerTempFreeMiB,conclusion|ConvertTo-Json |
             Set-Content -LiteralPath (Join-Path $PublishDirectory 'peer-check.json') -Encoding utf8
         return
