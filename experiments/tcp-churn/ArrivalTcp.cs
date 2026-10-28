@@ -86,6 +86,7 @@ public static class ArrivalTcp
             return "{\"enabled\":"+(Triggered?"true":"false")+",\"heapMiB\":"+heapMiB+",\"heapLayout\":\""+heapLayout+"\""+
                 ",\"configuredReceiveBudgetBytes\":"+receiveBudgetBytes+",\"maximumPostedReadBytes\":"+receiveBudgetBytes+
                 ",\"observedMaximumPostedReadBytes\":"+observedMaximumPostedReadBytes+
+                ",\"requestedListenBacklogHint\":"+(receiveBudgetBytes>0?8192:0)+
                 ",\"launchedAtCollection\":"+launched+",\"startedBeforeCollection\":"+started+
                 ",\"completedBeforeCollection\":"+completed+",\"inFlightBeforeCollection\":"+pending+
                 ",\"gen2CollectionsBefore\":"+before+",\"gen2CollectionsAfter\":"+after+
@@ -157,7 +158,7 @@ public static class ArrivalTcp
             offset+=n;
         }
     }
-    private static async Task Serve(TcpClient socket,int size,byte[] response)
+    private static async Task Serve(Socket socket,int size,byte[] response)
     {
         using(socket) {
             socket.NoDelay=noDelay;
@@ -166,17 +167,18 @@ public static class ArrivalTcp
                 if(socket.ReceiveBufferSize!=receiveBudgetBytes)
                     throw new InvalidOperationException("The accepted socket receive budget did not read back exactly.");
             }
-            var stream=socket.GetStream();
+            using(var stream=new NetworkStream(socket,false)) {
             byte[] data=new byte[size];
             await ReadAll(stream,data).ConfigureAwait(false);
             for(int i=0;i<data.Length;i++)if(data[i]!=(byte)(i%251))throw new IOException("Data mismatch.");
             await stream.WriteAsync(response,0,response.Length).ConfigureAwait(false);
-            socket.Client.Shutdown(SocketShutdown.Send);
+            socket.Shutdown(SocketShutdown.Send);
             if(await stream.ReadAsync(new byte[1],0,1).ConfigureAwait(false)!=0)
                 throw new IOException("Unexpected request data after completion.");
+            }
         }
     }
-    private static async Task ServeTracked(TcpClient socket,int size,byte[] response)
+    private static async Task ServeTracked(Socket socket,int size,byte[] response)
     {
         int active=Interlocked.Increment(ref serverInFlight),prior;
         Interlocked.Increment(ref serverStarted);
@@ -245,7 +247,7 @@ public static class ArrivalTcp
         if(File.Exists(args[6]))throw new IOException("Use a new result file.");
         if(gcHeapMiB>0 && File.Exists(args[6]+".gc.json"))throw new IOException("Use a new GC observation file.");
         if(gcHeapMiB>0 && File.Exists(args[6]+".gc.json.begin"))throw new IOException("Use a new GC pre-call signal file.");
-        TcpListener listener=null;
+        Socket listener=null;
         try {
             byte[] response=new byte[responseSize];
             for(int i=0;i<response.Length;i++)response[i]=(byte)(i%251);
@@ -254,19 +256,21 @@ public static class ArrivalTcp
             var gcObservation=new GcObservation(gcHeapMiB,heapLayout,args[6]+".gc.json");
             Task receiver=null;
             if(role!="client") {
-                listener=new TcpListener(peer,port);
+                listener=new Socket(peer.AddressFamily,SocketType.Stream,ProtocolType.Tcp);
                 if(receiveBudgetBytes>0) {
-                    listener.Server.ReceiveBufferSize=receiveBudgetBytes;
-                    if(listener.Server.ReceiveBufferSize!=receiveBudgetBytes)
+                    listener.ReceiveBufferSize=receiveBudgetBytes;
+                    if(listener.ReceiveBufferSize!=receiveBudgetBytes)
                         throw new InvalidOperationException("The listener receive budget did not read back exactly.");
                 }
-                listener.Start(8192);
+                listener.Bind(new IPEndPoint(peer,port));
+                // Winsock SOMAXCONN_HINT(N) is -N; a positive backlog may be silently capped.
+                listener.Listen(receiveBudgetBytes>0?-8192:8192);
                 receiver=Task.Run(async delegate {
                     var accepted=new List<Task>();
                     using(var serverCapacity=new SemaphoreSlim(concurrency)) {
                     for(int i=0;i<count;i++) {
                         if(gcHeapMiB>0 && role=="server")await serverCapacity.WaitAsync().ConfigureAwait(false);
-                        TcpClient connection=await listener.AcceptTcpClientAsync().ConfigureAwait(false);
+                        Socket connection=await listener.AcceptAsync().ConfigureAwait(false);
                         Interlocked.Increment(ref acceptedCount);
                         if(gcHeapMiB>0 && role=="server") {
                             accepted.Add(Task.Run(async delegate {
@@ -348,7 +352,7 @@ public static class ArrivalTcp
                 ",\"managedGc\":"+gcObservation.Json()+
                 ",\"targets\":["+string.Join(",",targetJson)+"]"+
                 ",\"maximumRequestMilliseconds\":"+(1000.0*maximumLatencyTicks/Stopwatch.Frequency).ToString("R",CultureInfo.InvariantCulture)+"}");
-        } finally {if(listener!=null)listener.Stop();}
+        } finally {if(listener!=null)listener.Dispose();}
     }
     private static void WriteFailure(string[] args,Exception error)
     {

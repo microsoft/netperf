@@ -60,6 +60,9 @@ try {
         $gc.observedMaximumPostedReadBytes -ne $ReceiveBudgetBytes){
         throw 'Receiver socket/read budgets did not verify.'
     }
+    if($gc.requestedListenBacklogHint -ne $(if($ReceiveBudgetBytes){8192}else{0})){
+        throw 'The receiver backlog hint did not verify.'
+    }
     $observed=Get-Content ($serverOutput+'.gc.json') -Raw|ConvertFrom-Json
     if((Get-Content ($serverOutput+'.gc.json.begin') -Raw) -ne 'pre-collection-call' -or
         $observed.heapLayout -ne $HeapLayout -or $observed.collectionEndUtc -ne $gc.collectionEndUtc -or

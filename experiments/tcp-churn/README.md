@@ -738,6 +738,11 @@ barrier, application sleep, neighbor pulse or route mutation is added.
 This option also requires and captures the public zero-window probing
 begin/end events. Whole-machine event counts remain distinct from
 ownership-correlated events and from sampled lock-wait evidence.
+The bounded control uses Winsock `SOMAXCONN_HINT(8192)` for its listener,
+rather than assuming a positive backlog argument requests that queue size.
+The requested hint is recorded; Windows provides no query for the actual
+backlog. This is ordinary accept-queue capacity, not a preconnected/data-release
+barrier. See the [Winsock listen contract](https://learn.microsoft.com/windows/win32/api/winsock2/nf-winsock2-listen).
 
 CPU summaries separately count queued lock-owner waits under path refresh
 and the narrower timer/header-send/path-refresh signature, including a
