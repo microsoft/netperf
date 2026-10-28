@@ -111,7 +111,20 @@ try {
         if(-not $rejected -or (Test-Path $directory)){throw 'Invalid receive-budget mode mutated state or was accepted.'}
         $checks++
     }
-    foreach($file in @('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1','Invoke-NetperfGuestTcpChurn.ps1','Invoke-ScopedNeighborPulse.ps1','Set-ScopedDataAddresses.ps1','GcReceiverTraffic.psm1','Invoke-ScopedPathRefresh.ps1')) {
+    foreach($extra in @(@{ManagedGcCacheRetirePaths=1024},
+        @{ManagedGc=$true;ProfileCpu=$true;ManagedGcCacheRetirePaths=1024})){
+        $rejected=$false
+        try {
+            & (Join-Path $PSScriptRoot 'adapters\Invoke-NetperfGuestTcpChurn.ps1') `
+                -VmName 'unused-test-only' -Credential $credential -PublishDirectory $directory @extra
+        }catch{
+            if($_.Exception.Message -notmatch 'Cache retirement requires isolated receiver-GC'){throw}
+            $rejected=$true
+        }
+        if(-not $rejected -or (Test-Path $directory)){throw 'Invalid cache-retirement mode mutated state or was accepted.'}
+        $checks++
+    }
+    foreach($file in @('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1','Invoke-NetperfGuestTcpChurn.ps1','Invoke-ScopedNeighborPulse.ps1','Set-ScopedDataAddresses.ps1','GcReceiverTraffic.psm1','Invoke-ScopedPathRefresh.ps1','Invoke-ScopedPathRetirement.ps1')) {
         $tokens=$null;$errors=$null
         $parsed=[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot "adapters\$file"),[ref]$tokens,[ref]$errors)
         if($errors.Count){throw ($errors|Out-String)}
@@ -143,9 +156,11 @@ try {
         $ManagedGcRouteRefresh=[switch]::new($true)
         $ManagedGcRouteVariant='peer-gateway'
         $ManagedGcReceiveBudgetBytes=16384
+        $ManagedGcCacheRetirePaths=8192
         & ([scriptblock]::Create($launch[0].Extent.Text))
     }
-    if($actual.Count -ne 17 -or $actual[15] -isnot [int] -or $actual[15] -ne 16384 -or
+    if($actual.Count -ne 18 -or $actual[16] -isnot [int] -or $actual[16] -ne 8192 -or
+        $actual[15] -isnot [int] -or $actual[15] -ne 16384 -or
         $actual[14] -ne 'peer-gateway' -or $actual[13] -isnot [bool] -or -not $actual[13] -or
         $actual[12] -ne 'graph' -or $actual[11] -ne 'client' -or $actual[7] -ne 2048 -or $actual[8] -isnot [bool] -or -not $actual[8] -or
         $actual[9] -isnot [bool] -or -not $actual[9] -or $actual[10] -ne 3000 -or

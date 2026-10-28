@@ -744,6 +744,20 @@ The requested hint is recorded; Windows provides no query for the actual
 backlog. This is ordinary accept-queue capacity, not a preconnected/data-release
 barrier. See the [Winsock listen contract](https://learn.microsoft.com/windows/win32/api/winsock2/nf-winsock2-listen).
 
+The separate `managed_gc_cache_retire_paths=1024|8192|24576` mechanism control
+requires isolated receiver GC and excludes route refresh and neighbor pulses.
+It populates measured idle UDP paths using only the extra source
+`198.19.0.1/17`, sends no UDP payloads, and retires that secondary address after
+the real-GC signal while ordinary TCP continues on `198.19.240.1`.
+It rejects overlapping routes/addresses, measures cached paths both before
+and after closing the fixture sockets, and requires a live TCP cohort before
+retirement. Management/data addresses, static IPv4 policy and default routes
+must remain unchanged. The measured population and actual API timing are
+reported separately from sampled lock waits. This deliberately tests address
+retirement/cache maintenance; it is not evidence that an unobserved application
+pause causes address changes or that this trigger occurred elsewhere.
+No VM CPU settings or host scheduling policies are changed.
+
 CPU summaries separately count queued lock-owner waits under path refresh
 and the narrower timer/header-send/path-refresh signature, including a
 separate count for hypervisor long-spin notification stacks. Acquisition

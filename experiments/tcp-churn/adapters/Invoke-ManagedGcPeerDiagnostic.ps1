@@ -17,7 +17,8 @@ param(
     [ValidateSet('arrays','graph')][string]$HeapLayout='arrays',
     [switch]$RouteRefresh,
     [ValidateSet('onlink','peer-gateway')][string]$RouteVariant='onlink',
-    [ValidateSet(0,16384)][int]$ReceiveBudgetBytes=0
+    [ValidateSet(0,16384)][int]$ReceiveBudgetBytes=0,
+    [ValidateSet(0,1024,8192,24576)][int]$CacheRetirePaths=0
 )
 $ErrorActionPreference='Stop'
 if($GcProcessRole -eq 'server' -and (-not $IsolatedData -or $PeerRecovery)){
@@ -28,6 +29,9 @@ if($RouteRefresh -and ($GcProcessRole -ne 'server' -or -not $IsolatedData -or $P
 }
 if($RouteVariant -ne 'onlink' -and -not $RouteRefresh){throw 'Logical gateway selection requires the owned route-refresh control.'}
 if($ReceiveBudgetBytes -and $GcProcessRole -ne 'server'){throw 'A bounded receive budget requires receiver-GC mode.'}
+if($CacheRetirePaths -and ($GcProcessRole -ne 'server' -or -not $IsolatedData -or $PeerRecovery -or $RouteRefresh)){
+    throw 'Cache retirement requires isolated receiver GC without another fault or route control.'
+}
 $sourceRoot=Split-Path $PSScriptRoot
 $diagnostics=Join-Path $ScratchParent 'managed-gc-diagnostics'
 $publishOwned=$false
@@ -235,18 +239,20 @@ try {
     $start=[DateTime]::UtcNow.ToString('o')
     $phase='managed-gc-traffic'
     $clientOutput=Join-Path $diagnostics 'client.json'
-    if($RouteRefresh) {
+    if($RouteRefresh -or $CacheRetirePaths) {
         $phase='route-control-start'
         $routeProgram=(Get-Command pwsh -CommandType Application -ErrorAction Stop).Source
-        $routeArguments=@('-NoProfile','-NonInteractive','-File',(Join-Path $PSScriptRoot 'Invoke-ScopedPathRefresh.ps1'),
+        $controlScript=if($CacheRetirePaths){'Invoke-ScopedPathRetirement.ps1'}else{'Invoke-ScopedPathRefresh.ps1'}
+        $routeArguments=@('-NoProfile','-NonInteractive','-File',(Join-Path $PSScriptRoot $controlScript),
             '-InterfaceAlias',$alias,'-DataStateFile',(Join-Path $diagnostics 'data-original.clixml'),
-            '-StateFile',(Join-Path $diagnostics 'route-control-original.clixml'),
-            '-NextHop',$(if($RouteVariant -eq 'peer-gateway'){'198.19.240.5'}else{'0.0.0.0'}),'-ExpectedPeerMac',$peerMac)
+            '-StateFile',(Join-Path $diagnostics 'route-control-original.clixml'))
+        if($CacheRetirePaths){$routeArguments+=@('-PathCount',[string]$CacheRetirePaths)}
+        else{$routeArguments+=@('-NextHop',$(if($RouteVariant -eq 'peer-gateway'){'198.19.240.5'}else{'0.0.0.0'}),'-ExpectedPeerMac',$peerMac)}
         $routeAgent=Start-TcpChurnCollector -Program $routeProgram -Arguments ($routeArguments+@(
             '-ReportFile',(Join-Path $diagnostics 'route-control.json'),'-ReadyFile',(Join-Path $diagnostics 'route-control.ready'),
             '-BeginFile',($localOutput+'.gc.json.begin'),'-StopFile',(Join-Path $diagnostics 'route-control.stop')
         )) -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'route-control-agent')
-        Wait-Ready $routeAgent (Join-Path $diagnostics 'route-control.ready')
+        Wait-Ready $routeAgent (Join-Path $diagnostics 'route-control.ready') $(if($CacheRetirePaths){180}else{20})
     }
     if($PeerRecovery) {
         $phase='neighbor-pulse-start'
@@ -485,7 +491,7 @@ if($null -ne $failure -or $cleanupErrors.Count) {
         if($PeerRecovery -and (Test-Path -LiteralPath (Join-Path $diagnostics 'neighbor-pulse.json'))) {
             $pulseResult=Get-Content (Join-Path $diagnostics 'neighbor-pulse.json') -Raw|ConvertFrom-Json
         }
-        if($RouteRefresh -and (Test-Path -LiteralPath (Join-Path $diagnostics 'route-control.json'))){
+        if(($RouteRefresh -or $CacheRetirePaths) -and (Test-Path -LiteralPath (Join-Path $diagnostics 'route-control.json'))){
             $routeReport=Get-Content (Join-Path $diagnostics 'route-control.json') -Raw|ConvertFrom-Json
         }
         $type=if($null -ne $failure){$failure.Exception.GetType().FullName}else{'cleanup-failure'}
@@ -496,7 +502,8 @@ if($null -ne $failure -or $cleanupErrors.Count) {
             cleanupErrorTypes=@($cleanupErrors|ForEach-Object{$_.GetType().FullName})
             peerRecovery=$pulseResult;peerDataInterfaceDhcpEnabled=$peerDhcpEnabled;clientFailure=$clientFailure
             receiverEvidence=$receiverEvidence
-            routeRefreshControl=$routeReport
+            routeRefreshControl=$(if($RouteRefresh){$routeReport}else{$null})
+            cacheRetirementControl=$(if($CacheRetirePaths){$routeReport}else{$null})
             tcpRecovery=$ownedCounts
             rejectedWorkloadCpuTcpVerified=$diagnosticVerified
             diagnosticFailureType=$(if($null -ne $diagnosticFailure){$diagnosticFailure.Exception.GetType().FullName}else{$null})
@@ -508,6 +515,18 @@ if($null -ne $failure -or $cleanupErrors.Count) {
 }
 $phase='public-symbol-analysis'
 try {
+    if($CacheRetirePaths){
+        $phase='verify-cache-retirement'
+        $routeReport=Get-Content (Join-Path $diagnostics 'route-control.json') -Raw|ConvertFrom-Json
+        if($routeReport.outcome -ne 'completed' -or -not $routeReport.retired -or -not $routeReport.restored -or
+            -not $routeReport.dataAndManagementAddressesPreserved -or -not $routeReport.defaultRoutesPreserved -or
+            $routeReport.measuredReleasedPaths -lt $CacheRetirePaths -or $routeReport.establishedAtTrigger -lt 8 -or
+            ([datetime]$routeReport.applyStartUtc).ToUniversalTime() -lt ([datetime]$start).ToUniversalTime() -or
+            ([datetime]$routeReport.applyEndUtc).ToUniversalTime() -gt ([datetime]$end).ToUniversalTime()){
+            throw 'The bounded source-retirement population, live cohort, timing or restoration did not verify.'
+        }
+        $result.cacheRetirementControl=$routeReport
+    }
     if($RouteRefresh) {
         $phase='verify-route-control'
         $routeReport=Get-Content (Join-Path $diagnostics 'route-control.json') -Raw|ConvertFrom-Json

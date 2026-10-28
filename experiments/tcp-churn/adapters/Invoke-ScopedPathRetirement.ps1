@@ -1,0 +1,176 @@
+# Copyright (c) Microsoft Corporation.
+# SPDX-License-Identifier: MIT
+#Requires -Version 7.2
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory)][string]$InterfaceAlias,
+    [Parameter(Mandatory)][string]$DataStateFile,
+    [Parameter(Mandatory)][string]$StateFile,
+    [Parameter(Mandatory)][string]$ReportFile,
+    [ValidateSet(1024,8192,24576)][int]$PathCount=8192,
+    [string]$ReadyFile,[string]$BeginFile,[string]$StopFile,
+    [switch]$RestoreOnly
+)
+$ErrorActionPreference='Stop'
+Set-StrictMode -Version Latest
+if(-not $RestoreOnly -and (!$ReadyFile -or !$BeginFile -or !$StopFile)){
+    throw 'Path retirement requires owned lifecycle files.'
+}
+$source='198.19.0.1';$prefix='198.19.0.0/17'
+$adapter=@(Get-NetAdapter -Name $InterfaceAlias -ErrorAction Stop)
+if($adapter.Count -ne 1){throw 'The owned data adapter must be unique.'}
+$data=Import-Clixml -LiteralPath $DataStateFile -ErrorAction Stop
+if($data.interfaceGuid -ne [string]$adapter[0].InterfaceGuid -or -not $data.originalDhcpDisabled -or
+    '198.19.240.1' -notin @($data.addresses) -or
+    @($data.addresses|Where-Object{$_ -notmatch '^198\.19\.240\.[1-4]$'}).Count){
+    throw 'Path retirement requires owned receiver addresses and unchanged static management policy.'
+}
+function Read-Defaults {
+    @(Get-NetRoute -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|
+        Where-Object DestinationPrefix -eq '0.0.0.0/0'|
+        ForEach-Object{"$($_.InterfaceIndex)/$($_.NextHop)/$($_.RouteMetric)"}|Sort-Object)
+}
+function Read-Addresses {
+    @(Get-NetIPAddress -InterfaceIndex $adapter[0].ifIndex -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|
+        ForEach-Object{"$($_.IPAddress)/$($_.PrefixLength)/$($_.SkipAsSource)"}|Sort-Object)
+}
+function Get-Range([string]$Cidr) {
+    $parts=$Cidr.Split('/');$bits=[int]$parts[1]
+    if($bits -lt 0 -or $bits -gt 32){throw 'Invalid IPv4 prefix.'}
+    $bytes=[Net.IPAddress]::Parse($parts[0]).GetAddressBytes()
+    if($bytes.Length -ne 4){throw 'An IPv4 prefix is required.'}
+    $number=[uint64]$bytes[0]*16777216+[uint64]$bytes[1]*65536+[uint64]$bytes[2]*256+[uint64]$bytes[3]
+    $size=[uint64][Math]::Pow(2,32-$bits);$first=$number-($number%$size)
+    [pscustomobject]@{First=$first;Last=$first+$size-1}
+}
+function Read-OwnedAddress {
+    @(Get-NetIPAddress -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|Where-Object IPAddress -eq $source)
+}
+function Restore-Control {
+    param([switch]$MeasureRetirement)
+    $saved=Import-Clixml -LiteralPath $StateFile -ErrorAction Stop
+    if($saved.interfaceGuid -ne [string]$adapter[0].InterfaceGuid -or $saved.source -ne $source -or
+        $saved.prefix -ne $prefix -or -not $saved.originalAbsent){
+        throw 'The path-retirement snapshot does not match the owned control.'
+    }
+    $current=@(Read-OwnedAddress)
+    if($current.Count -gt 1){throw 'The owned source address is no longer unique.'}
+    if($current.Count) {
+        if($current[0].InterfaceIndex -ne $adapter[0].ifIndex -or $current[0].PrefixLength -ne 17 -or
+            -not $current[0].SkipAsSource){throw 'The retirement address changed ownership; refusing removal.'}
+        if($MeasureRetirement){$report.removeApiStartUtc=[DateTime]::UtcNow.ToString('o')}
+        Remove-NetIPAddress -InterfaceIndex $adapter[0].ifIndex -IPAddress $source -PolicyStore ActiveStore `
+            -Confirm:$false -ErrorAction Stop
+        if($MeasureRetirement){$report.removeApiEndUtc=[DateTime]::UtcNow.ToString('o')}
+    }
+    $routes=@(Get-NetRoute -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|
+        Where-Object DestinationPrefix -eq $prefix)
+    if(@(Read-OwnedAddress).Count -or $routes.Count -or
+        (@(Read-Addresses)-join '|') -ne (@($saved.originalAddresses)-join '|') -or
+        (@(Read-Defaults)-join '|') -ne (@($data.originalDefaultKeys)-join '|')){
+        throw 'Source retirement, original addresses or unchanged default routes did not verify.'
+    }
+    $network=@(Get-NetIPInterface -InterfaceIndex $adapter[0].ifIndex -AddressFamily IPv4 -ErrorAction Stop)
+    if($network.Count -ne 1 -or [string]$network[0].Dhcp -ne 'Disabled'){
+        throw 'The original static IPv4 policy changed during path retirement.'
+    }
+}
+function Read-PathCount {
+    $rows=@(& "$env:SystemRoot\System32\netsh.exe" interface ipv4 show destinationcache "interface=$InterfaceAlias")
+    if($LASTEXITCODE){throw 'Cannot enumerate the owned cached paths.'}
+    @($rows|Where-Object{
+        if($_ -match '^\s*\d+\s+198\.19\.(\d+)\.') {return [int]$Matches[1] -lt 128}
+        return $false
+    }).Count
+}
+if($RestoreOnly){
+    Restore-Control
+    @{schema=1;removed=$true;defaultRoutesPreserved=$true}|ConvertTo-Json|Set-Content -LiteralPath $ReportFile
+    return
+}
+if(Test-Path -LiteralPath $StateFile){throw 'A fresh path-retirement snapshot is required.'}
+$range=Get-Range $prefix
+foreach($route in Get-NetRoute -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop){
+    if($route.DestinationPrefix -eq '0.0.0.0/0'){continue}
+    $other=Get-Range $route.DestinationPrefix
+    if($other.First -le $range.Last -and $other.Last -ge $range.First){
+        throw 'An existing route overlaps the exclusively owned cache-population prefix.'
+    }
+}
+foreach($address in Get-NetIPAddress -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop){
+    $other=Get-Range ($address.IPAddress+'/32')
+    if($other.First -ge $range.First -and $other.First -le $range.Last){
+        throw 'An existing address conflicts with the cache-population prefix.'
+    }
+}
+if((@(Read-Defaults)-join '|') -ne (@($data.originalDefaultKeys)-join '|')){
+    throw 'Default routing changed before path retirement.'
+}
+if((Read-PathCount) -ne 0){throw 'Existing cached paths conflict with the exclusively owned fixture prefix.'}
+@{interfaceGuid=[string]$adapter[0].InterfaceGuid;source=$source;prefix=$prefix
+    originalAbsent=$true;originalAddresses=@(Read-Addresses)}|Export-Clixml -LiteralPath $StateFile -NoClobber
+$sockets=[Collections.Generic.List[Net.Sockets.UdpClient]]::new()
+$failure=$null;$restoreFailure=$null
+$report=[ordered]@{schema=1;scenario='owned-secondary-source-address-retirement';scope='owned-benchmark-state-only'
+    requestedPaths=$PathCount;measuredHeldPaths=0;measuredReleasedPaths=0;payloadsSent=0
+    retired=$false;restored=$false;dataAndManagementAddressesPreserved=$false;defaultRoutesPreserved=$false}
+try {
+    $null=New-NetIPAddress -InterfaceIndex $adapter[0].ifIndex -IPAddress $source -PrefixLength 17 `
+        -SkipAsSource $true -PolicyStore ActiveStore -ErrorAction Stop
+    $wait=[Diagnostics.Stopwatch]::StartNew()
+    while(@(Read-OwnedAddress|Where-Object AddressState -eq 'Preferred').Count -ne 1){
+        if($wait.Elapsed.TotalSeconds -gt 15){throw 'The owned secondary source did not become preferred.'}
+        Start-Sleep -Milliseconds 50
+    }
+    $occupied=[Collections.Generic.HashSet[int]]::new()
+    foreach($endpoint in Get-NetUDPEndpoint -ErrorAction Stop){$null=$occupied.Add([int]$endpoint.LocalPort)}
+    $port=10000
+    for($i=1;$i -le $PathCount;$i++){
+        while($occupied.Contains($port)){$port++}
+        if($port -gt 65535){throw 'The explicit owned UDP-port budget was exhausted.'}
+        $socket=[Net.Sockets.UdpClient]::new([Net.IPEndPoint]::new([Net.IPAddress]::Parse($source),$port))
+        $sockets.Add($socket);$port++
+        $third=31+[int][Math]::Floor($i/256);$fourth=$i%256
+        $socket.Connect([Net.IPAddress]::Parse("198.19.$third.$fourth"),9)
+    }
+    $report.measuredHeldPaths=Read-PathCount
+    if($report.measuredHeldPaths -lt $PathCount){throw 'The requested cached-path population did not verify.'}
+    [IO.File]::WriteAllText($ReadyFile,'ready')
+    $wait.Restart()
+    while(-not(Test-Path -LiteralPath $BeginFile)){
+        if(Test-Path -LiteralPath $StopFile){throw 'Traffic stopped before the retirement control.'}
+        if($wait.Elapsed.TotalSeconds -gt 60){throw 'No real-GC signal reached the bounded retirement control.'}
+        Start-Sleep -Milliseconds 25
+    }
+    foreach($socket in $sockets){$socket.Dispose()}
+    $sockets.Clear()
+    $report.measuredReleasedPaths=Read-PathCount
+    if($report.measuredReleasedPaths -lt $PathCount){throw 'Released cached paths did not persist until retirement.'}
+    $report.establishedAtTrigger=@(Get-NetTCPConnection -State Established -ErrorAction Stop|
+        Where-Object{($_.LocalAddress -eq '198.19.240.1' -or $_.RemoteAddress -eq '198.19.240.1') -and
+            ($_.LocalPort -eq 20300 -or $_.RemotePort -eq 20300)}).Count
+    if($report.establishedAtTrigger -lt 8 -or (Test-Path -LiteralPath $StopFile)){
+        throw 'No verified live TCP cohort remains for the source-retirement control.'
+    }
+    $report.applyStartUtc=[DateTime]::UtcNow.ToString('o')
+    Restore-Control -MeasureRetirement
+    $report.applyEndUtc=[DateTime]::UtcNow.ToString('o')
+    $report.retired=$true
+}catch{$failure=$_}
+finally {
+    foreach($socket in $sockets){$socket.Dispose()}
+    try {
+        Restore-Control
+        $report.restored=$true;$report.dataAndManagementAddressesPreserved=$true;$report.defaultRoutesPreserved=$true
+    }catch{$restoreFailure=$_}
+    $report.outcome=if($null -eq $failure -and $null -eq $restoreFailure){'completed'}else{'failed'}
+    if($null -ne $failure){$report.failureType=$failure.Exception.GetType().FullName}
+    if($null -ne $restoreFailure){$report.restoreFailureType=$restoreFailure.Exception.GetType().FullName}
+    $report|ConvertTo-Json|Set-Content -LiteralPath $ReportFile
+}
+if($null -ne $failure -or $null -ne $restoreFailure){
+    $errors=[Collections.Generic.List[Exception]]::new()
+    if($null -ne $failure){$errors.Add($failure.Exception)}
+    if($null -ne $restoreFailure){$errors.Add($restoreFailure.Exception)}
+    throw [AggregateException]::new('The owned source-retirement control or restoration failed.',$errors)
+}
