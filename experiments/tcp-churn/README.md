@@ -531,6 +531,28 @@ process deadline; invalid configurations fail explicitly. It is a synthetic
 request/reply service workload, not a replay of a specific customer application.
 It does not provision adapters, firewall rules, traces or trust policy.
 
+For two prepared physical machines, select separate roles. Run the server on
+the machine owning the peer address, then run the client on the other machine:
+
+```powershell
+# Server: sources, peer/listen address, port, count, rate, request bytes, output,
+# role, response bytes, seed, client concurrency bound, socket pacing
+C:\PublicTools\ArrivalTcp.exe 192.0.2.21 192.0.2.12 20000 256 128 1024 C:\Runs\new\server.json server 65536 14529 128 nodelay
+
+# Client: same protocol dimensions; its source address must be locally assigned.
+C:\PublicTools\ArrivalTcp.exe 192.0.2.21 192.0.2.12 20000 256 128 1024 C:\Runs\new\client.json client 65536 14529 128 nodelay
+```
+
+The optional arguments default to `local`, one response byte, seed 14529,
+256 maximum in-flight client requests, and `nagle`. Client concurrency is now
+bounded (1-1,024), so offered rate can exceed achieved rate. Each response is
+verified byte-for-byte; the server half-closes first and the client verifies EOF
+before closing. Output includes peak concurrency, seed, launch lag and
+bind/connect/response/EOF timing. Parallel workers should use different seeds
+(for example, `14529 + 7919 * workerIndex`), not identical arrival schedules.
+Server readiness is a listener-owned ready file, not a first-payload barrier;
+`IsListenerReady` checks the listener's process ownership without a probe connection.
+
 The manual lab investigation supplemented CPU sampling with the existing Windows
 Performance Toolkit **SPINLOCK collision events**, rather than assuming that a
 function-entry sample proves contention. Private analysis matched the exact
@@ -573,6 +595,81 @@ necessary before treating it as representative of a remote customer's topology.
 Kernel collision tracing itself adds overhead and is diagnostic evidence, not
 an uninstrumented performance measurement.
 
+### Coherent per-processor CPU measurements
+
+Compile `CpuUtilization.cs` with the same x64 .NET Framework compiler, then run:
+
+```powershell
+C:\PublicTools\CpuUtilization.exe C:\Runs\new\cpu.json C:\Runs\new\cpu.ready C:\Runs\new\cpu.stop 240 1000
+# Wait for cpu.ready, run the workload, and create cpu.stop for owned shutdown.
+# A deadline without the stop file is a failed/incomplete collection.
+```
+
+This uses one group-aware wildcard PDH query per snapshot, not sequential
+per-CPU reads. Collection is bounded to 5-300 seconds and 1,000-10,000 ms
+intervals; 100 ms polling produced invalid idle-CPU statuses and is not supported.
+Warm-up precedes readiness. Invalid counters or topology changes fail explicitly.
+Provider timestamps are retained as opaque values: observed provider clocks
+were not UTC. Each query is instead bracketed by UTC reads, aligned to their
+midpoint, and rejected if its measured bracket exceeds 100 ms.
+
+`CpuUtilization.psm1` integrates interval-average utilization over explicit UTC
+workload bounds. It rejects legacy sequential snapshots, unverified clock
+alignment, overlapping/malformed intervals and less than 90% interval coverage.
+It reports time-weighted busy-CPU equivalents and logical processors at least
+90% busy, plus per-processor averages/peaks. Peaks are counter-interval averages,
+not instantaneous readings. When invoking a native analyzer from PowerShell,
+format UTC bounds explicitly with `ToUniversalTime().ToString('o')`; implicit
+DateTime argument conversion loses timezone/subsecond information.
+
+These are **total CPU** measurements, not attribution to a lock. Earlier local
+reports without the coherent-query/UTC-alignment quality tags are provisional
+and must not be used as evidence of customer-scale CPU saturation.
+
+### Two-physical-host investigation: severity gate still open
+
+Manual SSH measurements now use two dedicated physical 80-logical-processor
+servers, a 200-Gbps hardware link, MTU 1,500 and 40 verified RSS targets per host.
+They are not executions of the GitHub hardware workflow and do not use DuoNIC.
+Host access, isolated benchmark addressing, fault control, private symbols and
+raw traces remain outside this public repository.
+
+Successful native CTS controls transferred 16 GiB over 16,384 connections.
+The LSO-disabled CPU-plus-collision run averaged 23.18 busy CPU equivalents on
+the server and peaked at 43 logical processors at least 90% busy. A CPU-only
+repeat (no collision instrumentation) averaged 18.94 busy CPU equivalents and
+peaked at 60 logical processors at least 90% busy. Exact private analysis of
+that repeat found TCP send/completion lock waits, **not a path-cache hotspot**.
+LSO was restored to its original enabled state after those diagnostics.
+
+Offload settings affect mechanism coverage, but do not universally suppress it:
+the LSO-enabled native control still recorded 7,740 server full-size-ACK events,
+versus 16,384 in the LSO-disabled CPU-only repeat. Provider counts are system-wide,
+not flow-correlated. Do not equate ACK-event counts with actual BH probing or
+lock waiting, or assume a customer's offload configuration.
+
+A subsequent established-flow recovery trial requested a 500 ms stale neighbor
+mapping, changed only the isolated peer's data-plane mapping, then restored
+dynamic resolution. The verified-mapping-to-restoration interval was 662 ms;
+it was not an exact 500 ms physical outage. All 8,192 connections completed
+64 GiB with native expected-connection-byte-count verification, not per-byte
+pattern verification. Server averages were 12.29 busy CPU equivalents, peak
+40.46 busy CPU equivalents and 20 logical processors at least 90% busy.
+There were retransmissions and BH-confirmation events, but zero BH-entry events.
+Exact private CPU attribution found only six candidate-setter frame occurrences
+across both hosts, with no CPU/probe event loss or unresolved TCPIP frames.
+This remains a negative severity result, not a customer reproduction.
+
+A larger eight-second fault restored successfully but produced connection
+resets/deadlines; it is excluded from successful-transfer results. On-link
+traffic also does not exercise route-level DGD failover. More CPU load or more
+retransmissions alone cannot close either mechanism or severity gate.
+
+**Acceptance remains open:** plausible traffic must show the identified
+path-cache lock consuming roughly 30 CPUs, with contemporaneous per-CPU
+measurements and exact stack/instruction or lock-identity attribution. Neither
+generic saturation nor small positive-spin collision counts satisfy that gate.
+
 ```powershell
 ./Test-TcpChurn.ps1
 ./Test-HyperVTopologyProbe.ps1
@@ -582,8 +679,11 @@ an uninstrumented performance measurement.
 ./Test-EstablishedTransfer.ps1
 ./Test-BarrierTcp.ps1
 ./Test-ArrivalTcp.ps1
+./Test-CpuUtilization.ps1
+./Test-CpuCollector.ps1
 ```
 
 Tests use a memory adapter, a bounded owned PowerShell child, mocked Hyper-V
-lifecycle operations and synthetic RSS snapshots. They do not install a driver,
-operate real VMs or pretend to be runtime/performance coverage.
+lifecycle operations, synthetic RSS snapshots, loopback request/reply endpoints
+and a bounded real PDH collector. They do not install a driver, operate real VMs
+or pretend to establish kernel-lock performance coverage.
