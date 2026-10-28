@@ -71,14 +71,17 @@ try {
             try{
                 $query=Start-Process -FilePath "$env:SystemRoot\System32\wpr.exe" -ArgumentList '-status' `
                     -RedirectStandardOutput $probeOut -RedirectStandardError $probeErr -PassThru -NoNewWindow
+                $null=$query.Handle
                 if(-not $query.WaitForExit(15000)){
                     $query.Kill()
                     throw 'The read-only WPR status query exceeded its deadline.'
                 }
                 $query.WaitForExit()
+                $query.Refresh()
                 $wprExit=$query.ExitCode
+                if($null -eq $wprExit){throw 'The read-only WPR query did not return an exit code.'}
                 $status=(Get-Content -LiteralPath $probeOut -Raw)+(Get-Content -LiteralPath $probeErr -Raw)
-                $wprNotRunning=$status -match '(?i)recording is not running'
+                $wprNotRunning=$status -match '(?i)wpr is not recording|recording is not running'
                 $wprCpu=$status -match '(?im)^\s*CPU(?:\.|\s*$)'
             }finally{
                 foreach($file in @($probeOut,$probeErr)){if(Test-Path -LiteralPath $file){Remove-Item -LiteralPath $file}}

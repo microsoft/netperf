@@ -203,6 +203,37 @@ try {
         throw 'Child startup failure was not explicitly and safely reported.'
     }
     $checks++
+    $probeTry=@($guestAst.FindAll({
+        param($node)
+        $node -is [Management.Automation.Language.TryStatementAst] -and
+            @($node.Body.Statements|Where-Object{$_.Extent.Text.StartsWith('$query=Start-Process')}).Count -eq 1
+    },$true))
+    if($probeTry.Count -ne 1){throw 'The actual read-only WPR query must be uniquely identified.'}
+    foreach($recording in @($false,$true)){
+        & {
+            $probeOut=Join-Path $directory 'wpr.out';$probeErr=Join-Path $directory 'wpr.err'
+            $fixture=@{handleRead=$false;recording=$recording}
+            function Start-Process {
+                [CmdletBinding()]
+                param($FilePath,$ArgumentList,$RedirectStandardOutput,$RedirectStandardError,[switch]$PassThru,[switch]$NoNewWindow)
+                if($ArgumentList -ne '-status'){throw 'The probe must not modify recording state.'}
+                [IO.File]::WriteAllText($RedirectStandardOutput,$(if($fixture.recording){"Profiles:`r`n    CPU.Verbose.File"}else{'WPR is not recording'}))
+                [IO.File]::WriteAllText($RedirectStandardError,'')
+                $fake=[pscustomobject]@{}
+                $fake|Add-Member ScriptProperty Handle {$fixture.handleRead=$true;[intptr]1}
+                $fake|Add-Member ScriptProperty ExitCode {if($fixture.handleRead){0}else{$null}}
+                $fake|Add-Member ScriptMethod WaitForExit {param($milliseconds) if($null -ne $milliseconds){$true}}
+                $fake|Add-Member ScriptMethod Refresh {}
+                $fake
+            }
+            . ([scriptblock]::Create($probeTry[0].Extent.Text))
+            if($wprExit -isnot [int] -or $wprExit -ne 0 -or $wprCpu -ne $recording -or $wprNotRunning -eq $recording -or
+                (Test-Path -LiteralPath $probeOut) -or (Test-Path -LiteralPath $probeErr)){
+                throw 'The actual WPR query lost its exit code, misclassified status or leaked temporary files.'
+            }
+        }
+        $checks++
+    }
 } finally {
     if(Test-Path -LiteralPath $directory) {
         $result=Join-Path $directory 'publish\result.json'
