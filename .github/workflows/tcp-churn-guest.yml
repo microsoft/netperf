@@ -32,6 +32,10 @@ on:
         description: Measure over the actual idle netperf peer instead of single-host DuoNIC
         type: boolean
         default: false
+      managed_gc_mixed:
+        description: Run bounded managed-GC/mixed TCP diagnostic on existing idle guests (requires CPU profiling)
+        type: boolean
+        default: false
   push:
     branches: [main, 'user/mtfriesen/tcp-churn-public']
     paths: ['.github/workflows/tcp-churn-guest.yml', 'experiments/tcp-churn/**']
@@ -62,6 +66,8 @@ jobs:
         run: ./experiments/tcp-churn/Test-ArrivalTcp.ps1
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-GcArrivalTcp.ps1
+      - shell: pwsh
+        run: ./experiments/tcp-churn/Test-GcGuestAdapter.ps1
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-CpuUtilization.ps1
       - shell: pwsh
@@ -116,12 +122,13 @@ jobs:
           PEER_MEASUREMENT: ${{ inputs.peer_measurement }}
           PROBE_128_TOPOLOGY: ${{ inputs.probe_128_topology }}
           TOPOLOGY_VCPUS: ${{ inputs.topology_vcpus }}
+          MANAGED_GC_MIXED: ${{ inputs.managed_gc_mixed }}
         run: |
           $publish = Join-Path $env:RUNNER_TEMP "tcp-churn-guest-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           if ($env:PROBE_128_TOPOLOGY -eq 'true') {
             if (Test-Path Env:\GUEST_PASSWORD) { Remove-Item Env:\GUEST_PASSWORD }
             if (Test-Path Env:\GUEST_USER) { Remove-Item Env:\GUEST_USER }
-            if ($env:PROFILE_CPU -eq 'true' -or $env:SYN_DROP -eq 'true' -or $env:PEER_MEASUREMENT -eq 'true' -or $env:PROBE_PEER -eq 'true') {
+            if ($env:PROFILE_CPU -eq 'true' -or $env:SYN_DROP -eq 'true' -or $env:PEER_MEASUREMENT -eq 'true' -or $env:PROBE_PEER -eq 'true' -or $env:MANAGED_GC_MIXED -eq 'true') {
               throw 'Topology probing is separate from traffic and profiling.'
             }
             ./experiments/tcp-churn/adapters/Invoke-HyperVTopologyProbe.ps1 `
@@ -147,6 +154,12 @@ jobs:
             if ($env:PROFILE_CPU -ne 'true') { throw 'Peer measurement requires CPU profiling.' }
             $extra.PeerMeasurement = $true
           }
+          if ($env:MANAGED_GC_MIXED -eq 'true') {
+            if ($env:PROFILE_CPU -ne 'true' -or $env:SYN_DROP -eq 'true' -or $env:PEER_MEASUREMENT -eq 'true' -or $env:PROBE_PEER -eq 'true') {
+              throw 'Managed-GC diagnostics require CPU profiling and are separate from other campaigns.'
+            }
+            $extra.ManagedGc = $true
+          }
           ./experiments/tcp-churn/adapters/Invoke-NetperfGuestTcpChurn.ps1 `
             -VmName netperf-windows-2022-client -Credential $credential `
             -PublishDirectory $publish -Seconds ([int]$env:SECONDS) -Connections ([int]$env:CONNECTIONS) @extra
@@ -159,6 +172,8 @@ jobs:
             ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/result.json
             ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/cpu-idle.json
             ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/cpu-load.json
+            ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/cpu-after-gc.json
+            ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/clr-events.json
             ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/cpu-progress.json
             ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/tcp-state.json
             ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/tcp-events.json

@@ -602,6 +602,23 @@ stopwatch and generation counter establish that the collection actually ran.
 This is an explicitly forced-GC diagnostic, not natural-allocation/customer
 replay or proof of the target lock's CPU severity.
 
+The existing management-guest workflow also accepts
+`profile_cpu=true, managed_gc_mixed=true`. It uses the two **already running,
+idle Windows Server guests**, compiles only these public sources, and adds a
+separate loopback server in the client guest. It does not provision/reset a VM,
+install a driver, alter a feature, or change global networking/offload policy.
+`connections` is the bounded client in-flight limit; 8,192 total requests are
+offered over the nominal `seconds` interval. Heap pressure is bounded to 512 MiB
+and requires sufficient free guest memory.
+
+This mode captures kernel CPU samples, exact TCP probes and CLR GC events.
+It publishes only allowlisted numeric/fixed-label results, public-symbol CPU
+aggregates and owned-client CLR event counts. Raw traces, addresses, credentials
+and process identities stay in guest diagnostics. `cpu-after-gc.json` covers up
+to two seconds after the collection-call envelope; CLR event coverage does not
+by itself establish exact pause correlation. It is labelled virtualized and
+diagnostic, not physical-equivalent or proof of 30 target-lock CPUs.
+
 The manual lab investigation supplemented CPU sampling with the existing Windows
 Performance Toolkit **SPINLOCK collision events**, rather than assuming that a
 function-entry sample proves contention. Private analysis matched the exact
@@ -791,6 +808,7 @@ generic saturation nor small positive-spin collision counts satisfy that gate.
 ./Test-BarrierTcp.ps1
 ./Test-ArrivalTcp.ps1
 ./Test-GcArrivalTcp.ps1
+./Test-GcGuestAdapter.ps1
 ./Test-CpuUtilization.ps1
 ./Test-CpuCollector.ps1
 ```
