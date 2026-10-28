@@ -609,13 +609,17 @@ separate loopback server in the client guest. It does not provision/reset a VM,
 install a driver, alter a feature, or change global networking/offload policy.
 `connections` is the bounded client in-flight limit; 8,192 total requests are
 offered over the nominal `seconds` interval. Heap pressure is bounded to 512 MiB
-and requires sufficient free guest memory.
+and requires sufficient free guest memory. Each request and response is 1 MiB,
+giving 8 GiB per direction in the client accounting, half on the remote path.
+This intentionally increases payload from the initial 64 KiB diagnostic without
+changing offloads, arrival scheduling, GC pressure or the in-flight limit.
 
 This mode captures kernel CPU samples, exact TCP probes and CLR GC events.
 It publishes only allowlisted numeric/fixed-label results, public-symbol CPU
 aggregates and owned-client CLR event counts. Raw traces, addresses, credentials
-and process identities stay in guest diagnostics. `cpu-after-gc.json` covers up
-to two seconds after the collection-call envelope; CLR event coverage does not
+and process identities stay in guest diagnostics. `cpu-after-gc.json` starts at
+the end of the collection-call envelope without discarding the initial catch-up
+milliseconds, and covers up to two seconds; CLR event coverage does not
 by itself establish exact pause correlation. It is labelled virtualized and
 diagnostic, not physical-equivalent or proof of 30 target-lock CPUs.
 Failures report a bounded phase, exception type and numeric error code; child

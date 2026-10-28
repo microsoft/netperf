@@ -18,7 +18,7 @@ $peer=$null;$peerOwned=$false;$profileOwned=$false
 $client=$null;$localServer=$null;$tcpProbe=$null;$clrProbe=$null
 $failure=$null;$cleanupErrors=[Collections.Generic.List[Exception]]::new()
 $phase='preflight';$start=$null;$end=$null;$result=$null
-$port=20300;$count=8192;$heapMiB=512
+$port=20300;$count=8192;$heapMiB=512;$payloadBytes=1MB
 $rate=[int][Math]::Ceiling($count/[double]$Seconds)
 $analyzer=Join-Path $AnalyzerDirectory 'CpuSamples.exe'
 $exe=Join-Path $diagnostics 'ArrivalTcp.exe'
@@ -74,7 +74,7 @@ try {
     $peerOwned=$true
     $phase='start-remote-peer'
     Invoke-Command -Session $peer -ScriptBlock {
-        param($root,$listen,$client,$port,$count,$rate)
+        param($root,$listen,$client,$port,$count,$rate,$payloadBytes)
         if(@(Get-NetIPAddress -AddressFamily IPv4|Where-Object IPAddress -eq $listen).Count -ne 1){throw 'The peer does not uniquely own the declared listen address.'}
         Import-Module (Join-Path $root 'WindowsCts.psm1') -Force
         $global:OwnedManagedGcPeer=@{Process=$null;Rule=$null;Root=$root}
@@ -89,18 +89,18 @@ try {
         $global:OwnedManagedGcPeer.Rule=$rule
         $output=Join-Path $root 'server.json'
         $global:OwnedManagedGcPeer.Process=Start-TcpChurnCollector -Program $exe -Arguments @(
-            $client,$listen,[string]$port,[string]$count,[string]$rate,'65536',$output,'server','65536','14529','256','nodelay'
+            $client,$listen,[string]$port,[string]$count,[string]$rate,[string]$payloadBytes,$output,'server',[string]$payloadBytes,'14529','256','nodelay'
         ) -Directory $root -LogPrefix (Join-Path $root 'server')
         $clock=[Diagnostics.Stopwatch]::StartNew()
         while(-not(Test-Path -LiteralPath ($output+'.ready'))) {
             if($global:OwnedManagedGcPeer.Process.Process.HasExited -or $clock.Elapsed.TotalSeconds -gt 20){throw 'Peer listener did not become ready.'}
             Start-Sleep -Milliseconds 50
         }
-    } -ArgumentList $remote,$peerAddress,$clientAddress,$port,($count/2),$rate
+    } -ArgumentList $remote,$peerAddress,$clientAddress,$port,($count/2),$rate,$payloadBytes
     $localOutput=Join-Path $diagnostics 'loopback.json'
     $phase='start-loopback-peer'
     $localServer=Start-TcpChurnCollector -Program $exe -Arguments @(
-        '127.0.0.1','127.0.0.2',[string]$port,[string]($count/2),[string]$rate,'65536',$localOutput,'server','65536','14529','256','nodelay'
+        '127.0.0.1','127.0.0.2',[string]$port,[string]($count/2),[string]$rate,[string]$payloadBytes,$localOutput,'server',[string]$payloadBytes,'14529','256','nodelay'
     ) -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'loopback')
     Wait-Ready $localServer ($localOutput+'.ready')
     $phase='trace-start'
@@ -132,8 +132,8 @@ try {
     $phase='managed-gc-traffic'
     $clientOutput=Join-Path $diagnostics 'client.json'
     $client=Start-TcpChurnCollector -Program $exe -Arguments @(
-        "$clientAddress,127.0.0.1","$peerAddress,127.0.0.2",[string]$port,[string]$count,[string]$rate,'65536',
-        $clientOutput,'client','65536','14529',[string]$Connections,'nodelay',"gc:${heapMiB}:2048"
+        "$clientAddress,127.0.0.1","$peerAddress,127.0.0.2",[string]$port,[string]$count,[string]$rate,[string]$payloadBytes,
+        $clientOutput,'client',[string]$payloadBytes,'14529',[string]$Connections,'nodelay',"gc:${heapMiB}:2048"
     ) -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'client')
     $clientPid=$client.Process.Id
     if(-not $client.Process.WaitForExit(180000) -or $client.Process.ExitCode -ne 0){throw 'The GC client did not complete successfully.'}
@@ -162,7 +162,8 @@ try {
     if($after.SentBytes-$before.SentBytes -lt $r.targets[0].requestBytes -or
         $after.ReceivedBytes-$before.ReceivedBytes -lt $r.targets[0].responseBytes){throw 'The non-loopback NIC did not account for the remote payload.'}
     $result=[ordered]@{schema=1;workload='managed-gc-mixed';outcome='collected';connections=$r.connections
-        bytesSent=$r.bytesSent;bytesReceived=$r.bytesReceived;targets=$r.targets;managedGc=$r.managedGc
+        bytesSent=$r.bytesSent;bytesReceived=$r.bytesReceived;payloadBytesPerDirection=$payloadBytes
+        targets=$r.targets;managedGc=$r.managedGc
         arrivalRate=$r.arrivalRate;maxLaunchLagMilliseconds=$r.maxLaunchLagMilliseconds
         cpuCoverage='sampled-etw-only';executionTopology='two-existing-guests-plus-client-loopback'
         targetSeverity='not-evaluated';conclusion='diagnostic-not-customer-severity-proof'}
@@ -208,7 +209,7 @@ try {
     $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @((Join-Path $diagnostics 'cpu.etl'),
         (Join-Path $PublishDirectory 'cpu-load.json'),$start,$end) -Directory $diagnostics `
         -LogPrefix (Join-Path $diagnostics 'cpu-analysis') -TimeoutSeconds 300
-    $postStart=([datetime]$r.managedGc.collectionEndUtc).ToUniversalTime().AddMilliseconds(25)
+    $postStart=([datetime]$r.managedGc.collectionEndUtc).ToUniversalTime()
     $endUtc=([datetime]$end).ToUniversalTime()
     $postEnd=if($postStart.AddSeconds(2) -lt $endUtc){$postStart.AddSeconds(2)}else{$endUtc}
     if($postEnd -le $postStart){throw 'No positive post-collection window remains.'}

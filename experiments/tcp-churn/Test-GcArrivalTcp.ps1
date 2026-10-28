@@ -64,7 +64,7 @@ try {
         $peer="127.0.0.$(2+$index)"
         $result=Join-Path $directory "multi-server-$index.json"
         $targetCount=if($index -eq 0){65}else{64}
-        $child=Start-Workload @('127.0.0.1',$peer,[string]$port,[string]$targetCount,'4000','65536',$result,'server','262144','14529','64','nodelay')
+        $child=Start-Workload @('127.0.0.1',$peer,[string]$port,[string]$targetCount,'4000','1048576',$result,'server','1048576','14529','64','nodelay')
         $multiServers.Add($child);$watch.Restart()
         while(-not(Test-Path -LiteralPath ($result+'.ready'))) {
             if($child.process.HasExited -or $watch.Elapsed.TotalSeconds -gt 10){throw 'A mixed-target listener did not become ready.'}
@@ -72,12 +72,13 @@ try {
         }
     }
     $multiOutput=Join-Path $directory 'multi-client.json'
-    $client=Start-Workload @('127.0.0.1,127.0.0.4','127.0.0.2,127.0.0.3',[string]$port,'129','4000','65536',
-        $multiOutput,'client','262144','14529','64','nodelay','gc:32:32')
+    $client=Start-Workload @('127.0.0.1,127.0.0.4','127.0.0.2,127.0.0.3',[string]$port,'129','4000','1048576',
+        $multiOutput,'client','1048576','14529','64','nodelay','gc:32:32')
     if(-not $client.process.WaitForExit(30000) -or $client.process.ExitCode -ne 0){throw 'The mixed-target GC client failed.'}
     foreach($child in $multiServers){if(-not $child.process.WaitForExit(5000) -or $child.process.ExitCode -ne 0){throw 'A mixed-target server failed.'}}
     $mixed=Get-Content -LiteralPath $multiOutput -Raw|ConvertFrom-Json
-    if($mixed.connections -ne 129 -or $mixed.targets.Count -ne 2 -or
+    if($mixed.connections -ne 129 -or $mixed.bytesSent -ne 129MB -or $mixed.bytesReceived -ne 129MB -or
+        $mixed.targets.Count -ne 2 -or
         $mixed.targets[0].connections -ne 65 -or $mixed.targets[1].connections -ne 64 -or
         @($mixed.targets|Where-Object{-not $_.loopback}).Count -or
         ($mixed.targets|Measure-Object requestBytes -Sum).Sum -ne $mixed.bytesSent -or
