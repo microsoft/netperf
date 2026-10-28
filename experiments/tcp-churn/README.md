@@ -755,6 +755,18 @@ The `applyStartUtc`/`applyEndUtc` envelope brackets the route-addition API call;
 kernel cache-invalidation time. A verification timestamp after GC does not by
 itself establish that the route was applied after GC.
 
+[Run 40671784588](https://github.com/microsoft/netperf/actions/runs/40671784588)
+completed all 8,192 transactions with 1 MiB requests and responses, a 754 ms
+graph-heap collection, and verified cleanup. The logical-next-hop addition API
+returned 53 ms before the collection ended. At the lower offered arrival rate
+(1,640/s), the earlier connection refusals did not recur; this contrast does not
+identify their kernel cause. There were 11 active receiver operations at GC
+entry and a peak of 741 over the workload. The two-second post-GC window had
+135,619 CPU samples, including 19 path-update and 3 path-setter frame occurrences,
+with zero lost events or unresolved network frames. These are frame counts,
+not global path-cache-lock wait counts or evidence of target-lock saturation.
+The route API timing also does not prove a particular cached-path epoch changed.
+
 `managed_gc_isolated_data=true` is a separate, explicit opt-in for fresh data
 paths. It requires both existing guest interfaces to already have DHCP disabled.
 It transactionally adds four client aliases and one peer alias, all ActiveStore
