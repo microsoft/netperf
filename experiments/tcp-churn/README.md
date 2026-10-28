@@ -680,12 +680,19 @@ in `finally`; the controller also performs an ownership-checked restoration pass
 No route, link, firewall profile, offload or trust setting is changed.
 The peer's in-band management session may also pause, so algorithm coverage is
 counted only for TCB lifetimes correlated to the owned client's completion
-events, excluding management traffic and invalidating reused TCB identities.
+and close events, excluding management traffic and invalidating reused TCB identities.
+Owned close-event coverage must also match the completed workload. Failed BH
+attempts are counted separately from probe entry; a numeric count of failure
+messages mentioning an `ACK` token is reported without exporting message text.
+That lexical count is not by itself a complete reason classification.
 The contrast is accepted only with complete verified transfers, data
 retransmission **and actual BH entry** on those client connections, lossless
 traces and verified cleanup. It adds `cpu-after-recovery.json` for the immediate
 post-restoration window. Algorithm coverage still does not establish a cache-lock
 wait, target CPU saturation, or equivalence to a physical deployment.
+Post-restoration CPU diagnostics are retained even when the final BH-entry gate
+rejects the run. Fixed DHCP-state flags document the admission constraints for
+possible future data/management isolation; this pulse never changes DHCP.
 
 The manual lab investigation supplemented CPU sampling with the existing Windows
 Performance Toolkit **SPINLOCK collision events**, rather than assuming that a

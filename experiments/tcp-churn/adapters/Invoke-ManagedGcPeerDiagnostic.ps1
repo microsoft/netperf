@@ -18,7 +18,7 @@ $diagnostics=Join-Path $ScratchParent 'managed-gc-diagnostics'
 $publishOwned=$false
 $peer=$null;$peerOwned=$false;$profileOwned=$false
 $client=$null;$localServer=$null;$tcpProbe=$null;$clrProbe=$null
-$neighborPulse=$null;$neighborArguments=@();$pulseResult=$null;$ownedCounts=$null
+$neighborPulse=$null;$neighborArguments=@();$pulseResult=$null;$ownedCounts=$null;$peerDhcpEnabled=$null
 $failure=$null;$cleanupErrors=[Collections.Generic.List[Exception]]::new()
 $phase='preflight';$start=$null;$end=$null;$result=$null
 $port=20300;$count=8192;$heapMiB=1024
@@ -64,14 +64,19 @@ try {
     if($ipInterface.Count -ne 1 -or $ipInterface[0].NlMtu -lt 1){throw 'A unique client data interface with positive MTU is required.'}
     $mtu=$ipInterface[0].NlMtu
     if($PeerRecovery) {
-        $peerMac=Invoke-Command -Session $peer -ScriptBlock {
+        $peerData=Invoke-Command -Session $peer -ScriptBlock {
             param($address)
             $ip=@(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop|Where-Object IPAddress -eq $address)
             if($ip.Count -ne 1){throw 'A unique owned peer data address is required.'}
             $nic=@(Get-NetAdapter -Name $ip[0].InterfaceAlias -ErrorAction Stop)
             if($nic.Count -ne 1){throw 'A unique owned peer data adapter is required.'}
-            [string]$nic[0].MacAddress
+            $network=@(Get-NetIPInterface -InterfaceIndex $ip[0].InterfaceIndex -AddressFamily IPv4 -ErrorAction Stop)
+            if($network.Count -ne 1 -or [string]$network[0].Dhcp -notin @('Enabled','Disabled')){
+                throw 'The peer data-interface DHCP state is unavailable.'
+            }
+            [pscustomobject]@{mac=[string]$nic[0].MacAddress;dhcpEnabled=([string]$network[0].Dhcp -eq 'Enabled')}
         } -ArgumentList $peerAddress
+        $peerMac=$peerData.mac;$peerDhcpEnabled=$peerData.dhcpEnabled
     }
     $remote=Invoke-Command -Session $peer -ScriptBlock {
         if(@(Get-Process -Name Runner.Worker,ctsTraffic,ArrivalTcp -ErrorAction Ignore).Count){throw 'Peer guest is busy.'}
@@ -125,7 +130,7 @@ try {
     $provider=Get-WinEvent -ListProvider Microsoft-Windows-TCPIP
     $tasks=@('TcpTcbSynSend','TcpDisconnectTcbRtoTimeout','TcpDataTransferRetransmitRound',
         'TcpBlackHoleDetectionEntry','TcpBlackHoleDetectionExit','TcpBlackHoleDetectionFailed','TcpBhDetectFullSizeAck')
-    if($PeerRecovery){$tasks+=@('TcpConnectTcbComplete','TcpInsertConnectionTuple')}
+    if($PeerRecovery){$tasks+=@('TcpConnectTcbComplete','TcpInsertConnectionTuple','TcpCloseTcbRequest')}
     $events=@($provider.Events|Where-Object{$null -ne $_.Task -and $_.Task.Name -in $tasks}|
         ForEach-Object{[pscustomobject]@{Id=$_.Id;Task=$_.Task.Name}})
     foreach($task in $tasks){if($task -notin @($events.Task)){throw 'A required public TCP event is unavailable.'}}
@@ -211,7 +216,7 @@ try {
         meanBindMilliseconds=$r.meanBindMilliseconds;meanConnectMilliseconds=$r.meanConnectMilliseconds
         cpuCoverage='sampled-etw-only';executionTopology='two-existing-guests-plus-client-loopback'
         targetSeverity='not-evaluated';conclusion='diagnostic-not-customer-severity-proof'}
-    if($PeerRecovery){$result.peerRecovery=$pulseResult}
+    if($PeerRecovery){$result.peerRecovery=$pulseResult;$result.peerDataInterfaceDhcpEnabled=$peerDhcpEnabled}
 }catch{$failure=$_}
 finally {
     if($null -ne $neighborPulse) {
@@ -266,7 +271,8 @@ if($null -ne $failure -or $cleanupErrors.Count) {
         $toolCode=if($null -ne $failure -and $failure.Exception.Data.Contains('ToolExitCode')){$failure.Exception.Data['ToolExitCode']}else{$null}
         @{schema=1;workload='managed-gc-mixed';outcome='failed';phase=$phase;failureType=$type;failureCode=$code
             toolExitCode=$toolCode;cleanupErrorCount=$cleanupErrors.Count;cleanupVerified=($cleanupErrors.Count -eq 0)
-            peerRecovery=$pulseResult;conclusion='no-accepted-measurement'}|ConvertTo-Json -Depth 5|Set-Content (Join-Path $PublishDirectory 'result.json')
+            peerRecovery=$pulseResult;peerDataInterfaceDhcpEnabled=$peerDhcpEnabled
+            conclusion='no-accepted-measurement'}|ConvertTo-Json -Depth 5|Set-Content (Join-Path $PublishDirectory 'result.json')
     }
     if($null -ne $failure){$cleanupErrors.Insert(0,$failure.Exception)}
     throw [AggregateException]::new('Managed-GC diagnostic or required cleanup failed.',$cleanupErrors)
@@ -297,17 +303,19 @@ try {
         Import-Module (Join-Path $PSScriptRoot 'TcpRecoveryEvidence.psm1') -Force
         $layouts=@{}
         foreach($metadata in $provider.Events) {
-            if($null -eq $metadata.Task -or $metadata.Task.Name -notin @('TcpConnectTcbComplete','TcpInsertConnectionTuple',
-                'TcpDataTransferRetransmitRound','TcpBlackHoleDetectionEntry','TcpBlackHoleDetectionExit','TcpBhDetectFullSizeAck')){continue}
+            if($null -eq $metadata.Task -or $metadata.Task.Name -notin @('TcpConnectTcbComplete','TcpInsertConnectionTuple','TcpCloseTcbRequest',
+                'TcpDataTransferRetransmitRound','TcpBlackHoleDetectionEntry','TcpBlackHoleDetectionExit','TcpBlackHoleDetectionFailed','TcpBhDetectFullSizeAck')){continue}
             $template=[xml]$metadata.Template
             $names=@($template.GetElementsByTagName('data','http://schemas.microsoft.com/win/2004/08/events')|ForEach-Object{$_.GetAttribute('name')})
             $tcbIndex=[array]::IndexOf($names,'Tcb')
             $pidIndex=[array]::IndexOf($names,'ProcessId')
             $statusIndex=[array]::IndexOf($names,'Status')
-            if($tcbIndex -lt 0 -or ($metadata.Task.Name -eq 'TcpConnectTcbComplete' -and ($pidIndex -lt 0 -or $statusIndex -lt 0))){
+            $reasonIndex=[array]::IndexOf($names,'TraceString')
+            if($tcbIndex -lt 0 -or ($metadata.Task.Name -eq 'TcpConnectTcbComplete' -and ($pidIndex -lt 0 -or $statusIndex -lt 0)) -or
+                ($metadata.Task.Name -eq 'TcpBlackHoleDetectionFailed' -and $reasonIndex -lt 0)){
                 throw 'The public TCP manifest lacks required owner/lifetime correlation fields.'
             }
-            $layouts[([string]$metadata.Id+':'+$metadata.Version)]=@{task=$metadata.Task.Name;tcb=$tcbIndex;pid=$pidIndex;status=$statusIndex}
+            $layouts[([string]$metadata.Id+':'+$metadata.Version)]=@{task=$metadata.Task.Name;tcb=$tcbIndex;pid=$pidIndex;status=$statusIndex;reason=$reasonIndex}
         }
         $tcpRows=[Collections.Generic.List[object]]::new()
         $startUtc=([datetime]$start).ToUniversalTime()
@@ -318,16 +326,13 @@ try {
                 $layout=$layouts[$key]
                 $owner=if($layout.pid -ge 0){[uint32]$_.Properties[$layout.pid].Value}else{0}
                 $status=if($layout.status -ge 0){[uint32]$_.Properties[$layout.status].Value}else{0}
+                $ackToken=if($layout.reason -ge 0){[regex]::IsMatch([string]$_.Properties[$layout.reason].Value,'(?i)\bACK\b')}else{$false}
                 $tcpRows.Add([pscustomobject]@{kind=$layout.task;tcb=[uint64]$_.Properties[$layout.tcb].Value
-                    processId=$owner;status=$status;timestampTicks=$_.TimeCreated.ToUniversalTime().Ticks})
+                    processId=$owner;status=$status;timestampTicks=$_.TimeCreated.ToUniversalTime().Ticks;failureReasonAckToken=$ackToken})
             }
         }
         $ownedCounts=Get-TcpRecoveryCounts -Records $tcpRows.ToArray() -OwnerProcessId $clientPid -ExpectedConnections $count
         $result.tcpRecovery=$ownedCounts
-        if($ownedCounts.publicProbeCounts.TcpDataTransferRetransmitRound -lt 1 -or
-            $ownedCounts.publicProbeCounts.TcpBlackHoleDetectionEntry -lt 1){
-            throw 'The recovery experiment did not verify data retransmission and actual BH entry.'
-        }
         $recoveryStart=([datetime]$pulseResult.restoredUtc).ToUniversalTime()
         $recoveryEnd=if($recoveryStart.AddSeconds(2) -lt $endUtc){$recoveryStart.AddSeconds(2)}else{$endUtc}
         if($recoveryEnd -le $recoveryStart){throw 'No positive post-recovery CPU window remains.'}
@@ -357,13 +362,19 @@ try {
         $cpu=Get-Content (Join-Path $PublishDirectory $file) -Raw|ConvertFrom-Json
         if($cpu.outcome -ne 'sampled' -or $cpu.eventsLost -ne 0 -or $cpu.unresolvedNetworkFrames -ne 0){throw 'Lossless matching public-symbol CPU attribution is required.'}
     }
+    if($PeerRecovery -and ($ownedCounts.publicProbeCounts.TcpDataTransferRetransmitRound -lt 1 -or
+        $ownedCounts.publicProbeCounts.TcpBlackHoleDetectionEntry -lt 1)) {
+        $phase='verify-recovery-coverage'
+        throw 'The recovery experiment did not verify data retransmission and actual BH entry.'
+    }
     $result.cleanupVerified=$true
     $result|ConvertTo-Json -Depth 6|Set-Content (Join-Path $PublishDirectory 'result.json')
 }catch {
     $toolCode=if($_.Exception.Data.Contains('ToolExitCode')){$_.Exception.Data['ToolExitCode']}else{$null}
     @{schema=1;workload='managed-gc-mixed';outcome='failed';phase=$phase;failureType=$_.Exception.GetType().FullName
         failureCode=$_.Exception.HResult;toolExitCode=$toolCode;cleanupVerified=$true
-        peerRecovery=$pulseResult;tcpRecovery=$ownedCounts;conclusion='analysis-not-accepted'}|
+        peerRecovery=$pulseResult;tcpRecovery=$ownedCounts;peerDataInterfaceDhcpEnabled=$peerDhcpEnabled
+        conclusion='analysis-not-accepted'}|
         ConvertTo-Json -Depth 6|Set-Content (Join-Path $PublishDirectory 'result.json')
     throw
 }

@@ -37,7 +37,7 @@ try {
                 }
                 function Get-NetIPInterface {
                     [CmdletBinding()]param($InterfaceIndex,$AddressFamily)
-                    [pscustomobject]@{Forwarding='Disabled'}
+                    [pscustomobject]@{Forwarding='Disabled';Dhcp='Disabled'}
                 }
                 function Get-NetNeighbor {
                     [CmdletBinding()]param($InterfaceAlias,$AddressFamily,$PolicyStore)

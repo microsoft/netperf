@@ -48,6 +48,7 @@ $interfaces=@(Get-NetIPInterface -InterfaceIndex $adapter[0].ifIndex -AddressFam
 if($addresses.Count -ne 1 -or $interfaces.Count -ne 1 -or [string]$interfaces[0].Forwarding -ne 'Disabled'){
     throw 'A unique owned client IPv4 address with forwarding disabled is required.'
 }
+if([string]$interfaces[0].Dhcp -notin @('Enabled','Disabled')){throw 'The client data-interface DHCP state is unavailable.'}
 function Read-Neighbor {
     @(Get-NetNeighbor -InterfaceAlias $InterfaceAlias -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|
         Where-Object IPAddress -eq $PeerAddress)
@@ -101,7 +102,8 @@ if($original.Count -ne 1 -or [string]$original[0].State -eq 'Permanent' -or
     expectedMac=$ExpectedMac;substituteMac=$substitute;originalDynamic=$true}|Export-Clixml -LiteralPath $StateFile -NoClobber
 $changed=$false;$failure=$null;$restoreFailure=$null
 $report=[ordered]@{schema=1;scenario='owned-peer-stale-neighbor-recovery';requestedMilliseconds=$DurationMilliseconds
-    establishedAtTrigger=0;applied=$false;restored=$false;scope='owned-peer-only';firewallChanged=$false;linkDisabled=$false}
+    establishedAtTrigger=0;applied=$false;restored=$false;scope='owned-peer-only';firewallChanged=$false;linkDisabled=$false
+    dataInterfaceDhcpEnabled=([string]$interfaces[0].Dhcp -eq 'Enabled')}
 $phase='await-traffic'
 try {
     $baseline=Get-NetAdapterStatistics -Name $InterfaceAlias -ErrorAction Stop
