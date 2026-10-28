@@ -74,7 +74,7 @@ try {
             -Recurse -ToSession $session -ErrorAction Stop
     }
     $adapterFiles=@('WindowsCts.psm1','Invoke-NetperfTcpChurn.ps1','Invoke-NetperfPeerCpu.ps1')
-    if($ManagedGc){$adapterFiles+=@('Invoke-ManagedGcPeerDiagnostic.ps1')}
+    if($ManagedGc){$adapterFiles+=@('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1')}
     foreach ($file in $adapterFiles) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $file) -Destination (Join-Path $remoteRoot "adapters\$file") -ToSession $session -ErrorAction Stop
     }
@@ -89,7 +89,7 @@ try {
         $extra=@()
         $credentialFile=$null
         if ($peerMeasurement -or $managedGc) {
-            $program=Join-Path $root $(if($managedGc){'experiment\adapters\Invoke-ManagedGcPeerDiagnostic.ps1'}else{'experiment\adapters\Invoke-NetperfPeerCpu.ps1'})
+            $program=Join-Path $root $(if($managedGc){'experiment\adapters\Invoke-ManagedGcGuestEntry.ps1'}else{'experiment\adapters\Invoke-NetperfPeerCpu.ps1'})
             $credentialFile=Join-Path $root 'peer-credential.clixml'
             # DPAPI-protected for this same account/machine; child deletes it immediately on import.
             $credential|Export-Clixml -LiteralPath $credentialFile -ErrorAction Stop

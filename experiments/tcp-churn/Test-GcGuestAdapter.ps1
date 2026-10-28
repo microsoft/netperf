@@ -25,7 +25,7 @@ try {
         if(-not $rejected -or (Test-Path -LiteralPath $directory)){throw "GC adapter preflight mutated state or accepted invalid mode: $case"}
         $checks++
     }
-    foreach($file in @('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-NetperfGuestTcpChurn.ps1')) {
+    foreach($file in @('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1','Invoke-NetperfGuestTcpChurn.ps1')) {
         $tokens=$null;$errors=$null
         $null=[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot "adapters\$file"),[ref]$tokens,[ref]$errors)
         if($errors.Count){throw ($errors|Out-String)}
@@ -45,6 +45,23 @@ try {
     if(-not $rejected -or $status.outcome -ne 'failed' -or $status.phase -ne 'credential-import' -or
         [string]::IsNullOrWhiteSpace($status.failureType) -or -not $status.cleanupVerified -or
         $status.cleanupErrorCount -ne 0){throw 'Initialization failure was not explicitly and safely reported.'}
+    $checks++
+    Remove-Item -LiteralPath (Join-Path $publish 'result.json')
+    $rejected=$false
+    try {
+        & (Join-Path $PSScriptRoot 'adapters\Invoke-ManagedGcGuestEntry.ps1') `
+            -CredentialFile (Join-Path $directory 'absent.clixml') -ScratchParent $directory `
+            -PublishDirectory $publish -AnalyzerDirectory (Join-Path $directory 'unused-analyzer') -Seconds 1
+    }catch {
+        if($_.FullyQualifiedErrorId -notmatch 'ParameterArgumentValidationError'){throw}
+        $rejected=$true
+    }
+    $status=Get-Content (Join-Path $publish 'result.json') -Raw|ConvertFrom-Json
+    if(-not $rejected -or $status.outcome -ne 'failed' -or $status.phase -ne 'child-entry' -or
+        $status.failureType -notmatch 'ParameterBindingValidationException' -or
+        $status.errorId -notmatch 'ParameterArgumentValidationError'){
+        throw 'Child startup failure was not explicitly and safely reported.'
+    }
     $checks++
 } finally {
     if(Test-Path -LiteralPath $directory) {

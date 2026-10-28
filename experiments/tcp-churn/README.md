@@ -618,6 +618,9 @@ and process identities stay in guest diagnostics. `cpu-after-gc.json` covers up
 to two seconds after the collection-call envelope; CLR event coverage does not
 by itself establish exact pause correlation. It is labelled virtualized and
 diagnostic, not physical-equivalent or proof of 30 target-lock CPUs.
+Failures report a bounded phase, exception type and numeric error code; child
+startup failures also include a filtered error identifier and source line.
+Exception messages and raw child logs are not published.
 
 The manual lab investigation supplemented CPU sampling with the existing Windows
 Performance Toolkit **SPINLOCK collision events**, rather than assuming that a
