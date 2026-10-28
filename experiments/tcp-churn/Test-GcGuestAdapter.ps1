@@ -6,6 +6,12 @@ $directory=Join-Path ([IO.Path]::GetTempPath()) ('gc-adapter-'+[guid]::NewGuid()
 $credential=[pscredential]::new('unused-test-account',(ConvertTo-SecureString 'unused-test-value' -AsPlainText -Force))
 $checks=0
 try {
+    Import-Module (Join-Path $PSScriptRoot 'adapters\WindowsCts.psm1') -Force
+    Import-Module (Join-Path $PSScriptRoot 'adapters\GcReceiverTraffic.psm1') -Force
+    foreach($name in @('Invoke-TcpChurnTool','Start-TcpChurnCollector','Stop-TcpChurnCollector')){
+        if($null -eq (Get-Command $name -ErrorAction Stop)){throw 'Receiver-module import invalidated shared lifecycle commands.'}
+    }
+    $checks++
     foreach($case in @('no-profile','syn-drop','peer-probe','peer-measurement')) {
         $extra=@{ManagedGc=$true}
         if($case -ne 'no-profile'){$extra.ProfileCpu=$true}

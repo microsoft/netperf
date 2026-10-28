@@ -408,6 +408,7 @@ if($null -ne $failure -or $cleanupErrors.Count) {
         $toolCode=if($null -ne $failure -and $failure.Exception.Data.Contains('ToolExitCode')){$failure.Exception.Data['ToolExitCode']}else{$null}
         @{schema=1;workload='managed-gc-mixed';outcome='failed';phase=$phase;failureType=$type;failureCode=$code
             toolExitCode=$toolCode;cleanupErrorCount=$cleanupErrors.Count;cleanupVerified=($cleanupErrors.Count -eq 0)
+            cleanupErrorTypes=@($cleanupErrors|ForEach-Object{$_.GetType().FullName})
             peerRecovery=$pulseResult;peerDataInterfaceDhcpEnabled=$peerDhcpEnabled;clientFailure=$clientFailure
             tcpRecovery=$ownedCounts
             rejectedWorkloadCpuTcpVerified=$diagnosticVerified

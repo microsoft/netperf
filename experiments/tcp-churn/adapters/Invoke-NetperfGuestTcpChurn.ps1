@@ -48,20 +48,35 @@ try {
         $phase='peer-connectivity'
         $peerResult=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
             param($credential)
-            if (@(Get-Process -Name 'Runner.Worker','ctsTraffic' -ErrorAction Ignore).Count) { throw 'Client guest is busy.' }
+            if (@(Get-Process -Name 'Runner.Worker','ctsTraffic','ArrivalTcp','CpuSamples' -ErrorAction Ignore).Count) { throw 'Client guest is busy.' }
+            $clientAliases=@(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop|Where-Object{$_.IPAddress -match '^198\.19\.240\.[1-6]$'}).Count
+            $clientRules=@(Get-NetFirewallRule -PolicyStore ActiveStore -ErrorAction Stop|Where-Object{$_.Name -like 'ManagedGcPeer-*' -or $_.Name -like 'ManagedGcReceiver-*'}).Count
+            $clientStatic=@(Get-NetNeighbor -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|
+                Where-Object{$_.IPAddress -match '^198\.19\.240\.[1-6]$' -and [string]$_.State -eq 'Permanent'}).Count
+            if($clientAliases -or $clientRules -or $clientStatic){throw 'Owned client GC resources require restoration before further tests.'}
             $clientCpus=(Get-CimInstance Win32_Processor|Measure-Object NumberOfLogicalProcessors -Sum).Sum
             if($clientCpus -lt 1){throw 'The client processor inventory did not return a positive count.'}
             $peer=New-PSSession -ComputerName netperf-peer -Credential $credential -ConfigurationName PowerShell.7 -ErrorAction Stop
             try {
-                $peerCpus=Invoke-Command -Session $peer -ErrorAction Stop -ScriptBlock {
-                    if (@(Get-Process -Name 'Runner.Worker','ctsTraffic' -ErrorAction Ignore).Count) { throw 'Peer guest is busy.' }
-                    (Get-CimInstance Win32_Processor | Measure-Object NumberOfLogicalProcessors -Sum).Sum
+                $peerState=Invoke-Command -Session $peer -ErrorAction Stop -ScriptBlock {
+                    if (@(Get-Process -Name 'Runner.Worker','ctsTraffic','ArrivalTcp','CpuSamples' -ErrorAction Ignore).Count) { throw 'Peer guest is busy.' }
+                    $aliases=@(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop|Where-Object{$_.IPAddress -match '^198\.19\.240\.[1-6]$'}).Count
+                    $rules=@(Get-NetFirewallRule -PolicyStore ActiveStore -ErrorAction Stop|Where-Object{$_.Name -like 'ManagedGcPeer-*' -or $_.Name -like 'ManagedGcReceiver-*'}).Count
+                    $static=@(Get-NetNeighbor -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|
+                        Where-Object{$_.IPAddress -match '^198\.19\.240\.[1-6]$' -and [string]$_.State -eq 'Permanent'}).Count
+                    if($aliases -or $rules -or $static){throw 'Owned peer GC resources require restoration before further tests.'}
+                    [pscustomobject]@{cpus=(Get-CimInstance Win32_Processor|Measure-Object NumberOfLogicalProcessors -Sum).Sum
+                        aliases=$aliases;rules=$rules;static=$static}
                 }
+                $peerCpus=$peerState.cpus
                 if($peerCpus -lt 1){throw 'The peer processor inventory did not return a positive count.'}
-                [pscustomobject]@{schema=1;peerConnected=$true;clientLogicalProcessors=[int]$clientCpus;peerLogicalProcessors=[int]$peerCpus;conclusion='connectivity-only'}
+                [pscustomobject]@{schema=1;peerConnected=$true;clientLogicalProcessors=[int]$clientCpus;peerLogicalProcessors=[int]$peerCpus
+                    clientOwnedAliases=$clientAliases;peerOwnedAliases=$peerState.aliases;clientOwnedRules=$clientRules;peerOwnedRules=$peerState.rules
+                    clientOwnedStaticPeers=$clientStatic;peerOwnedStaticPeers=$peerState.static;conclusion='connectivity-and-owned-resource-check'}
             } finally { Remove-PSSession $peer -ErrorAction Stop }
         } -ArgumentList $Credential
-        $peerResult|Select-Object schema,peerConnected,clientLogicalProcessors,peerLogicalProcessors,conclusion|ConvertTo-Json |
+        $peerResult|Select-Object schema,peerConnected,clientLogicalProcessors,peerLogicalProcessors,clientOwnedAliases,peerOwnedAliases,
+            clientOwnedRules,peerOwnedRules,clientOwnedStaticPeers,peerOwnedStaticPeers,conclusion|ConvertTo-Json |
             Set-Content -LiteralPath (Join-Path $PublishDirectory 'peer-check.json') -Encoding utf8
         return
     }

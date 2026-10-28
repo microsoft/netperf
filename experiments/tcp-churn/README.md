@@ -714,6 +714,9 @@ passive TCBs are attributed using public accept-completion plus close events.
 The result records the profiled process role. The maximum independent-producer
 launch span is not a shared wire-arrival clock; workload duration covers both
 producers and the receiver. Ordinary client-GC mode remains the default.
+The read-only `probe_peer` mode also rejects remaining owned GC processes,
+data aliases, firewall rules or permanent fixture neighbors, and publishes only
+numeric residual counts. It never removes resources or changes guest policy.
 
 `managed_gc_isolated_data=true` is a separate, explicit opt-in for fresh data
 paths. It requires both existing guest interfaces to already have DHCP disabled.

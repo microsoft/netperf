@@ -3,7 +3,7 @@
 #Requires -Version 7.2
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
-Import-Module (Join-Path $PSScriptRoot 'WindowsCts.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'WindowsCts.psm1')
 function Start-GcReceiver {
     [CmdletBinding()]
     param([Parameter(Mandatory)][hashtable]$State)
