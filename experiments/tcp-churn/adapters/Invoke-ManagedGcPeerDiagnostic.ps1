@@ -310,7 +310,7 @@ try {
 }catch{$failure=$_}
 finally {
     if($null -ne $receiverState) {
-        $receiverEvidence=[ordered]@{stage=$receiverState.Stage;receiver=$null;localProducer=$null;diagnosticErrorType=$null}
+        $receiverEvidence=[ordered]@{stage=$receiverState.Stage;receiver=$null;localProducer=$null;gcObservation=$null;diagnosticErrorType=$null}
         try {
             foreach($entry in @(@{key='receiver';path=$receiverState.ServerOutput},
                 @{key='localProducer';path=(Join-Path $diagnostics 'receiver-local-client.json')})) {
@@ -318,6 +318,9 @@ finally {
                     $receiverEvidence[$entry.key]=Get-Content $entry.path -Raw|ConvertFrom-Json|
                         Select-Object schema,outcome,role,connections,connectionsStarted,connectionsConnected,connectionsCompleted,
                             acceptedConnections,errorType,errorCode,socketError,managedGc,requestDispatch,peakInFlight
+                }
+                if(Test-Path -LiteralPath ($receiverState.ServerOutput+'.gc.json')){
+                    $receiverEvidence.gcObservation=Get-Content ($receiverState.ServerOutput+'.gc.json') -Raw|ConvertFrom-Json
                 }
             }
         }catch{$receiverEvidence.diagnosticErrorType=$_.Exception.GetType().FullName}
@@ -411,6 +414,20 @@ if($null -ne $failure -or $cleanupErrors.Count) {
                     -ExpectedConnections $clientFailure.connectionsConnected
             }
             $diagnosticVerified=$true
+            if($null -ne $receiverEvidence -and $null -ne $receiverEvidence.gcObservation) {
+                $postStart=([datetime]$receiverEvidence.gcObservation.collectionEndUtc).ToUniversalTime()
+                $endUtc=([datetime]$end).ToUniversalTime()
+                $postEnd=if($postStart.AddSeconds(2) -lt $endUtc){$postStart.AddSeconds(2)}else{$endUtc}
+                if($postEnd -gt $postStart) {
+                    $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @((Join-Path $diagnostics 'cpu.etl'),
+                        (Join-Path $PublishDirectory 'cpu-after-gc.json'),$postStart.ToString('o'),$postEnd.ToString('o')) `
+                        -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'failed-receiver-post-gc') -TimeoutSeconds 300
+                    $postCpu=Get-Content (Join-Path $PublishDirectory 'cpu-after-gc.json') -Raw|ConvertFrom-Json
+                    if($postCpu.outcome -ne 'sampled' -or $postCpu.eventsLost -ne 0 -or $postCpu.unresolvedNetworkFrames -ne 0){
+                        throw 'The rejected receiver post-GC diagnostic did not verify.'
+                    }
+                }
+            }
         }catch{$diagnosticFailure=$_}
     }
     if($publishOwned) {

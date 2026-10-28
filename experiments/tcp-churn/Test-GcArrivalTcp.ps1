@@ -163,14 +163,14 @@ try {
 } finally {
     foreach($child in @($client,$server)){if($null -ne $child){Close-Owned $child}}
     foreach($child in $multiServers){Close-Owned $child}
-    foreach($file in @($exe,($exe+'.config'),$clientOutput,($clientOutput+'.traffic-ready'),$serverOutput,($serverOutput+'.ready'))) {
+    foreach($file in @($exe,($exe+'.config'),$clientOutput,($clientOutput+'.traffic-ready'),($clientOutput+'.gc.json'),$serverOutput,($serverOutput+'.ready'))) {
         if(Test-Path -LiteralPath $file){Remove-Item -LiteralPath $file -ErrorAction Stop}
     }
-    foreach($file in @('multi-client.json','multi-client.json.traffic-ready','multi-server-0.json','multi-server-0.json.ready','multi-server-1.json','multi-server-1.json.ready')) {
+    foreach($file in @('multi-client.json','multi-client.json.traffic-ready','multi-client.json.gc.json','multi-server-0.json','multi-server-0.json.ready','multi-server-1.json','multi-server-1.json.ready')) {
         $path=Join-Path $directory $file
         if(Test-Path -LiteralPath $path){Remove-Item -LiteralPath $path -ErrorAction Stop}
     }
-    foreach($file in @('eight-client.json','eight-client.json.traffic-ready','eight-server-0.json','eight-server-0.json.ready','eight-server-1.json','eight-server-1.json.ready')) {
+    foreach($file in @('eight-client.json','eight-client.json.traffic-ready','eight-client.json.gc.json','eight-server-0.json','eight-server-0.json.ready','eight-server-1.json','eight-server-1.json.ready')) {
         $path=Join-Path $directory $file
         if(Test-Path -LiteralPath $path){Remove-Item -LiteralPath $path -ErrorAction Stop}
     }

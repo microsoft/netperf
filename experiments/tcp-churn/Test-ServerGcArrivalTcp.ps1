@@ -53,6 +53,11 @@ try {
         throw 'Receiver dispatch, capacity, or endpoint byte accounting failed.'
     }
     $gc=$r.managedGc
+    $observed=Get-Content ($serverOutput+'.gc.json') -Raw|ConvertFrom-Json
+    if($observed.heapLayout -ne $HeapLayout -or $observed.collectionEndUtc -ne $gc.collectionEndUtc -or
+        $observed.blockingCollectionMilliseconds -ne $gc.blockingCollectionMilliseconds){
+        throw 'Independent GC observation did not match the final receiver result.'
+    }
     if(-not $gc.enabled -or -not $gc.serverGc -or $gc.heapMiB -ne 32 -or $gc.heapLayout -ne $HeapLayout -or
         $gc.gen2CollectionsAfter -le $gc.gen2CollectionsBefore -or $gc.blockingCollectionMilliseconds -le 0 -or
         $gc.completedBeforeCollection -lt 1 -or $gc.inFlightBeforeCollection -lt 1 -or $gc.launchedAtCollection -lt 32){
@@ -64,7 +69,7 @@ try {
         if(-not $child.process.WaitForExit(5000)){throw 'An owned server-GC endpoint remained.'}
         $child.process.Dispose()
     }
-    foreach($file in @('ArrivalTcp.exe','ArrivalTcp.exe.config','server.json','server.json.ready','first.json','second.json')) {
+    foreach($file in @('ArrivalTcp.exe','ArrivalTcp.exe.config','server.json','server.json.ready','server.json.gc.json','first.json','second.json')) {
         $path=Join-Path $directory $file
         if(Test-Path $path){Remove-Item -LiteralPath $path -ErrorAction Stop}
     }

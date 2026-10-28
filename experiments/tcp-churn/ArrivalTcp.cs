@@ -52,10 +52,11 @@ public static class ArrivalTcp
     {
         private readonly int heapMiB;
         private readonly string heapLayout;
+        private readonly string observationFile;
         private int claim,launched,started,completed,pending,before,after;
         private double milliseconds;
         private string start="",end="";
-        public GcObservation(int heap,string layout) {heapMiB=heap;heapLayout=layout;}
+        public GcObservation(int heap,string layout,string output) {heapMiB=heap;heapLayout=layout;observationFile=output;}
         public bool Triggered {get {return Volatile.Read(ref claim)==2;}}
         public void TryCollect(int minimum,int launchedNow,int startedNow,int completedNow,int pendingNow)
         {
@@ -70,6 +71,7 @@ public static class ArrivalTcp
             end=DateTime.UtcNow.ToString("o",CultureInfo.InvariantCulture);
             after=GC.CollectionCount(GC.MaxGeneration);
             Volatile.Write(ref claim,2);
+            File.WriteAllText(observationFile,Json());
         }
         public void Verify()
         {
@@ -221,13 +223,14 @@ public static class ArrivalTcp
             }
         }
         if(File.Exists(args[6]))throw new IOException("Use a new result file.");
+        if(gcHeapMiB>0 && File.Exists(args[6]+".gc.json"))throw new IOException("Use a new GC observation file.");
         TcpListener listener=null;
         try {
             byte[] response=new byte[responseSize];
             for(int i=0;i<response.Length;i++)response[i]=(byte)(i%251);
             if(responseSize==1)response[0]=0x5a;
             object pressureHeap=PrepareHeap(gcHeapMiB,heapLayout);
-            var gcObservation=new GcObservation(gcHeapMiB,heapLayout);
+            var gcObservation=new GcObservation(gcHeapMiB,heapLayout,args[6]+".gc.json");
             Task receiver=null;
             if(role!="client") {
                 listener=new TcpListener(peer,port);listener.Start(8192);

@@ -579,6 +579,10 @@ roots leaves real unreachable object graphs to mark and compact. It does not
 add a sleep or suspension primitive. `managed_gc_heap_layout=graph` selects this
 contrast in the guest workflow. Heap policy and observed collection time are
 reported separately; changing layout does not guarantee a longer pause.
+The completed collection also writes an owned `.gc.json` observation immediately,
+independently of final request-budget completion. A failed transfer can therefore
+retain the actual collection envelope and quality-checked post-GC CPU window
+without being relabelled as successful.
 
 To opt into server GC and all-processor-group runtime support, copy
 `ArrivalTcp.ServerGc.config` beside the compiled executable as
