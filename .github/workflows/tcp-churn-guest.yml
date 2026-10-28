@@ -36,6 +36,11 @@ on:
         description: Run bounded managed-GC/mixed TCP diagnostic on existing idle guests (requires CPU profiling)
         type: boolean
         default: false
+      managed_gc_payload_bytes:
+        description: Request and response bytes for the managed-GC diagnostic only
+        type: choice
+        options: ['2048', '65536', '1048576']
+        default: '65536'
   push:
     branches: [main, 'user/mtfriesen/tcp-churn-public']
     paths: ['.github/workflows/tcp-churn-guest.yml', 'experiments/tcp-churn/**']
@@ -123,6 +128,7 @@ jobs:
           PROBE_128_TOPOLOGY: ${{ inputs.probe_128_topology }}
           TOPOLOGY_VCPUS: ${{ inputs.topology_vcpus }}
           MANAGED_GC_MIXED: ${{ inputs.managed_gc_mixed }}
+          MANAGED_GC_PAYLOAD_BYTES: ${{ inputs.managed_gc_payload_bytes }}
         run: |
           $publish = Join-Path $env:RUNNER_TEMP "tcp-churn-guest-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           if ($env:PROBE_128_TOPOLOGY -eq 'true') {
@@ -159,6 +165,7 @@ jobs:
               throw 'Managed-GC diagnostics require CPU profiling and are separate from other campaigns.'
             }
             $extra.ManagedGc = $true
+            $extra.ManagedGcPayloadBytes = [int]$env:MANAGED_GC_PAYLOAD_BYTES
           }
           ./experiments/tcp-churn/adapters/Invoke-NetperfGuestTcpChurn.ps1 `
             -VmName netperf-windows-2022-client -Credential $credential `

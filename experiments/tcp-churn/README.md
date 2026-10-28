@@ -609,10 +609,11 @@ separate loopback server in the client guest. It does not provision/reset a VM,
 install a driver, alter a feature, or change global networking/offload policy.
 `connections` is the bounded client in-flight limit; 8,192 total requests are
 offered over the nominal `seconds` interval. Heap pressure is bounded to 512 MiB
-and requires sufficient free guest memory. Each request and response is 1 MiB,
-giving 8 GiB per direction in the client accounting, half on the remote path.
-This intentionally increases payload from the initial 64 KiB diagnostic without
-changing offloads, arrival scheduling, GC pressure or the in-flight limit.
+and requires sufficient free guest memory. `managed_gc_payload_bytes` selects
+2 KiB, 64 KiB (default), or 1 MiB requests and responses for controlled comparisons
+without changing offloads, arrival scheduling, GC pressure or the in-flight limit.
+Client byte accounting includes both targets; only half travels on the remote
+path. Results record the payload size and the client data-interface MTU.
 
 This mode captures kernel CPU samples, exact TCP probes and CLR GC events.
 It publishes only allowlisted numeric/fixed-label results, public-symbol CPU

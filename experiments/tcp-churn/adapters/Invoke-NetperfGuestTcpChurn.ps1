@@ -13,11 +13,15 @@ param(
     [switch]$SynDrop,
     [switch]$ProbePeer,
     [switch]$PeerMeasurement,
-    [switch]$ManagedGc
+    [switch]$ManagedGc,
+    [ValidateRange(1,1048576)][int]$ManagedGcPayloadBytes=65536
 )
 $ErrorActionPreference='Stop'
 if($ManagedGc -and (-not $ProfileCpu -or $SynDrop -or $ProbePeer -or $PeerMeasurement)){
     throw 'Managed-GC diagnostics require CPU profiling and are separate from peer probes and fault campaigns.'
+}
+if($PSBoundParameters.ContainsKey('ManagedGcPayloadBytes') -and -not $ManagedGc){
+    throw 'Managed-GC payload selection requires managed-GC diagnostic mode.'
 }
 if (Test-Path -LiteralPath $PublishDirectory) { throw 'Use a new publication directory.' }
 New-Item -ItemType Directory -Path $PublishDirectory -ErrorAction Stop | Out-Null
@@ -80,7 +84,7 @@ try {
     }
     $phase='guest-traffic'
     $exit=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
-        param($root,$seconds,$connections,$profile,$synDrop,$peerMeasurement,$managedGc,$credential)
+        param($root,$seconds,$connections,$profile,$synDrop,$peerMeasurement,$managedGc,$managedGcPayloadBytes,$credential)
         if (@(Get-Process -Name 'Runner.Worker','ctsTraffic' -ErrorAction Ignore).Count) {
             throw 'Guest became busy before traffic setup.'
         }
@@ -94,6 +98,7 @@ try {
             # DPAPI-protected for this same account/machine; child deletes it immediately on import.
             $credential|Export-Clixml -LiteralPath $credentialFile -ErrorAction Stop
             $extra=@('-CredentialFile',$credentialFile,'-AnalyzerDirectory',(Join-Path $root 'analyzer'))
+            if($managedGc){$extra+=@('-PayloadBytes',[string]$managedGcPayloadBytes)}
         } else {
             $extra=@('-DedicatedLab')
             if ($profile) { $extra+=@('-ProfileCpu','-AnalyzerDirectory',(Join-Path $root 'analyzer')) }
@@ -115,7 +120,7 @@ try {
             $launch|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $root 'child-startup.json')
             if($credentialFile -and (Test-Path -LiteralPath $credentialFile)){Remove-Item -LiteralPath $credentialFile -ErrorAction Stop}
         }
-    } -ArgumentList $guestRoot,$Seconds,$Connections,([bool]$ProfileCpu),([bool]$SynDrop),([bool]$PeerMeasurement),([bool]$ManagedGc),$Credential
+    } -ArgumentList $guestRoot,$Seconds,$Connections,([bool]$ProfileCpu),([bool]$SynDrop),([bool]$PeerMeasurement),([bool]$ManagedGc),$ManagedGcPayloadBytes,$Credential
     $startup=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
         param($root)
         Get-Content -LiteralPath (Join-Path $root 'child-startup.json') -Raw|ConvertFrom-Json|

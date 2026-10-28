@@ -8,7 +8,8 @@ param(
     [Parameter(Mandatory)][string]$PublishDirectory,
     [Parameter(Mandatory)][string]$AnalyzerDirectory,
     [ValidateRange(5,120)][int]$Seconds=5,
-    [ValidateRange(1,1024)][int]$Connections=256
+    [ValidateRange(1,1024)][int]$Connections=256,
+    [ValidateRange(1,1048576)][int]$PayloadBytes=65536
 )
 $ErrorActionPreference='Stop'
 $sourceRoot=Split-Path $PSScriptRoot
@@ -18,7 +19,7 @@ $peer=$null;$peerOwned=$false;$profileOwned=$false
 $client=$null;$localServer=$null;$tcpProbe=$null;$clrProbe=$null
 $failure=$null;$cleanupErrors=[Collections.Generic.List[Exception]]::new()
 $phase='preflight';$start=$null;$end=$null;$result=$null
-$port=20300;$count=8192;$heapMiB=512;$payloadBytes=1MB
+$port=20300;$count=8192;$heapMiB=512
 $rate=[int][Math]::Ceiling($count/[double]$Seconds)
 $analyzer=Join-Path $AnalyzerDirectory 'CpuSamples.exe'
 $exe=Join-Path $diagnostics 'ArrivalTcp.exe'
@@ -57,6 +58,9 @@ try {
     $route=@(Find-NetRoute -RemoteIPAddress $peerAddress|Where-Object{$_.PSObject.Properties['IPAddress']})
     if($route.Count -ne 1){throw 'A unique client-to-peer route is required.'}
     $clientAddress=$route[0].IPAddress;$alias=$route[0].InterfaceAlias
+    $ipInterface=@(Get-NetIPInterface -InterfaceIndex $route[0].InterfaceIndex -AddressFamily IPv4)
+    if($ipInterface.Count -ne 1 -or $ipInterface[0].NlMtuBytes -lt 1){throw 'A unique client data interface with positive MTU is required.'}
+    $mtu=$ipInterface[0].NlMtuBytes
     $remote=Invoke-Command -Session $peer -ScriptBlock {
         if(@(Get-Process -Name Runner.Worker,ctsTraffic,ArrivalTcp -ErrorAction Ignore).Count){throw 'Peer guest is busy.'}
         $root=Join-Path $env:TEMP ('managed-gc-peer-'+[guid]::NewGuid().ToString('N'))
@@ -163,6 +167,7 @@ try {
         $after.ReceivedBytes-$before.ReceivedBytes -lt $r.targets[0].responseBytes){throw 'The non-loopback NIC did not account for the remote payload.'}
     $result=[ordered]@{schema=1;workload='managed-gc-mixed';outcome='collected';connections=$r.connections
         bytesSent=$r.bytesSent;bytesReceived=$r.bytesReceived;payloadBytesPerDirection=$payloadBytes
+        dataInterfaceMtuBytes=$mtu
         targets=$r.targets;managedGc=$r.managedGc
         arrivalRate=$r.arrivalRate;maxLaunchLagMilliseconds=$r.maxLaunchLagMilliseconds
         cpuCoverage='sampled-etw-only';executionTopology='two-existing-guests-plus-client-loopback'
