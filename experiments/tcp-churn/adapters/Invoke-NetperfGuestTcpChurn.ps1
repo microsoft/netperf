@@ -6,7 +6,7 @@ param(
     [Parameter(Mandatory)][string]$VmName,
     [Parameter(Mandatory)][pscredential]$Credential,
     [Parameter(Mandatory)][string]$PublishDirectory,
-    [ValidateRange(5,120)][int]$Seconds=15,
+    [ValidateRange(1,120)][int]$Seconds=15,
     [ValidateRange(1,1024)][int]$Connections=16,
     [switch]$ProfileCpu,
     [string]$AnalyzerDirectory,
@@ -23,6 +23,7 @@ if($ManagedGc -and (-not $ProfileCpu -or $SynDrop -or $ProbePeer -or $PeerMeasur
 if($PSBoundParameters.ContainsKey('ManagedGcPayloadBytes') -and -not $ManagedGc){
     throw 'Managed-GC payload selection requires managed-GC diagnostic mode.'
 }
+if($Seconds -lt 5 -and -not $ManagedGc){throw 'Intervals below five seconds require managed-GC diagnostic mode.'}
 if (Test-Path -LiteralPath $PublishDirectory) { throw 'Use a new publication directory.' }
 New-Item -ItemType Directory -Path $PublishDirectory -ErrorAction Stop | Out-Null
 $session=$null; $guestRoot=$null; $phase='guest-connect'; $success=$false; $startup=$null

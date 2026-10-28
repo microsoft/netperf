@@ -35,6 +35,16 @@ try {
     }
     if(-not $rejected -or (Test-Path -LiteralPath $directory)){throw 'Payload selection outside managed-GC mode mutated state or was accepted.'}
     $checks++
+    $rejected=$false
+    try {
+        & (Join-Path $PSScriptRoot 'adapters\Invoke-NetperfGuestTcpChurn.ps1') `
+            -VmName 'unused-test-only' -Credential $credential -PublishDirectory $directory -Seconds 1
+    }catch {
+        if($_.Exception.Message -notmatch 'Intervals below five seconds require'){throw}
+        $rejected=$true
+    }
+    if(-not $rejected -or (Test-Path -LiteralPath $directory)){throw 'A short interval outside managed-GC mode mutated state or was accepted.'}
+    $checks++
     foreach($file in @('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1','Invoke-NetperfGuestTcpChurn.ps1')) {
         $tokens=$null;$errors=$null
         $parsed=[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot "adapters\$file"),[ref]$tokens,[ref]$errors)
@@ -89,7 +99,7 @@ try {
     try {
         & (Join-Path $PSScriptRoot 'adapters\Invoke-ManagedGcGuestEntry.ps1') `
             -CredentialFile (Join-Path $directory 'absent.clixml') -ScratchParent $directory `
-            -PublishDirectory $publish -AnalyzerDirectory (Join-Path $directory 'unused-analyzer') -Seconds 1
+            -PublishDirectory $publish -AnalyzerDirectory (Join-Path $directory 'unused-analyzer') -Seconds 0
     }catch {
         if($_.FullyQualifiedErrorId -notmatch 'ParameterArgumentValidationError'){throw}
         $rejected=$true

@@ -616,6 +616,9 @@ Client byte accounting includes both targets; only half travels on the remote
 path. Results record the payload size and the client data-interface MTU.
 The 1460-byte choice is an MTU-1500/MSS diagnostic control, not a claim about
 negotiated TCP options or a customer-equivalent application message size.
+Managed-GC mode alone permits `seconds=1` for a denser independently scheduled
+arrival stream; other guest campaigns retain their five-second minimum.
+This changes offered rate, not a shared connection or first-data release barrier.
 
 This mode captures kernel CPU samples, exact TCP probes and CLR GC events.
 It publishes only allowlisted numeric/fixed-label results, public-symbol CPU

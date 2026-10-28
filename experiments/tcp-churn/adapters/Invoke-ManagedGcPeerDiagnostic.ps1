@@ -7,7 +7,7 @@ param(
     [Parameter(Mandatory)][string]$ScratchParent,
     [Parameter(Mandatory)][string]$PublishDirectory,
     [Parameter(Mandatory)][string]$AnalyzerDirectory,
-    [ValidateRange(5,120)][int]$Seconds=5,
+    [ValidateRange(1,120)][int]$Seconds=5,
     [ValidateRange(1,1024)][int]$Connections=256,
     [ValidateRange(1,1048576)][int]$PayloadBytes=65536
 )
