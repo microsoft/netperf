@@ -59,4 +59,31 @@ foreach($case in @('wrong-owner','wrong-count','missing-close','out-of-order','i
     if(-not $rejected){throw "Invalid TCP attribution input was accepted: $case"}
     $checks++
 }
+$manifest=[pscustomobject]@{Events=@(
+    [pscustomobject]@{Id=1;Version=0;Task=[pscustomobject]@{Name='TcpConnectTcbComplete'}
+        Template='<template xmlns="http://schemas.microsoft.com/win/2004/08/events"><data name="Tcb"/><data name="ProcessId"/><data name="Status"/></template>'},
+    [pscustomobject]@{Id=2;Version=0;Task=[pscustomobject]@{Name='TcpBlackHoleDetectionEntry'}
+        Template='<template xmlns="http://schemas.microsoft.com/win/2004/08/events"><data name="Tcb"/></template>'},
+    [pscustomobject]@{Id=3;Version=0;Task=[pscustomobject]@{Name='TcpCloseTcbRequest'}
+        Template='<template xmlns="http://schemas.microsoft.com/win/2004/08/events"><data name="Tcb"/></template>'},
+    [pscustomobject]@{Id=4;Version=0;Task=[pscustomobject]@{Name='TcpBlackHoleDetectionFailed'}
+        Template='<template xmlns="http://schemas.microsoft.com/win/2004/08/events"><data name="Tcb"/><data name="TraceString"/></template>'}
+)}
+$time=[datetime]::UtcNow
+function Trace-Record($Id,[object[]]$Values) {
+    [pscustomobject]@{Id=$Id;Version=0;TimeCreated=$time;Properties=@($Values|ForEach-Object{[pscustomobject]@{Value=$_}})}
+}
+$events=@((Trace-Record 1 @(1,10,0)),(Trace-Record 4 @(1,'ACK token only')),
+    (Trace-Record 2 @(1)),(Trace-Record 3 @(1)),(Trace-Record 1 @(2,20,0)),
+    (Trace-Record 2 @(2)),(Trace-Record 3 @(2)))
+$normalized=& (Get-Module TcpRecoveryEvidence) {
+    param($items,$metadata,$begin,$finish)
+    function Get-WinEvent {param($Path,[switch]$Oldest) $items}
+    Read-TcpRecoveryEvidence -Provider $metadata -TracePath 'unused-synthetic-trace.etl' `
+        -StartUtc $begin -EndUtc $finish -OwnerProcessId 10 -ExpectedConnections 1
+} $events $manifest ($time.AddSeconds(-1)) ($time.AddSeconds(1))
+if($normalized.ownedConnectionCompletions -ne 1 -or $normalized.ownedConnectionClosures -ne 1 -or
+    $normalized.publicProbeCounts.TcpBlackHoleDetectionEntry -ne 1 -or
+    $normalized.failedAttemptReasonMentionsAckToken -ne 1){throw 'Public-manifest normalization did not preserve owner/lifetime attribution.'}
+$checks++
 Write-Output "Passed $checks TCP recovery attribution cases; no trace identities, process IDs, or addresses were exported."

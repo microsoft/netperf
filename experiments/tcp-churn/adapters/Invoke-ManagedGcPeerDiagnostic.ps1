@@ -356,6 +356,12 @@ if($null -ne $failure -or $cleanupErrors.Count) {
                 $tcp.outcome -ne 'counted' -or $tcp.eventsLost -ne 0){
                 throw 'The rejected-workload diagnostic did not verify lossless matching CPU/TCP coverage.'
             }
+            if($PeerRecovery -and $clientFailure.connectionsConnected -gt 0) {
+                Import-Module (Join-Path $PSScriptRoot 'TcpRecoveryEvidence.psm1') -Force
+                $ownedCounts=Read-TcpRecoveryEvidence -Provider $provider -TracePath (Join-Path $diagnostics 'tcp.etl') `
+                    -StartUtc ([datetime]$start) -EndUtc ([datetime]$tcpEnd) -OwnerProcessId $clientPid `
+                    -ExpectedConnections $clientFailure.connectionsConnected
+            }
             $diagnosticVerified=$true
         }catch{$diagnosticFailure=$_}
     }
@@ -369,6 +375,7 @@ if($null -ne $failure -or $cleanupErrors.Count) {
         @{schema=1;workload='managed-gc-mixed';outcome='failed';phase=$phase;failureType=$type;failureCode=$code
             toolExitCode=$toolCode;cleanupErrorCount=$cleanupErrors.Count;cleanupVerified=($cleanupErrors.Count -eq 0)
             peerRecovery=$pulseResult;peerDataInterfaceDhcpEnabled=$peerDhcpEnabled;clientFailure=$clientFailure
+            tcpRecovery=$ownedCounts
             rejectedWorkloadCpuTcpVerified=$diagnosticVerified
             diagnosticFailureType=$(if($null -ne $diagnosticFailure){$diagnosticFailure.Exception.GetType().FullName}else{$null})
             conclusion='no-accepted-measurement'}|ConvertTo-Json -Depth 5|Set-Content (Join-Path $PublishDirectory 'result.json')
@@ -402,38 +409,8 @@ try {
     if($PeerRecovery) {
         $phase='verify-recovery-coverage'
         Import-Module (Join-Path $PSScriptRoot 'TcpRecoveryEvidence.psm1') -Force
-        $layouts=@{}
-        foreach($metadata in $provider.Events) {
-            if($null -eq $metadata.Task -or $metadata.Task.Name -notin @('TcpConnectTcbComplete','TcpInsertConnectionTuple','TcpCloseTcbRequest',
-                'TcpDataTransferRetransmitRound','TcpBlackHoleDetectionEntry','TcpBlackHoleDetectionExit','TcpBlackHoleDetectionFailed','TcpBhDetectFullSizeAck')){continue}
-            $template=[xml]$metadata.Template
-            $names=@($template.GetElementsByTagName('data','http://schemas.microsoft.com/win/2004/08/events')|ForEach-Object{$_.GetAttribute('name')})
-            $tcbIndex=[array]::IndexOf($names,'Tcb')
-            $pidIndex=[array]::IndexOf($names,'ProcessId')
-            $statusIndex=[array]::IndexOf($names,'Status')
-            $reasonIndex=[array]::IndexOf($names,'TraceString')
-            if($tcbIndex -lt 0 -or ($metadata.Task.Name -eq 'TcpConnectTcbComplete' -and ($pidIndex -lt 0 -or $statusIndex -lt 0)) -or
-                ($metadata.Task.Name -eq 'TcpBlackHoleDetectionFailed' -and $reasonIndex -lt 0)){
-                throw 'The public TCP manifest lacks required owner/lifetime correlation fields.'
-            }
-            $layouts[([string]$metadata.Id+':'+$metadata.Version)]=@{task=$metadata.Task.Name;tcb=$tcbIndex;pid=$pidIndex;status=$statusIndex;reason=$reasonIndex}
-        }
-        $tcpRows=[Collections.Generic.List[object]]::new()
-        $startUtc=([datetime]$start).ToUniversalTime()
-        $tcpEndUtc=([datetime]$tcpCoverageEnd).ToUniversalTime()
-        Get-WinEvent -Path (Join-Path $diagnostics 'tcp.etl') -Oldest|ForEach-Object{
-            $key=[string]$_.Id+':'+$_.Version
-            if($_.TimeCreated.ToUniversalTime() -ge $startUtc -and $_.TimeCreated.ToUniversalTime() -le $tcpEndUtc -and $layouts.ContainsKey($key)){
-                if($tcpRows.Count -ge 200000){throw 'TCP owner/lifetime evidence exceeded its bound.'}
-                $layout=$layouts[$key]
-                $owner=if($layout.pid -ge 0){[uint32]$_.Properties[$layout.pid].Value}else{0}
-                $status=if($layout.status -ge 0){[uint32]$_.Properties[$layout.status].Value}else{0}
-                $ackToken=if($layout.reason -ge 0){[regex]::IsMatch([string]$_.Properties[$layout.reason].Value,'(?i)\bACK\b')}else{$false}
-                $tcpRows.Add([pscustomobject]@{kind=$layout.task;tcb=[uint64]$_.Properties[$layout.tcb].Value
-                    processId=$owner;status=$status;timestampTicks=$_.TimeCreated.ToUniversalTime().Ticks;failureReasonAckToken=$ackToken})
-            }
-        }
-        $ownedCounts=Get-TcpRecoveryCounts -Records $tcpRows.ToArray() -OwnerProcessId $clientPid -ExpectedConnections $count
+        $ownedCounts=Read-TcpRecoveryEvidence -Provider $provider -TracePath (Join-Path $diagnostics 'tcp.etl') `
+            -StartUtc ([datetime]$start) -EndUtc ([datetime]$tcpCoverageEnd) -OwnerProcessId $clientPid -ExpectedConnections $count
         $result.tcpRecovery=$ownedCounts
         $recoveryStart=([datetime]$pulseResult.restoredUtc).ToUniversalTime()
         $recoveryEnd=if($recoveryStart.AddSeconds(2) -lt $endUtc){$recoveryStart.AddSeconds(2)}else{$endUtc}
