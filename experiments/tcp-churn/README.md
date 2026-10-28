@@ -610,10 +610,12 @@ install a driver, alter a feature, or change global networking/offload policy.
 `connections` is the bounded client in-flight limit; 8,192 total requests are
 offered over the nominal `seconds` interval. Heap pressure is bounded to 512 MiB
 and requires sufficient free guest memory. `managed_gc_payload_bytes` selects
-2 KiB, 64 KiB (default), or 1 MiB requests and responses for controlled comparisons
+1460-byte, 2 KiB, 64 KiB (default), or 1 MiB requests and responses for controlled comparisons
 without changing offloads, arrival scheduling, GC pressure or the in-flight limit.
 Client byte accounting includes both targets; only half travels on the remote
 path. Results record the payload size and the client data-interface MTU.
+The 1460-byte choice is an MTU-1500/MSS diagnostic control, not a claim about
+negotiated TCP options or a customer-equivalent application message size.
 
 This mode captures kernel CPU samples, exact TCP probes and CLR GC events.
 It publishes only allowlisted numeric/fixed-label results, public-symbol CPU

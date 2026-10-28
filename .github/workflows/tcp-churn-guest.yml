@@ -39,7 +39,7 @@ on:
       managed_gc_payload_bytes:
         description: Request and response bytes for the managed-GC diagnostic only
         type: choice
-        options: ['2048', '65536', '1048576']
+        options: ['1460', '2048', '65536', '1048576']
         default: '65536'
   push:
     branches: [main, 'user/mtfriesen/tcp-churn-public']
