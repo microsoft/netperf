@@ -54,8 +54,11 @@ internal static class Program
         if (args.Length == 6 && args[0] == "--capture-probes")
         {
             string captureStage = "input";
+            Action<string> progress = capturePhase => File.WriteAllText(args[3] + ".progress.json",
+                JsonConvert.SerializeObject(new { schema = 1, outcome = "capture-starting", stage = capturePhase }));
             try
             {
+                progress(captureStage);
                 var state = JObject.Parse(File.ReadAllText(args[2]));
                 var ids = state["publicProviderEvents"].Select(item => (int)item["Id"]).Distinct().ToList();
                 if (ids.Count == 0 || ids.Count > 16) throw new InvalidOperationException("Invalid public probe list.");
@@ -63,12 +66,14 @@ internal static class Program
                 var duration = int.Parse(args[5]);
                 if (duration < 15 || duration > 300) throw new InvalidOperationException("Invalid capture bound.");
                 captureStage = "session-create";
+                progress(captureStage);
                 using (var capture = new TraceEventSession("TcpChurnExact-" + Guid.NewGuid().ToString("N"), args[1]))
                 {
                     capture.StopOnDispose = true;
                     capture.BufferSizeMB = 64;
                     capture.CircularBufferMB = 64;
                     captureStage = "provider-enable";
+                    progress(captureStage);
                     capture.EnableProvider(provider, TraceEventLevel.Verbose, ulong.MaxValue,
                         new TraceEventProviderOptions { EventIDsToEnable = ids });
                     captureStage = "ready";

@@ -72,6 +72,9 @@ try {
     if(@(Get-Process -Name Runner.Worker,ctsTraffic,ArrivalTcp -ErrorAction Ignore).Count){throw 'Client guest is busy.'}
     if((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory*1024 -lt $heapMiB*4MB){throw 'Insufficient free guest memory for the bounded GC diagnostic.'}
     if(-not(Test-Path -LiteralPath $analyzer)){throw 'The public-source analyzer is missing.'}
+    $phase='analyzer-smoke'
+    $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @('--self-test') -Directory $diagnostics `
+        -LogPrefix (Join-Path $diagnostics 'analyzer-smoke') -TimeoutSeconds 30
     $phase='peer-connect'
     $peer=New-PSSession -ComputerName netperf-peer -Credential $credential -ConfigurationName PowerShell.7
     $clientIdentity=(Get-CimInstance Win32_ComputerSystemProduct).UUID
@@ -353,6 +356,7 @@ try {
 finally {
     foreach($name in @('tcp','clr')){
         $startupFile=Join-Path $diagnostics ($name+'.ready.failure.json')
+        if(-not(Test-Path -LiteralPath $startupFile)){$startupFile=Join-Path $diagnostics ($name+'.ready.progress.json')}
         if(Test-Path -LiteralPath $startupFile){
             try{
                 $probeStartup[$name]=Get-Content -LiteralPath $startupFile -Raw|ConvertFrom-Json|
