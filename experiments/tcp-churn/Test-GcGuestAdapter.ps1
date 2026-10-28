@@ -27,9 +27,37 @@ try {
     }
     foreach($file in @('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1','Invoke-NetperfGuestTcpChurn.ps1')) {
         $tokens=$null;$errors=$null
-        $null=[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot "adapters\$file"),[ref]$tokens,[ref]$errors)
+        $parsed=[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot "adapters\$file"),[ref]$tokens,[ref]$errors)
         if($errors.Count){throw ($errors|Out-String)}
+        if($file -eq 'Invoke-NetperfGuestTcpChurn.ps1'){$guestAst=$parsed}
     }
+    $launch=@($guestAst.FindAll({
+        param($node)
+        if($node -isnot [Management.Automation.Language.CommandAst] -or $node.GetCommandName() -ne 'Invoke-Command'){return $false}
+        foreach($element in $node.CommandElements) {
+            if($element -is [Management.Automation.Language.ScriptBlockExpressionAst] -and
+                'managedGc' -in @($element.ScriptBlock.ParamBlock.Parameters.Name.VariablePath.UserPath)){return $true}
+        }
+        return $false
+    },$true))
+    if($launch.Count -ne 1){throw 'The actual guest child launch call site must be uniquely identified.'}
+    $actual=& {
+        function Invoke-Command {
+            [CmdletBinding()]
+            param($Session,[scriptblock]$ScriptBlock,[object[]]$ArgumentList)
+            Write-Output -NoEnumerate $ArgumentList
+        }
+        $session=$null;$guestRoot='unused-test-root';$Seconds=5;$Connections=1024
+        $ProfileCpu=[switch]::new($true);$SynDrop=[switch]::new($false)
+        $PeerMeasurement=[switch]::new($false);$ManagedGc=[switch]::new($true)
+        & ([scriptblock]::Create($launch[0].Extent.Text))
+    }
+    if($actual.Count -ne 8 -or $actual[3] -isnot [bool] -or -not $actual[3] -or
+        $actual[4] -isnot [bool] -or $actual[4] -or $actual[5] -isnot [bool] -or $actual[5] -or
+        $actual[6] -isnot [bool] -or -not $actual[6]){
+        throw 'The actual guest launch must transport Boolean mode flags, not truthy literal strings.'
+    }
+    $checks++
     $null=New-Item -ItemType Directory -Path $directory
     $publish=Join-Path $directory 'publish'
     $rejected=$false
