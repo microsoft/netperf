@@ -715,6 +715,18 @@ scoped firewall rules were removed; the original isolated physical fixture was
 retained for further work. These experiments still do not reproduce the
 customer-scale target-lock hotspot.
 
+A bounded scaling follow-up used status/error-only CTS console logging. Its
+8,192-connection control passed with all full-size ACKs and peaked at 16.56
+busy client CPU equivalents. The 65,536-connection case enabled CTS
+`PortScalability` and verified that name in its effective options, but still
+encountered port-allocation errors and was rejected. Existing TCP templates had
+no auto-reuse range, so CTS did not select `ReuseUnicastPort`; global TCP policy
+was intentionally left unchanged. This capacity limit applies to that candidate
+workload, not as an explanation of the customer's contention. Further high-count
+runs now require a validated existing reuse prerequisite before workloads start.
+The later fan-out trial was not started after this failure, and restoration/
+owned-fixture cleanup still completed.
+
 **Acceptance remains open:** plausible traffic must show the identified
 path-cache lock consuming roughly 30 CPUs, with contemporaneous per-CPU
 measurements and exact stack/instruction or lock-identity attribution. Neither
