@@ -148,6 +148,12 @@ finally {
         $report.restored=$true
     }catch{$restoreFailure=$_}
     $report.phase=$phase
+    if($null -ne $failure) {
+        $report.failureType=$failure.Exception.GetType().FullName
+        $report.failureCode=$failure.Exception.HResult
+        $report.toolExitCode=if($failure.Exception.Data.Contains('ToolExitCode')){$failure.Exception.Data['ToolExitCode']}else{$null}
+    }
+    if($null -ne $restoreFailure){$report.restoreFailureType=$restoreFailure.Exception.GetType().FullName}
     $report.outcome=if($null -eq $failure -and $null -eq $restoreFailure){'recovered'}else{'failed'}
     $report|ConvertTo-Json|Set-Content -LiteralPath $ReportFile
 }

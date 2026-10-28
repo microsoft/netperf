@@ -258,12 +258,15 @@ finally {
 }
 if($null -ne $failure -or $cleanupErrors.Count) {
     if($publishOwned) {
+        if($PeerRecovery -and (Test-Path -LiteralPath (Join-Path $diagnostics 'neighbor-pulse.json'))) {
+            $pulseResult=Get-Content (Join-Path $diagnostics 'neighbor-pulse.json') -Raw|ConvertFrom-Json
+        }
         $type=if($null -ne $failure){$failure.Exception.GetType().FullName}else{'cleanup-failure'}
         $code=if($null -ne $failure){$failure.Exception.HResult}else{$null}
         $toolCode=if($null -ne $failure -and $failure.Exception.Data.Contains('ToolExitCode')){$failure.Exception.Data['ToolExitCode']}else{$null}
         @{schema=1;workload='managed-gc-mixed';outcome='failed';phase=$phase;failureType=$type;failureCode=$code
             toolExitCode=$toolCode;cleanupErrorCount=$cleanupErrors.Count;cleanupVerified=($cleanupErrors.Count -eq 0)
-            conclusion='no-accepted-measurement'}|ConvertTo-Json|Set-Content (Join-Path $PublishDirectory 'result.json')
+            peerRecovery=$pulseResult;conclusion='no-accepted-measurement'}|ConvertTo-Json -Depth 5|Set-Content (Join-Path $PublishDirectory 'result.json')
     }
     if($null -ne $failure){$cleanupErrors.Insert(0,$failure.Exception)}
     throw [AggregateException]::new('Managed-GC diagnostic or required cleanup failed.',$cleanupErrors)
