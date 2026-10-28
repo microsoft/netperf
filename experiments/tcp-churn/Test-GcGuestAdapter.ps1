@@ -86,7 +86,19 @@ try {
         if(-not $rejected -or (Test-Path $directory)){throw 'Invalid receiver-GC mode mutated state or was accepted.'}
         $checks++
     }
-    foreach($file in @('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1','Invoke-NetperfGuestTcpChurn.ps1','Invoke-ScopedNeighborPulse.ps1','Set-ScopedDataAddresses.ps1','GcReceiverTraffic.psm1')) {
+    foreach($extra in @(@{ManagedGcRouteRefresh=$true},@{ManagedGc=$true;ProfileCpu=$true;ManagedGcRouteRefresh=$true})) {
+        $rejected=$false
+        try {
+            & (Join-Path $PSScriptRoot 'adapters\Invoke-NetperfGuestTcpChurn.ps1') `
+                -VmName 'unused-test-only' -Credential $credential -PublishDirectory $directory @extra
+        }catch {
+            if($_.Exception.Message -notmatch 'Route refresh requires'){throw}
+            $rejected=$true
+        }
+        if(-not $rejected -or (Test-Path $directory)){throw 'Invalid route-control mode mutated state or was accepted.'}
+        $checks++
+    }
+    foreach($file in @('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1','Invoke-NetperfGuestTcpChurn.ps1','Invoke-ScopedNeighborPulse.ps1','Set-ScopedDataAddresses.ps1','GcReceiverTraffic.psm1','Invoke-ScopedPathRefresh.ps1')) {
         $tokens=$null;$errors=$null
         $parsed=[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot "adapters\$file"),[ref]$tokens,[ref]$errors)
         if($errors.Count){throw ($errors|Out-String)}
@@ -115,9 +127,11 @@ try {
         $ManagedGcIsolatedData=[switch]::new($true);$ManagedGcRecoveryMilliseconds=3000
         $ManagedGcProcessRole='client'
         $ManagedGcHeapLayout='graph'
+        $ManagedGcRouteRefresh=[switch]::new($true)
         & ([scriptblock]::Create($launch[0].Extent.Text))
     }
-    if($actual.Count -ne 14 -or $actual[12] -ne 'graph' -or $actual[11] -ne 'client' -or $actual[7] -ne 2048 -or $actual[8] -isnot [bool] -or -not $actual[8] -or
+    if($actual.Count -ne 15 -or $actual[13] -isnot [bool] -or -not $actual[13] -or
+        $actual[12] -ne 'graph' -or $actual[11] -ne 'client' -or $actual[7] -ne 2048 -or $actual[8] -isnot [bool] -or -not $actual[8] -or
         $actual[9] -isnot [bool] -or -not $actual[9] -or $actual[10] -ne 3000 -or
         $actual[3] -isnot [bool] -or -not $actual[3] -or
         $actual[4] -isnot [bool] -or $actual[4] -or $actual[5] -isnot [bool] -or $actual[5] -or

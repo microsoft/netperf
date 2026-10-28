@@ -13,7 +13,8 @@ param(
     [switch]$IsolatedData,
     [int]$RecoveryMilliseconds=8000,
     [ValidateSet('client','server')][string]$GcProcessRole='client',
-    [ValidateSet('arrays','graph')][string]$HeapLayout='arrays'
+    [ValidateSet('arrays','graph')][string]$HeapLayout='arrays',
+    [switch]$RouteRefresh
 )
 $ErrorActionPreference='Stop'
 if($PublishDirectory -ne (Join-Path $ScratchParent 'publish')) {

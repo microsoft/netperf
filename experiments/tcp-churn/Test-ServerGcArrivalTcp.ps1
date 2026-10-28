@@ -54,7 +54,8 @@ try {
     }
     $gc=$r.managedGc
     $observed=Get-Content ($serverOutput+'.gc.json') -Raw|ConvertFrom-Json
-    if($observed.heapLayout -ne $HeapLayout -or $observed.collectionEndUtc -ne $gc.collectionEndUtc -or
+    if((Get-Content ($serverOutput+'.gc.json.begin') -Raw) -ne 'pre-collection-call' -or
+        $observed.heapLayout -ne $HeapLayout -or $observed.collectionEndUtc -ne $gc.collectionEndUtc -or
         $observed.blockingCollectionMilliseconds -ne $gc.blockingCollectionMilliseconds){
         throw 'Independent GC observation did not match the final receiver result.'
     }
@@ -69,7 +70,7 @@ try {
         if(-not $child.process.WaitForExit(5000)){throw 'An owned server-GC endpoint remained.'}
         $child.process.Dispose()
     }
-    foreach($file in @('ArrivalTcp.exe','ArrivalTcp.exe.config','server.json','server.json.ready','server.json.gc.json','first.json','second.json')) {
+    foreach($file in @('ArrivalTcp.exe','ArrivalTcp.exe.config','server.json','server.json.ready','server.json.gc.json','server.json.gc.json.begin','first.json','second.json')) {
         $path=Join-Path $directory $file
         if(Test-Path $path){Remove-Item -LiteralPath $path -ErrorAction Stop}
     }

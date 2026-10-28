@@ -19,7 +19,8 @@ param(
     [switch]$ManagedGcIsolatedData,
     [ValidateRange(100,8000)][int]$ManagedGcRecoveryMilliseconds=8000,
     [ValidateSet('client','server')][string]$ManagedGcProcessRole='client',
-    [ValidateSet('arrays','graph')][string]$ManagedGcHeapLayout='arrays'
+    [ValidateSet('arrays','graph')][string]$ManagedGcHeapLayout='arrays',
+    [switch]$ManagedGcRouteRefresh
 )
 $ErrorActionPreference='Stop'
 if($ManagedGc -and (-not $ProfileCpu -or $SynDrop -or $ProbePeer -or $PeerMeasurement)){
@@ -35,6 +36,9 @@ if($ManagedGcProcessRole -eq 'server' -and (-not $ManagedGc -or -not $ManagedGcI
     throw 'Receiver GC requires managed-GC mode, isolated data and no neighbor pulse.'
 }
 if($ManagedGcHeapLayout -ne 'arrays' -and -not $ManagedGc){throw 'GC heap layout selection requires managed-GC diagnostic mode.'}
+if($ManagedGcRouteRefresh -and (-not $ManagedGc -or $ManagedGcProcessRole -ne 'server' -or -not $ManagedGcIsolatedData -or $ManagedGcPeerRecovery)){
+    throw 'Route refresh requires isolated receiver-GC mode without a neighbor pulse.'
+}
 if($PSBoundParameters.ContainsKey('ManagedGcRecoveryMilliseconds') -and -not $ManagedGcPeerRecovery){
     throw 'Recovery duration selection requires managed-GC peer recovery.'
 }
@@ -55,7 +59,8 @@ try {
             $clientRules=@(Get-NetFirewallRule -PolicyStore ActiveStore -ErrorAction Stop|Where-Object{$_.Name -like 'ManagedGcPeer-*' -or $_.Name -like 'ManagedGcReceiver-*'}).Count
             $clientStatic=@(Get-NetNeighbor -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|
                 Where-Object{$_.IPAddress -match '^198\.19\.240\.[1-6]$' -and [string]$_.State -eq 'Permanent'}).Count
-            if($clientAliases -or $clientRules -or $clientStatic){throw 'Owned client GC resources require restoration before further tests.'}
+            $clientRoutes=@(Get-NetRoute -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|Where-Object DestinationPrefix -eq '198.19.240.6/32').Count
+            if($clientAliases -or $clientRules -or $clientStatic -or $clientRoutes){throw 'Owned client GC resources require restoration before further tests.'}
             $clientCpus=(Get-CimInstance Win32_Processor|Measure-Object NumberOfLogicalProcessors -Sum).Sum
             if($clientCpus -lt 1){throw 'The client processor inventory did not return a positive count.'}
             $peer=New-PSSession -ComputerName netperf-peer -Credential $credential -ConfigurationName PowerShell.7 -ErrorAction Stop
@@ -66,19 +71,21 @@ try {
                     $rules=@(Get-NetFirewallRule -PolicyStore ActiveStore -ErrorAction Stop|Where-Object{$_.Name -like 'ManagedGcPeer-*' -or $_.Name -like 'ManagedGcReceiver-*'}).Count
                     $static=@(Get-NetNeighbor -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|
                         Where-Object{$_.IPAddress -match '^198\.19\.240\.[1-6]$' -and [string]$_.State -eq 'Permanent'}).Count
-                    if($aliases -or $rules -or $static){throw 'Owned peer GC resources require restoration before further tests.'}
+                    $routes=@(Get-NetRoute -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|Where-Object DestinationPrefix -eq '198.19.240.6/32').Count
+                    if($aliases -or $rules -or $static -or $routes){throw 'Owned peer GC resources require restoration before further tests.'}
                     [pscustomobject]@{cpus=(Get-CimInstance Win32_Processor|Measure-Object NumberOfLogicalProcessors -Sum).Sum
-                        aliases=$aliases;rules=$rules;static=$static}
+                        aliases=$aliases;rules=$rules;static=$static;routes=$routes}
                 }
                 $peerCpus=$peerState.cpus
                 if($peerCpus -lt 1){throw 'The peer processor inventory did not return a positive count.'}
                 [pscustomobject]@{schema=1;peerConnected=$true;clientLogicalProcessors=[int]$clientCpus;peerLogicalProcessors=[int]$peerCpus
                     clientOwnedAliases=$clientAliases;peerOwnedAliases=$peerState.aliases;clientOwnedRules=$clientRules;peerOwnedRules=$peerState.rules
-                    clientOwnedStaticPeers=$clientStatic;peerOwnedStaticPeers=$peerState.static;conclusion='connectivity-and-owned-resource-check'}
+                    clientOwnedStaticPeers=$clientStatic;peerOwnedStaticPeers=$peerState.static
+                    clientOwnedControlRoutes=$clientRoutes;peerOwnedControlRoutes=$peerState.routes;conclusion='connectivity-and-owned-resource-check'}
             } finally { Remove-PSSession $peer -ErrorAction Stop }
         } -ArgumentList $Credential
         $peerResult|Select-Object schema,peerConnected,clientLogicalProcessors,peerLogicalProcessors,clientOwnedAliases,peerOwnedAliases,
-            clientOwnedRules,peerOwnedRules,clientOwnedStaticPeers,peerOwnedStaticPeers,conclusion|ConvertTo-Json |
+            clientOwnedRules,peerOwnedRules,clientOwnedStaticPeers,peerOwnedStaticPeers,clientOwnedControlRoutes,peerOwnedControlRoutes,conclusion|ConvertTo-Json |
             Set-Content -LiteralPath (Join-Path $PublishDirectory 'peer-check.json') -Encoding utf8
         return
     }
@@ -108,13 +115,13 @@ try {
             -Recurse -ToSession $session -ErrorAction Stop
     }
     $adapterFiles=@('WindowsCts.psm1','Invoke-NetperfTcpChurn.ps1','Invoke-NetperfPeerCpu.ps1')
-    if($ManagedGc){$adapterFiles+=@('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1','Invoke-ScopedNeighborPulse.ps1','TcpRecoveryEvidence.psm1','Set-ScopedDataAddresses.ps1','GcReceiverTraffic.psm1')}
+    if($ManagedGc){$adapterFiles+=@('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1','Invoke-ScopedNeighborPulse.ps1','TcpRecoveryEvidence.psm1','Set-ScopedDataAddresses.ps1','GcReceiverTraffic.psm1','Invoke-ScopedPathRefresh.ps1')}
     foreach ($file in $adapterFiles) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $file) -Destination (Join-Path $remoteRoot "adapters\$file") -ToSession $session -ErrorAction Stop
     }
     $phase='guest-traffic'
     $exit=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
-        param($root,$seconds,$connections,$profile,$synDrop,$peerMeasurement,$managedGc,$managedGcPayloadBytes,$peerRecovery,$isolatedData,$recoveryMilliseconds,$gcProcessRole,$heapLayout,$credential)
+        param($root,$seconds,$connections,$profile,$synDrop,$peerMeasurement,$managedGc,$managedGcPayloadBytes,$peerRecovery,$isolatedData,$recoveryMilliseconds,$gcProcessRole,$heapLayout,$routeRefresh,$credential)
         if (@(Get-Process -Name 'Runner.Worker','ctsTraffic' -ErrorAction Ignore).Count) {
             throw 'Guest became busy before traffic setup.'
         }
@@ -134,6 +141,7 @@ try {
             if($peerRecovery){$extra+=@('-RecoveryMilliseconds',[string]$recoveryMilliseconds)}
             if($managedGc){$extra+=@('-GcProcessRole',$gcProcessRole)}
             if($managedGc){$extra+=@('-HeapLayout',$heapLayout)}
+            if($routeRefresh){$extra+='-RouteRefresh'}
         } else {
             $extra=@('-DedicatedLab')
             if ($profile) { $extra+=@('-ProfileCpu','-AnalyzerDirectory',(Join-Path $root 'analyzer')) }
@@ -155,7 +163,7 @@ try {
             $launch|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $root 'child-startup.json')
             if($credentialFile -and (Test-Path -LiteralPath $credentialFile)){Remove-Item -LiteralPath $credentialFile -ErrorAction Stop}
         }
-    } -ArgumentList $guestRoot,$Seconds,$Connections,([bool]$ProfileCpu),([bool]$SynDrop),([bool]$PeerMeasurement),([bool]$ManagedGc),$ManagedGcPayloadBytes,([bool]$ManagedGcPeerRecovery),([bool]$ManagedGcIsolatedData),$ManagedGcRecoveryMilliseconds,$ManagedGcProcessRole,$ManagedGcHeapLayout,$Credential
+    } -ArgumentList $guestRoot,$Seconds,$Connections,([bool]$ProfileCpu),([bool]$SynDrop),([bool]$PeerMeasurement),([bool]$ManagedGc),$ManagedGcPayloadBytes,([bool]$ManagedGcPeerRecovery),([bool]$ManagedGcIsolatedData),$ManagedGcRecoveryMilliseconds,$ManagedGcProcessRole,$ManagedGcHeapLayout,([bool]$ManagedGcRouteRefresh),$Credential
     $startup=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
         param($root)
         Get-Content -LiteralPath (Join-Path $root 'child-startup.json') -Raw|ConvertFrom-Json|

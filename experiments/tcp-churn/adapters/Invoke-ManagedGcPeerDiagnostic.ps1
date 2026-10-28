@@ -14,11 +14,15 @@ param(
     [switch]$IsolatedData,
     [ValidateRange(100,8000)][int]$RecoveryMilliseconds=8000,
     [ValidateSet('client','server')][string]$GcProcessRole='client',
-    [ValidateSet('arrays','graph')][string]$HeapLayout='arrays'
+    [ValidateSet('arrays','graph')][string]$HeapLayout='arrays',
+    [switch]$RouteRefresh
 )
 $ErrorActionPreference='Stop'
 if($GcProcessRole -eq 'server' -and (-not $IsolatedData -or $PeerRecovery)){
     throw 'Receiver GC requires isolated data and no neighbor pulse.'
+}
+if($RouteRefresh -and ($GcProcessRole -ne 'server' -or -not $IsolatedData -or $PeerRecovery)){
+    throw 'Route refresh requires isolated receiver-GC mode without a neighbor pulse.'
 }
 $sourceRoot=Split-Path $PSScriptRoot
 $diagnostics=Join-Path $ScratchParent 'managed-gc-diagnostics'
@@ -28,6 +32,7 @@ $client=$null;$localServer=$null;$tcpProbe=$null;$clrProbe=$null
 $neighborPulse=$null;$neighborArguments=@();$pulseResult=$null;$ownedCounts=$null;$peerDhcpEnabled=$null;$clientFailure=$null
 $localDataStarted=$false;$remoteDataStarted=$false
 $receiverState=$null;$receiverEvidence=$null
+$routeAgent=$null;$routeArguments=@();$routeReport=$null
 $failure=$null;$cleanupErrors=[Collections.Generic.List[Exception]]::new()
 $phase='preflight';$start=$null;$end=$null;$tcpEnd=$null;$result=$null
 $port=20300;$count=8192;$heapMiB=1024
@@ -217,6 +222,18 @@ try {
     $start=[DateTime]::UtcNow.ToString('o')
     $phase='managed-gc-traffic'
     $clientOutput=Join-Path $diagnostics 'client.json'
+    if($RouteRefresh) {
+        $phase='route-control-start'
+        $routeProgram=(Get-Command pwsh -CommandType Application -ErrorAction Stop).Source
+        $routeArguments=@('-NoProfile','-NonInteractive','-File',(Join-Path $PSScriptRoot 'Invoke-ScopedPathRefresh.ps1'),
+            '-InterfaceAlias',$alias,'-DataStateFile',(Join-Path $diagnostics 'data-original.clixml'),
+            '-StateFile',(Join-Path $diagnostics 'route-control-original.clixml'))
+        $routeAgent=Start-TcpChurnCollector -Program $routeProgram -Arguments ($routeArguments+@(
+            '-ReportFile',(Join-Path $diagnostics 'route-control.json'),'-ReadyFile',(Join-Path $diagnostics 'route-control.ready'),
+            '-BeginFile',($localOutput+'.gc.json.begin'),'-StopFile',(Join-Path $diagnostics 'route-control.stop')
+        )) -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'route-control-agent')
+        Wait-Ready $routeAgent (Join-Path $diagnostics 'route-control.ready')
+    }
     if($PeerRecovery) {
         $phase='neighbor-pulse-start'
         $pulseProgram=(Get-Command pwsh -CommandType Application -ErrorAction Stop).Source
@@ -353,6 +370,26 @@ finally {
         try{Remove-NetFirewallRule -Name $receiverState.Rule -ErrorAction Stop}catch{$cleanupErrors.Add($_.Exception)}
     }
     $tcpEnd=[DateTime]::UtcNow.ToString('o')
+    if($null -ne $routeAgent) {
+        try {
+            [IO.File]::WriteAllText((Join-Path $diagnostics 'route-control.stop'),'stop')
+            if(-not $routeAgent.Process.WaitForExit(30000)){
+                $routeAgent.Process.Kill($true)
+                if(-not $routeAgent.Process.WaitForExit(10000)){throw 'The owned route-control process tree did not terminate.'}
+                throw 'The route-control agent exceeded its bounded restoration deadline.'
+            }
+        }catch{$cleanupErrors.Add($_.Exception)}
+        finally {
+            try{Stop-TcpChurnCollector $routeAgent}catch{$cleanupErrors.Add($_.Exception)}
+            if(Test-Path -LiteralPath (Join-Path $diagnostics 'route-control-original.clixml')) {
+                try {
+                    $null=Invoke-TcpChurnTool -Program $routeProgram -Arguments ($routeArguments+@('-RestoreOnly',
+                        '-ReportFile',(Join-Path $diagnostics 'route-control-restored.json'))) -Directory $diagnostics `
+                        -LogPrefix (Join-Path $diagnostics 'route-control-restore') -TimeoutSeconds 30
+                }catch{$cleanupErrors.Add($_.Exception)}
+            }
+        }
+    }
     foreach($entry in @(@{child=$tcpProbe;stop='tcp.stop'},@{child=$clrProbe;stop='clr.stop'})) {
         if($null -eq $entry.child){continue}
         try {
@@ -434,6 +471,9 @@ if($null -ne $failure -or $cleanupErrors.Count) {
         if($PeerRecovery -and (Test-Path -LiteralPath (Join-Path $diagnostics 'neighbor-pulse.json'))) {
             $pulseResult=Get-Content (Join-Path $diagnostics 'neighbor-pulse.json') -Raw|ConvertFrom-Json
         }
+        if($RouteRefresh -and (Test-Path -LiteralPath (Join-Path $diagnostics 'route-control.json'))){
+            $routeReport=Get-Content (Join-Path $diagnostics 'route-control.json') -Raw|ConvertFrom-Json
+        }
         $type=if($null -ne $failure){$failure.Exception.GetType().FullName}else{'cleanup-failure'}
         $code=if($null -ne $failure){$failure.Exception.HResult}else{$null}
         $toolCode=if($null -ne $failure -and $failure.Exception.Data.Contains('ToolExitCode')){$failure.Exception.Data['ToolExitCode']}else{$null}
@@ -442,6 +482,7 @@ if($null -ne $failure -or $cleanupErrors.Count) {
             cleanupErrorTypes=@($cleanupErrors|ForEach-Object{$_.GetType().FullName})
             peerRecovery=$pulseResult;peerDataInterfaceDhcpEnabled=$peerDhcpEnabled;clientFailure=$clientFailure
             receiverEvidence=$receiverEvidence
+            routeRefreshControl=$routeReport
             tcpRecovery=$ownedCounts
             rejectedWorkloadCpuTcpVerified=$diagnosticVerified
             diagnosticFailureType=$(if($null -ne $diagnosticFailure){$diagnosticFailure.Exception.GetType().FullName}else{$null})
@@ -453,6 +494,17 @@ if($null -ne $failure -or $cleanupErrors.Count) {
 }
 $phase='public-symbol-analysis'
 try {
+    if($RouteRefresh) {
+        $phase='verify-route-control'
+        $routeReport=Get-Content (Join-Path $diagnostics 'route-control.json') -Raw|ConvertFrom-Json
+        if($routeReport.outcome -ne 'completed' -or -not $routeReport.added -or -not $routeReport.removed -or
+            -not $routeReport.sameInterfaceAndNextHop -or -not $routeReport.defaultRoutesPreserved -or
+            ([datetime]$routeReport.addedUtc).ToUniversalTime() -lt ([datetime]$start).ToUniversalTime() -or
+            ([datetime]$routeReport.addedUtc).ToUniversalTime() -gt ([datetime]$end).ToUniversalTime()){
+            throw 'The owned route control did not apply within the workload and restore unchanged default routing.'
+        }
+        $result.routeRefreshControl=$routeReport
+    }
     $phase='analyze-whole-cpu'
     $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @((Join-Path $diagnostics 'cpu.etl'),
         (Join-Path $PublishDirectory 'cpu-load.json'),$start,$end) -Directory $diagnostics `
@@ -523,7 +575,7 @@ try {
     @{schema=1;workload='managed-gc-mixed';outcome='failed';phase=$phase;failureType=$_.Exception.GetType().FullName
         failureCode=$_.Exception.HResult;toolExitCode=$toolCode;cleanupVerified=$true
         peerRecovery=$pulseResult;tcpRecovery=$ownedCounts;peerDataInterfaceDhcpEnabled=$peerDhcpEnabled
-        conclusion='analysis-not-accepted'}|
+        routeRefreshControl=$routeReport;conclusion='analysis-not-accepted'}|
         ConvertTo-Json -Depth 6|Set-Content (Join-Path $PublishDirectory 'result.json')
     throw
 }

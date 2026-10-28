@@ -729,6 +729,18 @@ The read-only `probe_peer` mode also rejects remaining owned GC processes,
 data aliases, firewall rules or permanent fixture neighbors, and publishes only
 numeric residual counts. It never removes resources or changes guest policy.
 
+The optional `managed_gc_route_refresh=true` mechanism control requires isolated
+receiver GC and no neighbor pulse. An independent agent observes a pre-call GC
+signal and adds exactly one host route to the owned benchmark peer, retaining
+the connected prefix's interface and on-link next hop. The more-specific entry
+is ActiveStore only; existing host routes reject admission, default routes are
+verified unchanged, and both agent `finally` and an ownership-checked controller
+pass remove the entry. The read-only residual check also rejects a remaining
+control route. Workload CPU windows exclude route-removal cleanup.
+This tests cached-path invalidation separately from ordinary receive pressure;
+it is not a claim that the route update exactly overlaps CLR suspension, causes
+a cache epoch change by itself, or represents a customer network event.
+
 `managed_gc_isolated_data=true` is a separate, explicit opt-in for fresh data
 paths. It requires both existing guest interfaces to already have DHCP disabled.
 It transactionally adds four client aliases and one peer alias, all ActiveStore

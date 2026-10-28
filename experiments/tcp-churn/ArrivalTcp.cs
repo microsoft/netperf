@@ -63,6 +63,7 @@ public static class ArrivalTcp
             if(heapMiB==0 || launchedNow<minimum || completedNow<1 || pendingNow<1 ||
                 Interlocked.CompareExchange(ref claim,1,0)!=0)return;
             launched=launchedNow;started=startedNow;completed=completedNow;pending=pendingNow;
+            File.WriteAllText(observationFile+".begin","pre-collection-call");
             before=GC.CollectionCount(GC.MaxGeneration);
             start=DateTime.UtcNow.ToString("o",CultureInfo.InvariantCulture);
             var clock=Stopwatch.StartNew();
@@ -224,6 +225,7 @@ public static class ArrivalTcp
         }
         if(File.Exists(args[6]))throw new IOException("Use a new result file.");
         if(gcHeapMiB>0 && File.Exists(args[6]+".gc.json"))throw new IOException("Use a new GC observation file.");
+        if(gcHeapMiB>0 && File.Exists(args[6]+".gc.json.begin"))throw new IOException("Use a new GC pre-call signal file.");
         TcpListener listener=null;
         try {
             byte[] response=new byte[responseSize];
