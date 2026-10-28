@@ -59,8 +59,8 @@ try {
     if($route.Count -ne 1){throw 'A unique client-to-peer route is required.'}
     $clientAddress=$route[0].IPAddress;$alias=$route[0].InterfaceAlias
     $ipInterface=@(Get-NetIPInterface -InterfaceIndex $route[0].InterfaceIndex -AddressFamily IPv4)
-    if($ipInterface.Count -ne 1 -or $ipInterface[0].NlMtuBytes -lt 1){throw 'A unique client data interface with positive MTU is required.'}
-    $mtu=$ipInterface[0].NlMtuBytes
+    if($ipInterface.Count -ne 1 -or $ipInterface[0].NlMtu -lt 1){throw 'A unique client data interface with positive MTU is required.'}
+    $mtu=$ipInterface[0].NlMtu
     $remote=Invoke-Command -Session $peer -ScriptBlock {
         if(@(Get-Process -Name Runner.Worker,ctsTraffic,ArrivalTcp -ErrorAction Ignore).Count){throw 'Peer guest is busy.'}
         $root=Join-Path $env:TEMP ('managed-gc-peer-'+[guid]::NewGuid().ToString('N'))
