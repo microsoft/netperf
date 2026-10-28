@@ -19,7 +19,7 @@ $peer=$null;$peerOwned=$false;$profileOwned=$false
 $client=$null;$localServer=$null;$tcpProbe=$null;$clrProbe=$null
 $failure=$null;$cleanupErrors=[Collections.Generic.List[Exception]]::new()
 $phase='preflight';$start=$null;$end=$null;$result=$null
-$port=20300;$count=8192;$heapMiB=512
+$port=20300;$count=8192;$heapMiB=1024
 $rate=[int][Math]::Ceiling($count/[double]$Seconds)
 $analyzer=Join-Path $AnalyzerDirectory 'CpuSamples.exe'
 $exe=Join-Path $diagnostics 'ArrivalTcp.exe'
