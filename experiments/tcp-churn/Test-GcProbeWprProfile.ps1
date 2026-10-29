@@ -15,7 +15,7 @@ try{
     & $program -TcpStateFile $tcp -ClrStateFile $clr -Output $profile
     [xml]$xml=Get-Content -LiteralPath $profile -Raw
     $providers=@($xml.WindowsPerformanceRecorder.Profiles.EventProvider)
-    if($providers.Count -ne 2 -or $providers[0].Strict -ne 'true' -or
+    if($providers.Count -ne 2 -or $providers[0].Strict -ne 'true' -or $providers[0].NonPagedMemory -ne 'true' -or
         $providers[0].Keywords.Keyword.Value -ne '0x500000084' -or $providers[1].Keywords.Keyword.Value -ne '0x1' -or
         (@($providers[0].EventFilters.EventId.Value)-join ',') -ne '1004,1017' -or
         (@($providers[1].EventFilters.EventId.Value)-join ',') -ne '1,2,9'){

@@ -797,6 +797,9 @@ keywords needed by the selected events and the CLR GC keyword, rather than
 all provider keywords. The TCP selection is checked against the installed
 manifest. Event-ID filtering alone does not constrain provider-enable
 callbacks or unrelated rundown/control operations.
+The kernel TCP provider explicitly requests nonpaged event buffers; the
+dedicated hosted activation test checks TCP and CLR individually as well as
+the combined CPU/event recording.
 It also reports numeric free-space admission information for the guest temporary
 drives; busy or residual-resource failures retain fixed failure categories rather
 than exporting process names, paths or exception messages.

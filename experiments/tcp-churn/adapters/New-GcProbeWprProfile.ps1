@@ -24,7 +24,8 @@ foreach($entry in @(@{Id='Tcp';Path=$TcpStateFile},@{Id='Clr';Path=$ClrStateFile
     }|Sort-Object -Unique)
     if($ids.Count -lt 1 -or $ids.Count -gt 16){throw 'Each provider requires one to sixteen distinct public event IDs.'}
     $filters=($ids|ForEach-Object{'<EventId Value="{0}" />' -f $_}) -join ''
-    $definitions.Add(('<EventProvider Id="{0}" Name="{1}" Level="5" Strict="true"><Keywords><Keyword Value="{3}" /></Keywords><EventFilters FilterIn="true">{2}</EventFilters></EventProvider>' -f $entry.Id,$guid,$filters,$keywords))
+    $nonPaged=if($entry.Id -eq 'Tcp'){' NonPagedMemory="true"'}else{''}
+    $definitions.Add(('<EventProvider Id="{0}" Name="{1}" Level="5" Strict="true"{4}><Keywords><Keyword Value="{3}" /></Keywords><EventFilters FilterIn="true">{2}</EventFilters></EventProvider>' -f $entry.Id,$guid,$filters,$keywords,$nonPaged))
 }
 $xml=@"
 <?xml version="1.0" encoding="utf-8"?>
