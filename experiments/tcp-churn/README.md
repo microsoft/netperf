@@ -799,6 +799,8 @@ the requested count still must match measured cached paths, rather than
 assuming that successful socket creation pins every path.
 Fixture socket release is also a measured compiled loop, avoiding
 interpreter overhead between the observed GC signal and cache maintenance.
+Its maximum parallelism is the process's available CPU count, reported in
+the control result; only the separately owned idle UDP fixture is released.
 No productive TCP connection is preconnected or released by this operation.
 
 CPU summaries separately count queued lock-owner waits under path refresh

@@ -87,14 +87,14 @@ public static class ArrivalTcp
             }
             return sockets.ToArray();
         }catch{
-            foreach(var socket in sockets)socket.Dispose();
+            ReleaseIdlePathSockets(sockets);
             throw;
         }
     }
     public static void ReleaseIdlePathSockets(IEnumerable<UdpClient> sockets)
     {
         if(sockets==null)throw new ArgumentNullException("sockets");
-        foreach(var socket in sockets)socket.Dispose();
+        Parallel.ForEach(sockets,new ParallelOptions{MaxDegreeOfParallelism=Environment.ProcessorCount},socket=>socket.Dispose());
     }
     public static bool IsListenerReady(int processId,int port)
     {

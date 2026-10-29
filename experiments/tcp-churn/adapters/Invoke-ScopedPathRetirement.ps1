@@ -203,6 +203,7 @@ try {
     $release=[Diagnostics.Stopwatch]::StartNew()
     [ArrivalTcp]::ReleaseIdlePathSockets($sockets)
     $report.socketReleaseMilliseconds=$release.Elapsed.TotalMilliseconds
+    $report.socketReleaseParallelism=[Environment]::ProcessorCount
     $sockets.Clear()
     $report.measuredReleasedPaths=Read-PathCount
     if($report.measuredReleasedPaths -lt $PathCount){throw 'Released cached paths did not persist until retirement.'}
