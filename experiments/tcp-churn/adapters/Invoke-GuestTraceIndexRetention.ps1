@@ -11,6 +11,14 @@ param(
     [string]$VmName='netperf-windows-2022-client'
 )
 $ErrorActionPreference='Stop'
+function Get-TraceContentHash([string]$Path) {
+    $hash=[Security.Cryptography.SHA256]::Create()
+    try {
+        $stream=[IO.File]::OpenRead($Path)
+        try{[BitConverter]::ToString($hash.ComputeHash($stream)).Replace('-','')}
+        finally{$stream.Dispose()}
+    }finally{$hash.Dispose()}
+}
 function Read-RecorderStatus([string]$Executable,[string]$Arguments) {
     $settings=[Diagnostics.ProcessStartInfo]::new()
     $settings.FileName=$Executable;$settings.Arguments=$Arguments
@@ -66,9 +74,9 @@ $worker={
                     throw 'A derived index requires an ordinary, nonempty original ETL.'
                 }
                 $plan.Add([pscustomobject]@{Root=$root.FullName;Diagnostics=$diagnostics;Marker=$marker
-                    MarkerHash=(Get-FileHash -LiteralPath $marker -Algorithm SHA256).Hash
+                    MarkerHash=(Get-TraceContentHash $marker)
                     Index=$index;Raw=$raw;IndexBytes=$indexFile.Length
-                    IndexWriteTicks=$indexFile.LastWriteTimeUtc.Ticks;RawHash=(Get-FileHash -LiteralPath $raw -Algorithm SHA256).Hash})
+                    IndexWriteTicks=$indexFile.LastWriteTimeUtc.Ticks;RawHash=(Get-TraceContentHash $raw)})
             }
         }
         if($matchedCollections.Count -ne $Ticks.Count){throw 'Not every allowed synthetic collection matched exactly one owned root.'}
@@ -79,16 +87,16 @@ $worker={
             $current=Get-Item -LiteralPath $entry.Index -ErrorAction Stop
             if(((Get-Item -LiteralPath $entry.Root).Attributes -band [IO.FileAttributes]::ReparsePoint) -or
                 ((Get-Item -LiteralPath $entry.Diagnostics).Attributes -band [IO.FileAttributes]::ReparsePoint) -or
-                (Get-FileHash -LiteralPath $entry.Marker -Algorithm SHA256).Hash -ne $entry.MarkerHash -or
+                (Get-TraceContentHash $entry.Marker) -ne $entry.MarkerHash -or
                 $current.Extension -ne '.etlx' -or ($current.Attributes -band [IO.FileAttributes]::ReparsePoint) -or
                 $current.Length -ne $entry.IndexBytes -or $current.LastWriteTimeUtc.Ticks -ne $entry.IndexWriteTicks -or
-                (Get-FileHash -LiteralPath $entry.Raw -Algorithm SHA256).Hash -ne $entry.RawHash){
+                (Get-TraceContentHash $entry.Raw) -ne $entry.RawHash){
                 throw 'An owned derived index or its original ETL changed after planning.'
             }
         }
         foreach($entry in $Plan){
             Remove-Item -LiteralPath $entry.Index -ErrorAction Stop
-            if((Get-FileHash -LiteralPath $entry.Raw -Algorithm SHA256).Hash -ne $entry.RawHash){
+            if((Get-TraceContentHash $entry.Raw) -ne $entry.RawHash){
                 throw 'Original ETL integrity did not verify after derived-index removal.'
             }
         }

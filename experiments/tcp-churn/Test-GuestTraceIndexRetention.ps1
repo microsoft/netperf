@@ -9,9 +9,9 @@ if($errors.Count){throw ($errors|Out-String)}
 $functions=@($ast.FindAll({
     param($node)
     $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
-        $node.Name -in @('Get-OwnedIndexPlan','Remove-OwnedIndexes','Read-RecorderStatus')
+        $node.Name -in @('Get-OwnedIndexPlan','Remove-OwnedIndexes','Read-RecorderStatus','Get-TraceContentHash')
 },$true))
-if($functions.Count -ne 3){throw 'The actual retention status/planning/removal functions must be identified.'}
+if($functions.Count -ne 4){throw 'The actual retention status/hash/planning/removal functions must be identified.'}
 . ([scriptblock]::Create(($functions|ForEach-Object{$_.Extent.Text})-join "`n"))
 $directory=Join-Path ([IO.Path]::GetTempPath()) ('trace-index-test-'+[guid]::NewGuid().ToString('N'))
 $null=New-Item -ItemType Directory -Path $directory
@@ -61,6 +61,9 @@ try{
             ConvertTo-Json|Set-Content -LiteralPath $marker
         $raw=Join-Path $diagnostics 'cpu.etl';$index=Join-Path $diagnostics 'cpu.etlx'
         [IO.File]::WriteAllText($raw,'original synthetic trace fixture')
+        if((Get-TraceContentHash $raw) -ne (Get-FileHash -LiteralPath $raw -Algorithm SHA256).Hash){
+            throw 'The streaming SHA256 guard differs from the original content-hash contract.'
+        }
         [IO.File]::WriteAllText($index,'regenerable synthetic index fixture')
         $rejected=$false
         $details=@{examinedCollections=0;nearbyTicks=[Collections.Generic.List[long]]::new()}
