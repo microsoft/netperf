@@ -699,6 +699,17 @@ finally {
                 } -ArgumentList $receiverState.PeerRoot -ErrorAction Stop
             }catch{$receiverEvidence.remoteProducer=@{diagnosticErrorType=$_.Exception.GetType().FullName}}
         }
+        $receiverEvidence.dataNicDelta=$null
+        if($null -ne $before){
+            try {
+                $now=Get-NetAdapterStatistics -Name $alias -ErrorAction Stop
+                $receiverEvidence.dataNicDelta=[ordered]@{sentBytes=$now.SentBytes-$before.SentBytes;receivedBytes=$now.ReceivedBytes-$before.ReceivedBytes
+                    receivedDiscardedPackets=$now.ReceivedDiscardedPackets-$before.ReceivedDiscardedPackets
+                    receivedPacketErrors=$now.ReceivedPacketErrors-$before.ReceivedPacketErrors
+                    outboundDiscardedPackets=$now.OutboundDiscardedPackets-$before.OutboundDiscardedPackets
+                    outboundPacketErrors=$now.OutboundPacketErrors-$before.OutboundPacketErrors}
+            }catch{$receiverEvidence.dataNicDelta=@{diagnosticErrorType=$_.Exception.GetType().FullName}}
+        }
         $client=$receiverState.LocalClient
         $localServer=$receiverState.Receiver
     }
@@ -890,6 +901,34 @@ if($null -ne $failure -or $cleanupErrors.Count) {
                     }
                 }
             }
+        }catch{$diagnosticFailure=$_}
+    } elseif($NoTcpProbes -and $null -ne $receiverState -and $profileOwned -and $null -ne $start -and $null -ne $end -and
+        (Test-Path -LiteralPath (Join-Path $diagnostics 'cpu.etl'))) {
+        # CPU/CLR-only captures still show whether the stack stalled before a failed workload.
+        try {
+            $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @((Join-Path $diagnostics 'cpu.etl'),
+                (Join-Path $PublishDirectory 'cpu-load.json'),$start,$end) -Directory $diagnostics `
+                -LogPrefix (Join-Path $diagnostics 'failed-workload-cpu') -TimeoutSeconds 300
+            $cpu=Get-Content (Join-Path $PublishDirectory 'cpu-load.json') -Raw|ConvertFrom-Json
+            if($cpu.outcome -ne 'sampled' -or $cpu.eventsLost -ne 0 -or $cpu.unresolvedNetworkFrames -ne 0){
+                throw 'The rejected-workload CPU diagnostic did not verify lossless coverage.'
+            }
+            if($SpinLocks){
+                $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @('--spin-summary',(Join-Path $diagnostics 'cpu.etl'),
+                    (Join-Path $PublishDirectory 'lock-evidence.json'),$start,$end) -Directory $diagnostics `
+                    -LogPrefix (Join-Path $diagnostics 'failed-workload-spinlock') -TimeoutSeconds 300
+            }
+            if($null -ne $receiverEvidence -and $null -ne $receiverEvidence.gcObservation) {
+                $postStart=([datetime]$receiverEvidence.gcObservation.collectionEndUtc).ToUniversalTime()
+                $endUtc=([datetime]$end).ToUniversalTime()
+                $postEnd=if($postStart.AddSeconds(2) -lt $endUtc){$postStart.AddSeconds(2)}else{$endUtc}
+                if($postEnd -gt $postStart) {
+                    $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @((Join-Path $diagnostics 'cpu.etl'),
+                        (Join-Path $PublishDirectory 'cpu-after-gc.json'),$postStart.ToString('o'),$postEnd.ToString('o')) `
+                        -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'failed-receiver-post-gc') -TimeoutSeconds 300
+                }
+            }
+            $diagnosticVerified=$true
         }catch{$diagnosticFailure=$_}
     }
     if($publishOwned) {
