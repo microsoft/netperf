@@ -92,9 +92,73 @@ try {
         foreach($file in @($dataFile,$stateFile,$reportFile)){if(Test-Path -LiteralPath $file){Remove-Item -LiteralPath $file}}
         $checks++
     }
-    Write-Host "Passed $checks source-retirement ownership and restoration cases; no network operations were performed."
+    $tokens=$null;$errors=$null
+    $ast=[Management.Automation.Language.Parser]::ParseFile($program,[ref]$tokens,[ref]$errors)
+    if($errors.Count){throw ($errors|Out-String)}
+    $body=@($ast.FindAll({
+        param($node)
+        $node -is [Management.Automation.Language.TryStatementAst] -and
+            $node.Body.Extent.Text.Contains('$report.populationMilliseconds=')
+    },$true))
+    if($body.Count -ne 1){throw 'The actual cache-population lifecycle must be unique.'}
+    $statements=@($body[0].Body.Statements)
+    $first=@($statements|Where-Object{$_.Extent.Text -eq '$report.measuredHeldPaths=Read-PathCount'})
+    $last=@($statements|Where-Object{$_.Extent.Text.StartsWith('$report.establishedAtTrigger=')})
+    if($first.Count -ne 1 -or $last.Count -ne 1){throw 'The actual socket-release lifecycle boundaries must be unique.'}
+    $lifecycle=($statements|Where-Object{
+        $_.Extent.StartOffset -ge $first[0].Extent.StartOffset -and $_.Extent.StartOffset -lt $last[0].Extent.StartOffset
+    }|ForEach-Object{$_.Extent.Text})-join "`n"
+    Add-Type -TypeDefinition @'
+using System;
+using System.Collections;
+using System.IO;
+public static class ArrivalTcp {
+    public static string ReadyPath;
+    public static bool ExpectedReady;
+    public static int Releases;
+    public static void ReleaseIdlePathSockets(IList sockets) {
+        if (File.Exists(ReadyPath) != ExpectedReady || sockets.Count != 1)
+            throw new InvalidOperationException("The real lifecycle released sockets in the wrong phase.");
+        Releases++;
+    }
+}
+'@
+    foreach($phase in @('start','end')){
+        & {
+            $ReadyFile=Join-Path $directory 'ready';$BeginFile=Join-Path $directory 'begin'
+            $EndFile=if($phase -eq 'end'){Join-Path $directory 'end'}else{''}
+            $StopFile=Join-Path $directory 'stop';$PathCount=1024
+            [IO.File]::WriteAllText($BeginFile,'pre-collection-call')
+            if($EndFile){[IO.File]::WriteAllText($EndFile,'actual-completed-gc')}
+            $sockets=[Collections.ArrayList]::new();$null=$sockets.Add([object]::new())
+            $report=[ordered]@{};$fixture=@{Reads=0}
+            $wait=[Diagnostics.Stopwatch]::StartNew()
+            [ArrivalTcp]::ReadyPath=$ReadyFile;[ArrivalTcp]::ExpectedReady=($phase -eq 'start');[ArrivalTcp]::Releases=0
+            function Read-PathCount {
+                $fixture.Reads++
+                if($phase -eq 'end' -and $fixture.Reads -eq 2 -and
+                    ($sockets.Count -ne 0 -or (Test-Path -LiteralPath $ReadyFile))){
+                    throw 'Pre-released cached paths must verify before traffic readiness.'
+                }
+                $PathCount
+            }
+            & ([scriptblock]::Create($lifecycle))
+            if([ArrivalTcp]::Releases -ne 1 -or $sockets.Count -ne 0 -or
+                $report.measuredReleasedPaths -ne $PathCount -or
+                $fixture.Reads -ne $(if($phase -eq 'end'){3}else{2}) -or
+                -not (Test-Path -LiteralPath $ReadyFile)){
+                throw 'The real retirement lifecycle did not preserve release/readiness/count verification.'
+            }
+        }
+        foreach($name in @('ready','begin','end')){
+            $file=Join-Path $directory $name
+            if(Test-Path -LiteralPath $file){Remove-Item -LiteralPath $file}
+        }
+        $checks++
+    }
+    Write-Host "Passed $checks source-retirement ownership, restoration and actual socket-release lifecycle cases; no network operations were performed."
 }finally{
-    foreach($name in @('data.clixml','state.clixml','report.json')){
+    foreach($name in @('data.clixml','state.clixml','report.json','ready','begin','end')){
         $file=Join-Path $directory $name
         if(Test-Path -LiteralPath $file){Remove-Item -LiteralPath $file}
     }

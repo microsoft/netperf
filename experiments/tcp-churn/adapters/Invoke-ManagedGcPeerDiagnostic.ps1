@@ -334,7 +334,7 @@ try {
                 '-StateFile',(Join-Path $diagnostics ($stem+'-original.clixml')))
             if($type -eq 'cache'){$arguments+=@('-PathCount',[string]$CacheRetirePaths,
                 '-ReceiverExecutable',$exe,'-ReceiverProcessId',[string]$localServer.Process.Id)
-                if($CacheInterfaceGuid){$arguments+=@('-UnusedInterfaceGuid',$CacheInterfaceGuid)}
+                if($CacheInterfaceGuid){$arguments+=@('-UnusedInterfaceGuid',$CacheInterfaceGuid,'-EndFile',($localOutput+'.gc.json'))}
             }
             else{$arguments+=@('-NextHop',$(if($RouteVariant -eq 'peer-gateway'){'198.19.240.5'}else{'0.0.0.0'}),'-ExpectedPeerMac',$peerMac)}
             $control=[pscustomobject]@{Stem=$stem;Program=$program;Arguments=$arguments;Child=$null}
@@ -653,6 +653,11 @@ try {
             ([datetime]$cacheReport.removeApiStartUtc).ToUniversalTime() -lt ([datetime]$start).ToUniversalTime() -or
             ([datetime]$cacheReport.removeApiEndUtc).ToUniversalTime() -gt ([datetime]$end).ToUniversalTime()){
             throw 'The bounded source-retirement population, live cohort, timing or restoration did not verify.'
+        }
+        if($CacheInterfaceGuid -and
+            ($cacheReport.triggerPhase -ne 'gc-complete-pre-released-cache' -or
+                ([datetime]$cacheReport.removeApiStartUtc).ToUniversalTime() -lt ([datetime]$r.managedGc.collectionEndUtc).ToUniversalTime())){
+            throw 'The unused-interface writer did not begin after the actual GC completed.'
         }
         $result.cacheRetirementControl=$cacheReport
     }

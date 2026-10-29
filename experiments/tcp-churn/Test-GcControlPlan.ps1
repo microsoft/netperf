@@ -12,9 +12,12 @@ $plan=@($ast.FindAll({
         $node.Clauses[0].Item1.Extent.Text -eq '$RouteRefresh -or $CacheRetirePaths'
 },$true))
 if($plan.Count -ne 1){throw 'The actual path-control launch plan must be uniquely identified.'}
-foreach($case in @('route','cache','both')){
+foreach($case in @('route','cache','both','unused-cache')){
     & {
         $RouteRefresh=$case -ne 'cache';$CacheRetirePaths=if($case -ne 'route'){24576}else{0}
+        if($case -eq 'unused-cache'){$RouteRefresh=$false}
+        $CacheInterfaceGuid=if($case -eq 'unused-cache'){'owned-guid'}else{''}
+        $CacheInterfaceAlias=if($case -eq 'unused-cache'){'NetperfPath-123456abcdef'}else{''}
         $cacheStem=if($RouteRefresh -and $CacheRetirePaths){'cache-control'}else{'route-control'}
         $RouteVariant='peer-gateway';$alias='synthetic-owned-interface';$peerMac='02-00-00-00-00-02'
         $diagnostics=Join-Path ([IO.Path]::GetTempPath()) 'unused-control-plan'
@@ -45,6 +48,12 @@ foreach($case in @('route','cache','both')){
                 @($control.Arguments|Where-Object{$_ -eq (Join-Path $diagnostics ($control.Stem+'-original.clixml'))}).Count -ne 1){
                 throw 'Each launched control must retain its own restoration arguments.'
             }
+            $endIndex=[Array]::IndexOf($control.Arguments,'-EndFile')
+            if($case -eq 'unused-cache'){
+                if($endIndex -lt 0 -or $control.Arguments[$endIndex+1] -ne ($localOutput+'.gc.json')){
+                    throw 'Unused-interface retirement must use the actual receiver GC-completion observation.'
+                }
+            }elseif($endIndex -ge 0){throw 'A non-unused-interface control changed its GC-start trigger.'}
         }
     }
 }

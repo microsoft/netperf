@@ -10,7 +10,7 @@ param(
     [ValidateSet(1024,8192,24576)][int]$PathCount=8192,
     [string]$ReceiverExecutable,[int]$ReceiverProcessId,
     [string]$UnusedInterfaceGuid,
-    [string]$ReadyFile,[string]$BeginFile,[string]$StopFile,
+    [string]$ReadyFile,[string]$BeginFile,[string]$EndFile,[string]$StopFile,
     [switch]$RestoreOnly
 )
 $ErrorActionPreference='Stop'
@@ -32,6 +32,7 @@ $adapter=@(Get-NetAdapter -Name $InterfaceAlias -ErrorAction Stop)
 if($adapter.Count -ne 1){throw 'The owned data adapter must be unique.'}
 $data=Import-Clixml -LiteralPath $DataStateFile -ErrorAction Stop
 $detachInterface=-not [string]::IsNullOrWhiteSpace($UnusedInterfaceGuid)
+if($EndFile -and -not $detachInterface){throw 'GC-completion retirement requires the owned unused interface.'}
 $ownedInterface=if($detachInterface){
     $InterfaceAlias -match '^NetperfPath-[0-9a-f]{12}$' -and
         [guid]$UnusedInterfaceGuid -eq $adapter[0].InterfaceGuid -and $data.interfaceGuid -ne [string]$adapter[0].InterfaceGuid
@@ -176,6 +177,7 @@ if((Read-PrefixPathCount) -ne 0){throw 'Existing cached paths conflict with the 
 $sockets=[Collections.Generic.List[Net.Sockets.UdpClient]]::new()
 $failure=$null;$restoreFailure=$null
 $report=[ordered]@{schema=1;scenario=$(if($detachInterface){'owned-unused-interface-ipv4-detach'}else{'owned-secondary-source-address-retirement'});scope='owned-benchmark-state-only'
+    triggerPhase=$(if($EndFile){'gc-complete-pre-released-cache'}else{'gc-start-then-socket-release'})
     requestedPaths=$PathCount;measuredHeldPaths=0;measuredReleasedPaths=0;payloadsSent=0
     retired=$false;restored=$false;dataAndManagementAddressesPreserved=$false;defaultRoutesPreserved=$false}
 try {
@@ -193,18 +195,31 @@ try {
     $report.populationMilliseconds=$population.Elapsed.TotalMilliseconds
     $report.measuredHeldPaths=Read-PathCount
     if($report.measuredHeldPaths -lt $PathCount){throw 'The requested cached-path population did not verify.'}
-    [IO.File]::WriteAllText($ReadyFile,'ready')
-    $wait.Restart()
-    while(-not(Test-Path -LiteralPath $BeginFile)){
-        if(Test-Path -LiteralPath $StopFile){throw 'Traffic stopped before the retirement control.'}
-        if($wait.Elapsed.TotalSeconds -gt 60){throw 'No real-GC signal reached the bounded retirement control.'}
-        Start-Sleep -Milliseconds 25
+    if(-not $EndFile){
+        [IO.File]::WriteAllText($ReadyFile,'ready')
+        $wait.Restart()
+        while(-not(Test-Path -LiteralPath $BeginFile)){
+            if(Test-Path -LiteralPath $StopFile){throw 'Traffic stopped before the retirement control.'}
+            if($wait.Elapsed.TotalSeconds -gt 60){throw 'No real-GC signal reached the bounded retirement control.'}
+            Start-Sleep -Milliseconds 25
+        }
     }
     $release=[Diagnostics.Stopwatch]::StartNew()
     [ArrivalTcp]::ReleaseIdlePathSockets($sockets)
     $report.socketReleaseMilliseconds=$release.Elapsed.TotalMilliseconds
     $report.socketReleaseParallelism=[Environment]::ProcessorCount
     $sockets.Clear()
+    if($EndFile){
+        if((Read-PathCount) -lt $PathCount){throw 'Released cached paths did not persist before traffic.'}
+        [IO.File]::WriteAllText($ReadyFile,'ready')
+        $wait.Restart()
+        while(-not(Test-Path -LiteralPath $EndFile)){
+            if(Test-Path -LiteralPath $StopFile){throw 'Traffic stopped before the GC-completion retirement control.'}
+            if($wait.Elapsed.TotalSeconds -gt 60){throw 'No real-GC completion reached the bounded retirement control.'}
+            Start-Sleep -Milliseconds 5
+        }
+        $report.gcCompletionObservedUtc=[DateTime]::UtcNow.ToString('o')
+    }
     $report.measuredReleasedPaths=Read-PathCount
     if($report.measuredReleasedPaths -lt $PathCount){throw 'Released cached paths did not persist until retirement.'}
     $report.establishedAtTrigger=[ArrivalTcp]::CountEstablishedConnections($ReceiverProcessId,20300)

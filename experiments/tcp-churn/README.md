@@ -778,8 +778,13 @@ The explicit `managed_gc_unused_interface=true` variant creates one
 disposable synthetic NIC on the owned generation-2 VM. It is first added
 disconnected, configured without DHCP, and only then attached to the VM's
 existing data switch, matched by the guest's peer-route source MAC. The idle cache uses this NIC; productive TCP and management
-continue on the original NIC. At the observed GC signal, only the disposable
-NIC's IPv4 binding is detached. Its identity-checked binding/address restore
+continue on the original NIC. This variant releases its idle UDP sockets before
+traffic readiness, verifies the cached population again at the actual receiver
+GC-completion signal, and only then detaches the disposable NIC's IPv4 binding.
+This keeps cache-size comparisons from also shifting the maintenance trigger
+by their different socket-close costs. The source-address-only control retains
+its GC-start-then-release timing; the result records the trigger phase.
+Its identity-checked binding/address restore
 and host-side removal must both verify. Original VM NICs and switch
 configuration are never changed. This is an interface-retirement mechanism
 control, not a claim that the trigger happened in a customer workload.
@@ -798,7 +803,7 @@ Socket population uses a bounded compiled loop and reports its duration;
 the requested count still must match measured cached paths, rather than
 assuming that successful socket creation pins every path.
 Fixture socket release is also a measured compiled loop, avoiding
-interpreter overhead between the observed GC signal and cache maintenance.
+interpreter overhead and, in the unused-interface variant, finishing before traffic.
 Its maximum parallelism is the process's available CPU count, reported in
 the control result; only the separately owned idle UDP fixture is released.
 No productive TCP connection is preconnected or released by this operation.
