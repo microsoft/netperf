@@ -185,6 +185,28 @@ try {
         }
         return $false
     },$true))
+    $manifestInit=@($guestAst.FindAll({
+        param($node)
+        $node -is [Management.Automation.Language.AssignmentStatementAst] -and
+            $node.Left.Extent.Text -eq '$adapterFiles' -and
+            $node.Operator -eq [Management.Automation.Language.TokenKind]::Equals
+    },$true))
+    $manifestManaged=@($guestAst.FindAll({
+        param($node)
+        $node -is [Management.Automation.Language.IfStatementAst] -and
+            $node.Clauses[0].Item1.Extent.Text -eq '$ManagedGc' -and $node.Extent.Text.Contains('$adapterFiles+=')
+    },$true))
+    if($manifestInit.Count -ne 1 -or $manifestManaged.Count -ne 1){throw 'The actual guest deployment manifest must be identified.'}
+    & {
+        $ManagedGc=$true
+        . ([scriptblock]::Create($manifestInit[0].Extent.Text+"`n"+$manifestManaged[0].Extent.Text))
+        foreach($required in @('WindowsCts.psm1','Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1',
+            'Invoke-ScopedPathRefresh.ps1','Invoke-ScopedPathRetirement.ps1','Invoke-ScopedDestinationCacheFlush.ps1',
+            'GcReceiverTraffic.psm1','New-GcProbeWprProfile.ps1','Set-ScopedRss.ps1')){
+            if($required -notin $adapterFiles){throw 'A launchable managed-GC control was omitted from actual guest deployment.'}
+        }
+    }
+    $checks++
     if($launch.Count -ne 1){throw 'The actual guest child launch call site must be uniquely identified.'}
     $outerTry=@($guestAst.EndBlock.Statements|Where-Object{$_ -is [Management.Automation.Language.TryStatementAst]})
     if($outerTry.Count -ne 1 -or -not $outerTry[0].Finally.Extent.Text.Contains('$rssAttempted') -or

@@ -14,6 +14,16 @@ param(
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
+$phase='input'
+trap {
+    if(-not(Test-Path -LiteralPath $ReportFile)){
+        @{schema=1;scenario='owned-destination-cache-flush';outcome='failed';phase=$phase
+            failureType=$_.Exception.GetType().FullName;failureCode=$_.Exception.HResult
+            sourceLine=$_.InvocationInfo.ScriptLineNumber;destinationFlushes=0;networkConfigurationPreserved=$false}|
+            ConvertTo-Json|Set-Content -LiteralPath $ReportFile
+    }
+    break
+}
 Import-Module (Join-Path $PSScriptRoot 'WindowsCts.psm1')
 function Invoke-OwnedDestinationFlush($Adapter,$Data,[Collections.IDictionary]$Report,[string]$Directory) {
     if([string]::IsNullOrWhiteSpace($Adapter.Name) -or $Adapter.ifIndex -lt 1 -or
@@ -60,6 +70,7 @@ function Wait-GcSignal([string]$File) {
         Start-Sleep -Milliseconds 5
     }
 }
+$phase='owned-interface'
 $adapter=@(Get-NetAdapter -Name $InterfaceAlias -ErrorAction Stop)
 if($adapter.Count -ne 1){throw 'The owned destination-flush interface must be unique.'}
 $data=Import-Clixml -LiteralPath $DataStateFile -ErrorAction Stop
@@ -77,6 +88,7 @@ if(!$ReadyFile -or !$BeginFile -or !$EndFile -or !$StopFile -or !$ReceiverExecut
     throw 'Destination flush requires owned lifecycle files and the actual receiver identity.'
 }
 if(Test-Path -LiteralPath $StateFile){throw 'A fresh destination-flush snapshot is required.'}
+$phase='owned-data-and-peer'
 $addresses=@(Get-NetIPAddress -InterfaceIndex $adapter[0].ifIndex -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|
     Where-Object{$_.IPAddress -in $data.addresses -and $_.PrefixLength -eq 29 -and $_.SkipAsSource})
 $network=@(Get-NetIPInterface -InterfaceIndex $adapter[0].ifIndex -AddressFamily IPv4 -ErrorAction Stop)
@@ -90,6 +102,7 @@ if($addresses.Count -ne @($data.addresses).Count -or $network.Count -ne 1 -or [s
     (@(Read-Defaults)-join '|') -ne (@($data.originalDefaultKeys)-join '|')){
     throw 'Owned endpoints, peer identity and unchanged management routing must verify before a destination flush.'
 }
+$phase='receiver-identity'
 $null=[Reflection.Assembly]::Load([IO.File]::ReadAllBytes($ReceiverExecutable))
 @{owner='tcp-churn-destination-flush-v1';interfaceGuid=[string]$adapter[0].InterfaceGuid
     addresses=@(Read-Addresses);defaults=@(Read-Defaults)}|Export-Clixml -LiteralPath $StateFile -NoClobber
