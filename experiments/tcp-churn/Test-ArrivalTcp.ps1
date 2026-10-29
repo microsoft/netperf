@@ -58,6 +58,21 @@ try {
         }
         $child.Dispose();$child=$null;$checks++
     }
+    foreach($case in @('hot-nagle','hot-small-response','hot-large-request')){
+        $rejectedOutput=Join-Path $directory 'rejected-hot.json'
+        $info.ArgumentList.Clear()
+        foreach($argument in @('127.0.0.1','127.0.0.2',[string]$port,'16','128',$(if($case -eq 'hot-large-request'){'1460'}else{'512'}),$rejectedOutput,
+            'client',$(if($case -eq 'hot-small-response'){'512'}else{'16384'}),'14529','16',$(if($case -eq 'hot-nagle'){'nagle'}else{'nodelay'}),
+            'dispatch:pool','servicehot512:pipelined')){$info.ArgumentList.Add($argument)}
+        $child=[Diagnostics.Process]::Start($info)
+        $errorText=$child.StandardError.ReadToEndAsync()
+        if(-not $child.WaitForExit(5000) -or $child.ExitCode -eq 0 -or
+            $errorText.GetAwaiter().GetResult() -notmatch $(if($case -eq 'hot-nagle'){'Pipelined service requests require'}else{'Hot service mode requires'}) -or
+            (Test-Path -LiteralPath $rejectedOutput)){
+            throw 'Invalid hot service pacing was not rejected before network use.'
+        }
+        $child.Dispose();$child=$null;$checks++
+    }
     foreach($case in @('wrong-role','wrong-directory','existing-ready')){
         $rejectedOutput=Join-Path $directory 'rejected-readiness.json'
         $ready=Join-Path $directory 'route-control.ready'

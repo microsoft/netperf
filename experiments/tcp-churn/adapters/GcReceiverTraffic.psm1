@@ -36,7 +36,7 @@ function Start-GcReceiver {
         [string]$State.Payload,$State.ServerOutput,'server',[string]$State.ResponseBytes,'14529',
         [string]$State.Connections,$pacing,$gcDescriptor
     )
-    if($State.ServiceWait){$arguments+=$(if($State.PipelinedServiceWait){'servicewait64:pipelined'}else{'servicewait64'})}
+    if($State.ServiceWait){$arguments+=$(if($State.ExchangesPerConnection -eq 512){'servicehot512:pipelined'}elseif($State.PipelinedServiceWait){'servicewait64:pipelined'}else{'servicewait64'})}
     elseif($State.ExchangesPerConnection -eq 64){$arguments+=$(if($State.FramedNagle){'exchanges:64:framed'}else{'exchanges:64'})}
     elseif($State.IdleKeepalive){$arguments+='idlekeepalive'}
     if($State.GcReadinessFile){$arguments+=$State.GcReadinessFile}
@@ -77,7 +77,7 @@ function Start-GcReceiverTraffic {
             $source,$target,[string]$port,[string]$count,[string]$rate,[string]$payload,
             $output,'client',[string]$responseBytes,'23521',[string]$concurrency,$(if($framedNagle){'nagle'}else{'nodelay'}),'dispatch:pool'
         )
-        if($serviceWait){$arguments+=$(if($pipelinedServiceWait){'servicewait64:pipelined'}else{'servicewait64'})}
+        if($serviceWait){$arguments+=$(if($exchanges -eq 512){'servicehot512:pipelined'}elseif($pipelinedServiceWait){'servicewait64:pipelined'}else{'servicewait64'})}
         elseif($exchanges -eq 64){$arguments+=$(if($framedNagle){'exchanges:64:framed'}else{'exchanges:64'})}
         elseif($idleKeepalive){$arguments+='idlekeepalive'}
         $global:OwnedManagedGcPeer.Process=Start-TcpChurnCollector -Program (Join-Path $root 'ArrivalTcp.exe') `
@@ -97,7 +97,7 @@ function Start-GcReceiverTraffic {
         [string]([int][Math]::Ceiling($State.Rate*$State.LocalCount/$State.Count)),[string]$State.Payload,$localOutput,
         'client',[string]$State.ResponseBytes,'14529',[string]$State.Connections,$(if($State.FramedNagle){'nagle'}else{'nodelay'}),'dispatch:pool'
     )
-    if($State.ServiceWait){$arguments+=$(if($State.PipelinedServiceWait){'servicewait64:pipelined'}else{'servicewait64'})}
+    if($State.ServiceWait){$arguments+=$(if($State.ExchangesPerConnection -eq 512){'servicehot512:pipelined'}elseif($State.PipelinedServiceWait){'servicewait64:pipelined'}else{'servicewait64'})}
     elseif($State.ExchangesPerConnection -eq 64){$arguments+=$(if($State.FramedNagle){'exchanges:64:framed'}else{'exchanges:64'})}
     elseif($State.IdleKeepalive){$arguments+='idlekeepalive'}
     $State.LocalClient=Start-TcpChurnCollector -Program $State.Executable -Arguments $arguments `
@@ -182,8 +182,9 @@ function Complete-GcReceiverTraffic {
             $endpoint.serviceWaitsCompleted -ne $(if($State.ServiceWait -and $endpoint.role -eq 'server'){[long]$endpoint.connections*$State.ExchangesPerConnection}else{0}) -or
             $endpoint.serviceRequestPipelining -ne [bool]$State.PipelinedServiceWait -or
             $endpoint.clientPacingWaitsCompleted -ne $(if($State.PipelinedServiceWait -and $endpoint.role -eq 'client'){[long]$endpoint.connections*($State.ExchangesPerConnection-1)}else{0}) -or
-            $endpoint.clientPacingMinimumMilliseconds -ne $(if($State.PipelinedServiceWait){250}else{0}) -or
-            $endpoint.clientPacingMaximumMilliseconds -ne $(if($State.PipelinedServiceWait){750}else{0}) -or
+            $endpoint.clientPacingMinimumMilliseconds -ne $(if(-not $State.PipelinedServiceWait){0}elseif($State.ExchangesPerConnection -eq 512){20}else{250}) -or
+            $endpoint.clientPacingMaximumMilliseconds -ne $(if(-not $State.PipelinedServiceWait){0}elseif($State.ExchangesPerConnection -eq 512){60}else{750}) -or
+            $endpoint.serviceWaitMinimumMilliseconds -ne $(if(-not $State.ServiceWait){0}elseif($State.ExchangesPerConnection -eq 512){20}else{250}) -or
             $endpoint.maximumPerConnectionReadBufferBytes -ne [Math]::Min($(if($endpoint.role -eq 'server'){$State.Payload}else{$State.ResponseBytes}),65536) -or
             $endpoint.networkErrors -ne 0 -or $endpoint.protocolErrors -ne 0 -or $endpoint.barrier){
             throw 'A receiver-GC endpoint failed protocol verification.'

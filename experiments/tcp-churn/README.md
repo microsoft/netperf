@@ -838,7 +838,16 @@ unless at least 100 operations completed without error and routing is restored.
 spinning the dial's own thread rather than raising the global timer resolution,
 which would also change TCP timer behavior. `coreclr-cluster-epochdial2-aftergc`
 starts the same 4 s, 2 ms dial when the receiver's real GC completes, modelling
-invalidation during post-GC catch-up. Of 8,192 pipelined
+invalidation during post-GC catch-up.
+
+`coreclr-cluster-hot` and `coreclr-cluster-hot-epochdial2` keep the same
+topology but model a busy database node: each connection carries 512 pipelined
+exchanges with 20-60 ms service and client think times (versus 64 exchanges with
+250-750 ms), so roughly 4096 in-flight connections drive on the order of 100k
+exchanges per second. Path refresh demand after an invalidation is bounded by
+how many connections send before the next one, so the slow-paced profiles cannot
+show dense refresh convoys regardless of invalidation rate. The hot dial starts
+8 s into traffic and runs for 10 s at a 2 ms interval. Of 8,192 pipelined
 connections, 7,168 arrive from those remote addresses and 1,024 use loopback.
 Requests are 512 bytes; responses are 16 KiB, so healthy traffic sends full-size
 segments and exercises black-hole confirmation in the TCP delay queue. The

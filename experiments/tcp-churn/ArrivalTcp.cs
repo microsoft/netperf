@@ -472,6 +472,8 @@ public static class ArrivalTcp
     private static bool serviceWait;
     private static int serviceRequestOrdinal,serviceWaitsCompleted;
     private static bool serviceRequestPipelining;
+    private static int serviceDelayMinimumMilliseconds=250;
+    private static int serviceDelaySpanMilliseconds=501;
     private static int clientPacingWaitsCompleted;
     private static int preparedGraphNodeCount;
     private static long preparedManagedHeapBytes;
@@ -663,7 +665,7 @@ public static class ArrivalTcp
         for(int exchange=0;exchange<exchangesPerConnection;exchange++){
             await WriteMessage(stream,data).ConfigureAwait(false);
             if(exchange+1<exchangesPerConnection){
-                await Task.Delay(250+(int)(((long)connectionOrdinal*1103515245+(long)exchange*104729)%501)).ConfigureAwait(false);
+                await Task.Delay(serviceDelayMinimumMilliseconds+(int)(((long)connectionOrdinal*1103515245+(long)exchange*104729)%serviceDelaySpanMilliseconds)).ConfigureAwait(false);
                 Interlocked.Increment(ref clientPacingWaitsCompleted);
             }
         }
@@ -690,7 +692,7 @@ public static class ArrivalTcp
                 await ReadPattern(stream,data,size,null).ConfigureAwait(false);
                 if(serviceWait){
                     int ordinal=Interlocked.Increment(ref serviceRequestOrdinal);
-                    await Task.Delay(250+(int)(((long)ordinal*104729)%501)).ConfigureAwait(false);
+                    await Task.Delay(serviceDelayMinimumMilliseconds+(int)(((long)ordinal*104729)%serviceDelaySpanMilliseconds)).ConfigureAwait(false);
                     Interlocked.Increment(ref serviceWaitsCompleted);
                 }
                 await WriteMessage(stream,response).ConfigureAwait(false);
@@ -814,7 +816,13 @@ public static class ArrivalTcp
         serviceWait=false;
         serviceRequestPipelining=false;
         if(args.Length>=14){
-            if(args[13]=="servicewait64" || args[13]=="servicewait64:pipelined"){
+            if(args[13]=="servicehot512:pipelined"){
+                if(size!=512 || responseSize!=16384 || role=="local")
+                    throw new ArgumentException("Hot service mode requires 512-byte requests and 16384-byte pipelined responses.");
+                serviceWait=true;serviceRequestPipelining=true;exchangesPerConnection=512;
+                serviceDelayMinimumMilliseconds=20;serviceDelaySpanMilliseconds=41;
+                if(!noDelay)throw new ArgumentException("Pipelined service requests require explicit nodelay pacing.");
+            }else if(args[13]=="servicewait64" || args[13]=="servicewait64:pipelined"){
                 if(size!=512 || (responseSize!=512 && responseSize!=16384) || role=="local" ||
                     (responseSize==16384 && args[13]!="servicewait64:pipelined"))
                     throw new ArgumentException("Service wait mode requires 512-byte requests and 512-byte responses, or 16384-byte pipelined responses.");
@@ -902,8 +910,8 @@ public static class ArrivalTcp
                     ",\"idleKeepalive\":"+(idleKeepalive?"true":"false")+",\"keepaliveConfiguredSockets\":"+keepaliveConfiguredSockets+
                     ",\"serviceWait\":"+(serviceWait?"true":"false")+",\"serviceWaitsCompleted\":"+serviceWaitsCompleted+
                     ",\"serviceRequestPipelining\":"+(serviceRequestPipelining?"true":"false")+",\"clientPacingWaitsCompleted\":"+clientPacingWaitsCompleted+
-                    ",\"clientPacingMinimumMilliseconds\":"+(serviceRequestPipelining?250:0)+",\"clientPacingMaximumMilliseconds\":"+(serviceRequestPipelining?750:0)+
-                    ",\"serviceWaitMinimumMilliseconds\":"+(serviceWait?250:0)+",\"serviceWaitMaximumMilliseconds\":"+(serviceWait?750:0)+
+                    ",\"clientPacingMinimumMilliseconds\":"+(serviceRequestPipelining?serviceDelayMinimumMilliseconds:0)+",\"clientPacingMaximumMilliseconds\":"+(serviceRequestPipelining?serviceDelayMinimumMilliseconds+serviceDelaySpanMilliseconds-1:0)+
+                    ",\"serviceWaitMinimumMilliseconds\":"+(serviceWait?serviceDelayMinimumMilliseconds:0)+",\"serviceWaitMaximumMilliseconds\":"+(serviceWait?serviceDelayMinimumMilliseconds+serviceDelaySpanMilliseconds-1:0)+
                     ",\"keepaliveIdleMillisecondsRequested\":"+(idleKeepalive?1000:0)+",\"keepaliveIntervalMillisecondsRequested\":"+(idleKeepalive?1000:0)+
                     ",\"maximumPerConnectionReadBufferBytes\":"+maximumPerConnectionReadBufferBytes+
                     ",\"networkErrors\":0,\"protocolErrors\":0,\"barrier\":false,\"peakInFlight\":"+serverPeakInFlight+
@@ -954,8 +962,8 @@ public static class ArrivalTcp
                 ",\"idleKeepalive\":"+(idleKeepalive?"true":"false")+",\"keepaliveConfiguredSockets\":"+keepaliveConfiguredSockets+
                 ",\"serviceWait\":"+(serviceWait?"true":"false")+",\"serviceWaitsCompleted\":"+serviceWaitsCompleted+
                 ",\"serviceRequestPipelining\":"+(serviceRequestPipelining?"true":"false")+",\"clientPacingWaitsCompleted\":"+clientPacingWaitsCompleted+
-                ",\"clientPacingMinimumMilliseconds\":"+(serviceRequestPipelining?250:0)+",\"clientPacingMaximumMilliseconds\":"+(serviceRequestPipelining?750:0)+
-                ",\"serviceWaitMinimumMilliseconds\":"+(serviceWait?250:0)+",\"serviceWaitMaximumMilliseconds\":"+(serviceWait?750:0)+
+                ",\"clientPacingMinimumMilliseconds\":"+(serviceRequestPipelining?serviceDelayMinimumMilliseconds:0)+",\"clientPacingMaximumMilliseconds\":"+(serviceRequestPipelining?serviceDelayMinimumMilliseconds+serviceDelaySpanMilliseconds-1:0)+
+                ",\"serviceWaitMinimumMilliseconds\":"+(serviceWait?serviceDelayMinimumMilliseconds:0)+",\"serviceWaitMaximumMilliseconds\":"+(serviceWait?serviceDelayMinimumMilliseconds+serviceDelaySpanMilliseconds-1:0)+
                 ",\"keepaliveIdleMillisecondsRequested\":"+(idleKeepalive?1000:0)+",\"keepaliveIntervalMillisecondsRequested\":"+(idleKeepalive?1000:0)+
                 ",\"idleHoldMinimumMilliseconds\":"+(idleKeepalive?8000:0)+",\"idleHoldMaximumMilliseconds\":"+(idleKeepalive?30000:0)+
                 ",\"maximumPerConnectionReadBufferBytes\":"+maximumPerConnectionReadBufferBytes+
@@ -996,7 +1004,7 @@ public static class ArrivalTcp
         try {
             if((args.Length==8 || args.Length==9) && args[0]=="--route-epoch-dial")return RunRouteEpochDial(args);
             if(args.Length<7 || args.Length>15) {
-                Console.Error.WriteLine("Usage: ArrivalTcp sources peer port count rate request-bytes output.json [role [response-bytes [seed [maximum-in-flight [nodelay|nagle [gc:heap-MiB:minimum-launched|dispatch:pool [exchanges:64[:framed]|idlekeepalive|servicewait64[:pipelined] [fixture-ready-file]]]]]]]]");
+                Console.Error.WriteLine("Usage: ArrivalTcp sources peer port count rate request-bytes output.json [role [response-bytes [seed [maximum-in-flight [nodelay|nagle [gc:heap-MiB:minimum-launched|dispatch:pool [exchanges:64[:framed]|idlekeepalive|servicewait64[:pipelined]|servicehot512:pipelined [fixture-ready-file]]]]]]]]");
                 return 2;
             }
             if(!Run(args).Wait(TimeSpan.FromSeconds(150))){

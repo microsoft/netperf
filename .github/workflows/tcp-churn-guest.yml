@@ -35,7 +35,7 @@ on:
       managed_gc_mixed:
         description: Managed-GC mode; persistent64 performs64 ordinary exchanges per TCP connection
         type: choice
-        options: ['false', 'true', 'persistent64', 'persistent64-framed-nagle', 'coreclr', 'coreclr-keepalive', 'coreclr-servicewait', 'coreclr-servicewait-pipelined', 'coreclr-cluster', 'coreclr-cluster-outage', 'coreclr-cluster-epochdial', 'coreclr-cluster-epochdial2', 'coreclr-cluster-epochdial2-aftergc']
+        options: ['false', 'true', 'persistent64', 'persistent64-framed-nagle', 'coreclr', 'coreclr-keepalive', 'coreclr-servicewait', 'coreclr-servicewait-pipelined', 'coreclr-cluster', 'coreclr-cluster-outage', 'coreclr-cluster-epochdial', 'coreclr-cluster-epochdial2', 'coreclr-cluster-epochdial2-aftergc', 'coreclr-cluster-hot', 'coreclr-cluster-hot-epochdial2']
         default: 'false'
       managed_gc_payload_bytes:
         description: Request and response bytes for the managed-GC diagnostic only
@@ -273,11 +273,11 @@ jobs:
           }
           $persistentRequested = $env:MANAGED_GC_MIXED -in @('persistent64', 'persistent64-framed-nagle')
           $framedNagleRequested = $env:MANAGED_GC_MIXED -eq 'persistent64-framed-nagle'
-          $clusterProfile = switch ($env:MANAGED_GC_MIXED) { 'coreclr-cluster' { 'nodes1000' } 'coreclr-cluster-outage' { 'nodes1000-outage' } 'coreclr-cluster-epochdial' { 'nodes1000-epochdial' } 'coreclr-cluster-epochdial2' { 'nodes1000-epochdial2' } 'coreclr-cluster-epochdial2-aftergc' { 'nodes1000-epochdial2-aftergc' } default { 'none' } }
-          $coreClrRequested = $env:MANAGED_GC_MIXED -in @('coreclr', 'coreclr-keepalive', 'coreclr-servicewait', 'coreclr-servicewait-pipelined', 'coreclr-cluster', 'coreclr-cluster-outage', 'coreclr-cluster-epochdial', 'coreclr-cluster-epochdial2', 'coreclr-cluster-epochdial2-aftergc')
+          $clusterProfile = switch ($env:MANAGED_GC_MIXED) { 'coreclr-cluster' { 'nodes1000' } 'coreclr-cluster-outage' { 'nodes1000-outage' } 'coreclr-cluster-epochdial' { 'nodes1000-epochdial' } 'coreclr-cluster-epochdial2' { 'nodes1000-epochdial2' } 'coreclr-cluster-epochdial2-aftergc' { 'nodes1000-epochdial2-aftergc' } 'coreclr-cluster-hot' { 'nodes1000-hot' } 'coreclr-cluster-hot-epochdial2' { 'nodes1000-hot-epochdial2' } default { 'none' } }
+          $coreClrRequested = $env:MANAGED_GC_MIXED -in @('coreclr', 'coreclr-keepalive', 'coreclr-servicewait', 'coreclr-servicewait-pipelined', 'coreclr-cluster', 'coreclr-cluster-outage', 'coreclr-cluster-epochdial', 'coreclr-cluster-epochdial2', 'coreclr-cluster-epochdial2-aftergc', 'coreclr-cluster-hot', 'coreclr-cluster-hot-epochdial2')
           $idleKeepaliveRequested = $env:MANAGED_GC_MIXED -eq 'coreclr-keepalive'
-          $serviceWaitRequested = $env:MANAGED_GC_MIXED -in @('coreclr-servicewait', 'coreclr-servicewait-pipelined', 'coreclr-cluster', 'coreclr-cluster-outage', 'coreclr-cluster-epochdial', 'coreclr-cluster-epochdial2', 'coreclr-cluster-epochdial2-aftergc')
-          $pipelinedServiceWaitRequested = $env:MANAGED_GC_MIXED -in @('coreclr-servicewait-pipelined', 'coreclr-cluster', 'coreclr-cluster-outage', 'coreclr-cluster-epochdial', 'coreclr-cluster-epochdial2', 'coreclr-cluster-epochdial2-aftergc')
+          $serviceWaitRequested = $env:MANAGED_GC_MIXED -in @('coreclr-servicewait', 'coreclr-servicewait-pipelined', 'coreclr-cluster', 'coreclr-cluster-outage', 'coreclr-cluster-epochdial', 'coreclr-cluster-epochdial2', 'coreclr-cluster-epochdial2-aftergc', 'coreclr-cluster-hot', 'coreclr-cluster-hot-epochdial2')
+          $pipelinedServiceWaitRequested = $env:MANAGED_GC_MIXED -in @('coreclr-servicewait-pipelined', 'coreclr-cluster', 'coreclr-cluster-outage', 'coreclr-cluster-epochdial', 'coreclr-cluster-epochdial2', 'coreclr-cluster-epochdial2-aftergc', 'coreclr-cluster-hot', 'coreclr-cluster-hot-epochdial2')
           if ($coreClrRequested) { $env:MANAGED_GC_MIXED = 'true' }
           $steadyFixtureRequested = $env:MANAGED_GC_UNUSED_INTERFACE -eq 'valid-paths-steady-during-gc'
           $duringGcRequested = $env:MANAGED_GC_UNUSED_INTERFACE -in @('during-gc', 'valid-paths-during-gc', 'valid-paths-steady-during-gc')
