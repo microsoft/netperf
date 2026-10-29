@@ -43,7 +43,19 @@ $worker={
     }
     if(@(Get-Process -Name 'Runner.Worker','ctsTraffic' -ErrorAction Ignore).Count){throw 'The client guest has an active worker.'}
     $clientBefore=& $inventory
-    $report=[ordered]@{schema=1;restoreRequested=$Apply;clientBefore=$clientBefore;clientProcessesStopped=0;clientRecorderSessionsStopped=0;clientRecorderNames=@();clientRecorderExitCodes=@()
+    $rootSizes=@(foreach($root in @(Get-ChildItem -LiteralPath $env:TEMP -Directory -Filter 'netperf-churn-*'|
+        Where-Object{$_.Name -match '^netperf-churn-[0-9a-f]{32}$' -and -not($_.Attributes -band [IO.FileAttributes]::ReparsePoint)})){
+        $files=@(Get-ChildItem -LiteralPath $root.FullName -Recurse -File -ErrorAction SilentlyContinue)
+        $marker=Join-Path $root.FullName 'managed-gc-diagnostics\profiled-server.json.gc.json'
+        $tick=$null
+        if(Test-Path -LiteralPath $marker){try{$tick=([datetime](Get-Content -LiteralPath $marker -Raw|ConvertFrom-Json).collectionStartUtc).ToUniversalTime().Ticks}catch{}}
+        [pscustomobject]@{createdUtc=$root.CreationTimeUtc.ToString('o');collectionStartTicks=$tick
+            totalMiB=[long][Math]::Floor((($files|Measure-Object Length -Sum).Sum)/1MB)
+            etlMiB=[long][Math]::Floor((($files|Where-Object Extension -eq '.etl'|Measure-Object Length -Sum).Sum)/1MB)
+            etlxMiB=[long][Math]::Floor((($files|Where-Object Extension -eq '.etlx'|Measure-Object Length -Sum).Sum)/1MB)}
+    })
+    $drive=[IO.Path]::GetPathRoot($env:TEMP).Substring(0,1)
+    $report=[ordered]@{schema=1;restoreRequested=$Apply;clientBefore=$clientBefore;clientTempFreeMiB=[long][Math]::Floor((Get-PSDrive -Name $drive).Free/1MB);clientRunRoots=$rootSizes;clientProcessesStopped=0;clientRecorderSessionsStopped=0;clientRecorderNames=@();clientRecorderExitCodes=@()
         clientRootsRestored=0;clientDialRoutesRemoved=0;clientRulesRemoved=0;peerBefore=$null;peerProcessesStopped=0
         peerRootsRestored=0;peerRulesRemoved=0;clientAfter=$null;peerAfter=$null;stage='client';failureStage=$null;failureType=$null}
     try {
@@ -171,7 +183,7 @@ try{
     }
     $report|Select-Object schema,restoreRequested,clientBefore,clientProcessesStopped,clientRecorderSessionsStopped,clientRecorderNames,clientRecorderExitCodes,clientRootsRestored,
         clientDialRoutesRemoved,clientRulesRemoved,clientAfter,peerBefore,peerProcessesStopped,peerRootsRestored,peerRulesRemoved,peerAfter,failureStage,failureType,
-        @{n='ownedResourcesClear';e={$clean}},@{n='pathsExported';e={$false}},@{n='rawTracesExported';e={$false}}|
+        clientTempFreeMiB,clientRunRoots,@{n='ownedResourcesClear';e={$clean}},@{n='pathsExported';e={$false}},@{n='rawTracesExported';e={$false}}|
         Select-Object * -ExcludeProperty PSComputerName,RunspaceId,PSShowComputerName|
         ConvertTo-Json -Depth 4|Set-Content -LiteralPath $ReportFile
     if(($Restore -and -not $clean) -or $null -ne $report.failureStage){throw 'Owned resources remain after snapshot-based restoration.'}
