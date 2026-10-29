@@ -142,15 +142,9 @@ try {
     }
     $occupied=[Collections.Generic.HashSet[int]]::new()
     foreach($endpoint in Get-NetUDPEndpoint -ErrorAction Stop){$null=$occupied.Add([int]$endpoint.LocalPort)}
-    $port=10000
-    for($i=1;$i -le $PathCount;$i++){
-        while($occupied.Contains($port)){$port++}
-        if($port -gt 65535){throw 'The explicit owned UDP-port budget was exhausted.'}
-        $socket=[Net.Sockets.UdpClient]::new([Net.IPEndPoint]::new([Net.IPAddress]::Parse($source),$port))
-        $sockets.Add($socket);$port++
-        $third=31+[int][Math]::Floor($i/256);$fourth=$i%256
-        $socket.Connect([Net.IPAddress]::Parse("198.19.$third.$fourth"),9)
-    }
+    $population=[Diagnostics.Stopwatch]::StartNew()
+    $sockets.AddRange([ArrivalTcp]::CreateIdlePathSockets($source,$PathCount,[int[]]@($occupied)))
+    $report.populationMilliseconds=$population.Elapsed.TotalMilliseconds
     $report.measuredHeldPaths=Read-PathCount
     if($report.measuredHeldPaths -lt $PathCount){throw 'The requested cached-path population did not verify.'}
     [IO.File]::WriteAllText($ReadyFile,'ready')

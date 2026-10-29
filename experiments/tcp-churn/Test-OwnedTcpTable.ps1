@@ -11,6 +11,14 @@ try {
         "/out:$assembly" (Join-Path $PSScriptRoot 'ArrivalTcp.cs')
     if($LASTEXITCODE){throw 'Owned TCP table helper compilation failed.'}
     $null=[Reflection.Assembly]::Load([IO.File]::ReadAllBytes($assembly))
+    foreach($source in @('127.0.0.1','198.19.240.1')){
+        $rejected=$false
+        try{$null=[ArrivalTcp]::CreateIdlePathSockets($source,1024,[int[]]@())}catch{
+            if($_.Exception.InnerException -isnot [ArgumentException]){throw}
+            $rejected=$true
+        }
+        if(-not $rejected){throw 'An unowned UDP path-population source was accepted.'}
+    }
     $listener=[Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback,0)
     $listener.Start()
     $port=$listener.LocalEndpoint.Port

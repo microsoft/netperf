@@ -761,6 +761,9 @@ Path-population snapshots use the documented IP Helper path table, filtered
 by the owned interface and source, rather than launching a command-line
 enumerator in the GC-triggered interval. The native structure layout and
 ordinary loopback path enumeration are validated by the source tests.
+Socket population uses a bounded compiled loop and reports its duration;
+the requested count still must match measured cached paths, rather than
+assuming that successful socket creation pins every path.
 
 CPU summaries separately count queued lock-owner waits under path refresh
 and the narrower timer/header-send/path-refresh signature, including a
