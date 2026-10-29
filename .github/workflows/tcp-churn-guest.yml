@@ -176,8 +176,6 @@ jobs:
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-GcControlPlan.ps1
       - shell: pwsh
-        run: ./experiments/tcp-churn/Test-GcRouteWarmup.ps1
-      - shell: pwsh
         run: ./experiments/tcp-churn/Test-VmPathFixture.ps1
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-UnusedInterfaceRestore.ps1

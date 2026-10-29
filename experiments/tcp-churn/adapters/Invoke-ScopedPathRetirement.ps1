@@ -266,11 +266,13 @@ try {
     $occupied=[Collections.Generic.HashSet[int]]::new()
     foreach($endpoint in Get-NetUDPEndpoint -ErrorAction Stop){$null=$occupied.Add([int]$endpoint.LocalPort)}
     $population=[Diagnostics.Stopwatch]::StartNew()
+    $report.populationStartedUtc=[DateTime]::UtcNow.ToString('o')
     foreach($address in $sources){
         $sockets.AddRange([ArrivalTcp]::CreateIdlePathSockets($address,($PathCount/$sources.Count),[int[]]@($occupied)))
     }
     $report.populationMilliseconds=$population.Elapsed.TotalMilliseconds
     $report.measuredHeldPaths=Read-PathCount
+    $report.populationCompletedUtc=[DateTime]::UtcNow.ToString('o')
     if($report.measuredHeldPaths -lt $PathCount){throw 'The requested cached-path population did not verify.'}
     if(-not $EndFile){
         [IO.File]::WriteAllText($ReadyFile,'ready')

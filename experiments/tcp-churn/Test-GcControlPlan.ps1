@@ -501,4 +501,39 @@ try{
         throw 'A peer stop error prevented another owned child or rule from being cleaned.'
     }
 }finally{Remove-Variable -Name OwnedManagedGcPeer -Scope Global}
+$analysisTry=@($ast.FindAll({
+    param($node)
+    $node -is [Management.Automation.Language.TryStatementAst] -and
+        $node.Body.Extent.Text.Contains('$phase=''analyze-whole-cpu''') -and
+        $node.Body.Extent.Text.Contains('$snapshotPaths=if($KeepCacheValid)')
+},$true))
+if($analysisTry.Count -ne 1){throw 'The actual public analysis and scenario gate must share one guarded block.'}
+$gate=@($analysisTry[0].Body.Statements|Where-Object{
+    $_ -is [Management.Automation.Language.IfStatementAst] -and
+        $_.Extent.Text.Contains('$snapshotPaths=if($KeepCacheValid)')
+})
+if($gate.Count -ne 1){throw 'The actual scenario census gate must be unique.'}
+$prefix=($analysisTry[0].Body.Statements|Where-Object{$_.Extent.StartOffset -le $gate[0].Extent.StartOffset}|
+    ForEach-Object{$_.Extent.Text})-join "`n"
+& {
+    $CacheRetirePaths=98304;$KeepCacheValid=$true;$SpinLocks=$true
+    $diagnostics='unused-owned-diagnostics';$PublishDirectory='unused-owned-publish';$cacheStem='route-control'
+    $analyzer='unused-analyzer';$start='2026-01-01T00:00:00Z';$end='2026-01-01T00:01:00Z'
+    $calls=[Collections.Generic.List[object]]::new()
+    function Invoke-TcpChurnTool {param($Program,$Arguments,$Directory,$LogPrefix,$TimeoutSeconds)
+        $calls.Add([pscustomobject]@{Arguments=$Arguments})
+    }
+    function Get-Content {param($Path,[switch]$Raw)
+        '{"outcome":"failed","measuredHeldPathsAtSnapshot":0}'
+    }
+    $rejected=$false
+    try{& ([scriptblock]::Create($prefix))}catch{
+        if($_.Exception.Message -notmatch 'bounded source-retirement population'){throw}
+        $rejected=$true
+    }
+    if(-not $rejected -or $calls.Count -ne 2 -or $calls[0].Arguments[1] -notlike '*cpu-load.json' -or
+        $calls[1].Arguments[0] -ne '--spin-summary'){
+        throw 'A rejected census either bypassed its failure gate or lost independent CPU/spin diagnostics.'
+    }
+}
 Write-Output 'Passed standalone/combined path plans and failure-safe companion cleanup; no network operations were performed.'

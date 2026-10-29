@@ -107,7 +107,7 @@ $localDataStarted=$false;$remoteDataStarted=$false
 $peerAddressPlan=if($RouteVariant -eq 'peer-gateway'){'198.19.240.5,198.19.240.6'}else{'198.19.240.6'}
 $receiverState=$null;$receiverEvidence=$null
 $pathControls=[Collections.Generic.List[object]]::new()
-$routeReport=$null;$cacheReport=$null;$routeWarmupControl=$null;$warmupCleanupVerified=$true
+$routeReport=$null;$cacheReport=$null
 $cacheStem=if($RouteRefresh -and $CacheRetirePaths){'cache-control'}else{'route-control'}
 $probeStartup=[ordered]@{}
 $failure=$null;$cleanupErrors=[Collections.Generic.List[Exception]]::new()
@@ -319,10 +319,6 @@ try {
     }
     $receiverReadySeconds=if($GcProcessRole -eq 'server' -and $HeapLayout -eq 'graph'){60}else{20}
     Wait-Ready $localServer ($localOutput+'.ready') $receiverReadySeconds
-    if($requestedHeapLayout -eq 'graph-2g'){
-        $phase='healthy-route-warmup'
-        $routeWarmupControl=Invoke-GcRouteWarmup -State $receiverState
-    }
     $phase='trace-start'
     if(-not $WprProbes){
         $wprStartAttempted=$true
@@ -509,7 +505,6 @@ try {
     if($after.SentBytes-$before.SentBytes -lt ($remoteTargets|Measure-Object requestBytes -Sum).Sum -or
         $after.ReceivedBytes-$before.ReceivedBytes -lt ($remoteTargets|Measure-Object responseBytes -Sum).Sum){throw 'The non-loopback NIC did not account for the remote payload.'}
     $result=[ordered]@{schema=1;workload='managed-gc-mixed';outcome='collected';connections=$r.connections
-        routeWarmupControl=$routeWarmupControl
         bytesSent=$r.bytesSent;bytesReceived=$r.bytesReceived;payloadBytesPerDirection=$payloadBytes
         exchangesPerConnection=$ExchangesPerConnection
         configuredMaximumInFlightPerProducer=$Connections
@@ -553,13 +548,7 @@ try {
     $result.clientPacingMinimumMilliseconds=$r.clientPacingMinimumMilliseconds;$result.clientPacingMaximumMilliseconds=$r.clientPacingMaximumMilliseconds
     if($GcProcessRole -eq 'server'){$result.launchSpanScope='maximum-independent-producer-span';$result.workloadScope='both-independent-producers-plus-profiled-receiver'}
     if($PeerRecovery){$result.peerRecovery=$pulseResult;$result.peerDataInterfaceDhcpEnabled=$peerDhcpEnabled}
-}catch{
-    $failure=$_
-    if($phase -eq 'healthy-route-warmup'){
-        $warmupCleanupVerified=$failure.Exception.Data.Contains('RouteWarmupCleanupVerified') -and
-            [bool]$failure.Exception.Data['RouteWarmupCleanupVerified']
-    }
-}
+}catch{$failure=$_}
 finally {
     foreach($name in @('tcp','clr')){
         $startupFile=Join-Path $diagnostics ($name+'.ready.failure.json')
@@ -770,7 +759,7 @@ if($null -ne $failure -or $cleanupErrors.Count) {
             tcpProbeCoverage=$(if($NoTcpProbes){'not-recorded-cpu-clr-diagnostic'}else{'capture-not-accepted'})
             failureSourceLine=$(if($null -ne $failure){$failure.InvocationInfo.ScriptLineNumber}else{$null})
             probeStartup=$probeStartup
-            toolExitCode=$toolCode;cleanupErrorCount=$cleanupErrors.Count;cleanupVerified=($cleanupErrors.Count -eq 0 -and $warmupCleanupVerified)
+            toolExitCode=$toolCode;cleanupErrorCount=$cleanupErrors.Count;cleanupVerified=($cleanupErrors.Count -eq 0)
             cleanupErrorTypes=@($cleanupErrors|ForEach-Object{$_.GetType().FullName})
             cleanupErrorFacts=@($cleanupErrors|ForEach-Object{
                 $message=$_.Message
@@ -788,7 +777,6 @@ if($null -ne $failure -or $cleanupErrors.Count) {
             peerRecovery=$pulseResult;peerDataInterfaceDhcpEnabled=$peerDhcpEnabled;clientFailure=$clientFailure
             receiverEvidence=$receiverEvidence
             routeRefreshControl=$(if($RouteRefresh){$routeReport}else{$null})
-            routeWarmupControl=$routeWarmupControl
             cacheRetirementControl=$cacheReport
             tcpRecovery=$ownedCounts
             rejectedWorkloadCpuTcpVerified=$diagnosticVerified
@@ -801,6 +789,16 @@ if($null -ne $failure -or $cleanupErrors.Count) {
 }
 $phase='public-symbol-analysis'
 try {
+    $phase='analyze-whole-cpu'
+    $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @((Join-Path $diagnostics 'cpu.etl'),
+        (Join-Path $PublishDirectory 'cpu-load.json'),$start,$end) -Directory $diagnostics `
+        -LogPrefix (Join-Path $diagnostics 'cpu-analysis') -TimeoutSeconds 300
+    if($SpinLocks){
+        $phase='analyze-owned-spinlock-evidence'
+        $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @('--spin-summary',(Join-Path $diagnostics 'cpu.etl'),
+            (Join-Path $PublishDirectory 'lock-evidence.json'),$start,$end) -Directory $diagnostics `
+            -LogPrefix (Join-Path $diagnostics 'spinlock-evidence') -TimeoutSeconds 300
+    }
     if($CacheRetirePaths){
         $phase='verify-cache-retirement'
         $cacheReport=Get-Content (Join-Path $diagnostics ($cacheStem+'.json')) -Raw|ConvertFrom-Json
@@ -865,16 +863,6 @@ try {
             throw 'The GC-completion route control started before the actual collection completed.'
         }
         $result.routeRefreshControl=$routeReport
-    }
-    $phase='analyze-whole-cpu'
-    $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @((Join-Path $diagnostics 'cpu.etl'),
-        (Join-Path $PublishDirectory 'cpu-load.json'),$start,$end) -Directory $diagnostics `
-        -LogPrefix (Join-Path $diagnostics 'cpu-analysis') -TimeoutSeconds 300
-    if($SpinLocks){
-        $phase='analyze-owned-spinlock-evidence'
-        $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @('--spin-summary',(Join-Path $diagnostics 'cpu.etl'),
-            (Join-Path $PublishDirectory 'lock-evidence.json'),$start,$end) -Directory $diagnostics `
-            -LogPrefix (Join-Path $diagnostics 'spinlock-evidence') -TimeoutSeconds 300
     }
     $postStart=([datetime]$r.managedGc.collectionEndUtc).ToUniversalTime()
     $endUtc=([datetime]$end).ToUniversalTime()
@@ -978,9 +966,10 @@ try {
         failureCode=$_.Exception.HResult;toolExitCode=$toolCode;cleanupVerified=$true
         peerRecovery=$pulseResult;tcpRecovery=$ownedCounts;peerDataInterfaceDhcpEnabled=$peerDhcpEnabled
         routeRefreshControl=$(if($RouteRefresh){$routeReport}else{$null})
-        routeWarmupControl=$routeWarmupControl
         cacheRetirementControl=$cacheReport
         managedGc=$r.managedGc;peerGcPressure=$r.peerGcPressure;connections=$r.connections
+        rejectedVerifiedWorkload=($r|Select-Object bytesSent,bytesReceived,exchangesPerConnection,arrivalRate,
+            launchSpanMilliseconds,maxLaunchLagMilliseconds,serviceWaitsCompleted,clientPacingWaitsCompleted)
         conclusion='analysis-not-accepted'}|
         ConvertTo-Json -Depth 6|Set-Content (Join-Path $PublishDirectory 'result.json')
     throw

@@ -757,13 +757,11 @@ managed heap bytes, and the large receiver's admission memory are reported.
 The default graph remains 1 GiB. First compare the same cache population at both
 heap budgets before attributing a larger-cache result to population alone.
 No census, GC-phase, loss, byte, ownership, or restoration gate is relaxed.
-The 2-GiB variant first completes a separate, byte-checked 512-byte TCP exchange
-over the owned data addresses before recording or fixture population. Its
-temporary peer listener/firewall rule is removed and the exchange is reported
-separately; it does not consume any of the 8,192 measured workload connections.
-This tests whether first-use route/reachability transitions were invalidating
-the fixture before its GC census. It is not proof of the particular epoch
-changer, and it neither holds nor preconnects measured workload traffic.
+Whole-workload CPU and requested spin summaries are generated before checking
+the scenario-control gates. A rejected census still fails the experiment and
+cannot qualify as a severity result; these diagnostic summaries allow investigation
+of unexpected path invalidation before the requested control ran. Their loss,
+symbol, and lock-identity fields must be examined independently.
 The opt-in `managed_gc_mixed=coreclr-servicewait` model uses 64 ordinary
 512-byte request/reply exchanges per connection. Each validated server request
 independently awaits 250-750 ms of synthetic asynchronous downstream latency

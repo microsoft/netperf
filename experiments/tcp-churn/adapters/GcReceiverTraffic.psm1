@@ -4,101 +4,6 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 Import-Module (Join-Path $PSScriptRoot 'WindowsCts.psm1')
-function Invoke-GcRouteWarmup {
-    [CmdletBinding()]
-    param([Parameter(Mandatory)][hashtable]$State)
-    if($State.ServerAddress -ne '198.19.240.1' -or $State.PeerAddress -ne '198.19.240.6'){
-        throw 'Route warmup requires the exact owned isolated data endpoints.'
-    }
-    $owner=[guid]::NewGuid().ToString('N')
-    $client=$null;$proof=$null;$failure=$null
-    $cleanup=[Collections.Generic.List[Exception]]::new()
-    try{
-        Invoke-Command -Session $State.Peer -ScriptBlock {
-            param($source,$target,$owner)
-            if($global:OwnedManagedGcPeer.ContainsKey('Warmup')){throw 'An existing warmup owner must not be overwritten.'}
-            $warmup=@{Owner=$owner;Rule=('NetperfGcWarmup-'+$owner);RuleCreated=$false;Listener=$null}
-            $global:OwnedManagedGcPeer.Warmup=$warmup
-            $null=New-NetFirewallRule -Name $warmup.Rule -DisplayName $warmup.Rule -Direction Inbound -Action Allow `
-                -Protocol TCP -LocalPort 20302 -LocalAddress $target -RemoteAddress $source -ErrorAction Stop
-            $warmup.RuleCreated=$true
-            $warmup.Listener=[Net.Sockets.TcpListener]::new([Net.IPAddress]::Parse($target),20302)
-            $warmup.Listener.Start()
-        } -ArgumentList $State.ServerAddress,$State.PeerAddress,$owner
-        $client=[Net.Sockets.TcpClient]::new([Net.IPEndPoint]::new([Net.IPAddress]::Parse($State.ServerAddress),0))
-        if(-not $client.ConnectAsync($State.PeerAddress,20302).Wait(5000)){throw 'The healthy route-warmup connect deadline expired.'}
-        $client.ReceiveTimeout=5000;$client.SendTimeout=5000
-        $data=[byte[]]::new(512)
-        for($index=0;$index -lt $data.Length;$index++){$data[$index]=[byte]($index%251)}
-        $stream=$client.GetStream()
-        $stream.Write($data,0,$data.Length)
-        $client.Client.Shutdown([Net.Sockets.SocketShutdown]::Send)
-        $proof=Invoke-Command -Session $State.Peer -ScriptBlock {
-            param($owner)
-            $warmup=$global:OwnedManagedGcPeer.Warmup
-            if($warmup.Owner -ne $owner){throw 'The warmup listener changed ownership.'}
-            $accept=$warmup.Listener.AcceptTcpClientAsync()
-            if(-not $accept.Wait(5000)){throw 'The healthy route-warmup accept deadline expired.'}
-            $connection=$accept.GetAwaiter().GetResult()
-            try{
-                $connection.ReceiveTimeout=5000;$connection.SendTimeout=5000
-                $stream=$connection.GetStream();$data=[byte[]]::new(512);$offset=0
-                while($offset -lt $data.Length){
-                    $read=$stream.Read($data,$offset,$data.Length-$offset)
-                    if($read -eq 0){throw 'The route-warmup request ended early.'}
-                    $offset+=$read
-                }
-                for($index=0;$index -lt $data.Length;$index++){
-                    if($data[$index] -ne [byte]($index%251)){throw 'Route-warmup request mismatch.'}
-                }
-                if($stream.ReadByte() -ne -1){throw 'Unexpected route-warmup request data.'}
-                $stream.Write($data,0,$data.Length)
-                $connection.Client.Shutdown([Net.Sockets.SocketShutdown]::Send)
-                [pscustomobject]@{connections=1;bytesReceived=512;bytesSent=512}
-            }finally{$connection.Dispose()}
-        } -ArgumentList $owner
-        $reply=[byte[]]::new(512);$offset=0
-        while($offset -lt $reply.Length){
-            $read=$stream.Read($reply,$offset,$reply.Length-$offset)
-            if($read -eq 0){throw 'The route-warmup reply ended early.'}
-            $offset+=$read
-        }
-        for($index=0;$index -lt $reply.Length;$index++){
-            if($reply[$index] -ne $data[$index]){throw 'Route-warmup reply mismatch.'}
-        }
-        if($stream.ReadByte() -ne -1 -or $proof.connections -ne 1 -or $proof.bytesReceived -ne 512 -or $proof.bytesSent -ne 512){
-            throw 'The route-warmup EOF or byte counts did not verify.'
-        }
-    }catch{$failure=$_.Exception}
-    finally{
-        if($null -ne $client){try{$client.Dispose()}catch{$cleanup.Add($_.Exception)}}
-        try{
-            Invoke-Command -Session $State.Peer -ScriptBlock {
-                param($owner)
-                if(-not $global:OwnedManagedGcPeer.ContainsKey('Warmup')){return}
-                $warmup=$global:OwnedManagedGcPeer.Warmup
-                if($warmup.Owner -ne $owner -or $warmup.Rule -ne ('NetperfGcWarmup-'+$owner)){
-                    throw 'The warmup owner changed; refusing cleanup.'
-                }
-                $errors=[Collections.Generic.List[Exception]]::new()
-                if($null -ne $warmup.Listener){try{$warmup.Listener.Stop()}catch{$errors.Add($_.Exception)}}
-                if($warmup.RuleCreated){
-                    try{Remove-NetFirewallRule -Name $warmup.Rule -ErrorAction Stop}catch{$errors.Add($_.Exception)}
-                }
-                if($errors.Count){throw [AggregateException]::new('Required route-warmup cleanup failed.',$errors)}
-                $global:OwnedManagedGcPeer.Remove('Warmup')
-            } -ArgumentList $owner
-        }catch{$cleanup.Add($_.Exception)}
-    }
-    $cleanupVerified=$cleanup.Count -eq 0
-    if($null -ne $failure){$cleanup.Insert(0,$failure)}
-    if($cleanup.Count){
-        $warmupError=[AggregateException]::new('Healthy route warmup or required cleanup failed.',$cleanup)
-        $warmupError.Data['RouteWarmupCleanupVerified']=$cleanupVerified
-        throw $warmupError
-    }
-    [pscustomobject]@{connections=1;bytesPerDirection=512;beforeFixturePopulation=$true;cleanupVerified=$true}
-}
 function Start-GcReceiver {
     [CmdletBinding()]
     param([Parameter(Mandatory)][hashtable]$State)
@@ -281,4 +186,4 @@ function Invoke-GcReceiverTraffic {
         )
     }
 }
-Export-ModuleMember -Function Start-GcReceiver,Invoke-GcReceiverTraffic,Invoke-GcRouteWarmup
+Export-ModuleMember -Function Start-GcReceiver,Invoke-GcReceiverTraffic
