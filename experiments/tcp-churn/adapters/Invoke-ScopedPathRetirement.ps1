@@ -334,13 +334,24 @@ try {
             if($currentPopulation.Count -ne 1 -or [string]$currentPopulation[0].InterfaceGuid -ne $data.interfaceGuid){
                 throw 'The cache population interface changed ownership during maintenance.'
             }
+            $report.populationInterfaceIndexChanged=$currentPopulation[0].ifIndex -ne $populationAdapter[0].ifIndex
+            $populationAdapter=$currentPopulation
             $survivingSources=@(Read-VerifiedOwnedAddresses $currentPopulation[0].ifIndex $true)
             if(@($survivingSources|Where-Object AddressState -ne 'Preferred').Count){
                 throw 'The surviving cache population lost a preferred source during maintenance.'
             }
-            $report.measuredSurvivingPaths=Read-PathCount
-            if($report.measuredSurvivingPaths -lt $PathCount){throw 'The data-interface cache population did not survive unused-interface maintenance.'}
-            $report.populationSurvivedMaintenance=$true
+            if($sockets.Count -ne $PathCount){throw 'The bounded idle socket reference population changed during maintenance.'}
+            foreach($socket in $sockets){
+                if($null -eq $socket.Client -or -not $socket.Client.IsBound -or
+                    $socket.Client.LocalEndPoint.Address.ToString() -notin $sources){
+                    throw 'A held UDP socket source changed during maintenance.'
+                }
+            }
+            $report.heldSocketsAtVerification=$sockets.Count
+            $report.heldSocketReferencesVerified=$true
+            $report.sourcePopulationPreserved=$true
+            $report.postMaintenanceEnumeratedValidPaths=Read-PathCount
+            $report.postCountConclusion='enumerated-valid-rows-not-all-cached-path-objects'
         }
     }
 }catch{$failure=$_}

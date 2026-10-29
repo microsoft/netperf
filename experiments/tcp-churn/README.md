@@ -830,11 +830,12 @@ The `managed_gc_unused_interface=valid-paths` contrast keeps the idle-cache
 sources on the verified data interface while retiring the separate disposable
 unused interface. It does not detach or restart the data adapter. The owned
 cache prefix, source identities, data/default routing and both original address
-sets are guarded and restored. A post-maintenance native snapshot must confirm
-that the requested idle path population survived before its sources are
-removed during cleanup. Its connected UDP sockets remain idle but open until
-that snapshot, so the survival check is not based solely on retaining unreferenced
-cache entries; they never send payloads or release TCP work. This distinguishes a surviving-source cache population
+sets are guarded and restored. Actual enumerated valid path rows are measured
+before the event. After maintenance, the sources must still be preferred and
+the requested idle UDP sockets must remain bound to those owned sources until
+cleanup; they never send payloads or release TCP work. A separate post-event
+valid-row count is reported without treating stale, non-enumerated paths as
+absent objects. This distinguishes a surviving-source cache population
 from paths whose source is removed by the maintenance event; it does not assert
 the identity of any customer writer.
 High-concurrency cohorts use the same focused CPU capture as persistent mode,

@@ -88,17 +88,17 @@ foreach($case in @('route','cache','both','unused-cache','during-gc-cache','vali
                     $node.Clauses[0].Item1.Extent.Text.StartsWith('$KeepCacheValid -and ($cacheReport.populationPlacement')
             },$true))
             if($populationGate.Count -ne 1){throw 'The actual surviving-population acceptance gate must be unique.'}
-            foreach($case in @('valid','wrong-placement','missing-paths','not-survived')){
+            foreach($case in @('valid','wrong-placement','missing-references','changed-sources')){
                 & {
                     $KeepCacheValid=$true;$CacheRetirePaths=24576
                     $cacheReport=[pscustomobject]@{populationPlacement='surviving-data-interface'
-                        populationSurvivedMaintenance=$true;measuredSurvivingPaths=24576}
+                        sourcePopulationPreserved=$true;heldSocketReferencesVerified=$true;heldSocketsAtVerification=24576}
                     if($case -eq 'wrong-placement'){$cacheReport.populationPlacement='retired-interface'}
-                    if($case -eq 'missing-paths'){$cacheReport.measuredSurvivingPaths=1}
-                    if($case -eq 'not-survived'){$cacheReport.populationSurvivedMaintenance=$false}
+                    if($case -eq 'missing-references'){$cacheReport.heldSocketsAtVerification=1}
+                    if($case -eq 'changed-sources'){$cacheReport.sourcePopulationPreserved=$false}
                     $rejected=$false
                     try{& ([scriptblock]::Create($populationGate[0].Extent.Text))}catch{
-                        if($_.Exception.Message -notmatch 'valid-source data-interface cache population'){throw}
+                        if($_.Exception.Message -notmatch 'valid-source data-interface population'){throw}
                         $rejected=$true
                     }
                     if($rejected -eq ($case -eq 'valid')){throw 'Surviving-cache evidence was accepted or rejected incorrectly.'}
@@ -231,6 +231,23 @@ if($wprStarts.Count -ne 2 -or $wprStop.Count -ne 1){throw 'All actual recorder s
     if($calls.Count -ne 1 -or $calls[0].Arguments[0] -ne '-cancel' -or
         $calls[0].Arguments[-2] -ne '-instancename' -or $calls[0].Arguments[-1] -ne $wprInstance){
         throw 'Partial-start cleanup must target only the new owned instance, never the default recording.'
+    }
+}
+$metadata=@($ast.FindAll({
+    param($node)
+    $node -is [Management.Automation.Language.AssignmentStatementAst] -and
+        $node.Left.Extent.Text -eq '$result.probeCollectorBackend'
+},$true))
+if($metadata.Count -ne 1){throw 'Actual result recorder metadata must be unique.'}
+& {
+    $result=[ordered]@{};$WprProbes=$true;$SpinLocks=$false
+    $siblings=@($metadata[0].Parent.Statements)
+    $index=[Array]::IndexOf($siblings,$metadata[0])
+    $commands=($siblings[$index..($index+2)]|ForEach-Object{$_.Extent.Text})-join "`n"
+    & ([scriptblock]::Create($commands))
+    if($result.probeCollectorBackend -ne 'wpr-exact-events' -or
+        $result.recorderControlScope -ne 'unique-owned-named-instance' -or $result.kernelSpinlockEventsRequested){
+        throw 'Actual recorder metadata augmentation failed or executed a bare command.'
     }
 }
 $traffic=[Management.Automation.Language.Parser]::ParseFile(

@@ -290,6 +290,48 @@ public static class ArrivalTcp {
         }finally{[ArrivalTcp]::FailRelease=$false}
     }
     $checks++
+    $survival=@($ast.FindAll({
+        param($node)
+        $node -is [Management.Automation.Language.IfStatementAst] -and
+            $node.Clauses[0].Item1.Extent.Text -eq '$PopulationInterfaceAlias' -and
+            $node.Extent.Text.Contains('$report.postMaintenanceEnumeratedValidPaths=')
+    },$true))
+    if($survival.Count -ne 1){throw 'The actual post-maintenance source/reference validation must be unique.'}
+    foreach($case in @('zero-visible-rows','changed-socket','nonpreferred-source')){
+        & {
+            $PopulationInterfaceAlias='owned-data-interface';$data=@{interfaceGuid='test-interface'}
+            $populationAdapter=@([pscustomobject]@{InterfaceGuid='test-interface';ifIndex=5})
+            $sources=@('198.19.0.1');$PathCount=2;$report=[ordered]@{}
+            $sockets=@(1,2|ForEach-Object{[pscustomobject]@{Client=[pscustomobject]@{
+                IsBound=$true;LocalEndPoint=[pscustomobject]@{Address=[Net.IPAddress]::Parse('198.19.0.1')}}}})
+            if($case -eq 'changed-socket'){$sockets[1].Client.IsBound=$false}
+            function Get-NetAdapter {
+                [CmdletBinding()]param($Name)
+                [pscustomobject]@{InterfaceGuid='test-interface';ifIndex=6}
+            }
+            function Read-VerifiedOwnedAddresses {
+                param($Index,$RequireAll)
+                if($Index -ne 6 -or -not $RequireAll){throw 'Post-event source validation used stale interface identity.'}
+                [pscustomobject]@{AddressState=$(if($case -eq 'nonpreferred-source'){'Tentative'}else{'Preferred'})}
+            }
+            function Read-PathCount {
+                if($populationAdapter[0].ifIndex -ne 6){throw 'Post-event enumeration used a stale interface index.'}
+                0
+            }
+            $rejected=$false
+            try{& ([scriptblock]::Create($survival[0].Extent.Text))}catch{
+                if($_.Exception.Message -notmatch 'held UDP socket source changed|lost a preferred source'){throw}
+                $rejected=$true
+            }
+            if($rejected -ne ($case -ne 'zero-visible-rows')){throw 'Post-event row visibility was confused with source/reference validity.'}
+            if(-not $rejected -and (-not $report.sourcePopulationPreserved -or
+                -not $report.heldSocketReferencesVerified -or $report.heldSocketsAtVerification -ne 2 -or
+                $report.postMaintenanceEnumeratedValidPaths -ne 0 -or -not $report.populationInterfaceIndexChanged)){
+                throw 'Zero visible rows must remain an explicit observation with independently verified inputs.'
+            }
+        }
+        $checks++
+    }
     Write-Host "Passed $checks source-retirement ownership, restoration and actual socket-release lifecycle cases; no network operations were performed."
 }finally{
     foreach($name in @('data.clixml','state.clixml','report.json','release-failure.json','ready','begin','end')){

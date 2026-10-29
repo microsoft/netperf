@@ -498,7 +498,7 @@ try {
     }
     $result.probeCollectorBackend=$(if($WprProbes){'wpr-exact-events'}else{'traceevent-exact-events'})
     $result.kernelSpinlockEventsRequested=[bool]$SpinLocks
-    recorderControlScope='unique-owned-named-instance'
+    $result.recorderControlScope='unique-owned-named-instance'
     if($GcProcessRole -eq 'server'){$result.launchSpanScope='maximum-independent-producer-span';$result.workloadScope='both-independent-producers-plus-profiled-receiver'}
     if($PeerRecovery){$result.peerRecovery=$pulseResult;$result.peerDataInterfaceDhcpEnabled=$peerDhcpEnabled}
 }catch{$failure=$_}
@@ -732,8 +732,9 @@ try {
             throw 'The bounded source-retirement population, live cohort, timing or restoration did not verify.'
         }
         if($KeepCacheValid -and ($cacheReport.populationPlacement -ne 'surviving-data-interface' -or
-            -not $cacheReport.populationSurvivedMaintenance -or $cacheReport.measuredSurvivingPaths -lt $CacheRetirePaths)){
-            throw 'The requested valid-source data-interface cache population did not survive maintenance.'
+            -not $cacheReport.sourcePopulationPreserved -or -not $cacheReport.heldSocketReferencesVerified -or
+            $cacheReport.heldSocketsAtVerification -ne $CacheRetirePaths)){
+            throw 'The requested valid-source data-interface population or held socket references did not verify.'
         }
         if($CacheInterfaceGuid){
             $gcBegin=([datetime]$r.managedGc.collectionStartUtc).ToUniversalTime()
