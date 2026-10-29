@@ -398,7 +398,24 @@ try {
             $report.postCountConclusion='enumerated-valid-rows-not-all-cached-path-objects'
         }
     }
-}catch{$failure=$_}
+}catch{
+    $failure=$_
+    $pending=[Collections.Generic.Queue[Exception]]::new()
+    $pending.Enqueue($failure.Exception)
+    $facts=[Collections.Generic.List[object]]::new()
+    while($pending.Count -and $facts.Count -lt 8){
+        $cause=$pending.Dequeue()
+        $facts.Add([ordered]@{type=$cause.GetType().FullName;code=$cause.HResult
+            socketError=$(if($cause -is [Net.Sockets.SocketException]){$cause.NativeErrorCode}else{$null})
+            createdClients=$(if($cause.Data.Contains('FixtureCreatedClients')){$cause.Data['FixtureCreatedClients']}else{$null})
+            connectedPairs=$(if($cause.Data.Contains('FixtureConnectedPairs')){$cause.Data['FixtureConnectedPairs']}else{$null})})
+        if($cause -is [AggregateException]){
+            foreach($inner in $cause.InnerExceptions){if($pending.Count -lt 8){$pending.Enqueue($inner)}}
+        }elseif($null -ne $cause.InnerException){$pending.Enqueue($cause.InnerException)}
+    }
+    $report.failureSourceLine=$failure.InvocationInfo.ScriptLineNumber
+    $report.failureCauses=$facts.ToArray()
+}
 finally {
     try {
         if($PopulationInterfaceAlias){
@@ -426,7 +443,7 @@ finally {
         $report.restoreFailureType=$restoreFailure.Exception.GetType().FullName
         $report.restoreFailureSourceLine=$restoreFailure.InvocationInfo.ScriptLineNumber
     }
-    $report|ConvertTo-Json|Set-Content -LiteralPath $ReportFile
+    $report|ConvertTo-Json -Depth 5|Set-Content -LiteralPath $ReportFile
 }
 if($null -ne $failure -or $null -ne $releaseFailure -or $null -ne $tcpReleaseFailure -or $null -ne $restoreFailure){
     $errors=[Collections.Generic.List[Exception]]::new()

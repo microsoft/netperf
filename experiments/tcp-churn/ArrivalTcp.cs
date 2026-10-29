@@ -268,6 +268,11 @@ public static class ArrivalTcp
                     fixture.CreationMilliseconds=clock.Elapsed.TotalMilliseconds;
                     return fixture;
                 }catch(Exception failure){
+                    int created=0,connected=0;
+                    foreach(var socket in fixture.clients)if(socket!=null)created++;
+                    foreach(var socket in fixture.servers)if(socket!=null)connected++;
+                    failure.Data["FixtureCreatedClients"]=created;
+                    failure.Data["FixtureConnectedPairs"]=connected;
                     try{fixture.Dispose();}
                     catch(Exception cleanup){throw new AggregateException("Referenced TCP fixture creation and cleanup failed.",failure,cleanup);}
                     throw;

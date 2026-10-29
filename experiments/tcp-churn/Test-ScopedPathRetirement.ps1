@@ -189,6 +189,23 @@ try {
             $node.Body.Extent.Text.Contains('$report.populationMilliseconds=')
     },$true))
     if($body.Count -ne 1){throw 'The actual cache-population lifecycle must be unique.'}
+    & {
+        $report=[ordered]@{}
+        $socket=[Net.Sockets.SocketException]::new(10055)
+        $aggregate=[AggregateException]::new('unpublishable test message',[Exception[]]@($socket))
+        $aggregate.Data['FixtureCreatedClients']=42
+        $aggregate.Data['FixtureConnectedPairs']=32
+        $catchCode=($body[0].CatchClauses[0].Body.Statements|ForEach-Object{$_.Extent.Text})-join "`n"
+        try{throw $aggregate}catch{
+            . ([scriptblock]::Create($catchCode))
+        }
+        if(@($report.failureCauses|Where-Object socketError -eq 10055).Count -ne 1 -or
+            @($report.failureCauses|Where-Object createdClients -eq 42).Count -ne 1 -or
+            ($report|ConvertTo-Json -Depth 5) -match 'unpublishable'){
+            throw 'The actual fixture failure serializer lost numeric socket/progress facts or exposed raw messages.'
+        }
+    }
+    $checks++
     $statements=@($body[0].Body.Statements)
     & {
         $sources=@(1..12|ForEach-Object{"198.19.0.$_"})
