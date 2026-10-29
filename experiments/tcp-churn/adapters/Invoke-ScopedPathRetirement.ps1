@@ -296,7 +296,8 @@ try {
         $report.referencedTcpPreparationMilliseconds=$referencedFixture.PreparationMilliseconds
         $report.referencedTcpAdmissionFreePhysicalBytes=$referencedFixture.AvailablePhysicalBytesAtCreate
         $report.referencedTcpConnectBatchLimit=[ArrivalTcp+ReferencedTcpPathFixture]::ConnectBatchLimit
-        $report.referencedTcpSourcePortPolicy='system-allocated-specific-loopback-source'
+        $report.referencedTcpSourcePortPolicy='system-reserved-specific-loopback-source'
+        $report.referencedTcpReservedSourcePorts=$referencedFixture.ReservedSourcePorts
         $report.populationMaximumParallelism=$referencedFixture.MaximumBindParallelism
     }else{
         $report.populationMaximumParallelism=[Math]::Min($sources.Count,[Environment]::ProcessorCount)

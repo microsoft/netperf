@@ -204,7 +204,7 @@ public static class ArrivalTcp
     public sealed class ReferencedTcpPathFixture:IDisposable
     {
         public const int ConnectBatchLimit=256;
-        private readonly Socket[] clients,servers;
+        private readonly Socket[] clients,servers,portReservations;
         private int disposed;
         public int Count {get;private set;}
         public int Port {get;private set;}
@@ -213,9 +213,10 @@ public static class ArrivalTcp
         public int PreparationQueries {get;private set;}
         public double PreparationMilliseconds {get;private set;}
         public int MaximumBindParallelism {get{return Math.Min(Count,Math.Min(32,Environment.ProcessorCount));}}
+        public int ReservedSourcePorts {get{return portReservations.Length;}}
         private ReferencedTcpPathFixture(int count)
         {
-            Count=count;clients=new Socket[count];servers=new Socket[count];
+            Count=count;clients=new Socket[count];servers=new Socket[count];portReservations=new Socket[Math.Min(512,count)];
         }
         private static IPAddress SourceFor(int ordinal)
         {
@@ -238,6 +239,12 @@ public static class ArrivalTcp
                     listener.Listen(-8192);
                     fixture.Port=((IPEndPoint)listener.LocalEndPoint).Port;
                     var clock=Stopwatch.StartNew();
+                    for(int i=0;i<fixture.portReservations.Length;i++){
+                        var reservation=new Socket(AddressFamily.InterNetwork,SocketType.Stream,ProtocolType.Tcp);
+                        fixture.portReservations[i]=reservation;
+                        reservation.ExclusiveAddressUse=true;
+                        reservation.Bind(new IPEndPoint(IPAddress.Loopback,0));
+                    }
                     for(int offset=0;offset<count;offset+=ConnectBatchLimit){
                         if(clock.Elapsed.TotalSeconds>120)throw new TimeoutException("Referenced TCP fixture creation exceeded its deadline.");
                         int batch=Math.Min(ConnectBatchLimit,count-offset);
@@ -246,7 +253,8 @@ public static class ArrivalTcp
                             var client=new Socket(AddressFamily.InterNetwork,SocketType.Stream,ProtocolType.Tcp);
                             fixture.clients[offset+i]=client;
                             client.ExclusiveAddressUse=true;
-                            client.Bind(new IPEndPoint(SourceFor(offset+i+1),0));
+                            int sourcePort=((IPEndPoint)fixture.portReservations[(offset+i)%fixture.portReservations.Length].LocalEndPoint).Port;
+                            client.Bind(new IPEndPoint(SourceFor(offset+i+1),sourcePort));
                             connects[i]=client.ConnectAsync(IPAddress.Loopback,fixture.Port);
                         });
                         if(!Task.WaitAll(connects,5000))throw new TimeoutException("A referenced loopback connection exceeded its deadline.");
@@ -287,6 +295,7 @@ public static class ArrivalTcp
                     !((IPEndPoint)clients[i].LocalEndPoint).Address.Equals(SourceFor(i+1)) ||
                     !((IPEndPoint)clients[i].RemoteEndPoint).Address.Equals(IPAddress.Loopback) ||
                     ((IPEndPoint)clients[i].LocalEndPoint).Port<1 ||
+                    ((IPEndPoint)clients[i].LocalEndPoint).Port!=((IPEndPoint)portReservations[i%portReservations.Length].LocalEndPoint).Port ||
                     ((IPEndPoint)clients[i].RemoteEndPoint).Port!=Port ||
                     ((IPEndPoint)servers[i].LocalEndPoint).Port!=Port ||
                     ((IPEndPoint)servers[i].RemoteEndPoint).Port!=((IPEndPoint)clients[i].LocalEndPoint).Port)
@@ -314,7 +323,7 @@ public static class ArrivalTcp
         {
             if(Interlocked.Exchange(ref disposed,1)!=0)return;
             var errors=new List<Exception>();
-            foreach(var group in new[]{clients,servers}){
+            foreach(var group in new[]{clients,servers,portReservations}){
                 foreach(var socket in group){
                     if(socket==null)continue;
                     try{socket.LingerState=new LingerOption(true,0);}catch(Exception error){errors.Add(error);}
