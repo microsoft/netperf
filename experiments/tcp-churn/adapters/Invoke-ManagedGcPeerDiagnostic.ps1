@@ -20,6 +20,7 @@ param(
     [ValidateSet(1,64)][int]$ExchangesPerConnection=1,
     [switch]$RetireDuringGc,
     [switch]$KeepCacheValid,
+    [switch]$NoTcpProbes,
     [ValidateSet(0,16384)][int]$ReceiveBudgetBytes=0,
     [ValidateSet(0,1,1024,8192,24576,49152)][int]$CacheRetirePaths=0,
     [switch]$WprProbes,
@@ -31,9 +32,12 @@ param(
     [string]$DataInterfaceGuid
 )
 $ErrorActionPreference='Stop'
-$focusedCpuCapture=$ExchangesPerConnection -eq 64 -or $Connections -gt 1024
+$focusedCpuCapture=$NoTcpProbes -or $ExchangesPerConnection -eq 64 -or $Connections -gt 1024
 if($RetireDuringGc -and -not $CacheInterfaceAlias){throw 'GC-active retirement requires the owned unused-interface control.'}
 if($KeepCacheValid -and -not $CacheInterfaceAlias){throw 'Surviving cache population requires the owned unused-interface control.'}
+if($NoTcpProbes -and (-not $WprProbes -or $PeerRecovery)){
+    throw 'CPU/CLR-only diagnosis requires WPR without a TCP recovery experiment.'
+}
 if($Connections -gt 1024 -and ($GcProcessRole -ne 'server' -or $ReceiveBudgetBytes -ne 16384)){
     throw 'High concurrency requires receiver-GC mode and the verified 16384-byte receive budget.'
 }
@@ -307,6 +311,7 @@ try {
         $tasks=@($tasks|Where-Object{$_ -notin $omittedTcpTasks})
         $tcpKeywords=[long]0x1400000000
     }
+    if($NoTcpProbes){$omittedTcpTasks=@(($tasks+$omittedTcpTasks)|Sort-Object -Unique);$tasks=@();$tcpKeywords=[long]0}
     $events=@($provider.Events|Where-Object{$null -ne $_.Task -and $_.Task.Name -in $tasks}|
         ForEach-Object{[pscustomobject]@{Id=$_.Id;Task=$_.Task.Name}})
     foreach($task in $tasks){if($task -notin @($events.Task)){throw 'A required public TCP event is unavailable.'}}
@@ -328,6 +333,7 @@ try {
         $phase='wpr-exact-probe-start'
         $wprProfile=Join-Path $diagnostics 'gc-probes.wprp'
         $profileArguments=@{TcpStateFile=$tcpState;ClrStateFile=$clrState;Output=$wprProfile}
+        if($NoTcpProbes){$profileArguments.NoTcpProvider=$true}
         $cpuProfile='CPU'
         if($SpinLocks -or $focusedCpuCapture){
             $kernelProfile=Join-Path $diagnostics $(if($SpinLocks){'cpu-spinlocks.wprp'}else{'cpu-sampled-only.wprp'})
@@ -476,7 +482,7 @@ try {
         maximumPerConnectionReadBufferBytes=$r.maximumPerConnectionReadBufferBytes
         kernelSchedulingEventsRequested=($ExchangesPerConnection -ne 64)
         kernelProfileCoverage=$(if($focusedCpuCapture){'focused-sampled-cpu-lifetime-images'}else{'installed-cpu-profile'})
-        tcpProbeCoverage=$(if($ExchangesPerConnection -eq 64){'lifecycle-only'}else{'bounded-diagnosis-send-connect-tcb'})
+        tcpProbeCoverage=$(if($NoTcpProbes){'not-recorded-cpu-clr-diagnostic'}elseif($ExchangesPerConnection -eq 64){'lifecycle-only'}else{'bounded-diagnosis-send-connect-tcb'})
         omittedTcpProbeTasks=$omittedTcpTasks
         dataInterfaceMtuBytes=$mtu
         targets=$r.targets;managedGc=$r.managedGc
@@ -649,7 +655,7 @@ finally {
 }
 if($null -ne $failure -or $cleanupErrors.Count) {
     $diagnosticVerified=$false;$diagnosticFailure=$null
-    if(($null -ne $clientFailure -or $null -ne $receiverState) -and $profileOwned -and
+    if(-not $NoTcpProbes -and ($null -ne $clientFailure -or $null -ne $receiverState) -and $profileOwned -and
         (Test-Path -LiteralPath (Join-Path $diagnostics 'cpu.etl'))) {
         try {
             $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @((Join-Path $diagnostics 'cpu.etl'),
@@ -711,6 +717,7 @@ if($null -ne $failure -or $cleanupErrors.Count) {
                 rawMessagesExported=$false}
         }
         @{schema=1;workload='managed-gc-mixed';outcome='failed';phase=$phase;failureType=$type;failureCode=$code
+            tcpProbeCoverage=$(if($NoTcpProbes){'not-recorded-cpu-clr-diagnostic'}else{'capture-not-accepted'})
             failureSourceLine=$(if($null -ne $failure){$failure.InvocationInfo.ScriptLineNumber}else{$null})
             probeStartup=$probeStartup
             toolExitCode=$toolCode;cleanupErrorCount=$cleanupErrors.Count;cleanupVerified=($cleanupErrors.Count -eq 0)
@@ -826,22 +833,24 @@ try {
     $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @((Join-Path $diagnostics 'cpu.etl'),
         (Join-Path $PublishDirectory 'cpu-after-gc.json'),$postStart.ToString('o'),$postEnd.ToString('o')) `
         -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'post-gc-analysis') -TimeoutSeconds 300
-    $phase='analyze-tcp-events'
-    $tcpCoverageEnd=if($PeerRecovery -or $GcProcessRole -eq 'server'){$tcpEnd}else{$end}
-    $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @('--events',$tcpTrace,
-        (Join-Path $PublishDirectory 'tcp-events.json'),'interval',$start,$tcpCoverageEnd,(Join-Path $diagnostics 'tcp-state.json')) `
-        -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'tcp-analysis') -TimeoutSeconds 120
-    $tcpSummary=Get-Content (Join-Path $PublishDirectory 'tcp-events.json') -Raw|ConvertFrom-Json
-    if($tcpSummary.outcome -ne 'counted' -or $tcpSummary.eventsLost -ne 0){throw 'Lossless TCP event coverage is required.'}
     $cpuFiles=@('cpu-load.json','cpu-after-gc.json')
-    if($PeerRecovery -or $GcProcessRole -eq 'server') {
-        $phase='verify-recovery-coverage'
-        Import-Module (Join-Path $PSScriptRoot 'TcpRecoveryEvidence.psm1') -Force
-        $ownerEvent=if($GcProcessRole -eq 'server'){'TcpAcceptListenerComplete'}else{'TcpConnectTcbComplete'}
-        $ownedCounts=Read-TcpRecoveryEvidence -Provider $provider -TracePath $tcpTrace `
-            -StartUtc ([datetime]$start) -EndUtc ([datetime]$tcpCoverageEnd) -OwnerProcessId $clientPid -ExpectedConnections $count -OwnerEventKind $ownerEvent `
-            -MaximumRecords $(if($ExchangesPerConnection -eq 64){2000000}else{200000})
-        $result.tcpRecovery=$ownedCounts
+    if(-not $NoTcpProbes){
+        $phase='analyze-tcp-events'
+        $tcpCoverageEnd=if($PeerRecovery -or $GcProcessRole -eq 'server'){$tcpEnd}else{$end}
+        $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @('--events',$tcpTrace,
+            (Join-Path $PublishDirectory 'tcp-events.json'),'interval',$start,$tcpCoverageEnd,(Join-Path $diagnostics 'tcp-state.json')) `
+            -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'tcp-analysis') -TimeoutSeconds 120
+        $tcpSummary=Get-Content (Join-Path $PublishDirectory 'tcp-events.json') -Raw|ConvertFrom-Json
+        if($tcpSummary.outcome -ne 'counted' -or $tcpSummary.eventsLost -ne 0){throw 'Lossless TCP event coverage is required.'}
+        if($PeerRecovery -or $GcProcessRole -eq 'server') {
+            $phase='verify-recovery-coverage'
+            Import-Module (Join-Path $PSScriptRoot 'TcpRecoveryEvidence.psm1') -Force
+            $ownerEvent=if($GcProcessRole -eq 'server'){'TcpAcceptListenerComplete'}else{'TcpConnectTcbComplete'}
+            $ownedCounts=Read-TcpRecoveryEvidence -Provider $provider -TracePath $tcpTrace `
+                -StartUtc ([datetime]$start) -EndUtc ([datetime]$tcpCoverageEnd) -OwnerProcessId $clientPid -ExpectedConnections $count -OwnerEventKind $ownerEvent `
+                -MaximumRecords $(if($ExchangesPerConnection -eq 64){2000000}else{200000})
+            $result.tcpRecovery=$ownedCounts
+        }
     }
     if($PeerRecovery) {
         $recoveryStart=([datetime]$pulseResult.restoredUtc).ToUniversalTime()
@@ -895,6 +904,7 @@ try {
 }catch {
     $toolCode=if($_.Exception.Data.Contains('ToolExitCode')){$_.Exception.Data['ToolExitCode']}else{$null}
     @{schema=1;workload='managed-gc-mixed';outcome='failed';phase=$phase;failureType=$_.Exception.GetType().FullName
+        tcpProbeCoverage=$(if($NoTcpProbes){'not-recorded-cpu-clr-diagnostic'}else{'capture-not-accepted'})
         failureCode=$_.Exception.HResult;toolExitCode=$toolCode;cleanupVerified=$true
         peerRecovery=$pulseResult;tcpRecovery=$ownedCounts;peerDataInterfaceDhcpEnabled=$peerDhcpEnabled
         routeRefreshControl=$(if($RouteRefresh){$routeReport}else{$null})

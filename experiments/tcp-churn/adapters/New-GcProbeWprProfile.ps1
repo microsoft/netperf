@@ -7,6 +7,7 @@ param(
     [Parameter(Mandatory)][string]$ClrStateFile,
     [Parameter(Mandatory)][string]$Output,
     [string]$KernelOutput,
+    [switch]$NoTcpProvider,
     [ValidateSet('SpinWithScheduling','SampledOnly','SpinWithoutScheduling')][string]$KernelMode='SpinWithScheduling'
 )
 $ErrorActionPreference='Stop'
@@ -43,7 +44,9 @@ if($KernelOutput){
     $kernel.Save($KernelOutput)
 }
 $definitions=[Collections.Generic.List[string]]::new()
-foreach($entry in @(@{Id='Tcp';Path=$TcpStateFile},@{Id='Clr';Path=$ClrStateFile})){
+$entries=@(@{Id='Clr';Path=$ClrStateFile})
+if(-not $NoTcpProvider){$entries=@(@{Id='Tcp';Path=$TcpStateFile})+$entries}
+foreach($entry in $entries){
     $state=Get-Content -LiteralPath $entry.Path -Raw|ConvertFrom-Json
     $guid=[guid]::Parse($state.publicProviderGuid).ToString('D')
     $keywords=[string]$state.publicProviderKeywords
@@ -60,19 +63,22 @@ foreach($entry in @(@{Id='Tcp';Path=$TcpStateFile},@{Id='Clr';Path=$ClrStateFile
     $nonPaged=if($entry.Id -eq 'Tcp'){' NonPagedMemory="true"'}else{''}
     $definitions.Add(('<EventProvider Id="{0}" Name="{1}" Level="5" Strict="true"{4}><Keywords><Keyword Value="{3}" /></Keywords><EventFilters FilterIn="true">{2}</EventFilters></EventProvider>' -f $entry.Id,$guid,$filters,$keywords,$nonPaged))
 }
+$collectorName=if($NoTcpProvider){'TcpChurn CLR Events'}else{'TcpChurn GC Events'}
+$description=if($NoTcpProvider){'Exact public CLR events; TCP intentionally omitted'}else{'Exact public TCP and CLR events'}
+$providerReferences=($entries|ForEach-Object{'<EventProviderId Value="{0}" />' -f $_.Id})-join ''
 $xml=@"
 <?xml version="1.0" encoding="utf-8"?>
 <WindowsPerformanceRecorder Version="1.0" Author="Microsoft">
   <Profiles>
-    <EventCollector Id="GcEvents" Name="TcpChurn GC Events">
+    <EventCollector Id="GcEvents" Name="$collectorName">
       <BufferSize Value="64" />
       <Buffers Value="1024" />
     </EventCollector>
     $($definitions -join "`n")
-    <Profile Id="GcProbeEvents.Verbose.File" Name="GcProbeEvents" Description="Exact public TCP and CLR events" LoggingMode="File" DetailLevel="Verbose">
+    <Profile Id="GcProbeEvents.Verbose.File" Name="GcProbeEvents" Description="$description" LoggingMode="File" DetailLevel="Verbose">
       <Collectors>
         <EventCollectorId Value="GcEvents">
-          <EventProviders><EventProviderId Value="Tcp" /><EventProviderId Value="Clr" /></EventProviders>
+          <EventProviders>$providerReferences</EventProviders>
         </EventCollectorId>
       </Collectors>
     </Profile>

@@ -31,6 +31,7 @@ internal static class EtwSessionHealth
                     if (lost < 0) throw new InvalidOperationException("A collector returned an invalid loss counter.");
                     string label = name.Replace('_', ' ').ToLowerInvariant();
                     string kind = label.Contains("tcpchurn gc events") ? "exact-tcp-clr" :
+                        label.Contains("tcpchurn clr events") ? "exact-clr" :
                         label.Contains("system collector") ? "sampled-system" : "other-wpr";
                     collectors.Add(new { collectorOrdinal = collectors.Count + 1, kind, eventsLost = lost });
                 }

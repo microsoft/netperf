@@ -147,6 +147,12 @@ foreach($case in @('during-valid','during-late','after-valid','after-early','hel
                 $node.Left.Extent.Text -eq '$focusedCpuCapture'
         },$true))
         if($focus.Count -ne 1 -or $selection.Count -ne 1){throw 'Actual high-volume CPU capture selection must be unique.'}
+        & {
+            $NoTcpProbes=$true;$ExchangesPerConnection=1;$Connections=1024;$SpinLocks=$false
+            $diagnostics='unused-owned-diagnostics';$cpuProfile='CPU';$profileArguments=@{}
+            & ([scriptblock]::Create($selection[0].Extent.Text+"`n"+$focus[0].Extent.Text))
+            if($profileArguments.KernelMode -ne 'SampledOnly'){throw 'CPU/CLR isolation must use focused sampling even at ordinary concurrency.'}
+        }
         foreach($exchanges in @(1,64)){
             foreach($limit in @(1024,4096)){
                 foreach($spin in @($false,$true)){
@@ -328,6 +334,29 @@ foreach($case in @('native-and-close','deadline-and-close','close-only','native-
             if($failure -isnot [IO.IOException] -or $null -ne $value){throw 'Cleanup failure returned a success-shaped value.'}
         }elseif($null -ne $failure -or $value.ExitCode -ne 0){throw 'Successful native execution behavior changed.'}
     }
+}
+$noTcpSelection=@($ast.FindAll({
+    param($node)
+    $node -is [Management.Automation.Language.IfStatementAst] -and
+        $node.Clauses[0].Item1.Extent.Text -eq '$NoTcpProbes' -and
+        $node.Extent.Text.Contains('$omittedTcpTasks=')
+},$true))
+$tcpAnalysis=@($ast.FindAll({
+    param($node)
+    $node -is [Management.Automation.Language.IfStatementAst] -and
+        $node.Clauses[0].Item1.Extent.Text -eq '-not $NoTcpProbes'
+},$true))
+if($noTcpSelection.Count -ne 1 -or $tcpAnalysis.Count -ne 1){throw 'Explicit TCP omission and analysis selection must be unique.'}
+& {
+    $NoTcpProbes=$true;$tasks=@('TcpTcbSynSend','TcpCloseTcbRequest')
+    $omittedTcpTasks=@('TcpBlackHoleDetectionEntry');$tcpKeywords=[long]1
+    . ([scriptblock]::Create($noTcpSelection[0].Extent.Text))
+    if($tasks.Count -ne 0 -or $tcpKeywords -ne 0 -or $omittedTcpTasks.Count -ne 3){
+        throw 'CPU/CLR isolation lost explicit omissions or still requested TCP events.'
+    }
+    function Invoke-TcpChurnTool {throw 'TCP analysis must not run when its provider was not recorded.'}
+    function Read-TcpRecoveryEvidence {throw 'Missing TCP lifetime events must not be interpreted as measured zero counts.'}
+    & ([scriptblock]::Create($tcpAnalysis[0].Extent.Text))
 }
 $traffic=[Management.Automation.Language.Parser]::ParseFile(
     (Join-Path $PSScriptRoot 'adapters\GcReceiverTraffic.psm1'),[ref]$tokens,[ref]$errors)

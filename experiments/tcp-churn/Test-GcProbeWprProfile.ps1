@@ -51,6 +51,16 @@ try{
     }
     & "$env:SystemRoot\System32\wpr.exe" -profiles $sampledKernel
     if($LASTEXITCODE){throw 'The installed WPR rejected the focused sampling profile.'}
+    $clrOnlyProfile=Join-Path $directory 'generated-clr-only.wprp'
+    & $program -TcpStateFile (Join-Path $directory 'not-requested-tcp.json') -ClrStateFile $clr `
+        -Output $clrOnlyProfile -NoTcpProvider
+    [xml]$clrOnly=Get-Content -LiteralPath $clrOnlyProfile -Raw
+    if(@($clrOnly.SelectNodes('//EventProvider')).Count -ne 1 -or
+        $clrOnly.WindowsPerformanceRecorder.Profiles.EventProvider.Id -ne 'Clr' -or
+        @($clrOnly.SelectNodes("//EventProviderId[@Value='Tcp']")).Count -or
+        $clrOnly.WindowsPerformanceRecorder.Profiles.EventCollector.Name -ne 'TcpChurn CLR Events'){
+        throw 'CPU/CLR isolation must omit the TCP provider and every TCP reference explicitly.'
+    }
     if($CaptureSmoke){
         $wpr="$env:SystemRoot\System32\wpr.exe"
         $status=@(& $wpr -status)
@@ -58,9 +68,10 @@ try{
             throw 'The dedicated capture-smoke runner already has a recording; refusing interference.'
         }
         $exactExit=$null
-        foreach($case in @('tcp-only','clr-only','keyword-only','exact-combined','sampled-combined')){
+        foreach($case in @('tcp-only','clr-only','keyword-only','exact-combined','sampled-combined','clr-sampled-combined')){
             $instance='NetperfGc-'+[guid]::NewGuid().ToString('N')
             [xml]$variant=$xml.OuterXml
+            if($case -eq 'clr-sampled-combined'){$variant=[xml]$clrOnly.OuterXml}
             if($case -in @('tcp-only','clr-only')){
                 $removeId=if($case -eq 'tcp-only'){'Clr'}else{'Tcp'}
                 $node=$variant.SelectSingleNode("/WindowsPerformanceRecorder/Profiles/EventProvider[@Id='$removeId']")
@@ -77,15 +88,15 @@ try{
             try{
                 $attempted=$true
                 $cpuProfile=if($CaptureSpinLocks){$kernelProfile+'!CPU'}else{'CPU'}
-                if($case -eq 'sampled-combined'){$cpuProfile=$sampledKernel+'!CPU'}
-                $arguments=if($case -in @('exact-combined','sampled-combined')){@('-start',$cpuProfile,'-start',($variantPath+'!GcProbeEvents'),'-filemode')}
+                if($case -in @('sampled-combined','clr-sampled-combined')){$cpuProfile=$sampledKernel+'!CPU'}
+                $arguments=if($case -in @('exact-combined','sampled-combined','clr-sampled-combined')){@('-start',$cpuProfile,'-start',($variantPath+'!GcProbeEvents'),'-filemode')}
                     else{@('-start',($variantPath+'!GcProbeEvents'),'-filemode')}
                 $arguments+=@('-instancename',$instance)
                 & $wpr @arguments
                 $activationExit=$LASTEXITCODE
                 Write-Output ("WPR activation case={0} exit=0x{1:X8}" -f $case,$activationExit)
                 if($case -eq 'exact-combined'){$exactExit=$activationExit}
-                if($case -eq 'sampled-combined' -and $activationExit -ne 0){throw 'Dedicated-runner focused CPU/event activation failed.'}
+                if($case -in @('sampled-combined','clr-sampled-combined') -and $activationExit -ne 0){throw 'Dedicated-runner focused CPU/event activation failed.'}
                 if($activationExit -eq 0){
                     Start-Sleep -Milliseconds 250
                     & $wpr -stop (Join-Path $directory ($case+'.etl')) -skipPdbGen -instancename $instance
@@ -116,7 +127,8 @@ try{
     foreach($name in @('tcp.json','clr.json','probes.wprp','smoke.etl','kernel.wprp',
         'tcp-only.wprp','tcp-only.etl','clr-only.wprp','clr-only.etl',
         'keyword-only.wprp','keyword-only.etl','exact-combined.wprp','exact-combined.etl',
-        'sampled-kernel.wprp','sampled-probes.wprp','sampled-combined.wprp','sampled-combined.etl')){
+        'sampled-kernel.wprp','sampled-probes.wprp','sampled-combined.wprp','sampled-combined.etl',
+        'generated-clr-only.wprp','clr-sampled-combined.wprp','clr-sampled-combined.etl')){
         $file=Join-Path $directory $name
         if(Test-Path -LiteralPath $file){Remove-Item -LiteralPath $file}
     }

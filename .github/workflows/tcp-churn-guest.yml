@@ -76,9 +76,10 @@ on:
         options: ['0', '1', '1024', '8192', '24576', '49152']
         default: '0'
       managed_gc_wpr_probes:
-        description: Explicit alternate WPR controller for exact TCP/CLR event filters
-        type: boolean
-        default: false
+        description: Exact WPR probes; clr-only explicitly omits TCP events for collector isolation
+        type: choice
+        options: ['false', 'true', 'clr-only']
+        default: 'false'
       managed_gc_peer_pressure:
         description: Add a bounded independent real-GC loopback service on the owned peer
         type: boolean
@@ -252,6 +253,8 @@ jobs:
           $persistentRequested = $env:MANAGED_GC_MIXED -eq 'persistent64'
           $duringGcRequested = $env:MANAGED_GC_UNUSED_INTERFACE -eq 'during-gc'
           $validCacheRequested = $env:MANAGED_GC_UNUSED_INTERFACE -eq 'valid-paths'
+          $noTcpRequested = $env:MANAGED_GC_WPR_PROBES -eq 'clr-only'
+          if ($noTcpRequested) { $env:MANAGED_GC_WPR_PROBES = 'true' }
           if ($duringGcRequested -or $validCacheRequested) { $env:MANAGED_GC_UNUSED_INTERFACE = 'true' }
           if ($persistentRequested) {
             if ($env:MANAGED_GC_PROCESS_ROLE -ne 'server' -or $env:MANAGED_GC_PAYLOAD_BYTES -ne '1460') {
@@ -308,6 +311,7 @@ jobs:
             $extra.ManagedGcReceiveBudgetBytes = [int]$env:MANAGED_GC_RECEIVE_BUDGET_BYTES
             $extra.ManagedGcCacheRetirePaths = [int]$env:MANAGED_GC_CACHE_RETIRE_PATHS
             if ($env:MANAGED_GC_WPR_PROBES -eq 'true') { $extra.ManagedGcWprProbes = $true }
+            if ($noTcpRequested) { $extra.ManagedGcNoTcpProbes = $true }
             if ($env:MANAGED_GC_PEER_PRESSURE -eq 'true') { $extra.ManagedGcPeerPressure = $true }
             if ($env:MANAGED_GC_UNUSED_INTERFACE -eq 'true') {
               $extra.ManagedGcUnusedInterface = $true

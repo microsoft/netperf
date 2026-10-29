@@ -850,6 +850,13 @@ After traffic completes, capture closes before fixture teardown is signalled.
 Every guarded restoration is still attempted if recording shutdown fails.
 Native-tool errors and child-cleanup errors are preserved together rather than
 letting a secondary termination failure mask the original failure.
+The explicit `managed_gc_wpr_probes=clr-only` collector-isolation option
+records focused CPU stacks and owned-process CLR events but no TCP provider.
+It preserves byte, GC, symbol, capture-loss and restoration checks, reports
+all omitted TCP tasks, and performs no TCP lifetime/probe analysis. Missing
+events are not zero-event evidence and cannot establish absence of BH,
+retransmission or zero-window activity. TCP recovery experiments reject this
+option; ordinary `true` capture retains its existing TCP coverage.
 
 The explicit `managed_gc_unused_interface=true` variant creates one
 disposable synthetic NIC on the owned generation-2 VM. It is first added

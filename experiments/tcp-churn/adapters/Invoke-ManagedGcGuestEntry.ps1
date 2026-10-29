@@ -12,6 +12,7 @@ param(
     [ValidateSet(1,64)][int]$ExchangesPerConnection=1,
     [switch]$RetireDuringGc,
     [switch]$KeepCacheValid,
+    [switch]$NoTcpProbes,
     [switch]$PeerRecovery,
     [switch]$IsolatedData,
     [int]$RecoveryMilliseconds=8000,
