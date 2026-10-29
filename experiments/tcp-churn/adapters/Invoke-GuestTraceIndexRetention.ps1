@@ -151,7 +151,15 @@ try{
         default {'unclassified'}
     }
     if(-not(Test-Path -LiteralPath $ReportFile)){
+        $id=[string]$_.FullyQualifiedErrorId
+        $line=[regex]::Match([string]$_.ScriptStackTrace,'(?i)line\s+(\d+)')
+        $message=$_.Exception.Message
         @{schema=1;outcome='failed';failureType=$_.Exception.GetType().FullName;failureCode=$_.Exception.HResult
+            errorId=$(if($id -match '^[A-Za-z0-9_.,-]{1,256}$'){$id}else{'unclassified'})
+            sourceLine=$(if($line.Success){[int]$line.Groups[1].Value}else{$_.InvocationInfo.ScriptLineNumber})
+            publicDiagnosticTerms=@('native','command','query','session','file','hash','path','not','found','access','denied',
+                'space','disk','json','invalid','convert','null','variable','property','method','argument','buffer','count','cannot','enough','process','used','another'|
+                Where-Object{$message -match ('(?i)\b'+[regex]::Escape($_)+'\b')})
             failureReason=$reason;pathsExported=$false;rawTracesExported=$false}|ConvertTo-Json|Set-Content -LiteralPath $ReportFile
     }
     throw 'The bounded guest trace-index retention operation failed; no private paths or raw traces were published.'
