@@ -71,7 +71,8 @@ $session=$null; $guestRoot=$null; $phase='guest-connect'; $success=$false; $star
 $vmFixture=$null;$fixtureAlias='';$fixtureGuid=''
 $vmFixtureState=Join-Path $PublishDirectory 'owned-vm-path-interface.clixml'
 try {
-    if ((Get-VM -Name $VmName -ErrorAction Stop).State -ne 'Running') {
+    $vmInfo=Get-VM -Name $VmName -ErrorAction Stop
+    if ($vmInfo.State -ne 'Running') {
         throw 'The documented guest must already be running; this adapter does not reset other workloads.'
     }
     $session=New-PSSession -VMName $VmName -Credential $Credential -ErrorAction Stop
@@ -140,7 +141,9 @@ try {
                     clientOwnedControlRoutes=$clientRoutes;peerOwnedControlRoutes=$peerState.routes;conclusion='connectivity-and-owned-resource-check'}
             } finally { Remove-PSSession $peer -ErrorAction Stop }
         } -ArgumentList $Credential
-        $peerResult|Select-Object schema,peerConnected,clientLogicalProcessors,peerLogicalProcessors,clientOwnedAliases,peerOwnedAliases,
+        $peerResult|Add-Member NoteProperty profiledVmGeneration ([int]$vmInfo.Generation)
+        $peerResult|Add-Member NoteProperty profiledVmConnectedAdapters (@(Get-VMNetworkAdapter -VMName $VmName -ErrorAction Stop|Where-Object SwitchName).Count)
+        $peerResult|Select-Object schema,peerConnected,profiledVmGeneration,profiledVmConnectedAdapters,clientLogicalProcessors,peerLogicalProcessors,clientOwnedAliases,peerOwnedAliases,
             clientOwnedRules,peerOwnedRules,clientOwnedStaticPeers,peerOwnedStaticPeers,clientOwnedControlRoutes,peerOwnedControlRoutes,
             clientWprStatusExitCode,clientWprRecordingNotRunning,clientWprCpuProfileReported,
             clientExactProbeLoggerCount,
@@ -265,6 +268,10 @@ try {
             $reason='guest-busy'
         }elseif($_.Exception.Message -match 'Owned client GC resources require restoration|Owned peer GC resources require restoration'){
             $reason='owned-resources-require-restoration'
+        }elseif($_.Exception.Message -match 'running generation-2 test VM'){
+            $reason='unsupported-hot-add-topology'
+        }elseif($_.Exception.Message -match 'disconnected new interface unexpectedly'){
+            $reason='unexpected-disposable-interface-ipv4'
         }
         [ordered]@{schema=1;workload='tcp-churn';outcome='failed';phase=$phase
             failureType=$_.Exception.GetType().FullName;failureCode=$_.Exception.HResult
