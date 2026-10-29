@@ -45,6 +45,14 @@ internal static class Program
         return peak;
     }
 
+    private static int EventProcessFilter(string selector)
+    {
+        if (selector == "interval") return 0;
+        if (!int.TryParse(selector, out int processId) || processId <= 0)
+            throw new ArgumentException("Expected an interval selector or a positive process ID.");
+        return processId;
+    }
+
     private static object[] Top(Dictionary<string, long> counts, int limit) =>
         counts.OrderByDescending(pair => pair.Value).ThenBy(pair => pair.Key)
             .Take(limit).Select(pair => (object)new { name = pair.Key, samples = pair.Value }).ToArray();
@@ -108,6 +116,7 @@ internal static class Program
             try
             {
                 var state = JObject.Parse(File.ReadAllText(args[6]));
+                int ownerProcessId = EventProcessFilter(args[3]);
                 var provider = Guid.Parse((string)state["publicProviderGuid"]);
                 var names = state["publicProviderEvents"].GroupBy(item => (int)item["Id"]).ToDictionary(
                     group => group.Key, group => (string)group.First()["Task"]);
@@ -120,6 +129,7 @@ internal static class Program
                     source.AllEvents += record =>
                     {
                         if (record.ProviderGuid != provider) return;
+                        if (ownerProcessId != 0 && record.ProcessID != ownerProcessId) return;
                         var time = record.TimeStamp.ToUniversalTime();
                         if (time < startTime || time > endTime) return;
                         total++;
@@ -128,6 +138,7 @@ internal static class Program
                     source.Process();
                     File.WriteAllText(args[2], JsonConvert.SerializeObject(new {
                         schema = 1, outcome = "counted", providerEventsInInterval = total,
+                        processFilterApplied = ownerProcessId != 0,
                         publicProbeCounts = counts, eventsLost = source.EventsLost,
                         conclusion = "events-do-not-prove-lock-waiting"
                     }, Formatting.Indented));
@@ -154,6 +165,10 @@ internal static class Program
                 PeakSampleCount(new long[] { 5, 5, 5 }, 10) != 3 ||
                 PeakSampleCount(new long[0], 10) != 0)
                 return 1;
+            if (EventProcessFilter("interval") != 0 || EventProcessFilter("123") != 123) return 1;
+            bool rejectedProcessFilter = false;
+            try { EventProcessFilter("0"); } catch (ArgumentException) { rejectedProcessFilter = true; }
+            if (!rejectedProcessFilter) return 1;
             Console.WriteLine("CPU analyzer contract checks passed.");
             return 0;
         }

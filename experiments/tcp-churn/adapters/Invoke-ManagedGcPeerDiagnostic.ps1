@@ -624,19 +624,22 @@ try {
     }
     $phase='analyze-clr-events'
     $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @('--events',$clrTrace,
-        (Join-Path $diagnostics 'clr-loss.json'),'interval',$start,$end,(Join-Path $diagnostics 'clr-state.json')) `
+        (Join-Path $diagnostics 'clr-loss.json'),[string]$clientPid,$start,$end,(Join-Path $diagnostics 'clr-state.json')) `
         -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'clr-loss-analysis') -TimeoutSeconds 120
     $clrSummary=Get-Content (Join-Path $diagnostics 'clr-loss.json') -Raw|ConvertFrom-Json
-    if($clrSummary.outcome -ne 'counted' -or $clrSummary.eventsLost -ne 0){throw 'Lossless CLR event coverage is required.'}
-    $startUtc=([datetime]$start).ToUniversalTime()
-    $gcRecords=@(Get-WinEvent -FilterHashtable @{Path=$clrTrace;ProviderName='Microsoft-Windows-DotNETRuntime'} -Oldest|Where-Object{
-        $_.ProcessId -eq $clientPid -and $_.TimeCreated.ToUniversalTime() -ge $startUtc -and $_.TimeCreated.ToUniversalTime() -le $endUtc
-    })
-    if(-not $gcRecords.Count -or $gcRecords.Count -gt 1024){throw 'Owned-process CLR event coverage is missing or exceeds its bound.'}
+    if($clrSummary.outcome -ne 'counted' -or $clrSummary.eventsLost -ne 0 -or -not $clrSummary.processFilterApplied){
+        throw 'Lossless owned-process CLR event coverage is required.'
+    }
+    if($clrSummary.providerEventsInInterval -lt 1 -or $clrSummary.providerEventsInInterval -gt 1024){
+        throw 'Owned-process CLR event coverage is missing or exceeds its bound.'
+    }
     $gcCounts=@{}
-    foreach($event in $gcRecords){$key=[string]$event.Id;if(-not $gcCounts.ContainsKey($key)){$gcCounts[$key]=0};$gcCounts[$key]++}
+    foreach($event in (Get-Content -LiteralPath $clrState -Raw|ConvertFrom-Json).publicProviderEvents){
+        $counted=[long]$clrSummary.publicProbeCounts.($event.Task)
+        if($counted -gt 0){$gcCounts[[string]$event.Id]=$counted}
+    }
     if(-not $gcCounts.ContainsKey('8') -or -not $gcCounts.ContainsKey('7')){throw 'CLR suspension/restart events did not verify.'}
-    @{schema=1;processFilterApplied=$true;eventCounts=$gcCounts;eventsLost=0;scope='owned-client-process-workload-interval';
+    @{schema=1;processFilterApplied=$true;eventCounts=$gcCounts;eventsLost=0;scope='owned-profiled-process-workload-interval';
         conclusion='event-coverage-not-exact-pause-correlation'}|ConvertTo-Json -Depth 4|Set-Content (Join-Path $PublishDirectory 'clr-events.json')
     foreach($file in $cpuFiles) {
         $cpu=Get-Content (Join-Path $PublishDirectory $file) -Raw|ConvertFrom-Json

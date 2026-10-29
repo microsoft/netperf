@@ -805,6 +805,10 @@ dedicated hosted activation test checks TCP and CLR individually as well as
 the combined CPU/event recording.
 The WPR alternative skips dynamic managed-PDB generation, which is not used
 by the public TCP/kernel symbol analysis or CLR event correlation.
+CLR correlation uses the same provider-GUID-aware ETW reader as event counting,
+with an explicit profiled-process and time-interval filter. It does not depend
+on a registry-backed event-log query being able to select CLR records from a
+merged kernel/user ETL.
 It also reports numeric free-space admission information for the guest temporary
 drives; busy or residual-resource failures retain fixed failure categories rather
 than exporting process names, paths or exception messages.
