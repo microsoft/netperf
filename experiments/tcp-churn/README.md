@@ -841,14 +841,18 @@ starts the same 4 s, 2 ms dial when the receiver's real GC completes, modelling
 invalidation during post-GC catch-up.
 
 `coreclr-cluster-hot` and `coreclr-cluster-hot-epochdial2` keep the same
-topology but model a busy database node: each connection carries 384 pipelined
+topology but model a busy database node: each connection carries 256 pipelined
 exchanges of 512-byte requests and one MSS-sized (1460-byte) response with
 50-130 ms service and client think times (versus 64 exchanges of 16 KiB responses
 with 250-750 ms). The lab data path is roughly 1 GbE, so full 16 KiB responses
 cap the node near 7k exchanges per second; MSS-sized responses raise the exchange
 and segment rate about eightfold while staying near 0.7 Gbps. Offering more than
 the link carries is not a valid hot profile: single-segment flights recover drops
-only by retransmission timeout, so overload aborts connections with resets. Path refresh demand after an invalidation is bounded by
+only by retransmission timeout, so overload aborts connections with resets. Hot
+mode also caps the remote producer at 3072 in-flight connections so that, with
+the 1024 loopback connections, every connection is accepted by the 4096-slot
+server: hot pipelined requests on connections waiting un-accepted in the listen
+backlog went unacknowledged until the client timed out. Path refresh demand after an invalidation is bounded by
 how many connections send before the next one, so the slow-paced profiles cannot
 show dense refresh convoys regardless of invalidation rate. The hot dial starts
 8 s into traffic and runs for 10 s at a 2 ms interval. Of 8,192 pipelined

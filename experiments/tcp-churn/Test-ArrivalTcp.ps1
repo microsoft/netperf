@@ -63,7 +63,7 @@ try {
         $info.ArgumentList.Clear()
         foreach($argument in @('127.0.0.1','127.0.0.2',[string]$port,'16','128',$(if($case -eq 'hot-large-request'){'1460'}else{'512'}),$rejectedOutput,
             'client',$(if($case -eq 'hot-wrong-response'){'16384'}else{'1460'}),'14529','16',$(if($case -eq 'hot-nagle'){'nagle'}else{'nodelay'}),
-            'dispatch:pool','servicehot384:pipelined')){$info.ArgumentList.Add($argument)}
+            'dispatch:pool','servicehot256:pipelined')){$info.ArgumentList.Add($argument)}
         $child=[Diagnostics.Process]::Start($info)
         $errorText=$child.StandardError.ReadToEndAsync()
         if(-not $child.WaitForExit(5000) -or $child.ExitCode -eq 0 -or
