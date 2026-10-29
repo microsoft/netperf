@@ -132,6 +132,7 @@ public static class ArrivalTcp {
             if($EndFile){[IO.File]::WriteAllText($EndFile,'actual-completed-gc')}
             $sockets=[Collections.ArrayList]::new();$null=$sockets.Add([object]::new())
             $report=[ordered]@{};$fixture=@{Reads=0}
+            $pathTiming=@{QueryMilliseconds=0;RowScanMilliseconds=0}
             $wait=[Diagnostics.Stopwatch]::StartNew()
             [ArrivalTcp]::ReadyPath=$ReadyFile;[ArrivalTcp]::ExpectedReady=($phase -eq 'start');[ArrivalTcp]::Releases=0
             function Read-PathCount {

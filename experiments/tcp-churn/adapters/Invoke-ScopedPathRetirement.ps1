@@ -133,8 +133,12 @@ function Read-PrefixPathCount {
         return $false
     }).Count
 }
+$pathTiming=@{QueryMilliseconds=0;RowScanMilliseconds=0}
 function Read-PathCount {
-    [ArrivalTcp]::CountIpv4Paths($adapter[0].ifIndex,$source)
+    [double]$query=0;[double]$scan=0
+    $count=[ArrivalTcp]::CountIpv4Paths($adapter[0].ifIndex,$source,[ref]$query,[ref]$scan)
+    $pathTiming.QueryMilliseconds=$query;$pathTiming.RowScanMilliseconds=$scan
+    $count
 }
 if($RestoreOnly){
     Restore-Control
@@ -223,6 +227,8 @@ try {
     $snapshotClock=[Diagnostics.Stopwatch]::StartNew()
     $report.measuredReleasedPaths=Read-PathCount
     $report.triggerPathSnapshotMilliseconds=$snapshotClock.Elapsed.TotalMilliseconds
+    $report.triggerPathNativeQueryMilliseconds=$pathTiming.QueryMilliseconds
+    $report.triggerPathRowScanMilliseconds=$pathTiming.RowScanMilliseconds
     if($report.measuredReleasedPaths -lt $PathCount){throw 'Released cached paths did not persist until retirement.'}
     $snapshotClock.Restart()
     $report.establishedAtTrigger=[ArrivalTcp]::CountEstablishedConnections($ReceiverProcessId,20300)

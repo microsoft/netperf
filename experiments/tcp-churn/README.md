@@ -799,6 +799,10 @@ Path-population snapshots use the documented IP Helper path table, filtered
 by the owned interface and source, rather than launching a command-line
 enumerator in the GC-triggered interval. The native structure layout and
 ordinary loopback path enumeration are validated by the source tests.
+Counting reads only the required native row fields instead of boxing every
+complete row. Trigger diagnostics separate the native query, row scan and TCP
+cohort snapshot costs, since observation latency can move maintenance away
+from the intended GC phase.
 Socket population uses a bounded compiled loop and reports its duration;
 the requested count still must match measured cached paths, rather than
 assuming that successful socket creation pins every path.

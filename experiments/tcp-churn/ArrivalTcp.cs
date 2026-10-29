@@ -44,27 +44,40 @@ public static class ArrivalTcp
     }
     public static int CountIpv4Paths(int interfaceIndex,string sourceAddress)
     {
+        double queryMilliseconds,scanMilliseconds;
+        return CountIpv4Paths(interfaceIndex,sourceAddress,out queryMilliseconds,out scanMilliseconds);
+    }
+    public static int CountIpv4Paths(int interfaceIndex,string sourceAddress,out double queryMilliseconds,out double scanMilliseconds)
+    {
+        queryMilliseconds=0;scanMilliseconds=0;
         IPAddress source;
         if(interfaceIndex<1 || !IPAddress.TryParse(sourceAddress,out source) ||
             source.AddressFamily!=AddressFamily.InterNetwork)throw new ArgumentException("An IPv4 source and interface index are required.");
         IntPtr table;
+        var clock=Stopwatch.StartNew();
         uint status=GetIpPathTable(2,out table);
+        queryMilliseconds=clock.Elapsed.TotalMilliseconds;
         if(status!=0)throw new InvalidOperationException("Cannot read the IPv4 path table: "+status);
         if(table==IntPtr.Zero)throw new InvalidOperationException("The IPv4 path table is missing.");
         try {
+            clock.Restart();
             int count=Marshal.ReadInt32(table);
             if(count<0 || count>1000000)throw new InvalidOperationException("Invalid IPv4 path-table bounds.");
             int stride=Marshal.SizeOf(typeof(IpPathRow));
             int offset=Marshal.OffsetOf(typeof(IpPathTable),"FirstRow").ToInt32();
             if(stride!=136 || offset!=8)throw new InvalidOperationException("The documented x64 IP-path layout did not verify.");
+            int destinationOffset=Marshal.OffsetOf(typeof(IpPathRow),"Destination").ToInt32();
+            int indexOffset=Marshal.OffsetOf(typeof(IpPathRow),"InterfaceIndex").ToInt32();
+            int addressOffset=Marshal.OffsetOf(typeof(SockaddrInet),"Ipv4").ToInt32();
             uint sourceValue=BitConverter.ToUInt32(source.GetAddressBytes(),0);
             int matched=0;
             for(int i=0;i<count;i++){
-                var row=(IpPathRow)Marshal.PtrToStructure(IntPtr.Add(table,offset+i*stride),typeof(IpPathRow));
-                if(row.Source.Family!=2 || row.Destination.Family!=2)
+                IntPtr row=IntPtr.Add(table,offset+i*stride);
+                if(Marshal.ReadInt16(row)!=2 || Marshal.ReadInt16(row,destinationOffset)!=2)
                     throw new InvalidOperationException("Unexpected address family in the IPv4 path table.");
-                if(row.InterfaceIndex==(uint)interfaceIndex && row.Source.Ipv4==sourceValue)matched++;
+                if(Marshal.ReadInt32(row,indexOffset)==interfaceIndex && (uint)Marshal.ReadInt32(row,addressOffset)==sourceValue)matched++;
             }
+            scanMilliseconds=clock.Elapsed.TotalMilliseconds;
             return matched;
         }finally{FreeMibTable(table);}
     }

@@ -40,6 +40,11 @@ try {
     if($loopback.Count -ne 1 -or [ArrivalTcp]::CountIpv4Paths($loopback[0].GetIPProperties().GetIPv4Properties().Index,'127.0.0.1') -lt 1){
         throw 'The native path-table reader did not find the ordinary loopback path.'
     }
+    [double]$query=0;[double]$scan=0
+    if([ArrivalTcp]::CountIpv4Paths($loopback[0].GetIPProperties().GetIPv4Properties().Index,'127.0.0.1',[ref]$query,[ref]$scan) -lt 1 -or
+        $query -lt 0 -or $scan -lt 0 -or [double]::IsNaN($query) -or [double]::IsNaN($scan)){
+        throw 'Timed native path enumeration did not preserve the path count and nonnegative query/scan measurements.'
+    }
     Write-Host 'Passed owned TCP-table and native IP-path enumeration checks with ordinary loopback connections.'
 }finally{
     foreach($socket in $sockets){$socket.Dispose()}
