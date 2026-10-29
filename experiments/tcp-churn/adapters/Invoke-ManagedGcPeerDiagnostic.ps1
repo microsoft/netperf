@@ -834,6 +834,25 @@ try {
         (Join-Path $PublishDirectory 'cpu-after-gc.json'),$postStart.ToString('o'),$postEnd.ToString('o')) `
         -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'post-gc-analysis') -TimeoutSeconds 300
     $cpuFiles=@('cpu-load.json','cpu-after-gc.json')
+    if($CacheRetirePaths){
+        foreach($slice in @(
+            @{File='cpu-cache-snapshot.json';Begin=$cacheReport.snapshotStartedUtc;End=$cacheReport.snapshotCompletedUtc;Name='path-and-cohort-snapshot'},
+            @{File='cpu-cache-maintenance.json';Begin=$cacheReport.removeApiStartUtc;End=$cacheReport.removeApiEndUtc;Name='maintenance-api'}
+        )){
+            $begin=([datetime]$slice.Begin).ToUniversalTime();$finish=([datetime]$slice.End).ToUniversalTime()
+            if($finish -le $begin -or $begin -lt ([datetime]$start).ToUniversalTime() -or $finish -gt $endUtc){
+                throw 'The requested cache-control CPU phase must be positive and within the verified workload.'
+            }
+            $phase='analyze-cache-'+$slice.Name
+            $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @((Join-Path $diagnostics 'cpu.etl'),
+                (Join-Path $PublishDirectory $slice.File),$begin.ToString('o'),$finish.ToString('o')) `
+                -Directory $diagnostics -LogPrefix (Join-Path $diagnostics $slice.Name) -TimeoutSeconds 300
+            $phaseCpu=Get-Content -LiteralPath (Join-Path $PublishDirectory $slice.File) -Raw|ConvertFrom-Json
+            if($phaseCpu.outcome -notin @('sampled','no-samples') -or $phaseCpu.eventsLost -ne 0 -or $phaseCpu.unresolvedNetworkFrames -ne 0){
+                throw 'The narrow cache-control CPU phase failed lossless public-symbol analysis.'
+            }
+        }
+    }
     if(-not $NoTcpProbes){
         $phase='analyze-tcp-events'
         $tcpCoverageEnd=if($PeerRecovery -or $GcProcessRole -eq 'server'){$tcpEnd}else{$end}

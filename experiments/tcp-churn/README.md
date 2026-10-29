@@ -857,6 +857,11 @@ all omitted TCP tasks, and performs no TCP lifetime/probe analysis. Missing
 events are not zero-event evidence and cannot establish absence of BH,
 retransmission or zero-window activity. TCP recovery experiments reject this
 option; ordinary `true` capture retains its existing TCP coverage.
+Cache-control captures also export separate CPU slices for the measured
+path/cohort snapshot and the maintenance API interval. These are not lock-hold
+durations or writer-identity proofs. An explicitly empty narrow slice is
+reported as `no-samples`, not interpreted as absence of activity; whole-workload
+and post-GC sample, symbol and loss checks remain unchanged.
 
 The explicit `managed_gc_unused_interface=true` variant creates one
 disposable synthetic NIC on the owned generation-2 VM. It is first added

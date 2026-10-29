@@ -358,6 +358,45 @@ if($noTcpSelection.Count -ne 1 -or $tcpAnalysis.Count -ne 1){throw 'Explicit TCP
     function Read-TcpRecoveryEvidence {throw 'Missing TCP lifetime events must not be interpreted as measured zero counts.'}
     & ([scriptblock]::Create($tcpAnalysis[0].Extent.Text))
 }
+$slices=@($ast.FindAll({
+    param($node)
+    $node -is [Management.Automation.Language.IfStatementAst] -and
+        $node.Clauses[0].Item1.Extent.Text -eq '$CacheRetirePaths' -and
+        $node.Extent.Text.Contains("File='cpu-cache-snapshot.json'")
+},$true))
+if($slices.Count -ne 1){throw 'The actual cache phase CPU plan must be unique.'}
+foreach($case in @('sampled','no-samples','bad-window','lost')){
+    & {
+        $origin=([datetime]'2026-01-01T00:00:00Z').ToUniversalTime();$start=$origin.ToString('o');$endUtc=$origin.AddSeconds(2)
+        $CacheRetirePaths=24576;$diagnostics='unused';$PublishDirectory='unused';$analyzer='unused'
+        $cacheReport=[pscustomobject]@{snapshotStartedUtc=$origin.AddMilliseconds(200);snapshotCompletedUtc=$origin.AddMilliseconds(400)
+            removeApiStartUtc=$origin.AddMilliseconds(600);removeApiEndUtc=$origin.AddMilliseconds(900)}
+        if($case -eq 'bad-window'){$cacheReport.removeApiEndUtc=$origin.AddMilliseconds(500)}
+        $calls=[Collections.Generic.List[object]]::new()
+        function Invoke-TcpChurnTool {
+            param($Program,$Arguments,$Directory,$LogPrefix,$TimeoutSeconds)
+            $calls.Add([pscustomobject]@{Arguments=$Arguments})
+        }
+        function Get-Content {
+            param($LiteralPath,[switch]$Raw)
+            @{outcome=$(if($case -eq 'no-samples'){'no-samples'}else{'sampled'})
+                eventsLost=$(if($case -eq 'lost'){1}else{0});unresolvedNetworkFrames=0}|ConvertTo-Json
+        }
+        $rejected=$false
+        try{& ([scriptblock]::Create($slices[0].Extent.Text))}catch{
+            if($_.Exception.Message -notmatch 'CPU phase must be positive|CPU phase failed lossless'){throw}
+            $rejected=$true
+        }
+        if($rejected -ne ($case -in @('bad-window','lost'))){throw "Narrow-phase validity or loss gate changed: $case; rejected=$rejected."}
+        if(-not $rejected -and ($calls.Count -ne 2 -or
+            ([datetime]$calls[0].Arguments[2]).ToUniversalTime() -ne $cacheReport.snapshotStartedUtc -or
+            ([datetime]$calls[0].Arguments[3]).ToUniversalTime() -ne $cacheReport.snapshotCompletedUtc -or
+            ([datetime]$calls[1].Arguments[2]).ToUniversalTime() -ne $cacheReport.removeApiStartUtc -or
+            ([datetime]$calls[1].Arguments[3]).ToUniversalTime() -ne $cacheReport.removeApiEndUtc)){
+            throw 'Snapshot and maintenance CPU slices were conflated or clipped to a proxy interval.'
+        }
+    }
+}
 $traffic=[Management.Automation.Language.Parser]::ParseFile(
     (Join-Path $PSScriptRoot 'adapters\GcReceiverTraffic.psm1'),[ref]$tokens,[ref]$errors)
 if($errors.Count){throw ($errors|Out-String)}

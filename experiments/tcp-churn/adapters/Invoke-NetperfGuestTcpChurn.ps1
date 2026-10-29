@@ -328,7 +328,7 @@ try {
     $remoteResult=Join-Path $guestRoot 'publish\result.json'
     Copy-Item -LiteralPath $remoteResult -Destination (Join-Path $PublishDirectory 'result.json') -FromSession $session -ErrorAction Stop
     if ($ProfileCpu) {
-        foreach ($file in @('cpu-idle.json','cpu-load.json','cpu-after-gc.json','cpu-after-recovery.json','clr-events.json','cpu-progress.json','tcp-state.json','tcp-events.json','lock-evidence.json','collector-health.json')) {
+        foreach ($file in @('cpu-idle.json','cpu-load.json','cpu-after-gc.json','cpu-after-recovery.json','cpu-cache-snapshot.json','cpu-cache-maintenance.json','clr-events.json','cpu-progress.json','tcp-state.json','tcp-events.json','lock-evidence.json','collector-health.json')) {
             $remoteFile=Join-Path $guestRoot "publish\$file"
             if (Invoke-Command -Session $session -ScriptBlock {param($p) Test-Path -LiteralPath $p -PathType Leaf} -ArgumentList $remoteFile) {
                 Copy-Item -LiteralPath $remoteFile -Destination (Join-Path $PublishDirectory $file) `
