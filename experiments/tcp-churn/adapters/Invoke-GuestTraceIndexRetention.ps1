@@ -11,6 +11,21 @@ param(
     [string]$VmName='netperf-windows-2022-client'
 )
 $ErrorActionPreference='Stop'
+function Read-RecorderStatus([string]$Executable,[string]$Arguments) {
+    $settings=[Diagnostics.ProcessStartInfo]::new()
+    $settings.FileName=$Executable;$settings.Arguments=$Arguments
+    $settings.UseShellExecute=$false;$settings.RedirectStandardOutput=$true;$settings.RedirectStandardError=$true
+    $query=[Diagnostics.Process]::new();$query.StartInfo=$settings
+    try {
+        if(-not $query.Start()){throw 'The read-only recorder status query did not start.'}
+        $output=$query.StandardOutput.ReadToEndAsync();$errorOutput=$query.StandardError.ReadToEndAsync()
+        if(-not $query.WaitForExit(15000)){
+            Stop-Process -Id $query.Id -Force -ErrorAction Stop
+            throw 'The read-only recorder status query exceeded its deadline.'
+        }
+        [pscustomobject]@{ExitCode=$query.ExitCode;Text=($output.GetAwaiter().GetResult()+$errorOutput.GetAwaiter().GetResult())}
+    }finally{$query.Dispose()}
+}
 if(Test-Path -LiteralPath $ReportFile){throw 'Use a fresh numeric retention report.'}
 $worker={
     param([long[]]$AllowedTicks,[bool]$RemoveIndexes,[bool]$PermitInactiveMetadata)
@@ -80,7 +95,8 @@ $worker={
     }
     $active=@([Diagnostics.Process]::GetProcesses()|Where-Object{$_.ProcessName -in @('ArrivalTcp','CpuSamples','ctsTraffic','Runner.Worker')})
     if($active.Count){throw 'The guest has an active workload or analyzer.'}
-    $status=(& wpr.exe -status 2>&1|Out-String);$statusCode=$LASTEXITCODE
+    $query=Read-RecorderStatus -Executable "$env:SystemRoot\System32\wpr.exe" -Arguments '-status'
+    $status=$query.Text;$statusCode=$query.ExitCode
     $inactiveMetadata=$false
     if($statusCode -ne 0 -or $status -notmatch '(?i)wpr is not recording|recording is not running'){
         if(-not $PermitInactiveMetadata -or $statusCode -eq 0){throw 'An idle WPR state is required for derived-index retention.'}

@@ -9,13 +9,18 @@ if($errors.Count){throw ($errors|Out-String)}
 $functions=@($ast.FindAll({
     param($node)
     $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
-        $node.Name -in @('Get-OwnedIndexPlan','Remove-OwnedIndexes')
+        $node.Name -in @('Get-OwnedIndexPlan','Remove-OwnedIndexes','Read-RecorderStatus')
 },$true))
-if($functions.Count -ne 2){throw 'The actual retention planning/removal functions must be identified.'}
+if($functions.Count -ne 3){throw 'The actual retention status/planning/removal functions must be identified.'}
 . ([scriptblock]::Create(($functions|ForEach-Object{$_.Extent.Text})-join "`n"))
 $directory=Join-Path ([IO.Path]::GetTempPath()) ('trace-index-test-'+[guid]::NewGuid().ToString('N'))
 $null=New-Item -ItemType Directory -Path $directory
 try{
+    $status=Read-RecorderStatus -Executable "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" `
+        -Arguments '-NoProfile -NonInteractive -Command "[Console]::Error.WriteLine(''synthetic-recorder-error''); exit 9"'
+    if($status.ExitCode -ne 9 -or $status.Text -notmatch 'synthetic-recorder-error'){
+        throw 'Native stderr became a terminating PowerShell error before its explicit exit/status guard.'
+    }
     $idleGuard=@($ast.FindAll({
         param($node)
         $node -is [Management.Automation.Language.IfStatementAst] -and
