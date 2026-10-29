@@ -841,7 +841,7 @@ starts the same 4 s, 2 ms dial when the receiver's real GC completes, modelling
 invalidation during post-GC catch-up.
 
 `coreclr-cluster-hot` and `coreclr-cluster-hot-epochdial2` keep the same
-topology but model a busy database node: each connection carries 512 pipelined
+topology but model a busy database node: each connection carries 128 pipelined
 exchanges with 20-60 ms service and client think times (versus 64 exchanges with
 250-750 ms), so roughly 4096 in-flight connections drive on the order of 100k
 exchanges per second. Path refresh demand after an invalidation is bounded by

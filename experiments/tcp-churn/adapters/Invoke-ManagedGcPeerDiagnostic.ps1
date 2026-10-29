@@ -300,7 +300,7 @@ try {
             outageDelayMilliseconds=$(if($ClusterProfile -eq 'nodes1000-outage'){5000}else{0})
             outageDurationMilliseconds=$(if($ClusterProfile -eq 'nodes1000-outage'){4000}else{0})
             routeEpochDialIntervalMilliseconds=$(switch($ClusterProfile){'nodes1000-epochdial'{20}'nodes1000-epochdial2'{2}'nodes1000-epochdial2-aftergc'{2}'nodes1000-hot-epochdial2'{2}default{0}})
-            hotService=($ClusterProfile -like 'nodes1000-hot*');exchangesPerConnection=$(if($ClusterProfile -like 'nodes1000-hot*'){512}else{64})
+            hotService=($ClusterProfile -like 'nodes1000-hot*');exchangesPerConnection=$(if($ClusterProfile -like 'nodes1000-hot*'){128}else{64})
             serviceDelayMinimumMilliseconds=$(if($ClusterProfile -like 'nodes1000-hot*'){20}else{250})
             serviceDelayMaximumMilliseconds=$(if($ClusterProfile -like 'nodes1000-hot*'){60}else{750})
             routeEpochDialStartsAfterGc=($ClusterProfile -eq 'nodes1000-epochdial2-aftergc')}
@@ -368,7 +368,7 @@ try {
             ServerOutput=$localOutput;Rule=$null;Receiver=$null;LocalClient=$null}
         if($ClusterProfile -ne 'none'){
             $receiverState.ResponseBytes=16384;$receiverState.RemoteCount=7168
-            if($ClusterProfile -like 'nodes1000-hot*'){$receiverState.ExchangesPerConnection=512}
+            if($ClusterProfile -like 'nodes1000-hot*'){$receiverState.ExchangesPerConnection=128}
             $receiverState.RemoteSources=$clusterSources -join ',';$receiverState.ClusterPrefix='198.19.64.0/22'
             if($ClusterProfile -eq 'nodes1000-outage'){
                 # Every fourth remote node (25%) silently drops inbound traffic for a bounded window.
