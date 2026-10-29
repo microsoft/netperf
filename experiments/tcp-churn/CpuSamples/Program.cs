@@ -208,6 +208,7 @@ internal static class Program
                 var networkLeaves = new Dictionary<string, long>();
                 var processors = new HashSet<int>();
                 var networkProcessors = new Dictionary<string, long>();
+                var timerProcessors = new Dictionary<string, long>();
                 var callers = new Dictionary<string, Dictionary<string, long>>();
                 stage = "samples";
                 long samples = 0, withStack = 0, network = 0, unresolved = 0;
@@ -253,6 +254,8 @@ internal static class Program
                     }
                     if (!hit) continue;
                     network++;
+                    if (frames.Any(frame => frame.EndsWith("TcpPeriodicTimeoutHandler", StringComparison.Ordinal)))
+                        Add(timerProcessors, sample.ProcessorNumber.ToString());
                     Add(networkProcessors, sample.ProcessorNumber.ToString());
                     var publicStack = string.Join(" <- ", frames.Take(24));
                     foreach (var frame in seen)
@@ -310,6 +313,8 @@ internal static class Program
                     pathRefreshWaitConclusion = "caller-signature-only-not-lock-address-or-owner-proof",
                     observedProcessorNumbers = processors.OrderBy(value => value).ToArray(),
                     networkSamplesByProcessor = Top(networkProcessors, 4096),
+                    timerSamplesByProcessor = Top(timerProcessors, 4096),
+                    timerProcessorConclusion = "distinct-across-interval-not-simultaneous-timer-cpus",
                     traceProcessorCount = log.NumberOfProcessors, eventsLost = log.EventsLost,
                     publicNetworkFrames = Top(networkFrames, 4096),
                     publicNetworkStackLeaves = Top(networkLeaves, 50),

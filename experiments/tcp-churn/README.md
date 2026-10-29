@@ -823,6 +823,10 @@ or not-recording flags. Unrecognized status is not evidence that recording is
 idle; the probe never cancels or stops a capture.
 The read-only probe also counts exact-probe ETW loggers independently of WPR;
 an idle WPR status does not establish that these separate loggers are absent.
+It reports the peer-route data adapter's RSS queue/processor bounds separately
+from VM logical-CPU count. CPU summaries also expose timer samples by
+processor; distinct processors over a whole interval are not claimed as
+simultaneous timer execution.
 Failed TCP/CLR collector startup reports a fixed capture stage, exception
 type and numeric error code. Provider discovery, TCP startup and CLR startup
 remain separate adapter phases; private exception messages and raw ETLs are

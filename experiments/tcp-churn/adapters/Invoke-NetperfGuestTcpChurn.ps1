@@ -116,6 +116,11 @@ try {
             $clientRoutes=@(Get-NetRoute -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|Where-Object DestinationPrefix -in @('198.19.240.6/32','198.19.0.0/17')).Count
             if($clientAliases -or $clientRules -or $clientStatic -or $clientRoutes -or $clientPathInterfaces){throw 'Owned client GC resources require restoration before further tests.'}
             $clientCpus=(Get-CimInstance Win32_Processor|Measure-Object NumberOfLogicalProcessors -Sum).Sum
+            $peerIp=@([Net.Dns]::GetHostAddresses('netperf-peer')|Where-Object AddressFamily -eq InterNetwork)[0].ToString()
+            $dataRoute=@(Find-NetRoute -RemoteIPAddress $peerIp -ErrorAction Stop|Where-Object{$_.PSObject.Properties['IPAddress']})
+            if($dataRoute.Count -ne 1){throw 'The read-only RSS probe requires one source route.'}
+            $rss=@(Get-NetAdapterRss -Name $dataRoute[0].InterfaceAlias -ErrorAction Stop)
+            if($rss.Count -ne 1){throw 'The read-only RSS probe requires one supported data-adapter RSS configuration.'}
             $clientFree=[Math]::Floor(([IO.DriveInfo]::new([IO.Path]::GetPathRoot($env:TEMP))).AvailableFreeSpace/1MB)
             if($clientCpus -lt 1){throw 'The client processor inventory did not return a positive count.'}
             $peer=New-PSSession -ComputerName netperf-peer -Credential $credential -ConfigurationName PowerShell.7 -ErrorAction Stop
@@ -142,6 +147,10 @@ try {
                     clientWprCpuProfileReported=[bool]$wprCpu
                     clientExactProbeLoggerCount=$exactLoggers
                     clientOwnedPathInterfaces=$clientPathInterfaces
+                    clientDataRssEnabled=[bool]$rss[0].Enabled
+                    clientDataRssQueues=[int]$rss[0].NumberOfReceiveQueues
+                    clientDataRssMaxProcessors=[int]$rss[0].MaxProcessors
+                    clientDataRssProcessorArrayCount=@($rss[0].RssProcessorArray).Count
                     clientOwnedControlRoutes=$clientRoutes;peerOwnedControlRoutes=$peerState.routes;conclusion='connectivity-and-owned-resource-check'}
             } finally { Remove-PSSession $peer -ErrorAction Stop }
         } -ArgumentList $Credential
@@ -152,6 +161,7 @@ try {
             clientWprStatusExitCode,clientWprRecordingNotRunning,clientWprCpuProfileReported,
             clientExactProbeLoggerCount,
             clientOwnedPathInterfaces,
+            clientDataRssEnabled,clientDataRssQueues,clientDataRssMaxProcessors,clientDataRssProcessorArrayCount,
             clientTempFreeMiB,peerTempFreeMiB,conclusion|ConvertTo-Json |
             Set-Content -LiteralPath (Join-Path $PublishDirectory 'peer-check.json') -Encoding utf8
         return
