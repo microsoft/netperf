@@ -12,17 +12,17 @@ $plan=@($ast.FindAll({
         $node.Clauses[0].Item1.Extent.Text -eq '$RouteRefresh -or $CacheRetirePaths'
 },$true))
 if($plan.Count -ne 1){throw 'The actual path-control launch plan must be uniquely identified.'}
-foreach($case in @('route','cache','both','unused-cache','during-gc-cache','valid-cache','flush','after-gc-route')){
+foreach($case in @('route','cache','both','unused-cache','during-gc-cache','valid-cache','valid-during-cache','flush','after-gc-route')){
     & {
         $RouteRefresh=$case -ne 'cache';$CacheRetirePaths=if($case -ne 'route'){24576}else{0}
         if($case -eq 'unused-cache'){$RouteRefresh=$false;$CacheRetirePaths=49152}
-        if($case -in @('during-gc-cache','valid-cache')){$RouteRefresh=$false}
-        $RetireDuringGc=$case -eq 'during-gc-cache'
-        $KeepCacheValid=$case -eq 'valid-cache'
+        if($case -in @('during-gc-cache','valid-cache','valid-during-cache')){$RouteRefresh=$false}
+        $RetireDuringGc=$case -in @('during-gc-cache','valid-during-cache')
+        $KeepCacheValid=$case -in @('valid-cache','valid-during-cache')
         if($case -eq 'cache'){$CacheRetirePaths=1}
         if($case -in @('flush','after-gc-route')){$CacheRetirePaths=0}
-        $CacheInterfaceGuid=if($case -in @('unused-cache','during-gc-cache','valid-cache')){'owned-guid'}else{''}
-        $CacheInterfaceAlias=if($case -in @('unused-cache','during-gc-cache','valid-cache')){'NetperfPath-123456abcdef'}else{''}
+        $CacheInterfaceGuid=if($case -in @('unused-cache','during-gc-cache','valid-cache','valid-during-cache')){'owned-guid'}else{''}
+        $CacheInterfaceAlias=if($case -in @('unused-cache','during-gc-cache','valid-cache','valid-during-cache')){'NetperfPath-123456abcdef'}else{''}
         $cacheStem=if($RouteRefresh -and $CacheRetirePaths){'cache-control'}else{'route-control'}
         $RouteVariant=if($case -eq 'flush'){'destination-flush'}elseif($case -eq 'after-gc-route'){'onlink-after-gc'}else{'peer-gateway'}
         $alias='synthetic-owned-interface';$peerMac='02-00-00-00-00-02'
@@ -62,12 +62,12 @@ foreach($case in @('route','cache','both','unused-cache','during-gc-cache','vali
                 throw 'Each launched control must retain its own restoration arguments.'
             }
             $endIndex=[Array]::IndexOf($control.Arguments,'-EndFile')
-            if($case -in @('unused-cache','during-gc-cache','valid-cache','flush')){
+            if($case -in @('unused-cache','during-gc-cache','valid-cache','valid-during-cache','flush')){
                 if($endIndex -lt 0 -or $control.Arguments[$endIndex+1] -ne ($localOutput+'.gc.json')){
                     throw 'Unused-interface retirement must use the actual receiver GC-completion observation.'
                 }
             }elseif($endIndex -ge 0){throw 'A non-unused-interface control changed its GC-start trigger.'}
-            if(('-RetireDuringGc' -in $control.Arguments) -ne ($case -eq 'during-gc-cache')){
+            if(('-RetireDuringGc' -in $control.Arguments) -ne ($case -in @('during-gc-cache','valid-during-cache'))){
                 throw 'The actual control plan lost or leaked GC-active retirement selection.'
             }
             $populationIndex=[Array]::IndexOf($control.Arguments,'-PopulationInterfaceAlias')
@@ -118,22 +118,22 @@ $phaseValidation=@($ast.FindAll({
         $node.Extent.Text.Contains('$retirementPhaseValid=')
 },$true))
 if($phaseValidation.Count -ne 1){throw 'The actual retirement phase acceptance gate must be identified.'}
-foreach($case in @('during-valid','during-late','after-valid','after-early','held-after-valid','held-after-early')){
+foreach($case in @('during-valid','during-late','after-valid','after-early','held-after-valid','held-after-early','held-during-valid','held-during-late')){
     & {
-        $CacheInterfaceGuid='owned-test-guid';$RetireDuringGc=$case.StartsWith('during-')
+        $CacheInterfaceGuid='owned-test-guid';$RetireDuringGc=$case -match 'during-'
         $KeepCacheValid=$case.StartsWith('held-')
         $origin=[datetime]'2026-01-01T00:00:00Z'
         $r=[pscustomobject]@{managedGc=[pscustomobject]@{collectionStartUtc=$origin;collectionEndUtc=$origin.AddSeconds(1)}}
-        $apiStart=if($case -in @('during-valid','after-early','held-after-early')){$origin.AddMilliseconds(200)}else{$origin.AddMilliseconds(1100)}
-        $cacheReport=[pscustomobject]@{triggerPhase=$(if($KeepCacheValid){'gc-complete-held-valid-cache'}elseif($RetireDuringGc){'gc-active-pre-released-cache'}else{'gc-complete-pre-released-cache'})
+        $apiStart=if($case -in @('during-valid','held-during-valid','after-early','held-after-early')){$origin.AddMilliseconds(200)}else{$origin.AddMilliseconds(1100)}
+        $cacheReport=[pscustomobject]@{triggerPhase=$(if($KeepCacheValid -and $RetireDuringGc){'gc-active-held-valid-cache'}elseif($KeepCacheValid){'gc-complete-held-valid-cache'}elseif($RetireDuringGc){'gc-active-pre-released-cache'}else{'gc-complete-pre-released-cache'})
             snapshotCompletedUtc=$origin.AddMilliseconds(100);removeApiStartUtc=$apiStart;removeApiEndUtc=$origin.AddMilliseconds(1300)}
         $rejected=$false
         try{& ([scriptblock]::Create($phaseValidation[0].Extent.Text))}catch{
-            if($case -in @('during-valid','after-valid','held-after-valid') -or $_.Exception.Message -notmatch 'requested GC retirement phase'){throw}
+            if($case -in @('during-valid','after-valid','held-after-valid','held-during-valid') -or $_.Exception.Message -notmatch 'requested GC retirement phase'){throw}
             $rejected=$true
         }
-        if($rejected -ne ($case -in @('during-late','after-early','held-after-early'))){throw 'GC-active and post-GC acceptance were conflated.'}
-        if($case -eq 'during-valid' -and $cacheReport.collectionOverlapMilliseconds -ne 800){
+        if($rejected -ne ($case -in @('during-late','held-during-late','after-early','held-after-early'))){throw 'GC-active and post-GC acceptance were conflated.'}
+        if($case -in @('during-valid','held-during-valid') -and $cacheReport.collectionOverlapMilliseconds -ne 800){
             throw 'The actual collection/API overlap was not clipped to collection completion.'
         }
         $focus=@($ast.FindAll({

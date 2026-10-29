@@ -87,7 +87,7 @@ on:
       managed_gc_unused_interface:
         description: Create/retire/remove one disposable VM NIC; never detach the data or management NIC
         type: choice
-        options: ['false', 'true', 'during-gc', 'valid-paths']
+        options: ['false', 'true', 'during-gc', 'valid-paths', 'valid-paths-during-gc']
         default: 'false'
       managed_gc_spinlocks:
         description: Add kernel spinlock events to the explicitly selected WPR capture
@@ -251,8 +251,8 @@ jobs:
         run: |
           $publish = Join-Path $env:RUNNER_TEMP "tcp-churn-guest-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           $persistentRequested = $env:MANAGED_GC_MIXED -eq 'persistent64'
-          $duringGcRequested = $env:MANAGED_GC_UNUSED_INTERFACE -eq 'during-gc'
-          $validCacheRequested = $env:MANAGED_GC_UNUSED_INTERFACE -eq 'valid-paths'
+          $duringGcRequested = $env:MANAGED_GC_UNUSED_INTERFACE -in @('during-gc', 'valid-paths-during-gc')
+          $validCacheRequested = $env:MANAGED_GC_UNUSED_INTERFACE -in @('valid-paths', 'valid-paths-during-gc')
           $noTcpRequested = $env:MANAGED_GC_WPR_PROBES -eq 'clr-only'
           if ($noTcpRequested) { $env:MANAGED_GC_WPR_PROBES = 'true' }
           if ($duringGcRequested -or $validCacheRequested) { $env:MANAGED_GC_UNUSED_INTERFACE = 'true' }

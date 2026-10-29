@@ -838,6 +838,9 @@ valid-row count is reported without treating stale, non-enumerated paths as
 absent objects. This distinguishes a surviving-source cache population
 from paths whose source is removed by the maintenance event; it does not assert
 the identity of any customer writer.
+The `valid-paths-during-gc` choice combines this placement with the existing
+GC-active trigger. Actual snapshot timing, maintenance start inside the measured
+collection and clipped overlap must verify; no TCP traffic is held or released.
 High-concurrency cohorts use the same focused CPU capture as persistent mode,
 omitting scheduling/power/memory and auxiliary CPU-event collectors while
 retaining sampled stacks, explicit buffers and strict zero-loss gates. Ordinary
