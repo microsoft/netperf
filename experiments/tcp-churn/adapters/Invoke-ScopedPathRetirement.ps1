@@ -8,6 +8,7 @@ param(
     [Parameter(Mandatory)][string]$StateFile,
     [Parameter(Mandatory)][string]$ReportFile,
     [ValidateSet(1,1024,8192,24576,49152,98304,196608,294912)][int]$PathCount=8192,
+    [ValidateSet(0,1024,49152,98304,196608,294912)][int]$ReferencedTcpPaths=0,
     [string]$ReceiverExecutable,[int]$ReceiverProcessId,
     [string]$UnusedInterfaceGuid,
     [string]$PopulationInterfaceAlias,
@@ -37,6 +38,9 @@ if($adapter.Count -ne 1){throw 'The owned data adapter must be unique.'}
 $data=Import-Clixml -LiteralPath $DataStateFile -ErrorAction Stop
 $detachInterface=-not [string]::IsNullOrWhiteSpace($UnusedInterfaceGuid)
 if($RetireDuringGc -and (-not $detachInterface -or -not $EndFile)){throw 'GC-active retirement requires the owned unused interface and completion signal.'}
+if($ReferencedTcpPaths -and ($PathCount -ne 1 -or -not $RetireDuringGc -or -not $PopulationInterfaceAlias -or -not $detachInterface)){
+    throw 'Referenced TCP paths require the owned steady-state GC-active control and one data-address anchor.'
+}
 if($EndFile -and -not $detachInterface){throw 'GC-completion retirement requires the owned unused interface.'}
 $ownedInterface=if($detachInterface){
     $InterfaceAlias -match '^NetperfPath-[0-9a-f]{12}$' -and
@@ -193,7 +197,12 @@ function Wait-ControlSignal([string]$File,[int]$PollMilliseconds=5) {
 function Read-PathCount {
     [double]$query=0;[double]$scan=0
     $index=if($PopulationInterfaceAlias){$populationAdapter[0].ifIndex}else{$adapter[0].ifIndex}
-    $count=[ArrivalTcp]::CountIpv4PathsForSources($index,[string[]]$sources,[ref]$query,[ref]$scan)
+    if($ReferencedTcpPaths){
+        $snapshot=[ArrivalTcp]::ReadPathPopulation($index,[string[]]$sources,$loopbackInterfaceIndex,$ReferencedTcpPaths)
+        $count=$snapshot.ReferencedTcpPaths
+        $query=$snapshot.QueryMilliseconds;$scan=$snapshot.ScanMilliseconds
+        $pathTiming.TotalIpv4Rows=$snapshot.TotalIpv4Rows
+    }else{$count=[ArrivalTcp]::CountIpv4PathsForSources($index,[string[]]$sources,[ref]$query,[ref]$scan)}
     $pathTiming.QueryMilliseconds=$query;$pathTiming.RowScanMilliseconds=$scan
     $count
 }
@@ -245,13 +254,14 @@ if((Read-PrefixPathCount) -ne 0){throw 'Existing cached paths conflict with the 
     populationInterfaceGuid=[string]$populationAdapter[0].InterfaceGuid
     populationOriginalAddresses=@(Read-PopulationAddresses)}|Export-Clixml -LiteralPath $StateFile -NoClobber
 $sockets=[Collections.Generic.List[Net.Sockets.UdpClient]]::new()
-$failure=$null;$restoreFailure=$null;$releaseFailure=$null
+$referencedFixture=$null;$loopbackInterfaceIndex=0
+$failure=$null;$restoreFailure=$null;$releaseFailure=$null;$tcpReleaseFailure=$null
 $report=[ordered]@{schema=1;scenario=$(if($detachInterface){'owned-unused-interface-ipv4-detach'}else{'owned-secondary-source-address-retirement'});scope='owned-benchmark-state-only'
     triggerPhase=$(if($PopulationInterfaceAlias -and $RetireDuringGc){'gc-active-held-valid-cache'}
         elseif($PopulationInterfaceAlias){'gc-complete-held-valid-cache'}
         elseif($RetireDuringGc){'gc-active-pre-released-cache'}elseif($EndFile){'gc-complete-pre-released-cache'}else{'gc-start-then-socket-release'})
-    requestedPaths=$PathCount;sourceCount=$sources.Count;measuredHeldPaths=0;measuredReleasedPaths=0;payloadsSent=0
-    populationPlacement=$(if($PopulationInterfaceAlias){'surviving-data-interface'}elseif($detachInterface){'retired-interface'}else{'retired-source'})
+    requestedPaths=$(if($ReferencedTcpPaths){$ReferencedTcpPaths}else{$PathCount});sourceCount=$sources.Count;measuredHeldPaths=0;measuredReleasedPaths=0;payloadsSent=0
+    populationPlacement=$(if($ReferencedTcpPaths){'surviving-referenced-loopback'}elseif($PopulationInterfaceAlias){'surviving-data-interface'}elseif($detachInterface){'retired-interface'}else{'retired-source'})
     retired=$false;restored=$false;dataAndManagementAddressesPreserved=$false;defaultRoutesPreserved=$false}
 try {
     foreach($address in $sources){
@@ -272,12 +282,27 @@ try {
     $report.configuredIpv4RouteCacheLimitEntries=[long]$ipv4Protocol[0].RouteCacheLimit
     $population=[Diagnostics.Stopwatch]::StartNew()
     $report.populationStartedUtc=[DateTime]::UtcNow.ToString('o')
-    $report.populationMaximumParallelism=[Math]::Min($sources.Count,[Environment]::ProcessorCount)
-    $sockets.AddRange([ArrivalTcp]::CreateIdlePathSocketPopulation([string[]]$sources,$PathCount,[int[]]@($occupied)))
+    if($ReferencedTcpPaths){
+        $loopback=@(Get-NetIPAddress -IPAddress 127.0.0.1 -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop)
+        if($loopback.Count -ne 1 -or $loopback[0].PrefixLength -ne 8){throw 'The referenced fixture requires one verified loopback interface.'}
+        $loopbackInterfaceIndex=$loopback[0].InterfaceIndex
+        $referencedFixture=[ArrivalTcp+ReferencedTcpPathFixture]::Create($ReferencedTcpPaths)
+        $report.pathReferenceKind='established-loopback-tcp'
+        $report.requestedReferencedTcpPaths=$ReferencedTcpPaths
+        $report.referencedTcpConnectionPairs=$referencedFixture.Count
+        $report.referencedTcpCreationMilliseconds=$referencedFixture.CreationMilliseconds
+        $report.referencedTcpAdmissionFreePhysicalBytes=$referencedFixture.AvailablePhysicalBytesAtCreate
+        $report.referencedTcpConnectBatchLimit=32
+        $report.populationMaximumParallelism=1
+    }else{
+        $report.populationMaximumParallelism=[Math]::Min($sources.Count,[Environment]::ProcessorCount)
+        $sockets.AddRange([ArrivalTcp]::CreateIdlePathSocketPopulation([string[]]$sources,$PathCount,[int[]]@($occupied)))
+    }
     $report.populationMilliseconds=$population.Elapsed.TotalMilliseconds
     $report.measuredHeldPaths=Read-PathCount
     $report.populationCompletedUtc=[DateTime]::UtcNow.ToString('o')
-    if($report.measuredHeldPaths -lt $PathCount){throw 'The requested cached-path population did not verify.'}
+    $requiredPaths=if($ReferencedTcpPaths){$ReferencedTcpPaths}else{$PathCount}
+    if($report.measuredHeldPaths -lt $requiredPaths){throw 'The requested cached-path population did not verify.'}
     if(-not $EndFile){
         [IO.File]::WriteAllText($ReadyFile,'ready')
         Wait-ControlSignal $BeginFile 25
@@ -292,7 +317,7 @@ try {
         $sockets.Clear()
     }
     if($EndFile){
-        if((Read-PathCount) -lt $PathCount){throw 'Released cached paths did not persist before traffic.'}
+        if((Read-PathCount) -lt $requiredPaths){throw 'Released cached paths did not persist before traffic.'}
         [IO.File]::WriteAllText($ReadyFile,'ready')
         Wait-ControlSignal $BeginFile
     }
@@ -304,9 +329,12 @@ try {
     $report.triggerPathSnapshotMilliseconds=$snapshotClock.Elapsed.TotalMilliseconds
     $report.triggerPathNativeQueryMilliseconds=$pathTiming.QueryMilliseconds
     $report.triggerPathRowScanMilliseconds=$pathTiming.RowScanMilliseconds
-    if($snapshotPaths -lt $PathCount){throw 'The measured cached paths did not persist until retirement.'}
+    if($snapshotPaths -lt $requiredPaths){throw 'The measured cached paths did not persist until retirement.'}
+    if($ReferencedTcpPaths){$report.measuredReferencedTcpPathsAtSnapshot=$snapshotPaths;$report.totalIpv4RowsAtSnapshot=$pathTiming.TotalIpv4Rows}
     $snapshotClock.Restart()
-    $report.establishedAtSnapshot=[ArrivalTcp]::CountEstablishedConnections($ReceiverProcessId,20300)
+    $report.establishedAtSnapshot=if($ReferencedTcpPaths){
+        [ArrivalTcp]::CountEstablishedConnectionsInLargeTable($ReceiverProcessId,20300)
+    }else{[ArrivalTcp]::CountEstablishedConnections($ReceiverProcessId,20300)}
     $report.triggerTcpSnapshotMilliseconds=$snapshotClock.Elapsed.TotalMilliseconds
     $report.snapshotCompletedUtc=[DateTime]::UtcNow.ToString('o')
     if($report.establishedAtSnapshot -lt 8){throw 'No verified live TCP cohort remains at the retirement snapshot.'}
@@ -346,14 +374,20 @@ try {
             if(@($survivingSources|Where-Object AddressState -ne 'Preferred').Count){
                 throw 'The surviving cache population lost a preferred source during maintenance.'
             }
-            if($sockets.Count -ne $PathCount){throw 'The bounded idle socket reference population changed during maintenance.'}
-            foreach($socket in $sockets){
-                if($null -eq $socket.Client -or -not $socket.Client.IsBound -or
-                    $socket.Client.LocalEndPoint.Address.ToString() -notin $sources){
-                    throw 'A held UDP socket source changed during maintenance.'
+            if($ReferencedTcpPaths){
+                $referencedFixture.VerifyHeld()
+                $report.heldTcpConnectionPairsAtVerification=$referencedFixture.Count
+                $report.heldSocketsAtVerification=2*$referencedFixture.Count
+            }else{
+                if($sockets.Count -ne $PathCount){throw 'The bounded idle socket reference population changed during maintenance.'}
+                foreach($socket in $sockets){
+                    if($null -eq $socket.Client -or -not $socket.Client.IsBound -or
+                        $socket.Client.LocalEndPoint.Address.ToString() -notin $sources){
+                        throw 'A held UDP socket source changed during maintenance.'
+                    }
                 }
+                $report.heldSocketsAtVerification=$sockets.Count
             }
-            $report.heldSocketsAtVerification=$sockets.Count
             $report.heldSocketReferencesVerified=$true
             $report.sourcePopulationPreserved=$true
             $report.postMaintenanceEnumeratedValidPaths=Read-PathCount
@@ -369,23 +403,32 @@ finally {
             $report.socketReleaseMilliseconds=$release.Elapsed.TotalMilliseconds
         }else{[ArrivalTcp]::ReleaseIdlePathSockets($sockets)}
     }catch{$releaseFailure=$_}
+    if($null -ne $referencedFixture){
+        try{
+            $release=[Diagnostics.Stopwatch]::StartNew()
+            $referencedFixture.Dispose()
+            $report.referencedTcpReleaseMilliseconds=$release.Elapsed.TotalMilliseconds
+        }catch{$tcpReleaseFailure=$_}
+    }
     try {
         Restore-Control
         $report.restored=$true;$report.dataAndManagementAddressesPreserved=$true;$report.defaultRoutesPreserved=$true
     }catch{$restoreFailure=$_}
-    $report.outcome=if($null -eq $failure -and $null -eq $releaseFailure -and $null -eq $restoreFailure){'completed'}else{'failed'}
+    $report.outcome=if($null -eq $failure -and $null -eq $releaseFailure -and $null -eq $tcpReleaseFailure -and $null -eq $restoreFailure){'completed'}else{'failed'}
     if($null -ne $failure){$report.failureType=$failure.Exception.GetType().FullName}
     if($null -ne $releaseFailure){$report.socketReleaseFailureType=$releaseFailure.Exception.GetType().FullName}
+    if($null -ne $tcpReleaseFailure){$report.referencedTcpReleaseFailureType=$tcpReleaseFailure.Exception.GetType().FullName}
     if($null -ne $restoreFailure){
         $report.restoreFailureType=$restoreFailure.Exception.GetType().FullName
         $report.restoreFailureSourceLine=$restoreFailure.InvocationInfo.ScriptLineNumber
     }
     $report|ConvertTo-Json|Set-Content -LiteralPath $ReportFile
 }
-if($null -ne $failure -or $null -ne $releaseFailure -or $null -ne $restoreFailure){
+if($null -ne $failure -or $null -ne $releaseFailure -or $null -ne $tcpReleaseFailure -or $null -ne $restoreFailure){
     $errors=[Collections.Generic.List[Exception]]::new()
     if($null -ne $failure){$errors.Add($failure.Exception)}
     if($null -ne $releaseFailure){$errors.Add($releaseFailure.Exception)}
+    if($null -ne $tcpReleaseFailure){$errors.Add($tcpReleaseFailure.Exception)}
     if($null -ne $restoreFailure){$errors.Add($restoreFailure.Exception)}
     throw [AggregateException]::new('The owned source-retirement control or restoration failed.',$errors)
 }

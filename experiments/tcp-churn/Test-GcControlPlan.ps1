@@ -12,17 +12,19 @@ $plan=@($ast.FindAll({
         $node.Clauses[0].Item1.Extent.Text -eq '$RouteRefresh -or $CacheRetirePaths'
 },$true))
 if($plan.Count -ne 1){throw 'The actual path-control launch plan must be uniquely identified.'}
-foreach($case in @('route','cache','both','unused-cache','during-gc-cache','valid-cache','valid-during-cache','flush','after-gc-route')){
+foreach($case in @('route','cache','both','unused-cache','during-gc-cache','valid-cache','valid-during-cache','referenced-cache','flush','after-gc-route')){
     & {
         $RouteRefresh=$case -ne 'cache';$CacheRetirePaths=if($case -ne 'route'){24576}else{0}
         if($case -eq 'unused-cache'){$RouteRefresh=$false;$CacheRetirePaths=49152}
         if($case -in @('during-gc-cache','valid-cache','valid-during-cache')){$RouteRefresh=$false}
-        $RetireDuringGc=$case -in @('during-gc-cache','valid-during-cache')
-        $KeepCacheValid=$case -in @('valid-cache','valid-during-cache')
+        $ReferencedTcpPaths=0
+        if($case -eq 'referenced-cache'){$RouteRefresh=$false;$CacheRetirePaths=1;$ReferencedTcpPaths=49152}
+        $RetireDuringGc=$case -in @('during-gc-cache','valid-during-cache','referenced-cache')
+        $KeepCacheValid=$case -in @('valid-cache','valid-during-cache','referenced-cache')
         if($case -eq 'cache'){$CacheRetirePaths=1}
         if($case -in @('flush','after-gc-route')){$CacheRetirePaths=0}
-        $CacheInterfaceGuid=if($case -in @('unused-cache','during-gc-cache','valid-cache','valid-during-cache')){'owned-guid'}else{''}
-        $CacheInterfaceAlias=if($case -in @('unused-cache','during-gc-cache','valid-cache','valid-during-cache')){'NetperfPath-123456abcdef'}else{''}
+        $CacheInterfaceGuid=if($case -in @('unused-cache','during-gc-cache','valid-cache','valid-during-cache','referenced-cache')){'owned-guid'}else{''}
+        $CacheInterfaceAlias=if($case -in @('unused-cache','during-gc-cache','valid-cache','valid-during-cache','referenced-cache')){'NetperfPath-123456abcdef'}else{''}
         $cacheStem=if($RouteRefresh -and $CacheRetirePaths){'cache-control'}else{'route-control'}
         $RouteVariant=if($case -eq 'flush'){'destination-flush'}elseif($case -eq 'after-gc-route'){'onlink-after-gc'}else{'peer-gateway'}
         $alias='synthetic-owned-interface';$peerMac='02-00-00-00-00-02'
@@ -62,13 +64,18 @@ foreach($case in @('route','cache','both','unused-cache','during-gc-cache','vali
                 throw 'Each launched control must retain its own restoration arguments.'
             }
             $endIndex=[Array]::IndexOf($control.Arguments,'-EndFile')
-            if($case -in @('unused-cache','during-gc-cache','valid-cache','valid-during-cache','flush')){
+            if($case -in @('unused-cache','during-gc-cache','valid-cache','valid-during-cache','referenced-cache','flush')){
                 if($endIndex -lt 0 -or $control.Arguments[$endIndex+1] -ne ($localOutput+'.gc.json')){
                     throw 'Unused-interface retirement must use the actual receiver GC-completion observation.'
                 }
             }elseif($endIndex -ge 0){throw 'A non-unused-interface control changed its GC-start trigger.'}
-            if(('-RetireDuringGc' -in $control.Arguments) -ne ($case -in @('during-gc-cache','valid-during-cache'))){
+            if(('-RetireDuringGc' -in $control.Arguments) -ne ($case -in @('during-gc-cache','valid-during-cache','referenced-cache'))){
                 throw 'The actual control plan lost or leaked GC-active retirement selection.'
+            }
+            $referenceIndex=[Array]::IndexOf($control.Arguments,'-ReferencedTcpPaths')
+            if(($referenceIndex -ge 0) -ne ($case -eq 'referenced-cache') -or
+                ($referenceIndex -ge 0 -and $control.Arguments[$referenceIndex+1] -ne '49152')){
+                throw 'The actual reference fixture lost its bounded pair count or leaked into another control.'
             }
             $populationIndex=[Array]::IndexOf($control.Arguments,'-PopulationInterfaceAlias')
             if($KeepCacheValid){
@@ -88,21 +95,32 @@ foreach($case in @('route','cache','both','unused-cache','during-gc-cache','vali
                     $node.Clauses[0].Item1.Extent.Text.StartsWith('$KeepCacheValid -and ($cacheReport.populationPlacement')
             },$true))
             if($populationGate.Count -ne 1){throw 'The actual surviving-population acceptance gate must be unique.'}
+            $populationSettings=@($ast.FindAll({
+                param($node)
+                $node -is [Management.Automation.Language.AssignmentStatementAst] -and
+                    $node.Left.Extent.Text -in @('$expectedPlacement','$expectedSockets')
+            },$true))
+            if($populationSettings.Count -ne 2){throw 'The actual population kind/count settings must be unique.'}
+            $populationGateCode=(($populationSettings|Sort-Object {$_.Extent.StartOffset}|ForEach-Object{$_.Extent.Text})-join "`n")+"`n"+$populationGate[0].Extent.Text
+            foreach($referenced in @($false,$true)){
             foreach($case in @('valid','wrong-placement','missing-references','changed-sources')){
                 & {
-                    $KeepCacheValid=$true;$CacheRetirePaths=24576
-                    $cacheReport=[pscustomobject]@{populationPlacement='surviving-data-interface'
-                        sourcePopulationPreserved=$true;heldSocketReferencesVerified=$true;heldSocketsAtVerification=24576}
+                    $KeepCacheValid=$true;$CacheRetirePaths=if($referenced){1}else{24576}
+                    $ReferencedTcpPaths=if($referenced){49152}else{0}
+                    $cacheReport=[pscustomobject]@{populationPlacement=$(if($referenced){'surviving-referenced-loopback'}else{'surviving-data-interface'})
+                        sourcePopulationPreserved=$true;heldSocketReferencesVerified=$true
+                        heldSocketsAtVerification=$(if($referenced){98304}else{24576})}
                     if($case -eq 'wrong-placement'){$cacheReport.populationPlacement='retired-interface'}
                     if($case -eq 'missing-references'){$cacheReport.heldSocketsAtVerification=1}
                     if($case -eq 'changed-sources'){$cacheReport.sourcePopulationPreserved=$false}
                     $rejected=$false
-                    try{& ([scriptblock]::Create($populationGate[0].Extent.Text))}catch{
+                    try{& ([scriptblock]::Create($populationGateCode))}catch{
                         if($_.Exception.Message -notmatch 'valid-source data-interface population'){throw}
                         $rejected=$true
                     }
                     if($rejected -eq ($case -eq 'valid')){throw 'Surviving-cache evidence was accepted or rejected incorrectly.'}
                 }
+            }
             }
             $countIndex=[Array]::IndexOf($control.Arguments,'-PathCount')
             if($countIndex -ge 0 -and $control.Arguments[$countIndex+1] -ne [string]$CacheRetirePaths){
@@ -568,6 +586,28 @@ foreach($steady in @($false,$true)){
         if(($calls-join ',') -ne $(if($steady){'start,complete'}else{'legacy'})){
             throw 'The actual traffic dispatch duplicated or withheld a producer phase.'
         }
+    }
+}
+$referenceGate=@($ast.FindAll({
+    param($node)
+    $node -is [Management.Automation.Language.IfStatementAst] -and
+        $node.Clauses[0].Item1.Extent.Text.StartsWith('$ReferencedTcpPaths -and ($cacheReport.pathReferenceKind')
+},$true))
+if($referenceGate.Count -ne 1){throw 'The actual referenced-path acceptance gate must be unique.'}
+foreach($case in @('valid','wrong-kind','missing-paths','missing-pairs')){
+    & {
+        $ReferencedTcpPaths=49152
+        $cacheReport=[pscustomobject]@{pathReferenceKind='established-loopback-tcp';requestedReferencedTcpPaths=49152
+            measuredReferencedTcpPathsAtSnapshot=49152;heldTcpConnectionPairsAtVerification=49152}
+        if($case -eq 'wrong-kind'){$cacheReport.pathReferenceKind='socket-count-only'}
+        if($case -eq 'missing-paths'){$cacheReport.measuredReferencedTcpPathsAtSnapshot=49151}
+        if($case -eq 'missing-pairs'){$cacheReport.heldTcpConnectionPairsAtVerification=49151}
+        $rejected=$false
+        try{& ([scriptblock]::Create($referenceGate[0].Extent.Text))}catch{
+            if($_.Exception.Message -notmatch 'actual referenced-path census'){throw}
+            $rejected=$true
+        }
+        if($rejected -eq ($case -eq 'valid')){throw 'Referenced paths were accepted from socket counts or a different fixture kind.'}
     }
 }
 Write-Output 'Passed standalone/combined path plans and failure-safe companion cleanup; no network operations were performed.'

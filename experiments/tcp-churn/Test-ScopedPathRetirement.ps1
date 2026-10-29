@@ -321,11 +321,30 @@ public static class ArrivalTcp {
             $node.Extent.Text.Contains('$report.postMaintenanceEnumeratedValidPaths=')
     },$true))
     if($survival.Count -ne 1){throw 'The actual post-maintenance source/reference validation must be unique.'}
-    foreach($case in @('zero-visible-rows','changed-socket','nonpreferred-source')){
+    & {
+        $PopulationInterfaceAlias='owned-data-interface';$sockets=@()
+        $failure=$null;$releaseFailure=$null;$restoreFailure=$null;$tcpReleaseFailure=$null
+        $referencedFixture=[pscustomobject]@{}
+        $referencedFixture|Add-Member ScriptMethod Dispose {throw 'Synthetic referenced TCP release failure.'}
+        $fixture=@{Restores=0};$report=[ordered]@{}
+        $ReportFile=Join-Path $directory 'tcp-release-failure.json'
+        function Restore-Control {$fixture.Restores++}
+        $cleanup=($body[0].Finally.Statements|ForEach-Object{$_.Extent.Text})-join "`n"
+        & ([scriptblock]::Create($cleanup))
+        if($fixture.Restores -ne 1 -or $report.outcome -ne 'failed' -or
+            -not $report.restored -or -not $report.referencedTcpReleaseFailureType){
+            throw 'Referenced TCP cleanup failure skipped address restoration or was reported as success.'
+        }
+    }
+    $checks++
+    foreach($case in @('zero-visible-rows','changed-socket','nonpreferred-source','referenced-zero-visible','referenced-changed')){
         & {
             $PopulationInterfaceAlias='owned-data-interface';$data=@{interfaceGuid='test-interface'}
             $populationAdapter=@([pscustomobject]@{InterfaceGuid='test-interface';ifIndex=5})
             $sources=@('198.19.0.1');$PathCount=2;$report=[ordered]@{}
+            $ReferencedTcpPaths=if($case.StartsWith('referenced-')){1024}else{0}
+            $referencedFixture=[pscustomobject]@{Count=1024}
+            $referencedFixture|Add-Member ScriptMethod VerifyHeld {if($case -eq 'referenced-changed'){throw 'Synthetic referenced TCP source changed.'}}
             $sockets=@(1,2|ForEach-Object{[pscustomobject]@{Client=[pscustomobject]@{
                 IsBound=$true;LocalEndPoint=[pscustomobject]@{Address=[Net.IPAddress]::Parse('198.19.0.1')}}}})
             if($case -eq 'changed-socket'){$sockets[1].Client.IsBound=$false}
@@ -344,12 +363,12 @@ public static class ArrivalTcp {
             }
             $rejected=$false
             try{& ([scriptblock]::Create($survival[0].Extent.Text))}catch{
-                if($_.Exception.Message -notmatch 'held UDP socket source changed|lost a preferred source'){throw}
+                if($_.Exception.Message -notmatch 'held UDP socket source changed|lost a preferred source|referenced TCP source changed'){throw}
                 $rejected=$true
             }
-            if($rejected -ne ($case -ne 'zero-visible-rows')){throw 'Post-event row visibility was confused with source/reference validity.'}
+            if($rejected -ne ($case -notin @('zero-visible-rows','referenced-zero-visible'))){throw 'Post-event row visibility was confused with source/reference validity.'}
             if(-not $rejected -and (-not $report.sourcePopulationPreserved -or
-                -not $report.heldSocketReferencesVerified -or $report.heldSocketsAtVerification -ne 2 -or
+                -not $report.heldSocketReferencesVerified -or $report.heldSocketsAtVerification -ne $(if($ReferencedTcpPaths){2048}else{2}) -or
                 $report.postMaintenanceEnumeratedValidPaths -ne 0 -or -not $report.populationInterfaceIndexChanged)){
                 throw 'Zero visible rows must remain an explicit observation with independently verified inputs.'
             }
@@ -358,7 +377,7 @@ public static class ArrivalTcp {
     }
     Write-Host "Passed $checks source-retirement ownership, restoration and actual socket-release lifecycle cases; no network operations were performed."
 }finally{
-    foreach($name in @('data.clixml','state.clixml','report.json','release-failure.json','ready','begin','end')){
+    foreach($name in @('data.clixml','state.clixml','report.json','release-failure.json','tcp-release-failure.json','ready','begin','end')){
         $file=Join-Path $directory $name
         if(Test-Path -LiteralPath $file){Remove-Item -LiteralPath $file}
     }

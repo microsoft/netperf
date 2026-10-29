@@ -27,6 +27,7 @@ param(
     [switch]$ServiceWait,
     [switch]$PipelinedServiceWait,
     [switch]$SteadyStateFixture,
+    [ValidateSet(0,1024,49152,98304,196608,294912)][int]$ReferencedTcpPaths=0,
     [ValidateSet(0,16384)][int]$ReceiveBudgetBytes=0,
     [ValidateSet(0,1,1024,8192,24576,49152,98304,196608,294912)][int]$CacheRetirePaths=0,
     [switch]$WprProbes,
@@ -68,6 +69,9 @@ if($PipelinedServiceWait -and -not $ServiceWait){throw 'Pipelined requests requi
 if($SteadyStateFixture -and (-not $PipelinedServiceWait -or -not $KeepCacheValid -or -not $RetireDuringGc -or
     -not $CacheRetirePaths -or -not $CacheInterfaceGuid -or $RouteRefresh)){
     throw 'Steady-state fixture setup requires pipelined receiver traffic and only the owned GC-active valid-cache control.'
+}
+if($ReferencedTcpPaths -and (-not $SteadyStateFixture -or $CacheRetirePaths -ne 1)){
+    throw 'Referenced loopback paths require the steady-state fixture and one owned data-address anchor.'
 }
 if($Connections -gt 1024 -and ($GcProcessRole -ne 'server' -or $ReceiveBudgetBytes -ne 16384)){
     throw 'High concurrency requires receiver-GC mode and the verified 16384-byte receive budget.'
@@ -419,6 +423,7 @@ try {
                 '-StateFile',(Join-Path $diagnostics ($stem+'-original.clixml')))
             if($type -eq 'cache'){$arguments+=@('-PathCount',[string]$CacheRetirePaths,
                 '-ReceiverExecutable',$exe,'-ReceiverProcessId',[string]$localServer.Process.Id)
+                if($ReferencedTcpPaths){$arguments+=@('-ReferencedTcpPaths',[string]$ReferencedTcpPaths)}
                 if($CacheInterfaceGuid){
                     $arguments+=@('-UnusedInterfaceGuid',$CacheInterfaceGuid,'-EndFile',($localOutput+'.gc.json'))
                     if($RetireDuringGc){$arguments+='-RetireDuringGc'}
@@ -517,6 +522,7 @@ try {
         $after.ReceivedBytes-$before.ReceivedBytes -lt ($remoteTargets|Measure-Object responseBytes -Sum).Sum){throw 'The non-loopback NIC did not account for the remote payload.'}
     $result=[ordered]@{schema=1;workload='managed-gc-mixed';outcome='collected';connections=$r.connections
         fixtureOrdering=$(if($SteadyStateFixture){'during-ongoing-pipelined-traffic'}else{'before-traffic'})
+        requestedReferencedTcpPaths=$ReferencedTcpPaths
         bytesSent=$r.bytesSent;bytesReceived=$r.bytesReceived;payloadBytesPerDirection=$payloadBytes
         exchangesPerConnection=$ExchangesPerConnection
         configuredMaximumInFlightPerProducer=$Connections
@@ -823,10 +829,18 @@ try {
             ([datetime]$cacheReport.removeApiEndUtc).ToUniversalTime() -gt ([datetime]$end).ToUniversalTime()){
             throw 'The bounded source-retirement population, live cohort, timing or restoration did not verify.'
         }
-        if($KeepCacheValid -and ($cacheReport.populationPlacement -ne 'surviving-data-interface' -or
+        $expectedPlacement=if($ReferencedTcpPaths){'surviving-referenced-loopback'}else{'surviving-data-interface'}
+        $expectedSockets=if($ReferencedTcpPaths){2*$ReferencedTcpPaths}else{$CacheRetirePaths}
+        if($KeepCacheValid -and ($cacheReport.populationPlacement -ne $expectedPlacement -or
             -not $cacheReport.sourcePopulationPreserved -or -not $cacheReport.heldSocketReferencesVerified -or
-            $cacheReport.heldSocketsAtVerification -ne $CacheRetirePaths)){
+            $cacheReport.heldSocketsAtVerification -ne $expectedSockets)){
             throw 'The requested valid-source data-interface population or held socket references did not verify.'
+        }
+        if($ReferencedTcpPaths -and ($cacheReport.pathReferenceKind -ne 'established-loopback-tcp' -or
+            $cacheReport.requestedReferencedTcpPaths -ne $ReferencedTcpPaths -or
+            $cacheReport.measuredReferencedTcpPathsAtSnapshot -lt $ReferencedTcpPaths -or
+            $cacheReport.heldTcpConnectionPairsAtVerification -ne $ReferencedTcpPaths)){
+            throw 'The actual referenced-path census or held TCP-pair population did not verify.'
         }
         if($CacheInterfaceGuid){
             $gcBegin=([datetime]$r.managedGc.collectionStartUtc).ToUniversalTime()

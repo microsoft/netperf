@@ -118,6 +118,33 @@ try {
     $checks++
     $flags=[Reflection.BindingFlags]'Static,NonPublic'
     $type=$probeMethod.DeclaringType
+    $referenceType=$type.GetNestedType('ReferencedTcpPathFixture')
+    $loopback=@(Get-NetIPAddress -IPAddress 127.0.0.1 -AddressFamily IPv4 -ErrorAction Stop)
+    if($loopback.Count -ne 1){throw 'The native reference-fixture test requires one loopback interface.'}
+    foreach($count in @(1,128)){
+        $fixture=$null
+        try{
+            $fixture=if($count -eq 1){[ArrivalTcp+ReferencedTcpPathFixture]::Create($count)}
+                else{$referenceType.GetMethod('Create').Invoke($null,@([int]$count))}
+            $fixture.VerifyHeld()
+            $snapshot=$type.GetMethod('ReadPathPopulation').Invoke($null,@([int]$loopback[0].InterfaceIndex,
+                [string[]]@('127.0.0.1'),[int]$loopback[0].InterfaceIndex,[int]$count))
+            $connections=$type.GetMethod('CountEstablishedConnectionsInLargeTable').Invoke($null,@([int]$PID,[int]$fixture.Port))
+            if($fixture.Count -ne $count -or $snapshot.ReferencedTcpPaths -ne $count -or $connections -ne 2*$count -or
+                $fixture.AvailablePhysicalBytesAtCreate -lt ([long]$count*65536+256MB)){
+                throw 'Referenced fixture pairs, actual path range, TCP ownership, or memory admission did not verify.'
+            }
+            $fixture.Dispose()
+            if($type.GetMethod('CountEstablishedConnectionsInLargeTable').Invoke($null,@([int]$PID,[int]$fixture.Port)) -ne 0){
+                throw 'Referenced fixture teardown retained owned TCP connections.'
+            }
+            $checks++
+        }finally{if($null -ne $fixture){$fixture.Dispose()}}
+    }
+    $failure=$null
+    try{$null=$referenceType.GetMethod('Create').Invoke($null,@([int]2))}catch{$failure=$_.Exception.GetBaseException()}
+    if($failure -isnot [ArgumentException]){throw 'An unbounded referenced fixture size was accepted.'}
+    $checks++
     $populationMethod=$type.GetMethod('CreateIdlePathSocketPopulation')
     foreach($case in @(
         @{Sources=[string[]]@();Count=1},

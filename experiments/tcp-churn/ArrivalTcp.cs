@@ -61,9 +61,28 @@ public static class ArrivalTcp
     }
     public static int CountIpv4PathsForSources(int interfaceIndex,string[] sourceAddresses,out double queryMilliseconds,out double scanMilliseconds)
     {
-        queryMilliseconds=0;scanMilliseconds=0;
+        var snapshot=ReadPathPopulation(interfaceIndex,sourceAddresses,0,0);
+        queryMilliseconds=snapshot.QueryMilliseconds;scanMilliseconds=snapshot.ScanMilliseconds;
+        return snapshot.DatagramPaths;
+    }
+    public static int CountReferencedLoopbackPaths(int interfaceIndex,out double queryMilliseconds,out double scanMilliseconds)
+    {
+        var snapshot=ReadPathPopulation(interfaceIndex,new[]{"127.0.0.1"},interfaceIndex,4194303);
+        queryMilliseconds=snapshot.QueryMilliseconds;scanMilliseconds=snapshot.ScanMilliseconds;
+        return snapshot.ReferencedTcpPaths;
+    }
+    public sealed class PathPopulationSnapshot
+    {
+        public int DatagramPaths,ReferencedTcpPaths,TotalIpv4Rows;
+        public double QueryMilliseconds,ScanMilliseconds;
+    }
+    public static PathPopulationSnapshot ReadPathPopulation(int interfaceIndex,string[] sourceAddresses,int loopbackInterfaceIndex,int referencedPaths)
+    {
+        var snapshot=new PathPopulationSnapshot();
         if(interfaceIndex<1 || sourceAddresses==null || sourceAddresses.Length==0)
             throw new ArgumentException("IPv4 sources and an interface index are required.");
+        if(referencedPaths<0 || referencedPaths>4194303 || (referencedPaths>0 && loopbackInterfaceIndex<1))
+            throw new ArgumentException("The referenced path census requires its bounded loopback scope.");
         var sourceValues=new HashSet<uint>();
         foreach(string address in sourceAddresses){
             IPAddress source;
@@ -74,28 +93,37 @@ public static class ArrivalTcp
         IntPtr table;
         var clock=Stopwatch.StartNew();
         uint status=GetIpPathTable(2,out table);
-        queryMilliseconds=clock.Elapsed.TotalMilliseconds;
+        snapshot.QueryMilliseconds=clock.Elapsed.TotalMilliseconds;
         if(status!=0)throw new InvalidOperationException("Cannot read the IPv4 path table: "+status);
         if(table==IntPtr.Zero)throw new InvalidOperationException("The IPv4 path table is missing.");
         try {
             clock.Restart();
             int count=Marshal.ReadInt32(table);
             if(count<0 || count>1000000)throw new InvalidOperationException("Invalid IPv4 path-table bounds.");
+            snapshot.TotalIpv4Rows=count;
             int stride=Marshal.SizeOf(typeof(IpPathRow));
             int offset=Marshal.OffsetOf(typeof(IpPathTable),"FirstRow").ToInt32();
             if(stride!=136 || offset!=8)throw new InvalidOperationException("The documented x64 IP-path layout did not verify.");
             int destinationOffset=Marshal.OffsetOf(typeof(IpPathRow),"Destination").ToInt32();
             int indexOffset=Marshal.OffsetOf(typeof(IpPathRow),"InterfaceIndex").ToInt32();
             int addressOffset=Marshal.OffsetOf(typeof(SockaddrInet),"Ipv4").ToInt32();
-            int matched=0;
             for(int i=0;i<count;i++){
                 IntPtr row=IntPtr.Add(table,offset+i*stride);
                 if(Marshal.ReadInt16(row)!=2 || Marshal.ReadInt16(row,destinationOffset)!=2)
                     throw new InvalidOperationException("Unexpected address family in the IPv4 path table.");
-                if(Marshal.ReadInt32(row,indexOffset)==interfaceIndex && sourceValues.Contains((uint)Marshal.ReadInt32(row,addressOffset)))matched++;
+                int rowInterface=Marshal.ReadInt32(row,indexOffset);
+                uint source=(uint)Marshal.ReadInt32(row,addressOffset);
+                uint destination=(uint)Marshal.ReadInt32(row,destinationOffset+addressOffset);
+                if(rowInterface==interfaceIndex && sourceValues.Contains(source))snapshot.DatagramPaths++;
+                // Match 127.64.0.0/10 in the little-endian IPv4 field.
+                if(referencedPaths>0 && rowInterface==loopbackInterfaceIndex && source==0x0100007Fu &&
+                    (destination&0xC0FFu)==0x407Fu){
+                    int ordinal=(((int)(destination>>8)&255)-64)*65536+((int)(destination>>16)&255)*256+(int)(destination>>24);
+                    if(ordinal>=1 && ordinal<=referencedPaths)snapshot.ReferencedTcpPaths++;
+                }
             }
-            scanMilliseconds=clock.Elapsed.TotalMilliseconds;
-            return matched;
+            snapshot.ScanMilliseconds=clock.Elapsed.TotalMilliseconds;
+            return snapshot;
         }finally{FreeMibTable(table);}
     }
     private static IPAddress ParseIdlePathSource(string sourceAddress)
@@ -164,6 +192,99 @@ public static class ArrivalTcp
         if(sockets==null)throw new ArgumentNullException("sockets");
         Parallel.ForEach(sockets,new ParallelOptions{MaxDegreeOfParallelism=Environment.ProcessorCount},socket=>socket.Dispose());
     }
+    public sealed class ReferencedTcpPathFixture:IDisposable
+    {
+        private readonly Socket[] clients,servers;
+        private int disposed;
+        public int Count {get;private set;}
+        public int Port {get;private set;}
+        public ulong AvailablePhysicalBytesAtCreate {get;private set;}
+        public double CreationMilliseconds {get;private set;}
+        private ReferencedTcpPathFixture(int count)
+        {
+            Count=count;clients=new Socket[count];servers=new Socket[count];
+        }
+        private static IPAddress SourceFor(int ordinal)
+        {
+            return new IPAddress(new byte[]{127,(byte)(64+(ordinal>>16)),(byte)((ordinal>>8)&255),(byte)(ordinal&255)});
+        }
+        public static ReferencedTcpPathFixture Create(int count)
+        {
+            if(count!=1 && count!=128 && count!=1024 && count!=49152 && count!=98304 && count!=196608 && count!=294912)
+                throw new ArgumentException("Only bounded referenced loopback TCP fixtures are supported.");
+            var memory=new MemoryStatus{Length=(uint)Marshal.SizeOf(typeof(MemoryStatus))};
+            if(!GlobalMemoryStatusEx(ref memory))throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+            if(memory.AvailablePhysical<(ulong)count*65536+268435456)
+                throw new InvalidOperationException("Insufficient free physical memory for the bounded referenced TCP fixture.");
+            var fixture=new ReferencedTcpPathFixture(count);
+            fixture.AvailablePhysicalBytesAtCreate=memory.AvailablePhysical;
+            using(var listener=new Socket(AddressFamily.InterNetwork,SocketType.Stream,ProtocolType.Tcp)){
+                try{
+                    listener.ExclusiveAddressUse=true;
+                    listener.Bind(new IPEndPoint(IPAddress.Loopback,0));
+                    listener.Listen(-8192);
+                    fixture.Port=((IPEndPoint)listener.LocalEndPoint).Port;
+                    var clock=Stopwatch.StartNew();
+                    for(int offset=0;offset<count;offset+=32){
+                        if(clock.Elapsed.TotalSeconds>120)throw new TimeoutException("Referenced TCP fixture creation exceeded its deadline.");
+                        int batch=Math.Min(32,count-offset);
+                        var connects=new Task[batch];
+                        for(int i=0;i<batch;i++){
+                            var client=new Socket(AddressFamily.InterNetwork,SocketType.Stream,ProtocolType.Tcp);
+                            fixture.clients[offset+i]=client;
+                            client.ExclusiveAddressUse=true;
+                            client.Bind(new IPEndPoint(SourceFor(offset+i+1),fixture.Port));
+                            connects[i]=client.ConnectAsync(IPAddress.Loopback,fixture.Port);
+                        }
+                        if(!Task.WaitAll(connects,5000))throw new TimeoutException("A referenced loopback connection exceeded its deadline.");
+                        for(int i=0;i<batch;i++){
+                            var server=listener.Accept();
+                            var remote=(IPEndPoint)server.RemoteEndPoint;
+                            byte[] bytes=remote.Address.GetAddressBytes();
+                            int ordinal=(bytes[1]-64)*65536+bytes[2]*256+bytes[3];
+                            if(bytes[0]!=127 || ordinal<1 || ordinal>count || remote.Port!=fixture.Port ||
+                                fixture.clients[ordinal-1]==null || fixture.servers[ordinal-1]!=null){
+                                server.Dispose();
+                                throw new InvalidOperationException("The private loopback listener accepted an unexpected source.");
+                            }
+                            fixture.servers[ordinal-1]=server;
+                        }
+                    }
+                    fixture.VerifyHeld();
+                    fixture.CreationMilliseconds=clock.Elapsed.TotalMilliseconds;
+                    return fixture;
+                }catch(Exception failure){
+                    try{fixture.Dispose();}
+                    catch(Exception cleanup){throw new AggregateException("Referenced TCP fixture creation and cleanup failed.",failure,cleanup);}
+                    throw;
+                }
+            }
+        }
+        public void VerifyHeld()
+        {
+            if(Volatile.Read(ref disposed)!=0)throw new ObjectDisposedException("ReferencedTcpPathFixture");
+            for(int i=0;i<Count;i++){
+                if(clients[i]==null || servers[i]==null || !clients[i].Connected || !servers[i].Connected ||
+                    !((IPEndPoint)clients[i].LocalEndPoint).Address.Equals(SourceFor(i+1)) ||
+                    !((IPEndPoint)clients[i].RemoteEndPoint).Address.Equals(IPAddress.Loopback) ||
+                    ((IPEndPoint)clients[i].LocalEndPoint).Port!=Port || ((IPEndPoint)servers[i].LocalEndPoint).Port!=Port)
+                    throw new InvalidOperationException("A referenced TCP fixture connection changed.");
+            }
+        }
+        public void Dispose()
+        {
+            if(Interlocked.Exchange(ref disposed,1)!=0)return;
+            var errors=new List<Exception>();
+            foreach(var group in new[]{clients,servers}){
+                foreach(var socket in group){
+                    if(socket==null)continue;
+                    try{socket.LingerState=new LingerOption(true,0);}catch(Exception error){errors.Add(error);}
+                    try{socket.Dispose();}catch(Exception error){errors.Add(error);}
+                }
+            }
+            if(errors.Count>0)throw new AggregateException("Required referenced TCP fixture cleanup failed.",errors);
+        }
+    }
     public static bool IsListenerReady(int processId,int port)
     {
         return CountOwnedTcpRows(processId,port,true)>0;
@@ -172,14 +293,18 @@ public static class ArrivalTcp
     {
         return CountOwnedTcpRows(processId,port,false);
     }
-    private static int CountOwnedTcpRows(int processId,int port,bool listenerOnly)
+    public static int CountEstablishedConnectionsInLargeTable(int processId,int port)
+    {
+        return CountOwnedTcpRows(processId,port,false,67108864);
+    }
+    private static int CountOwnedTcpRows(int processId,int port,bool listenerOnly,uint maximumBytes=1048576)
     {
         if(processId<1 || port<1 || port>65535)throw new ArgumentException("Valid listener process and port are required.");
         uint bytes=0;
         int tableClass=listenerOnly?3:4;
         uint status=GetExtendedTcpTable(IntPtr.Zero,ref bytes,false,2,tableClass,0);
-        if(status!=122 || bytes<4 || bytes>1048576)throw new InvalidOperationException("Cannot size the owned TCP table.");
-        bytes=Math.Min(bytes+65536,1048576);
+        if(status!=122 || bytes<4 || bytes>maximumBytes)throw new InvalidOperationException("Cannot size the owned TCP table.");
+        bytes=Math.Min(bytes+65536,maximumBytes);
         IntPtr table=Marshal.AllocHGlobal((int)bytes);
         try {
             status=GetExtendedTcpTable(table,ref bytes,false,2,tableClass,0);

@@ -19,6 +19,7 @@ param(
     [switch]$ServiceWait,
     [switch]$PipelinedServiceWait,
     [switch]$SteadyStateFixture,
+    [ValidateSet(0,1024,49152,98304,196608,294912)][int]$ReferencedTcpPaths=0,
     [switch]$PeerRecovery,
     [switch]$IsolatedData,
     [int]$RecoveryMilliseconds=8000,

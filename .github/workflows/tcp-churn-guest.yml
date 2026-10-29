@@ -73,7 +73,7 @@ on:
       managed_gc_cache_retire_paths:
         description: Optional owned secondary-source retirement control; 0 disables it
         type: choice
-        options: ['0', '1', '1024', '8192', '24576', '49152', '98304', '196608', '294912']
+        options: ['0', '1', '1024', '8192', '24576', '49152', '98304', '196608', '294912', 'tcp-1024', 'tcp-49152', 'tcp-98304', 'tcp-196608', 'tcp-294912']
         default: '0'
       managed_gc_wpr_probes:
         description: Exact WPR probes; clr-only explicitly omits TCP events for collector isolation
@@ -262,6 +262,11 @@ jobs:
           MANAGED_GC_ROUTE_VARIANT: ${{ inputs.managed_gc_route_variant }}
         run: |
           $publish = Join-Path $env:RUNNER_TEMP "tcp-churn-guest-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $referencedTcpPaths = 0
+          if ($env:MANAGED_GC_CACHE_RETIRE_PATHS -match '^tcp-(1024|49152|98304|196608|294912)$') {
+            $referencedTcpPaths = [int]$Matches[1]
+            $env:MANAGED_GC_CACHE_RETIRE_PATHS = '1'
+          }
           $persistentRequested = $env:MANAGED_GC_MIXED -in @('persistent64', 'persistent64-framed-nagle')
           $framedNagleRequested = $env:MANAGED_GC_MIXED -eq 'persistent64-framed-nagle'
           $coreClrRequested = $env:MANAGED_GC_MIXED -in @('coreclr', 'coreclr-keepalive', 'coreclr-servicewait', 'coreclr-servicewait-pipelined')
@@ -334,6 +339,7 @@ jobs:
             $extra.ManagedGcHeapLayout = $env:MANAGED_GC_HEAP_LAYOUT
             $extra.ManagedGcReceiveBudgetBytes = [int]$env:MANAGED_GC_RECEIVE_BUDGET_BYTES
             $extra.ManagedGcCacheRetirePaths = [int]$env:MANAGED_GC_CACHE_RETIRE_PATHS
+            if ($referencedTcpPaths) { $extra.ManagedGcReferencedTcpPaths = $referencedTcpPaths }
             if ($env:MANAGED_GC_WPR_PROBES -eq 'true') { $extra.ManagedGcWprProbes = $true }
             if ($noTcpRequested) { $extra.ManagedGcNoTcpProbes = $true }
             if ($env:MANAGED_GC_PEER_PRESSURE -eq 'true') { $extra.ManagedGcPeerPressure = $true }

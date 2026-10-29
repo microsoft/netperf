@@ -759,6 +759,21 @@ The documented IPv4 `RouteCacheLimitEntries` setting is recorded read-only.
 Holding UDP socket objects is not treated as proof that IP retains every
 corresponding cached path: the actual native census remains mandatory, and
 capacity/eviction may reject larger fixtures. No cache limit is changed.
+
+The separate `tcp-1024|tcp-49152|tcp-98304|tcp-196608|tcp-294912` cache choices
+require steady-state pipelined traffic. They hold established TCP pairs using
+only loopback addresses: a loopback-only listener and distinct client sources
+inside 127.64.0.0/10. No fixture application payloads or shared data release
+exist. This retains transport references rather than assuming idle UDP socket
+objects pin paths, and does not change any protocol cache limit or host policy.
+The native census counts the exact server-direction source/destination range
+in the verified loopback interface; it also reports total IPv4 rows separately.
+One unused owned data-address anchor preserves the existing guarded interface
+control, but is not counted as the requested TCP-path population. Both ends of
+every pair are held and verified until recording/workload completion. Teardown
+then uses abortive closes to avoid a large TIME_WAIT population outside the
+measurement. Creation has a 120-second deadline, 32-connect batches, explicit
+memory admission, and all-attempt disposal; any failed gate rejects the run.
 The 294,912-path option requires `managed_gc_heap_layout=graph-2g`, an isolated CoreCLR receiver-only
 variant with a nominal 2-GiB graph budget to allow the real during-GC path census
 to finish. Both controller admission and the receiver immediately before graph
