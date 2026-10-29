@@ -11,8 +11,8 @@ param(
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 $prefix='198.19.64.0/22'
-# Two logical gateways on the owned peer give dead-gateway detection an alternate route.
-$gateways=@(@{NextHop='198.19.240.5';Metric=10},@{NextHop='198.19.240.6';Metric=20})
+# One gateway on the data interface, standing in for that interface's single default gateway.
+$gateways=@(@{NextHop='198.19.240.5';Metric=10})
 $nic=@(Get-NetAdapter -Name $InterfaceAlias -ErrorAction Stop)
 if($nic.Count -ne 1){throw 'The owned data interface must be unique.'}
 function Read-PrefixRoutes {
@@ -62,10 +62,10 @@ try{
             -RouteMetric $gateway.Metric -PolicyStore ActiveStore -ErrorAction Stop
     }
     $rows=@(Read-PrefixRoutes)
-    if($rows.Count -ne 2 -or @($rows|Where-Object InterfaceIndex -ne $nic[0].ifIndex).Count){
-        throw 'The two owned cluster gateway routes did not verify.'
+    if($rows.Count -ne $gateways.Count -or @($rows|Where-Object InterfaceIndex -ne $nic[0].ifIndex).Count){
+        throw 'The owned cluster gateway route did not verify.'
     }
-    @{schema=1;added=$true;prefix=$prefix;gatewayRoutes=2;primaryMetric=10;alternateMetric=20}|
+    @{schema=1;added=$true;prefix=$prefix;gatewayRoutes=$gateways.Count;gatewayMetric=10}|
         ConvertTo-Json|Set-Content -LiteralPath $ReportFile
 }catch{
     $failure=$_

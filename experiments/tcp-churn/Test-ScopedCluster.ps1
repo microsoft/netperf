@@ -66,7 +66,7 @@ try{
                     [pscustomobject]@{IPAddress='198.19.240.1';PrefixLength=29}}
                 function New-NetRoute {[CmdletBinding()]param($InterfaceIndex,$DestinationPrefix,$NextHop,$RouteMetric,$PolicyStore)
                     if($DestinationPrefix -ne '198.19.64.0/22' -or $NextHop -notin @('198.19.240.5','198.19.240.6')){throw 'Unowned route.'}
-                    $fixture.adds++
+                    $fixture.adds++;$fixture.lastNextHop=$NextHop
                     $fixture.routes.Add([pscustomobject]@{DestinationPrefix=$DestinationPrefix;InterfaceIndex=$InterfaceIndex;NextHop=$NextHop;RouteMetric=$RouteMetric})}
                 function Remove-NetRoute {[CmdletBinding(SupportsShouldProcess=$true)]param($InterfaceIndex,$DestinationPrefix,$NextHop,$PolicyStore)
                     $fixture.removes++
@@ -84,7 +84,8 @@ try{
             $failed=$true
         }
         if($failed -ne ($case -ne 'add-remove')){throw "Unexpected cluster-route verdict: $case"}
-        if($case -eq 'add-remove' -and ($fixture.adds -ne 2 -or $fixture.removes -ne 2 -or $fixture.routes.Count -ne 1)){
+        if($case -eq 'add-remove' -and ($fixture.adds -ne 1 -or $fixture.removes -ne 1 -or $fixture.routes.Count -ne 1 -or
+            $fixture.lastNextHop -ne '198.19.240.5')){
             throw 'Cluster routes were not exactly added and restored.'
         }
         if($case -ne 'add-remove' -and $fixture.removes){throw 'A rejected route state was mutated.'}

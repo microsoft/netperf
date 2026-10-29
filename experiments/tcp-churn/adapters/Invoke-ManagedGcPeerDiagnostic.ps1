@@ -291,7 +291,7 @@ try {
                 throw 'The cluster prefix did not select the owned primary gateway route.'
             }
         }
-        $clusterReport=[ordered]@{remoteNodeAddresses=1000;prefix='198.19.64.0/22';gatewayRoutes=2
+        $clusterReport=[ordered]@{remoteNodeAddresses=1000;prefix='198.19.64.0/22';gatewayRoutes=1;gatewaysPerInterface=1
             peerPreparationMilliseconds=$peerClusterReport.preparationMilliseconds
             deadGatewayDetectionSetting=[int](Get-NetIPv4Protocol -ErrorAction Stop).DeadGatewayDetection
             remoteConnections=7168;loopbackConnections=1024;responseBytes=16384

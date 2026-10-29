@@ -819,9 +819,12 @@ model to test delayed header output, not a measured customer latency claim.
 The `managed_gc_mixed=coreclr-cluster` and `coreclr-cluster-outage` modes model
 a large database node serving many adjacent nodes and clients inside one
 datacenter network. The peer owns 1,000 /32 addresses in 198.19.64.0/22; the
-profiled node reaches that prefix only through two gateway routes (via
-198.19.240.5 at metric 10, and via 198.19.240.6 at metric 20), both owned by the
-peer, so dead-gateway detection has an alternate route. Of 8,192 pipelined
+profiled node reaches that prefix through exactly one gateway route on its data
+interface (via peer-owned 198.19.240.5), standing in for that interface's single
+default gateway. The management interface and its default route are untouched.
+Accepted connections are source-constrained to the data interface, so dead-gateway
+detection has no alternate route here; this mode isolates the other path-cache
+writers (black-hole confirmation, path suspicion and per-path revalidation). Of 8,192 pipelined
 connections, 7,168 arrive from those remote addresses and 1,024 use loopback.
 Requests are 512 bytes; responses are 16 KiB, so healthy traffic sends full-size
 segments and exercises black-hole confirmation in the TCP delay queue. The
