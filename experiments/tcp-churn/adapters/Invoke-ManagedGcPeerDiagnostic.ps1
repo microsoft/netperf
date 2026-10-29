@@ -23,6 +23,7 @@ param(
     [switch]$NoTcpProbes,
     [switch]$FramedNagle,
     [switch]$CoreClr,
+    [switch]$IdleKeepalive,
     [ValidateSet(0,16384)][int]$ReceiveBudgetBytes=0,
     [ValidateSet(0,1,1024,8192,24576,49152,98304)][int]$CacheRetirePaths=0,
     [switch]$WprProbes,
@@ -44,6 +45,9 @@ if($FramedNagle -and ($GcProcessRole -ne 'server' -or $ExchangesPerConnection -n
     throw 'Framed Nagle exchanges require bounded receiver-GC persistent64 mode.'
 }
 if($CoreClr -and $GcProcessRole -ne 'server'){throw 'CoreCLR comparison requires the owned receiver-GC workflow.'}
+if($IdleKeepalive -and ($GcProcessRole -ne 'server' -or $ExchangesPerConnection -ne 1 -or $PayloadBytes -ne 1460)){
+    throw 'Idle keepalive pooling requires bounded receiver-GC single1460-byte exchanges.'
+}
 if($Connections -gt 1024 -and ($GcProcessRole -ne 'server' -or $ReceiveBudgetBytes -ne 16384)){
     throw 'High concurrency requires receiver-GC mode and the verified 16384-byte receive budget.'
 }
@@ -285,7 +289,7 @@ try {
         $receiverState=@{Peer=$peer;PeerRoot=$remote;Directory=$diagnostics;Executable=$exe
             ServerAddress=$clientAddress;PeerAddress=$peerAddress;Port=$port;Count=$count;Rate=$rate;Payload=$payloadBytes
             Connections=$Connections;HeapMiB=$heapMiB;HeapLayout=$HeapLayout;ReceiveBudgetBytes=$ReceiveBudgetBytes
-            PeerGcPressure=([bool]$PeerGcPressure);ExchangesPerConnection=$ExchangesPerConnection;FramedNagle=([bool]$FramedNagle);CoreClr=([bool]$CoreClr)
+            PeerGcPressure=([bool]$PeerGcPressure);ExchangesPerConnection=$ExchangesPerConnection;FramedNagle=([bool]$FramedNagle);CoreClr=([bool]$CoreClr);IdleKeepalive=([bool]$IdleKeepalive)
             ServerOutput=$localOutput;Rule=$null;Receiver=$null;LocalClient=$null}
         Start-GcReceiver -State $receiverState
         $localServer=$receiverState.Receiver
@@ -517,6 +521,10 @@ try {
     $result.recorderControlScope='unique-owned-named-instance'
     $result.framedWrites=[bool]$r.framedWrites;$result.noDelay=[bool]$r.noDelay
     $result.managedCoreLibrary=$r.managedCoreLibrary;$result.managedRuntimeVersion=$r.managedRuntimeVersion
+    $result.idleKeepalive=[bool]$r.idleKeepalive;$result.keepaliveConfiguredSockets=$r.keepaliveConfiguredSockets
+    $result.keepaliveIdleMillisecondsRequested=$r.keepaliveIdleMillisecondsRequested
+    $result.keepaliveIntervalMillisecondsRequested=$r.keepaliveIntervalMillisecondsRequested
+    $result.idleHoldMinimumMilliseconds=$r.idleHoldMinimumMilliseconds;$result.idleHoldMaximumMilliseconds=$r.idleHoldMaximumMilliseconds
     if($GcProcessRole -eq 'server'){$result.launchSpanScope='maximum-independent-producer-span';$result.workloadScope='both-independent-producers-plus-profiled-receiver'}
     if($PeerRecovery){$result.peerRecovery=$pulseResult;$result.peerDataInterfaceDhcpEnabled=$peerDhcpEnabled}
 }catch{$failure=$_}

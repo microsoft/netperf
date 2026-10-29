@@ -746,6 +746,17 @@ barrier. See the [Winsock listen contract](https://learn.microsoft.com/windows/w
 
 The separate `managed_gc_cache_retire_paths=1|1024|8192|24576|49152|98304` mechanism control
 requires the ordinary receiver setup described above.
+The opt-in `managed_gc_mixed=coreclr-keepalive` test sends one ordinary 1460-byte
+request immediately on each independent connection and validates the reply.
+It then keeps connections idle for individually staggered 8-30 second lifetimes
+with documented socket keep-alive settings requested at 1000 ms idle/interval.
+Every endpoint verifies keep-alive enablement and the exact number of configured
+sockets. First data is never held, there is no shared release barrier, no
+application payload is sent during the idle period, and all EOFs/bytes/GC/loss
+and restoration gates remain required. This is an explicit aggressive
+health-check hypothesis, not a claim about customer configuration or observed
+probe counts.
+
 The opt-in `managed_gc_mixed=coreclr` comparison runs the same compiled public
 workload through the already-installed PowerShell Core host on every main
 endpoint. It installs no runtime and changes no host policy. Server GC and

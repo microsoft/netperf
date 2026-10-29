@@ -161,6 +161,8 @@ public static class ArrivalTcp
     private static int receiveBudgetBytes;
     private static int exchangesPerConnection=1;
     private static bool framedWrites;
+    private static bool idleKeepalive;
+    private static int keepaliveConfiguredSockets;
     private static int observedMaximumPostedReadBytes;
     private static int maximumPerConnectionReadBufferBytes;
     private static int inFlight,peakInFlight,completed,started,connectedCount,acceptedCount;
@@ -304,6 +306,17 @@ public static class ArrivalTcp
     {
         return framedWrites?WriteFramedMessage(stream,data):stream.WriteAsync(data,0,data.Length);
     }
+    private static void ConfigureKeepalive(Socket socket)
+    {
+        var values=new byte[12];
+        Buffer.BlockCopy(BitConverter.GetBytes((uint)1),0,values,0,4);
+        Buffer.BlockCopy(BitConverter.GetBytes((uint)1000),0,values,4,4);
+        Buffer.BlockCopy(BitConverter.GetBytes((uint)1000),0,values,8,4);
+        if(socket.IOControl(IOControlCode.KeepAliveValues,values,null)!=0 ||
+            Convert.ToInt32(socket.GetSocketOption(SocketOptionLevel.Socket,SocketOptionName.KeepAlive))!=1)
+            throw new InvalidOperationException("The requested keepalive setting did not verify.");
+        Interlocked.Increment(ref keepaliveConfiguredSockets);
+    }
     private static async Task WriteFramedMessage(NetworkStream stream,byte[] data)
     {
         await stream.WriteAsync(data,0,4).ConfigureAwait(false);
@@ -314,6 +327,7 @@ public static class ArrivalTcp
         using(socket) {
             socket.NoDelay=noDelay;
             if(framedWrites && socket.NoDelay)throw new InvalidOperationException("The requested Nagle setting did not verify.");
+            if(idleKeepalive)ConfigureKeepalive(socket);
             if(receiveBudgetBytes>0) {
                 socket.ReceiveBufferSize=receiveBudgetBytes;
                 if(socket.ReceiveBufferSize!=receiveBudgetBytes)
@@ -325,9 +339,10 @@ public static class ArrivalTcp
                 await ReadPattern(stream,data,size,null).ConfigureAwait(false);
                 await WriteMessage(stream,response).ConfigureAwait(false);
             }
-            socket.Shutdown(SocketShutdown.Send);
+            if(!idleKeepalive)socket.Shutdown(SocketShutdown.Send);
             if(await stream.ReadAsync(new byte[1],0,1).ConfigureAwait(false)!=0)
                 throw new IOException("Unexpected request data after completion.");
+            if(idleKeepalive)socket.Shutdown(SocketShutdown.Send);
             }
         }
     }
@@ -352,15 +367,22 @@ public static class ArrivalTcp
             socket.NoDelay=noDelay;
             if(framedWrites && socket.NoDelay)throw new InvalidOperationException("The requested Nagle setting did not verify.");
             await socket.ConnectAsync(peer,port).ConfigureAwait(false);
-            Interlocked.Increment(ref connectedCount);
+            int connectionOrdinal=Interlocked.Increment(ref connectedCount);
+            if(idleKeepalive)ConfigureKeepalive(socket.Client);
             long connected=Stopwatch.GetTimestamp();Interlocked.Add(ref connectTicks,connected-bound);
+            var stream=socket.GetStream();
             var reply=CreateValidationBuffer(expectedResponse.Length);
             for(int exchange=0;exchange<exchangesPerConnection;exchange++){
-                await WriteMessage(socket.GetStream(),data).ConfigureAwait(false);
-                await ReadPattern(socket.GetStream(),reply,expectedResponse.Length,expectedResponse).ConfigureAwait(false);
+                await WriteMessage(stream,data).ConfigureAwait(false);
+                await ReadPattern(stream,reply,expectedResponse.Length,expectedResponse).ConfigureAwait(false);
             }
             long received=Stopwatch.GetTimestamp();Interlocked.Add(ref responseTicks,received-connected);
-            if(await socket.GetStream().ReadAsync(new byte[1],0,1).ConfigureAwait(false)!=0)
+            if(idleKeepalive){
+                int holdSeconds=8+(int)(((long)connectionOrdinal*1103515245)%23);
+                await Task.Delay(TimeSpan.FromSeconds(holdSeconds)).ConfigureAwait(false);
+                socket.Client.Shutdown(SocketShutdown.Send);
+            }
+            if(await stream.ReadAsync(new byte[1],0,1).ConfigureAwait(false)!=0)
                 throw new IOException("Unexpected response data after completion.");
             Interlocked.Add(ref eofTicks,Stopwatch.GetTimestamp()-received);
         }
@@ -403,7 +425,13 @@ public static class ArrivalTcp
         }
         exchangesPerConnection=1;
         framedWrites=false;
+        idleKeepalive=false;
         if(args.Length==14){
+            if(args[13]=="idlekeepalive"){
+                if(size!=1460 || responseSize!=1460 || role=="local")
+                    throw new ArgumentException("Idle keepalive mode requires bounded client/server 1460-byte messages.");
+                idleKeepalive=true;
+            }else{
             string[] exchangeOption=args[13].Split(':');
             if((exchangeOption.Length!=2 && exchangeOption.Length!=3) || exchangeOption[0]!="exchanges" ||
                 !int.TryParse(exchangeOption[1],out exchangesPerConnection) || exchangesPerConnection!=64 ||
@@ -412,6 +440,7 @@ public static class ArrivalTcp
             framedWrites=exchangeOption.Length==3;
             if(framedWrites && (exchangeOption[2]!="framed" || noDelay))
                 throw new ArgumentException("Framed exchanges require exchanges:64:framed with Nagle enabled.");
+            }
         }
         if(File.Exists(args[6]))throw new IOException("Use a new result file.");
         if(gcHeapMiB>0 && File.Exists(args[6]+".gc.json"))throw new IOException("Use a new GC observation file.");
@@ -465,6 +494,8 @@ public static class ArrivalTcp
                     ",\"exchangesPerConnection\":"+exchangesPerConnection+
                     ",\"framedWrites\":"+(framedWrites?"true":"false")+",\"noDelay\":"+(noDelay?"true":"false")+
                     ",\"managedCoreLibrary\":\""+typeof(object).Assembly.GetName().Name+"\",\"managedRuntimeVersion\":\""+Environment.Version+"\""+
+                    ",\"idleKeepalive\":"+(idleKeepalive?"true":"false")+",\"keepaliveConfiguredSockets\":"+keepaliveConfiguredSockets+
+                    ",\"keepaliveIdleMillisecondsRequested\":"+(idleKeepalive?1000:0)+",\"keepaliveIntervalMillisecondsRequested\":"+(idleKeepalive?1000:0)+
                     ",\"maximumPerConnectionReadBufferBytes\":"+maximumPerConnectionReadBufferBytes+
                     ",\"networkErrors\":0,\"protocolErrors\":0,\"barrier\":false,\"peakInFlight\":"+serverPeakInFlight+
                     ",\"requestDispatch\":\""+(gcHeapMiB>0?"thread-pool":"inline")+"\",\"managedGc\":"+gcObservation.Json()+"}");
@@ -511,6 +542,9 @@ public static class ArrivalTcp
                 ",\"exchangesPerConnection\":"+exchangesPerConnection+
                 ",\"framedWrites\":"+(framedWrites?"true":"false")+
                 ",\"managedCoreLibrary\":\""+typeof(object).Assembly.GetName().Name+"\",\"managedRuntimeVersion\":\""+Environment.Version+"\""+
+                ",\"idleKeepalive\":"+(idleKeepalive?"true":"false")+",\"keepaliveConfiguredSockets\":"+keepaliveConfiguredSockets+
+                ",\"keepaliveIdleMillisecondsRequested\":"+(idleKeepalive?1000:0)+",\"keepaliveIntervalMillisecondsRequested\":"+(idleKeepalive?1000:0)+
+                ",\"idleHoldMinimumMilliseconds\":"+(idleKeepalive?8000:0)+",\"idleHoldMaximumMilliseconds\":"+(idleKeepalive?30000:0)+
                 ",\"maximumPerConnectionReadBufferBytes\":"+maximumPerConnectionReadBufferBytes+
                 ",\"arrivalRate\":"+rate+",\"seed\":"+seed+",\"barrier\":false"+
                 ",\"arrivalDispatch\":\""+(gcHeapMiB>0||poolDispatch?"thread-pool":"inline")+"\""+
@@ -548,7 +582,7 @@ public static class ArrivalTcp
     {
         try {
             if(args.Length<7 || args.Length>14) {
-                Console.Error.WriteLine("Usage: ArrivalTcp sources peer port count rate request-bytes output.json [role [response-bytes [seed [maximum-in-flight [nodelay|nagle [gc:heap-MiB:minimum-launched|dispatch:pool [exchanges:64[:framed]]]]]]]]");
+                Console.Error.WriteLine("Usage: ArrivalTcp sources peer port count rate request-bytes output.json [role [response-bytes [seed [maximum-in-flight [nodelay|nagle [gc:heap-MiB:minimum-launched|dispatch:pool [exchanges:64[:framed]|idlekeepalive]]]]]]]");
                 return 2;
             }
             if(!Run(args).Wait(TimeSpan.FromSeconds(150))){

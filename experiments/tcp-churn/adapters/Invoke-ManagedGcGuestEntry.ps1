@@ -15,6 +15,7 @@ param(
     [switch]$NoTcpProbes,
     [switch]$FramedNagle,
     [switch]$CoreClr,
+    [switch]$IdleKeepalive,
     [switch]$PeerRecovery,
     [switch]$IsolatedData,
     [int]$RecoveryMilliseconds=8000,
