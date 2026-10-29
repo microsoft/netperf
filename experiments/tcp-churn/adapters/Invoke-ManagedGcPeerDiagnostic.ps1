@@ -108,6 +108,8 @@ try {
     finally {if(Test-Path -LiteralPath $CredentialFile){Remove-Item -LiteralPath $CredentialFile -ErrorAction Stop}}
     $phase='module-load'
     Import-Module (Join-Path $PSScriptRoot 'WindowsCts.psm1') -Force
+    @{schema=1;instance=$wprInstance;createdUtc=[DateTime]::UtcNow.ToString('o')}|
+        ConvertTo-Json|Set-Content -LiteralPath (Join-Path $diagnostics 'wpr-owned-instance.json')
     $phase='wpr-instance-support'
     $null=Invoke-TcpChurnTool -Program $wpr -Arguments @('-help','advanced') -Directory $diagnostics `
         -LogPrefix (Join-Path $diagnostics 'wpr-instance-help')
@@ -539,7 +541,7 @@ finally {
                 if(-not $neighborPulse.Process.WaitForExit(10000)){throw 'The owned pulse process tree did not terminate.'}
                 throw 'The scoped pulse exceeded its graceful restoration deadline.'
             }
-        }catch{$cleanupErrors.Add($_.Exception)}
+        }catch{$_.Exception.Data['CleanupPhase']='neighbor-control-wait';$cleanupErrors.Add($_.Exception)}
         finally {
             try{Stop-TcpChurnCollector $neighborPulse}catch{$cleanupErrors.Add($_.Exception)}
             if(Test-Path -LiteralPath (Join-Path $diagnostics 'neighbor-original.clixml')) {
@@ -547,7 +549,7 @@ finally {
                     $null=Invoke-TcpChurnTool -Program $pulseProgram -Arguments ($neighborArguments+@('-RestoreOnly',
                         '-ReportFile',(Join-Path $diagnostics 'neighbor-restore.json'))) -Directory $diagnostics `
                         -LogPrefix (Join-Path $diagnostics 'neighbor-restore') -TimeoutSeconds 30
-                }catch{$cleanupErrors.Add($_.Exception)}
+                }catch{$_.Exception.Data['CleanupPhase']='neighbor-control-restore';$cleanupErrors.Add($_.Exception)}
             }
         }
     }
@@ -573,7 +575,7 @@ finally {
                     $null=Invoke-TcpChurnTool -Program $control.Program -Arguments ($control.Arguments+@('-RestoreOnly',
                         '-ReportFile',(Join-Path $diagnostics ($control.Stem+'-restored.json')))) -Directory $diagnostics `
                         -LogPrefix (Join-Path $diagnostics ($control.Stem+'-restore')) -TimeoutSeconds 30
-                }catch{$cleanupErrors.Add($_.Exception)}
+                }catch{$_.Exception.Data['CleanupPhase']='path-control-restore';$cleanupErrors.Add($_.Exception)}
             }
         }
     }
@@ -590,14 +592,14 @@ finally {
             try{
                 $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @('--session-health',(Join-Path $PublishDirectory 'collector-health.json'),$wprInstance) `
                     -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'collector-health') -TimeoutSeconds 20
-            }catch{$cleanupErrors.Add($_.Exception)}
+            }catch{$_.Exception.Data['CleanupPhase']='collector-health';$cleanupErrors.Add($_.Exception)}
         }
         $stopArguments=@('-stop',(Join-Path $diagnostics 'cpu.etl'))
         if($WprProbes){$stopArguments+='-skipPdbGen'}
         $stopArguments+=@('-instancename',$wprInstance)
         try {$null=Invoke-TcpChurnTool -Program $wpr -Arguments $stopArguments `
             -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'wpr-stop') -TimeoutSeconds 120}
-        catch{$cleanupErrors.Add($_.Exception)}
+        catch{$_.Exception.Data['CleanupPhase']='wpr-stop';$cleanupErrors.Add($_.Exception)}
     }elseif($wprStartAttempted){
         try {
             $null=Invoke-TcpChurnTool -Program $wpr -Arguments @('-cancel','-instancename',$wprInstance) `
@@ -705,6 +707,14 @@ if($null -ne $failure -or $cleanupErrors.Count) {
             probeStartup=$probeStartup
             toolExitCode=$toolCode;cleanupErrorCount=$cleanupErrors.Count;cleanupVerified=($cleanupErrors.Count -eq 0)
             cleanupErrorTypes=@($cleanupErrors|ForEach-Object{$_.GetType().FullName})
+            cleanupErrorFacts=@($cleanupErrors|ForEach-Object{
+                $message=$_.Message
+                @{type=$_.GetType().FullName;stage=$(if($_.Data.Contains('CleanupPhase')){$_.Data['CleanupPhase']}else{'unclassified'})
+                    toolExitCode=$(if($_.Data.Contains('ToolExitCode')){$_.Data['ToolExitCode']}else{$null})
+                    deadlineExceeded=($_.Message -eq 'Test tool deadline exceeded.')
+                    publicDiagnosticTerms=@('deadline','process','exit','restoration','route','address','changed','ownership','failed','tool','timeout','removed','terminated','recording','stop'|
+                        Where-Object{$message -match ('(?i)\b'+[regex]::Escape($_)+'\b')})}
+            })
             peerRecovery=$pulseResult;peerDataInterfaceDhcpEnabled=$peerDhcpEnabled;clientFailure=$clientFailure
             receiverEvidence=$receiverEvidence
             routeRefreshControl=$(if($RouteRefresh){$routeReport}else{$null})

@@ -250,6 +250,27 @@ if($metadata.Count -ne 1){throw 'Actual result recorder metadata must be unique.
         throw 'Actual recorder metadata augmentation failed or executed a bare command.'
     }
 }
+$cleanupTables=@($ast.FindAll({
+    param($node)
+    $node -is [Management.Automation.Language.HashtableAst] -and
+        @($node.KeyValuePairs|Where-Object{$_.Item1.Extent.Text -eq 'cleanupErrorFacts'}).Count -eq 1
+},$true))
+if($cleanupTables.Count -ne 1){throw 'The actual cleanup failure serialization must be unique.'}
+& {
+    $cleanupErrors=[Collections.Generic.List[Exception]]::new()
+    $deadline=[Management.Automation.RuntimeException]::new('Test tool deadline exceeded.')
+    $deadline.Data['CleanupPhase']='wpr-stop'
+    $cleanupErrors.Add($deadline)
+    $native=[InvalidOperationException]::new('Synthetic private C:\private\fixture-secret command failed.')
+    $native.Data['ToolExitCode']=-1
+    $cleanupErrors.Add($native)
+    $pair=@($cleanupTables[0].KeyValuePairs|Where-Object{$_.Item1.Extent.Text -eq 'cleanupErrorFacts'})[0]
+    $facts=@(& ([scriptblock]::Create($pair.Item2.Extent.Text)))
+    if($facts.Count -ne 2 -or $facts[0].stage -ne 'wpr-stop' -or -not $facts[0].deadlineExceeded -or
+        $facts[1].toolExitCode -ne -1 -or ($facts|ConvertTo-Json -Compress) -match 'private|fixture-secret'){
+        throw 'Cleanup diagnostics lost the failure stage/code or leaked private exception text.'
+    }
+}
 $traffic=[Management.Automation.Language.Parser]::ParseFile(
     (Join-Path $PSScriptRoot 'adapters\GcReceiverTraffic.psm1'),[ref]$tokens,[ref]$errors)
 if($errors.Count){throw ($errors|Out-String)}
