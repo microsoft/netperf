@@ -321,6 +321,8 @@ try {
             $reason='unsupported-hot-add-topology'
         }elseif($_.Exception.Message -match 'disconnected new interface unexpectedly'){
             $reason='unexpected-disposable-interface-ipv4'
+        }elseif($_.Exception.Message -match 'bootstrap address is already in use'){
+            $reason='disposable-bootstrap-in-use'
         }
         [ordered]@{schema=1;workload='tcp-churn';outcome='failed';phase=$phase
             failureType=$_.Exception.GetType().FullName;failureCode=$_.Exception.HResult

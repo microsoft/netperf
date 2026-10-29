@@ -110,6 +110,14 @@ Apply-Rss $adapter $target
 if($restartOwned){
     $rssPhase='owned-interface-restart'
     Restart-NetAdapter -Name $adapter.Name -Confirm:$false -ErrorAction Stop
+    if((@(Read-Addresses $adapter)-join '|') -ne (@($saved.addresses)-join '|')){
+        $bootstrap="$($adapter.ifIndex)/198.19.255.253/32/True"
+        if(@($saved.addresses).Count -ne 1 -or $saved.addresses[0] -ne $bootstrap -or @(Read-Addresses $adapter).Count){
+            throw 'The disposable data restart changed more than its known ephemeral bootstrap.'
+        }
+        $null=New-NetIPAddress -InterfaceIndex $adapter.ifIndex -IPAddress '198.19.255.253' -PrefixLength 32 `
+            -SkipAsSource $true -PolicyStore ActiveStore -ErrorAction Stop
+    }
 }
 $rssPhase='active-readback'
 $actual=@(Get-NetAdapterRss -Name $adapter.Name -ErrorAction Stop)

@@ -79,7 +79,7 @@ function New-TcpChurnVmPathFixture {
             Set-NetIPInterface -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -Dhcp Disabled -ErrorAction Stop
             Rename-NetAdapter -Name $adapter.Name -NewName $name -ErrorAction Stop
             $null=New-NetIPAddress -InterfaceIndex $adapter.ifIndex -IPAddress $bootstrap -PrefixLength 32 `
-                -SkipAsSource $true -ErrorAction Stop
+                -SkipAsSource $true -PolicyStore ActiveStore -ErrorAction Stop
             [pscustomobject]@{alias=$name;guid=[string]$adapter.InterfaceGuid}
         } -ArgumentList $mac,$name,$bootstrap
         Connect-VMNetworkAdapter -VMNetworkAdapter $created -SwitchName $connected[0].SwitchName -ErrorAction Stop
