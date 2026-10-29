@@ -12,6 +12,14 @@ $functions=@($ast.FindAll({
         $node.Name -in @('Get-OwnedIndexPlan','Remove-OwnedIndexes','Read-RecorderStatus','Get-TraceContentHash')
 },$true))
 if($functions.Count -ne 4){throw 'The actual retention status/hash/planning/removal functions must be identified.'}
+$worker=@($ast.FindAll({
+    param($node)
+    $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -eq '$worker'
+},$true))
+if($worker.Count -ne 1 -or @($functions|Where-Object{
+    $_.Extent.StartOffset -le $worker[0].Right.Extent.StartOffset -or
+        $_.Extent.EndOffset -ge $worker[0].Right.Extent.EndOffset
+}).Count){throw 'Every retention helper must be inside the actual remote worker, not only available in host tests.'}
 . ([scriptblock]::Create(($functions|ForEach-Object{$_.Extent.Text})-join "`n"))
 $directory=Join-Path ([IO.Path]::GetTempPath()) ('trace-index-test-'+[guid]::NewGuid().ToString('N'))
 $null=New-Item -ItemType Directory -Path $directory

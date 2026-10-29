@@ -11,33 +11,33 @@ param(
     [string]$VmName='netperf-windows-2022-client'
 )
 $ErrorActionPreference='Stop'
-function Get-TraceContentHash([string]$Path) {
-    $hash=[Security.Cryptography.SHA256]::Create()
-    try {
-        $stream=[IO.File]::OpenRead($Path)
-        try{[BitConverter]::ToString($hash.ComputeHash($stream)).Replace('-','')}
-        finally{$stream.Dispose()}
-    }finally{$hash.Dispose()}
-}
-function Read-RecorderStatus([string]$Executable,[string]$Arguments) {
-    $settings=[Diagnostics.ProcessStartInfo]::new()
-    $settings.FileName=$Executable;$settings.Arguments=$Arguments
-    $settings.UseShellExecute=$false;$settings.RedirectStandardOutput=$true;$settings.RedirectStandardError=$true
-    $query=[Diagnostics.Process]::new();$query.StartInfo=$settings
-    try {
-        if(-not $query.Start()){throw 'The read-only recorder status query did not start.'}
-        $output=$query.StandardOutput.ReadToEndAsync();$errorOutput=$query.StandardError.ReadToEndAsync()
-        if(-not $query.WaitForExit(15000)){
-            Stop-Process -Id $query.Id -Force -ErrorAction Stop
-            throw 'The read-only recorder status query exceeded its deadline.'
-        }
-        [pscustomobject]@{ExitCode=$query.ExitCode;Text=($output.GetAwaiter().GetResult()+$errorOutput.GetAwaiter().GetResult())}
-    }finally{$query.Dispose()}
-}
 if(Test-Path -LiteralPath $ReportFile){throw 'Use a fresh numeric retention report.'}
 $worker={
     param([long[]]$AllowedTicks,[bool]$RemoveIndexes,[bool]$PermitInactiveMetadata)
     $ErrorActionPreference='Stop'
+    function Get-TraceContentHash([string]$Path) {
+        $hash=[Security.Cryptography.SHA256]::Create()
+        try {
+            $stream=[IO.File]::OpenRead($Path)
+            try{[BitConverter]::ToString($hash.ComputeHash($stream)).Replace('-','')}
+            finally{$stream.Dispose()}
+        }finally{$hash.Dispose()}
+    }
+    function Read-RecorderStatus([string]$Executable,[string]$Arguments) {
+        $settings=[Diagnostics.ProcessStartInfo]::new()
+        $settings.FileName=$Executable;$settings.Arguments=$Arguments
+        $settings.UseShellExecute=$false;$settings.RedirectStandardOutput=$true;$settings.RedirectStandardError=$true
+        $query=[Diagnostics.Process]::new();$query.StartInfo=$settings
+        try {
+            if(-not $query.Start()){throw 'The read-only recorder status query did not start.'}
+            $output=$query.StandardOutput.ReadToEndAsync();$errorOutput=$query.StandardError.ReadToEndAsync()
+            if(-not $query.WaitForExit(15000)){
+                Stop-Process -Id $query.Id -Force -ErrorAction Stop
+                throw 'The read-only recorder status query exceeded its deadline.'
+            }
+            [pscustomobject]@{ExitCode=$query.ExitCode;Text=($output.GetAwaiter().GetResult()+$errorOutput.GetAwaiter().GetResult())}
+        }finally{$query.Dispose()}
+    }
     function Get-OwnedIndexPlan([string]$Parent,[long[]]$Ticks,[Collections.IDictionary]$Details) {
         if(-not $Ticks.Count -or @($Ticks|Sort-Object -Unique).Count -ne $Ticks.Count -or @($Ticks|Where-Object{$_ -le 0}).Count){
             throw 'Distinct positive synthetic collection timestamps are required.'
