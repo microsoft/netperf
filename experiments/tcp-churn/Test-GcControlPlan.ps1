@@ -598,7 +598,7 @@ foreach($case in @('valid','wrong-kind','missing-preparation','missing-reservati
     & {
         $ReferencedTcpPaths=49152
         $cacheReport=[pscustomobject]@{pathReferenceKind='established-loopback-tcp';requestedReferencedTcpPaths=49152
-            referencedTcpPreparationQueries=49152;referencedTcpReservedSourcePorts=512
+            referencedTcpPreparationQueries=49152;referencedTcpReservedSourcePorts=4096
             measuredReferencedTcpPathsAtSnapshot=49152;heldTcpConnectionPairsAtVerification=49152}
         if($case -eq 'wrong-kind'){$cacheReport.pathReferenceKind='socket-count-only'}
         if($case -eq 'missing-preparation'){$cacheReport.referencedTcpPreparationQueries=0}

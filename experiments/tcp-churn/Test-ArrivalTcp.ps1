@@ -131,7 +131,7 @@ try {
             $snapshot=$type.GetMethod('ReadPathPopulation').Invoke($null,@([int]$loopback[0].InterfaceIndex,
                 [string[]]@('127.0.0.1'),[int]$loopback[0].InterfaceIndex,[int]$count))
             $connections=$type.GetMethod('CountEstablishedLoopbackFixtureServers').Invoke($null,@([int]$PID,[int]$fixture.Port))
-            if($fixture.Count -ne $count -or $fixture.PreparationQueries -ne $count -or $fixture.ReservedSourcePorts -ne [Math]::Min(512,$count) -or
+            if($fixture.Count -ne $count -or $fixture.PreparationQueries -ne $count -or $fixture.ReservedSourcePorts -ne [Math]::Min(4096,$count) -or
                 $snapshot.ReferencedTcpPaths -ne $count -or $connections -ne $count -or
                 $fixture.AvailablePhysicalBytesAtCreate -lt ([long]$count*65536+256MB)){
                 throw 'Referenced fixture pairs, actual path range, TCP ownership, or memory admission did not verify.'

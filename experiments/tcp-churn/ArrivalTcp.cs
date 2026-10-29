@@ -204,6 +204,7 @@ public static class ArrivalTcp
     public sealed class ReferencedTcpPathFixture:IDisposable
     {
         public const int ConnectBatchLimit=256;
+        public const int SourcePortReservationLimit=4096;
         private readonly Socket[] clients,servers,portReservations;
         private int disposed;
         public int Count {get;private set;}
@@ -216,7 +217,7 @@ public static class ArrivalTcp
         public int ReservedSourcePorts {get{return portReservations.Length;}}
         private ReferencedTcpPathFixture(int count)
         {
-            Count=count;clients=new Socket[count];servers=new Socket[count];portReservations=new Socket[Math.Min(512,count)];
+            Count=count;clients=new Socket[count];servers=new Socket[count];portReservations=new Socket[Math.Min(SourcePortReservationLimit,count)];
         }
         private static IPAddress SourceFor(int ordinal)
         {

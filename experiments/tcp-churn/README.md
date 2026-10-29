@@ -778,7 +778,7 @@ Client ports are system-allocated instead of sharing one local port or choosing
 manual ports that could intersect OS reservations. Binds within each batch
 use at most 32 workers, bounded also by the connection/processor count; both endpoint tuples are
 verified. This changes fixture preparation cost, not the measured workload.
-The fixture reserves at most 512 system-allocated ports on bound, non-listening
+The fixture reserves at most 4,096 system-allocated ports on bound, non-listening
 loopback sockets, then distributes those ports across its distinct specific
 loopback source addresses. Reservations and both endpoint tuples remain owned
 and verified until teardown. This avoids consuming one wildcard ephemeral port
