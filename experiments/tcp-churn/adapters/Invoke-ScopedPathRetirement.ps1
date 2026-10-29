@@ -220,9 +220,13 @@ try {
         }
         $report.gcCompletionObservedUtc=[DateTime]::UtcNow.ToString('o')
     }
+    $snapshotClock=[Diagnostics.Stopwatch]::StartNew()
     $report.measuredReleasedPaths=Read-PathCount
+    $report.triggerPathSnapshotMilliseconds=$snapshotClock.Elapsed.TotalMilliseconds
     if($report.measuredReleasedPaths -lt $PathCount){throw 'Released cached paths did not persist until retirement.'}
+    $snapshotClock.Restart()
     $report.establishedAtTrigger=[ArrivalTcp]::CountEstablishedConnections($ReceiverProcessId,20300)
+    $report.triggerTcpSnapshotMilliseconds=$snapshotClock.Elapsed.TotalMilliseconds
     $report.controlStoppedBeforeRetirement=Test-Path -LiteralPath $StopFile
     if($report.establishedAtTrigger -lt 8 -or $report.controlStoppedBeforeRetirement){
         throw 'No verified live TCP cohort remains for the source-retirement control.'
