@@ -280,18 +280,25 @@ try {
     if($ReceiveBudgetBytes){$tasks+=@('TcpZeroWindowProbingBegin','TcpZeroWindowProbingEnd')}
     if($PeerRecovery){$tasks+=@('TcpConnectTcbComplete','TcpInsertConnectionTuple','TcpCloseTcbRequest')}
     if($GcProcessRole -eq 'server'){$tasks+=@('TcpAcceptListenerComplete','TcpCloseTcbRequest','TcpInsertConnectionTuple')}
+    $tcpKeywords=[long]0x500000084
+    $omittedTcpTasks=@()
+    if($ExchangesPerConnection -eq 64){
+        $omittedTcpTasks=@('TcpDataTransferRetransmitRound','TcpBhDetectFullSizeAck','TcpZeroWindowProbingBegin','TcpZeroWindowProbingEnd')
+        $tasks=@($tasks|Where-Object{$_ -notin $omittedTcpTasks})
+        $tcpKeywords=[long]0x8400000004
+    }
     $events=@($provider.Events|Where-Object{$null -ne $_.Task -and $_.Task.Name -in $tasks}|
         ForEach-Object{[pscustomobject]@{Id=$_.Id;Task=$_.Task.Name}})
     foreach($task in $tasks){if($task -notin @($events.Task)){throw 'A required public TCP event is unavailable.'}}
-    # Diagnosis, send, connect and TCB events; do not request unrelated rundown/control keywords.
-    $tcpKeywords=[long]0x500000084
+    # Persistent mode requests lifecycle and BH events without broad per-message diagnosis/send keywords.
     foreach($event in @($provider.Events|Where-Object{$null -ne $_.Task -and $_.Task.Name -in $tasks})){
         if(@($event.Keywords).Count -and -not @($event.Keywords|Where-Object{($_.Value -band $tcpKeywords) -ne 0}).Count){
             throw 'The bounded TCP keyword selection does not cover a required public event.'
         }
     }
     $tcpState=Join-Path $diagnostics 'tcp-state.json'
-    @{publicProviderGuid=[string]$provider.Id;publicProviderKeywords='0x500000084';publicProviderEvents=$events}|ConvertTo-Json -Depth 4|Set-Content $tcpState
+    @{publicProviderGuid=[string]$provider.Id;publicProviderKeywords=('0x{0:X}' -f $tcpKeywords);publicProviderEvents=$events}|
+        ConvertTo-Json -Depth 4|Set-Content $tcpState
     $clrState=Join-Path $diagnostics 'clr-state.json'
     @{publicProviderGuid='e13c0d23-ccbc-4e12-931b-d9cc2eee27e4';publicProviderKeywords='0x1';publicProviderEvents=@(
         @{Id=1;Task='GCStart'},@{Id=2;Task='GCStop'},@{Id=3;Task='GCRestartEEEnd'},
@@ -441,6 +448,8 @@ try {
         bytesSent=$r.bytesSent;bytesReceived=$r.bytesReceived;payloadBytesPerDirection=$payloadBytes
         exchangesPerConnection=$ExchangesPerConnection
         kernelSchedulingEventsRequested=($ExchangesPerConnection -ne 64)
+        tcpProbeCoverage=$(if($ExchangesPerConnection -eq 64){'lifecycle-and-black-hole-only'}else{'bounded-diagnosis-send-connect-tcb'})
+        omittedTcpProbeTasks=$omittedTcpTasks
         dataInterfaceMtuBytes=$mtu
         targets=$r.targets;managedGc=$r.managedGc
         arrivalRate=$r.arrivalRate;maxLaunchLagMilliseconds=$r.maxLaunchLagMilliseconds

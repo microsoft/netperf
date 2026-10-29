@@ -108,6 +108,42 @@ foreach($pressureEnabled in @($false,$true)){
         }
     }finally{Remove-Variable -Name OwnedManagedGcPeer -Scope Global}
 }
+$selection=@($ast.FindAll({
+    param($node)
+    $node -is [Management.Automation.Language.IfStatementAst] -and
+        $node.Clauses[0].Item1.Extent.Text -eq '$ExchangesPerConnection -eq 64' -and
+        $node.Extent.Text.Contains('$omittedTcpTasks=')
+},$true))
+if($selection.Count -ne 1){throw 'The actual persistent TCP event selection must be identified.'}
+foreach($exchangeMode in @(1,64)){
+    & {
+        $ExchangesPerConnection=$exchangeMode
+        $tasks=@('TcpTcbSynSend','TcpDisconnectTcbRtoTimeout','TcpDataTransferRetransmitRound',
+            'TcpBlackHoleDetectionEntry','TcpBlackHoleDetectionExit','TcpBlackHoleDetectionFailed','TcpBhDetectFullSizeAck',
+            'TcpZeroWindowProbingBegin','TcpZeroWindowProbingEnd','TcpAcceptListenerComplete','TcpCloseTcbRequest','TcpInsertConnectionTuple')
+        $tcpKeywords=[long]0x500000084;$omittedTcpTasks=@()
+        . ([scriptblock]::Create($selection[0].Extent.Text))
+        foreach($required in @('TcpTcbSynSend','TcpDisconnectTcbRtoTimeout','TcpAcceptListenerComplete',
+            'TcpCloseTcbRequest','TcpInsertConnectionTuple','TcpBlackHoleDetectionEntry','TcpBlackHoleDetectionExit','TcpBlackHoleDetectionFailed')){
+            if($required -notin $tasks){throw 'Persistent selection lost required lifetime or actual BH event coverage.'}
+        }
+        if($exchangeMode -eq 64 -and
+            (($tcpKeywords -band [long]0x100000080) -ne 0 -or $omittedTcpTasks.Count -ne 4 -or
+                @($tasks|Where-Object{$_ -in $omittedTcpTasks}).Count)){
+            throw 'Persistent selection retained broad per-message send/diagnosis event volume.'
+        }
+        if($exchangeMode -eq 1 -and ($tcpKeywords -ne [long]0x500000084 -or $omittedTcpTasks.Count)){
+            throw 'The ordinary single-exchange capture changed its default event coverage.'
+        }
+        $metadata=@((Get-WinEvent -ListProvider Microsoft-Windows-TCPIP).Events|Where-Object{$null -ne $_.Task -and $_.Task.Name -in $tasks})
+        foreach($required in $tasks){if($required -notin @($metadata.Task.Name)){throw 'A selected task is absent from the installed public manifest.'}}
+        foreach($event in $metadata){
+            if(@($event.Keywords).Count -and -not @($event.Keywords|Where-Object{($_.Value -band $tcpKeywords) -ne 0}).Count){
+                throw 'Narrowed persistent keywords do not cover a selected public event.'
+            }
+        }
+    }
+}
 $cleanup=@($ast.FindAll({
     param($node)
     $node -is [Management.Automation.Language.ScriptBlockExpressionAst] -and
