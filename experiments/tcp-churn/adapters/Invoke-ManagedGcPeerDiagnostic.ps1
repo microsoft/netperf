@@ -599,7 +599,15 @@ finally {
         $stopArguments+=@('-instancename',$wprInstance)
         try {$null=Invoke-TcpChurnTool -Program $wpr -Arguments $stopArguments `
             -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'wpr-stop') -TimeoutSeconds 120}
-        catch{$_.Exception.Data['CleanupPhase']='wpr-stop';$cleanupErrors.Add($_.Exception)}
+        catch{
+            $_.Exception.Data['CleanupPhase']='wpr-stop'
+            $id=[string]$_.FullyQualifiedErrorId
+            $_.Exception.Data['CleanupErrorId']=if($id -match '^[A-Za-z0-9_.,-]{1,256}$'){$id}else{'unclassified'}
+            $_.Exception.Data['CleanupSourceLine']=$_.InvocationInfo.ScriptLineNumber
+            $logs=@('wpr-stop.out.txt','wpr-stop.err.txt'|ForEach-Object{Join-Path $diagnostics $_}|Where-Object{Test-Path -LiteralPath $_})
+            $_.Exception.Data['CleanupOutputLogsPresent']=$logs.Count
+            $cleanupErrors.Add($_.Exception)
+        }
     }elseif($wprStartAttempted){
         try {
             $null=Invoke-TcpChurnTool -Program $wpr -Arguments @('-cancel','-instancename',$wprInstance) `
@@ -711,8 +719,12 @@ if($null -ne $failure -or $cleanupErrors.Count) {
                 $message=$_.Message
                 @{type=$_.GetType().FullName;stage=$(if($_.Data.Contains('CleanupPhase')){$_.Data['CleanupPhase']}else{'unclassified'})
                     toolExitCode=$(if($_.Data.Contains('ToolExitCode')){$_.Data['ToolExitCode']}else{$null})
+                    errorId=$(if($_.Data.Contains('CleanupErrorId')){$_.Data['CleanupErrorId']}else{$null})
+                    sourceLine=$(if($_.Data.Contains('CleanupSourceLine')){$_.Data['CleanupSourceLine']}else{$null})
+                    outputLogsPresent=$(if($_.Data.Contains('CleanupOutputLogsPresent')){$_.Data['CleanupOutputLogsPresent']}else{$null})
                     deadlineExceeded=($_.Message -eq 'Test tool deadline exceeded.')
-                    publicDiagnosticTerms=@('deadline','process','exit','restoration','route','address','changed','ownership','failed','tool','timeout','removed','terminated','recording','stop'|
+                    publicDiagnosticTerms=@('deadline','process','exit','restoration','route','address','changed','ownership','failed','tool','timeout','removed','terminated','recording','stop',
+                        'null','method','argument','variable','overwrite','read','only','constant','overload','cannot','property','disposed','index','parameter','binding','unexpected','non','zero'|
                         Where-Object{$message -match ('(?i)\b'+[regex]::Escape($_)+'\b')})}
             })
             peerRecovery=$pulseResult;peerDataInterfaceDhcpEnabled=$peerDhcpEnabled;clientFailure=$clientFailure

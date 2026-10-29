@@ -204,12 +204,17 @@ $wprStop=@($ast.FindAll({
 if($wprStarts.Count -ne 2 -or $wprStop.Count -ne 1){throw 'All actual recorder start/stop paths must be identified.'}
 & {
     $wpr='unused-wpr';$cpuProfile='unused-cpu!CPU';$wprProfile='unused-probes.wprp'
-    $diagnostics=[IO.Path]::GetTempPath();$PublishDirectory=$diagnostics;$analyzer='unused-analyzer'
+    $diagnostics=Join-Path ([IO.Path]::GetTempPath()) ('uncreated-recorder-test-'+[guid]::NewGuid().ToString('N'))
+    $PublishDirectory=$diagnostics;$analyzer='unused-analyzer'
     $wprInstance='NetperfGc-'+('1'*32)
+    $simulateStopFailure=$false
     $calls=[Collections.Generic.List[object]]::new()
     function Invoke-TcpChurnTool {
         param($Program,$Arguments,$Directory,$LogPrefix,$TimeoutSeconds)
         $calls.Add([pscustomobject]@{Program=$Program;Arguments=$Arguments})
+        if($simulateStopFailure -and $Arguments[0] -eq '-stop'){
+            throw [Management.Automation.RuntimeException]::new('You cannot call a method on a null-valued expression.')
+        }
     }
     foreach($start in $wprStarts){& ([scriptblock]::Create($start.Extent.Text))}
     foreach($call in $calls){
@@ -226,7 +231,13 @@ if($wprStarts.Count -ne 2 -or $wprStop.Count -ne 1){throw 'All actual recorder s
         $calls[1].Arguments[-2] -ne '-instancename' -or $calls[1].Arguments[-1] -ne $wprInstance -or $cleanupErrors.Count){
         throw 'Recorder health or stop escaped the owning instance.'
     }
-    $calls.Clear();$profileOwned=$false
+    $calls.Clear();$simulateStopFailure=$true
+    & ([scriptblock]::Create($wprStop[0].Extent.Text))
+    if($cleanupErrors.Count -ne 1 -or $cleanupErrors[0].Data['CleanupPhase'] -ne 'wpr-stop' -or
+        -not $cleanupErrors[0].Data['CleanupErrorId'] -or $cleanupErrors[0].Data['CleanupOutputLogsPresent'] -ne 0){
+        throw 'Recorder shutdown errors lost their bounded identity or were reported as success.'
+    }
+    $calls.Clear();$profileOwned=$false;$simulateStopFailure=$false
     & ([scriptblock]::Create($wprStop[0].Extent.Text))
     if($calls.Count -ne 1 -or $calls[0].Arguments[0] -ne '-cancel' -or
         $calls[0].Arguments[-2] -ne '-instancename' -or $calls[0].Arguments[-1] -ne $wprInstance){
