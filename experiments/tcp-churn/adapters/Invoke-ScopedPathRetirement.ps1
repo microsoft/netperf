@@ -9,6 +9,7 @@ param(
     [Parameter(Mandatory)][string]$ReportFile,
     [ValidateSet(1024,8192,24576)][int]$PathCount=8192,
     [string]$ReceiverExecutable,[int]$ReceiverProcessId,
+    [string]$UnusedInterfaceGuid,
     [string]$ReadyFile,[string]$BeginFile,[string]$StopFile,
     [switch]$RestoreOnly
 )
@@ -30,7 +31,12 @@ $source='198.19.0.1';$prefix='198.19.0.0/17'
 $adapter=@(Get-NetAdapter -Name $InterfaceAlias -ErrorAction Stop)
 if($adapter.Count -ne 1){throw 'The owned data adapter must be unique.'}
 $data=Import-Clixml -LiteralPath $DataStateFile -ErrorAction Stop
-if($data.interfaceGuid -ne [string]$adapter[0].InterfaceGuid -or -not $data.originalDhcpDisabled -or
+$detachInterface=-not [string]::IsNullOrWhiteSpace($UnusedInterfaceGuid)
+$ownedInterface=if($detachInterface){
+    $InterfaceAlias -match '^NetperfPath-[0-9a-f]{12}$' -and
+        [guid]$UnusedInterfaceGuid -eq $adapter[0].InterfaceGuid -and $data.interfaceGuid -ne [string]$adapter[0].InterfaceGuid
+}else{$data.interfaceGuid -eq [string]$adapter[0].InterfaceGuid}
+if(-not $ownedInterface -or -not $data.originalDhcpDisabled -or
     '198.19.240.1' -notin @($data.addresses) -or
     @($data.addresses|Where-Object{$_ -notmatch '^198\.19\.240\.[1-4]$'}).Count){
     throw 'Path retirement requires owned receiver addresses and unchanged static management policy.'
@@ -59,9 +65,18 @@ function Read-OwnedAddress {
 function Restore-Control {
     param([switch]$MeasureRetirement)
     $saved=Import-Clixml -LiteralPath $StateFile -ErrorAction Stop
+    $savedDetach=$saved.ContainsKey('detachInterface') -and [bool]$saved.detachInterface
     if($saved.interfaceGuid -ne [string]$adapter[0].InterfaceGuid -or $saved.source -ne $source -or
-        $saved.prefix -ne $prefix -or -not $saved.originalAbsent){
+        $saved.prefix -ne $prefix -or -not $saved.originalAbsent -or $savedDetach -ne $detachInterface){
         throw 'The path-retirement snapshot does not match the owned control.'
+    }
+    if($detachInterface){
+        $binding=@(Get-NetAdapterBinding -Name $InterfaceAlias -ComponentID ms_tcpip -ErrorAction Stop)
+        if($binding.Count -ne 1){throw 'The owned unused-interface binding is not unique.'}
+        if(-not $binding[0].Enabled){
+            Enable-NetAdapterBinding -Name $InterfaceAlias -ComponentID ms_tcpip -Confirm:$false -ErrorAction Stop
+        }
+        Set-NetIPInterface -InterfaceIndex $adapter[0].ifIndex -AddressFamily IPv4 -Dhcp Disabled -ErrorAction Stop
     }
     $current=@(Read-OwnedAddress)
     if($current.Count -gt 1){throw 'The owned source address is no longer unique.'}
@@ -103,6 +118,12 @@ if($RestoreOnly){
     return
 }
 if(Test-Path -LiteralPath $StateFile){throw 'A fresh path-retirement snapshot is required.'}
+if($detachInterface){
+    $binding=@(Get-NetAdapterBinding -Name $InterfaceAlias -ComponentID ms_tcpip -ErrorAction Stop)
+    if($binding.Count -ne 1 -or -not $binding[0].Enabled -or @(Read-Addresses).Count){
+        throw 'The disposable unused interface must start IPv4-bound and without IPv4 addresses.'
+    }
+}
 $range=Get-Range $prefix
 foreach($route in Get-NetRoute -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop){
     if($route.DestinationPrefix -eq '0.0.0.0/0'){continue}
@@ -126,10 +147,10 @@ if($ReceiverProcessId -lt 1 -or -not(Test-Path -LiteralPath $ReceiverExecutable 
 $null=[Reflection.Assembly]::Load([IO.File]::ReadAllBytes($ReceiverExecutable))
 if((Read-PrefixPathCount) -ne 0){throw 'Existing cached paths conflict with the exclusively owned fixture prefix.'}
 @{interfaceGuid=[string]$adapter[0].InterfaceGuid;source=$source;prefix=$prefix
-    originalAbsent=$true;originalAddresses=@(Read-Addresses)}|Export-Clixml -LiteralPath $StateFile -NoClobber
+    originalAbsent=$true;originalAddresses=@(Read-Addresses);detachInterface=$detachInterface}|Export-Clixml -LiteralPath $StateFile -NoClobber
 $sockets=[Collections.Generic.List[Net.Sockets.UdpClient]]::new()
 $failure=$null;$restoreFailure=$null
-$report=[ordered]@{schema=1;scenario='owned-secondary-source-address-retirement';scope='owned-benchmark-state-only'
+$report=[ordered]@{schema=1;scenario=$(if($detachInterface){'owned-unused-interface-ipv4-detach'}else{'owned-secondary-source-address-retirement'});scope='owned-benchmark-state-only'
     requestedPaths=$PathCount;measuredHeldPaths=0;measuredReleasedPaths=0;payloadsSent=0
     retired=$false;restored=$false;dataAndManagementAddressesPreserved=$false;defaultRoutesPreserved=$false}
 try {
@@ -164,9 +185,20 @@ try {
         throw 'No verified live TCP cohort remains for the source-retirement control.'
     }
     $report.applyStartUtc=[DateTime]::UtcNow.ToString('o')
-    Restore-Control -MeasureRetirement
+    if($detachInterface){
+        $report.removeApiStartUtc=[DateTime]::UtcNow.ToString('o')
+        Disable-NetAdapterBinding -Name $InterfaceAlias -ComponentID ms_tcpip -Confirm:$false -ErrorAction Stop
+        $report.removeApiEndUtc=[DateTime]::UtcNow.ToString('o')
+    }else{Restore-Control -MeasureRetirement}
     $report.applyEndUtc=[DateTime]::UtcNow.ToString('o')
     $report.retired=$true
+    if($detachInterface){
+        $hold=[Diagnostics.Stopwatch]::StartNew()
+        while(-not(Test-Path -LiteralPath $StopFile)){
+            if($hold.Elapsed.TotalSeconds -gt 180){throw 'The unused-interface restoration deadline was exceeded.'}
+            Start-Sleep -Milliseconds 50
+        }
+    }
 }catch{$failure=$_}
 finally {
     foreach($socket in $sockets){$socket.Dispose()}

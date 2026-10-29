@@ -136,6 +136,16 @@ try {
         if(-not $rejected -or (Test-Path $directory)){throw 'Invalid companion-GC mode mutated state or was accepted.'}
         $checks++
     }
+    $rejected=$false
+    try {
+        & (Join-Path $PSScriptRoot 'adapters\Invoke-NetperfGuestTcpChurn.ps1') `
+            -VmName 'unused-test-only' -Credential $credential -PublishDirectory $directory -ManagedGcUnusedInterface
+    }catch{
+        if($_.Exception.Message -notmatch 'Unused-interface retirement requires bounded'){throw}
+        $rejected=$true
+    }
+    if(-not $rejected -or (Test-Path $directory)){throw 'Invalid disposable-interface mode mutated state or was accepted.'}
+    $checks++
     foreach($file in @('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1','Invoke-NetperfGuestTcpChurn.ps1','Invoke-ScopedNeighborPulse.ps1','Set-ScopedDataAddresses.ps1','GcReceiverTraffic.psm1','Invoke-ScopedPathRefresh.ps1','Invoke-ScopedPathRetirement.ps1','New-GcProbeWprProfile.ps1')) {
         $tokens=$null;$errors=$null
         $parsed=[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot "adapters\$file"),[ref]$tokens,[ref]$errors)
@@ -171,9 +181,13 @@ try {
         $ManagedGcCacheRetirePaths=8192
         $ManagedGcWprProbes=[switch]::new($true)
         $ManagedGcPeerPressure=[switch]::new($true)
+        $fixtureAlias='NetperfPath-123456abcdef'
+        $fixtureGuid='11111111-2222-3333-4444-555555555555'
         & ([scriptblock]::Create($launch[0].Extent.Text))
     }
-    if($actual.Count -ne 20 -or $actual[18] -isnot [bool] -or -not $actual[18] -or
+    if($actual.Count -ne 22 -or $actual[19] -ne 'NetperfPath-123456abcdef' -or
+        $actual[20] -ne '11111111-2222-3333-4444-555555555555' -or
+        $actual[18] -isnot [bool] -or -not $actual[18] -or
         $actual[17] -isnot [bool] -or -not $actual[17] -or
         $actual[16] -isnot [int] -or $actual[16] -ne 8192 -or
         $actual[15] -isnot [int] -or $actual[15] -ne 16384 -or

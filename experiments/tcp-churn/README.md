@@ -770,6 +770,15 @@ burner or data-release barrier. Both heaps must fit admission limits, both
 loopback endpoints must finish, and their measured generation-2 collection
 must overlap the profiled collection. This tests concurrent managed-service
 CPU pressure without changing VM processor allocation or host scheduling.
+The explicit `managed_gc_unused_interface=true` variant creates one
+disposable synthetic NIC on the owned generation-2 VM. It is first added
+disconnected, configured without DHCP, and only then attached to the VM's
+existing switch. The idle cache uses this NIC; productive TCP and management
+continue on the original NIC. At the observed GC signal, only the disposable
+NIC's IPv4 binding is detached. Its identity-checked binding/address restore
+and host-side removal must both verify. Original VM NICs and switch
+configuration are never changed. This is an interface-retirement mechanism
+control, not a claim that the trigger happened in a customer workload.
 Path-population snapshots use the documented IP Helper path table, filtered
 by the owned interface and source, rather than launching a command-line
 enumerator in the GC-triggered interval. The native structure layout and

@@ -82,6 +82,10 @@ on:
         description: Add a bounded independent real-GC loopback service on the owned peer
         type: boolean
         default: false
+      managed_gc_unused_interface:
+        description: Create/retire/remove one disposable VM NIC; never detach the data or management NIC
+        type: boolean
+        default: false
       managed_gc_route_refresh:
         description: One owned equivalent host-route control; requires isolated receiver GC without neighbor pulse
         type: boolean
@@ -139,6 +143,10 @@ jobs:
         run: ./experiments/tcp-churn/Test-ScopedPathRetirement.ps1
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-GcControlPlan.ps1
+      - shell: pwsh
+        run: ./experiments/tcp-churn/Test-VmPathFixture.ps1
+      - shell: pwsh
+        run: ./experiments/tcp-churn/Test-UnusedInterfaceRestore.ps1
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-OwnedTcpTable.ps1
       - shell: pwsh
@@ -210,11 +218,13 @@ jobs:
           MANAGED_GC_CACHE_RETIRE_PATHS: ${{ inputs.managed_gc_cache_retire_paths }}
           MANAGED_GC_WPR_PROBES: ${{ inputs.managed_gc_wpr_probes }}
           MANAGED_GC_PEER_PRESSURE: ${{ inputs.managed_gc_peer_pressure }}
+          MANAGED_GC_UNUSED_INTERFACE: ${{ inputs.managed_gc_unused_interface }}
           MANAGED_GC_ROUTE_REFRESH: ${{ inputs.managed_gc_route_refresh }}
           MANAGED_GC_ROUTE_VARIANT: ${{ inputs.managed_gc_route_variant }}
         run: |
           $publish = Join-Path $env:RUNNER_TEMP "tcp-churn-guest-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           if ($env:PROBE_128_TOPOLOGY -eq 'true') {
+            if ($env:MANAGED_GC_UNUSED_INTERFACE -eq 'true') { throw 'Unused-interface retirement is separate from topology probing.' }
             if ($env:MANAGED_GC_PEER_PRESSURE -eq 'true') { throw 'Companion GC pressure is separate from topology probing.' }
             if ($env:MANAGED_GC_WPR_PROBES -eq 'true') { throw 'Exact WPR probes are separate from topology probing.' }
             if ($env:MANAGED_GC_CACHE_RETIRE_PATHS -ne '0') { throw 'Cache retirement is separate from topology probing.' }
@@ -259,6 +269,7 @@ jobs:
             $extra.ManagedGcCacheRetirePaths = [int]$env:MANAGED_GC_CACHE_RETIRE_PATHS
             if ($env:MANAGED_GC_WPR_PROBES -eq 'true') { $extra.ManagedGcWprProbes = $true }
             if ($env:MANAGED_GC_PEER_PRESSURE -eq 'true') { $extra.ManagedGcPeerPressure = $true }
+            if ($env:MANAGED_GC_UNUSED_INTERFACE -eq 'true') { $extra.ManagedGcUnusedInterface = $true }
           }
           if ($env:MANAGED_GC_PEER_RECOVERY -eq 'true') {
             if ($env:MANAGED_GC_MIXED -ne 'true') { throw 'Peer recovery requires managed-GC diagnostic mode.' }
@@ -289,6 +300,9 @@ jobs:
           }
           if ($env:MANAGED_GC_PEER_PRESSURE -eq 'true' -and ($env:MANAGED_GC_MIXED -ne 'true' -or $env:MANAGED_GC_PROCESS_ROLE -ne 'server' -or $env:MANAGED_GC_ISOLATED_DATA -ne 'true' -or $env:MANAGED_GC_PEER_RECOVERY -eq 'true')) {
             throw 'Companion GC pressure requires isolated receiver-GC mode without a neighbor fault.'
+          }
+          if ($env:MANAGED_GC_UNUSED_INTERFACE -eq 'true' -and ($env:MANAGED_GC_MIXED -ne 'true' -or $env:MANAGED_GC_PROCESS_ROLE -ne 'server' -or $env:MANAGED_GC_ISOLATED_DATA -ne 'true' -or $env:MANAGED_GC_CACHE_RETIRE_PATHS -eq '0' -or $env:MANAGED_GC_PEER_RECOVERY -eq 'true')) {
+            throw 'Unused-interface retirement requires bounded isolated receiver-GC mode.'
           }
           if ($env:MANAGED_GC_ROUTE_REFRESH -eq 'true') {
             if ($env:MANAGED_GC_MIXED -ne 'true' -or $env:MANAGED_GC_PROCESS_ROLE -ne 'server' -or $env:MANAGED_GC_ISOLATED_DATA -ne 'true' -or $env:MANAGED_GC_PEER_RECOVERY -eq 'true') {

@@ -25,9 +25,14 @@ param(
     [ValidateSet(0,16384)][int]$ManagedGcReceiveBudgetBytes=0,
     [ValidateSet(0,1024,8192,24576)][int]$ManagedGcCacheRetirePaths=0,
     [switch]$ManagedGcWprProbes,
-    [switch]$ManagedGcPeerPressure
+    [switch]$ManagedGcPeerPressure,
+    [switch]$ManagedGcUnusedInterface
 )
 $ErrorActionPreference='Stop'
+if($ManagedGcUnusedInterface -and (-not $ManagedGc -or $ManagedGcProcessRole -ne 'server' -or
+    -not $ManagedGcIsolatedData -or -not $ManagedGcCacheRetirePaths -or $ManagedGcPeerRecovery)){
+    throw 'Unused-interface retirement requires bounded isolated receiver-GC mode.'
+}
 if($ManagedGcWprProbes -and -not $ManagedGc){throw 'Exact WPR probes require managed-GC diagnostic mode.'}
 if($ManagedGcPeerPressure -and (-not $ManagedGc -or $ManagedGcProcessRole -ne 'server' -or
     -not $ManagedGcIsolatedData -or $ManagedGcPeerRecovery)){
@@ -63,6 +68,8 @@ if($PSBoundParameters.ContainsKey('ManagedGcRecoveryMilliseconds') -and -not $Ma
 if (Test-Path -LiteralPath $PublishDirectory) { throw 'Use a new publication directory.' }
 New-Item -ItemType Directory -Path $PublishDirectory -ErrorAction Stop | Out-Null
 $session=$null; $guestRoot=$null; $phase='guest-connect'; $success=$false; $startup=$null
+$vmFixture=$null;$fixtureAlias='';$fixtureGuid=''
+$vmFixtureState=Join-Path $PublishDirectory 'owned-vm-path-interface.clixml'
 try {
     if ((Get-VM -Name $VmName -ErrorAction Stop).State -ne 'Running') {
         throw 'The documented guest must already be running; this adapter does not reset other workloads.'
@@ -97,11 +104,12 @@ try {
             if($LASTEXITCODE -ne 0){throw 'The read-only ETW session query failed.'}
             $exactLoggers=@($loggerRows|Where-Object{$_ -match '^\s*TcpChurnExact-[0-9a-fA-F]{32}\s'}).Count
             $clientAliases=@(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop|Where-Object{$_.IPAddress -match '^198\.19\.240\.[1-6]$' -or $_.IPAddress -eq '198.19.0.1'}).Count
+            $clientPathInterfaces=@(Get-NetAdapter -ErrorAction Stop|Where-Object Name -match '^NetperfPath-[0-9a-f]{12}$').Count
             $clientRules=@(Get-NetFirewallRule -PolicyStore ActiveStore -ErrorAction Stop|Where-Object{$_.Name -like 'ManagedGcPeer-*' -or $_.Name -like 'ManagedGcReceiver-*'}).Count
             $clientStatic=@(Get-NetNeighbor -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|
                 Where-Object{$_.IPAddress -match '^198\.19\.240\.[1-6]$' -and [string]$_.State -eq 'Permanent'}).Count
             $clientRoutes=@(Get-NetRoute -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|Where-Object DestinationPrefix -in @('198.19.240.6/32','198.19.0.0/17')).Count
-            if($clientAliases -or $clientRules -or $clientStatic -or $clientRoutes){throw 'Owned client GC resources require restoration before further tests.'}
+            if($clientAliases -or $clientRules -or $clientStatic -or $clientRoutes -or $clientPathInterfaces){throw 'Owned client GC resources require restoration before further tests.'}
             $clientCpus=(Get-CimInstance Win32_Processor|Measure-Object NumberOfLogicalProcessors -Sum).Sum
             $clientFree=[Math]::Floor(([IO.DriveInfo]::new([IO.Path]::GetPathRoot($env:TEMP))).AvailableFreeSpace/1MB)
             if($clientCpus -lt 1){throw 'The client processor inventory did not return a positive count.'}
@@ -128,6 +136,7 @@ try {
                     clientWprStatusExitCode=$wprExit;clientWprRecordingNotRunning=[bool]$wprNotRunning
                     clientWprCpuProfileReported=[bool]$wprCpu
                     clientExactProbeLoggerCount=$exactLoggers
+                    clientOwnedPathInterfaces=$clientPathInterfaces
                     clientOwnedControlRoutes=$clientRoutes;peerOwnedControlRoutes=$peerState.routes;conclusion='connectivity-and-owned-resource-check'}
             } finally { Remove-PSSession $peer -ErrorAction Stop }
         } -ArgumentList $Credential
@@ -135,18 +144,25 @@ try {
             clientOwnedRules,peerOwnedRules,clientOwnedStaticPeers,peerOwnedStaticPeers,clientOwnedControlRoutes,peerOwnedControlRoutes,
             clientWprStatusExitCode,clientWprRecordingNotRunning,clientWprCpuProfileReported,
             clientExactProbeLoggerCount,
+            clientOwnedPathInterfaces,
             clientTempFreeMiB,peerTempFreeMiB,conclusion|ConvertTo-Json |
             Set-Content -LiteralPath (Join-Path $PublishDirectory 'peer-check.json') -Encoding utf8
         return
     }
     $phase='guest-idle-check'
     $guestRoot=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
-        if (@(Get-Process -Name 'Runner.Worker','ctsTraffic' -ErrorAction Ignore).Count) {
+        if (@(Get-Process -Name 'Runner.Worker','ctsTraffic','ArrivalTcp','CpuSamples' -ErrorAction Ignore).Count) {
             throw 'Guest has an active Actions worker or CTS process.'
         }
         $root=Join-Path $env:TEMP ('netperf-churn-'+[guid]::NewGuid().ToString('N'))
         New-Item -ItemType Directory -Path $root -ErrorAction Stop | Out-Null
         $root
+    }
+    if($ManagedGcUnusedInterface){
+        $phase='owned-vm-path-interface'
+        Import-Module (Join-Path $PSScriptRoot 'VmPathFixture.psm1') -Force
+        $vmFixture=New-TcpChurnVmPathFixture -VmName $VmName -Session $session -StateFile $vmFixtureState
+        $fixtureAlias=$vmFixture.Alias;$fixtureGuid=$vmFixture.Guid
     }
     $phase='guest-copy'
     $localRoot=Split-Path $PSScriptRoot
@@ -171,7 +187,7 @@ try {
     }
     $phase='guest-traffic'
     $exit=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
-        param($root,$seconds,$connections,$profile,$synDrop,$peerMeasurement,$managedGc,$managedGcPayloadBytes,$peerRecovery,$isolatedData,$recoveryMilliseconds,$gcProcessRole,$heapLayout,$routeRefresh,$routeVariant,$receiveBudgetBytes,$cacheRetirePaths,$wprProbes,$peerPressure,$credential)
+        param($root,$seconds,$connections,$profile,$synDrop,$peerMeasurement,$managedGc,$managedGcPayloadBytes,$peerRecovery,$isolatedData,$recoveryMilliseconds,$gcProcessRole,$heapLayout,$routeRefresh,$routeVariant,$receiveBudgetBytes,$cacheRetirePaths,$wprProbes,$peerPressure,$fixtureAlias,$fixtureGuid,$credential)
         if (@(Get-Process -Name 'Runner.Worker','ctsTraffic' -ErrorAction Ignore).Count) {
             throw 'Guest became busy before traffic setup.'
         }
@@ -195,6 +211,7 @@ try {
             if($cacheRetirePaths){$extra+=@('-CacheRetirePaths',[string]$cacheRetirePaths)}
             if($wprProbes){$extra+='-WprProbes'}
             if($peerPressure){$extra+='-PeerGcPressure'}
+            if($fixtureAlias){$extra+=@('-CacheInterfaceAlias',$fixtureAlias,'-CacheInterfaceGuid',$fixtureGuid)}
             if($routeRefresh){$extra+='-RouteRefresh'}
             if($routeRefresh){$extra+=@('-RouteVariant',$routeVariant)}
         } else {
@@ -218,7 +235,7 @@ try {
             $launch|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $root 'child-startup.json')
             if($credentialFile -and (Test-Path -LiteralPath $credentialFile)){Remove-Item -LiteralPath $credentialFile -ErrorAction Stop}
         }
-    } -ArgumentList $guestRoot,$Seconds,$Connections,([bool]$ProfileCpu),([bool]$SynDrop),([bool]$PeerMeasurement),([bool]$ManagedGc),$ManagedGcPayloadBytes,([bool]$ManagedGcPeerRecovery),([bool]$ManagedGcIsolatedData),$ManagedGcRecoveryMilliseconds,$ManagedGcProcessRole,$ManagedGcHeapLayout,([bool]$ManagedGcRouteRefresh),$ManagedGcRouteVariant,$ManagedGcReceiveBudgetBytes,$ManagedGcCacheRetirePaths,([bool]$ManagedGcWprProbes),([bool]$ManagedGcPeerPressure),$Credential
+    } -ArgumentList $guestRoot,$Seconds,$Connections,([bool]$ProfileCpu),([bool]$SynDrop),([bool]$PeerMeasurement),([bool]$ManagedGc),$ManagedGcPayloadBytes,([bool]$ManagedGcPeerRecovery),([bool]$ManagedGcIsolatedData),$ManagedGcRecoveryMilliseconds,$ManagedGcProcessRole,$ManagedGcHeapLayout,([bool]$ManagedGcRouteRefresh),$ManagedGcRouteVariant,$ManagedGcReceiveBudgetBytes,$ManagedGcCacheRetirePaths,([bool]$ManagedGcWprProbes),([bool]$ManagedGcPeerPressure),$fixtureAlias,$fixtureGuid,$Credential
     $startup=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
         param($root)
         Get-Content -LiteralPath (Join-Path $root 'child-startup.json') -Raw|ConvertFrom-Json|
@@ -256,7 +273,23 @@ try {
             ConvertTo-Json -Depth 3 | Set-Content -LiteralPath (Join-Path $PublishDirectory 'result.json') -Encoding utf8
     }
 } finally {
+    if($ManagedGcUnusedInterface -and (Test-Path -LiteralPath $vmFixtureState)){
+        try{
+            Remove-TcpChurnVmPathFixture -StateFile $vmFixtureState
+            $resultFile=Join-Path $PublishDirectory 'result.json'
+            if(Test-Path -LiteralPath $resultFile){
+                $published=Get-Content -LiteralPath $resultFile -Raw|ConvertFrom-Json
+                $published|Add-Member NoteProperty ownedVmPathInterfaceRemoved $true -Force
+                $published|ConvertTo-Json -Depth 10|Set-Content -LiteralPath $resultFile
+            }
+        }catch{
+            $success=$false
+            @{schema=1;outcome='failed';phase='owned-vm-path-interface-cleanup';cleanupVerified=$false
+                failureType=$_.Exception.GetType().FullName;conclusion='no-accepted-measurement'}|
+                ConvertTo-Json|Set-Content -LiteralPath (Join-Path $PublishDirectory 'result.json')
+        }
+    }
     if ($null -ne $session) { Remove-PSSession $session -ErrorAction Stop }
 }
-if (-not $success) { throw "Dedicated guest experiment failed at $phase; no host/runner configuration was changed." }
+if (-not $success) { throw "Dedicated guest experiment failed at $phase; inspect the numeric result and owned cleanup status." }
 Write-Output 'Real netperf guest traffic and owned fixture cleanup completed.'

@@ -20,7 +20,9 @@ param(
     [ValidateSet(0,16384)][int]$ReceiveBudgetBytes=0,
     [ValidateSet(0,1024,8192,24576)][int]$CacheRetirePaths=0,
     [switch]$WprProbes,
-    [switch]$PeerGcPressure
+    [switch]$PeerGcPressure,
+    [string]$CacheInterfaceAlias,
+    [string]$CacheInterfaceGuid
 )
 $ErrorActionPreference='Stop'
 if($GcProcessRole -eq 'server' -and (-not $IsolatedData -or $PeerRecovery)){
@@ -36,6 +38,10 @@ if($PeerGcPressure -and ($GcProcessRole -ne 'server' -or -not $IsolatedData -or 
 }
 if($CacheRetirePaths -and ($GcProcessRole -ne 'server' -or -not $IsolatedData -or $PeerRecovery)){
     throw 'Cache retirement requires isolated receiver GC without a neighbor fault.'
+}
+if(($CacheInterfaceAlias -or $CacheInterfaceGuid) -and
+    (-not $CacheRetirePaths -or $CacheInterfaceAlias -notmatch '^NetperfPath-[0-9a-f]{12}$' -or -not $CacheInterfaceGuid)){
+    throw 'Unused-interface retirement requires the owned disposable interface and a bounded cache population.'
 }
 $sourceRoot=Split-Path $PSScriptRoot
 $diagnostics=Join-Path $ScratchParent 'managed-gc-diagnostics'
@@ -300,11 +306,14 @@ try {
             $phase=$stem+'-start'
             $program=(Get-Command pwsh -CommandType Application -ErrorAction Stop).Source
             $script=if($type -eq 'cache'){'Invoke-ScopedPathRetirement.ps1'}else{'Invoke-ScopedPathRefresh.ps1'}
+            $controlAlias=if($type -eq 'cache' -and $CacheInterfaceAlias){$CacheInterfaceAlias}else{$alias}
             $arguments=@('-NoProfile','-NonInteractive','-File',(Join-Path $PSScriptRoot $script),
-                '-InterfaceAlias',$alias,'-DataStateFile',(Join-Path $diagnostics 'data-original.clixml'),
+                '-InterfaceAlias',$controlAlias,'-DataStateFile',(Join-Path $diagnostics 'data-original.clixml'),
                 '-StateFile',(Join-Path $diagnostics ($stem+'-original.clixml')))
             if($type -eq 'cache'){$arguments+=@('-PathCount',[string]$CacheRetirePaths,
-                '-ReceiverExecutable',$exe,'-ReceiverProcessId',[string]$localServer.Process.Id)}
+                '-ReceiverExecutable',$exe,'-ReceiverProcessId',[string]$localServer.Process.Id)
+                if($CacheInterfaceGuid){$arguments+=@('-UnusedInterfaceGuid',$CacheInterfaceGuid)}
+            }
             else{$arguments+=@('-NextHop',$(if($RouteVariant -eq 'peer-gateway'){'198.19.240.5'}else{'0.0.0.0'}),'-ExpectedPeerMac',$peerMac)}
             $control=[pscustomobject]@{Stem=$stem;Program=$program;Arguments=$arguments;Child=$null}
             $pathControls.Add($control)

@@ -1,0 +1,80 @@
+# Copyright (c) Microsoft Corporation.
+# SPDX-License-Identifier: MIT
+#Requires -Version 5.1
+Set-StrictMode -Version Latest
+$ErrorActionPreference='Stop'
+function Remove-TcpChurnVmPathFixture {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$StateFile)
+    $state=Import-Clixml -LiteralPath $StateFile -ErrorAction Stop
+    if($state.owner -ne 'tcp-churn-path-fixture-v1' -or $state.name -notmatch '^NetperfPath-[0-9a-f]{12}$'){
+        throw 'The VM path-interface snapshot is not owned by this fixture.'
+    }
+    $vm=Get-VM -Name $state.vmName -ErrorAction Stop
+    if([string]$vm.Id -ne $state.vmId){throw 'The fixture VM identity changed; refusing removal.'}
+    $adapters=@(Get-VMNetworkAdapter -VMName $state.vmName -ErrorAction Stop|Where-Object Name -eq $state.name)
+    if($adapters.Count -gt 1){throw 'The owned VM interface is no longer unique.'}
+    if($adapters.Count){
+        if([string]$adapters[0].Id -ne $state.adapterId -or $adapters[0].MacAddress -ne $state.mac){
+            throw 'The VM interface identity changed; refusing removal.'
+        }
+        Remove-VMNetworkAdapter -VMNetworkAdapter $adapters[0] -Confirm:$false -ErrorAction Stop
+    }
+    if(@(Get-VMNetworkAdapter -VMName $state.vmName -ErrorAction Stop|Where-Object Name -eq $state.name).Count){
+        throw 'The owned VM interface removal did not verify.'
+    }
+}
+function New-TcpChurnVmPathFixture {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$VmName,[Parameter(Mandatory)]$Session,[Parameter(Mandatory)][string]$StateFile)
+    if(Test-Path -LiteralPath $StateFile){throw 'A fresh VM path-interface snapshot is required.'}
+    $vm=Get-VM -Name $VmName -ErrorAction Stop
+    if(@(Get-VMNetworkAdapter -VMName $VmName -ErrorAction Stop|Where-Object Name -match '^NetperfPath-').Count){
+        throw 'An existing owned VM path interface requires restoration first.'
+    }
+    $connected=@(Get-VMNetworkAdapter -VMName $VmName -ErrorAction Stop|Where-Object SwitchName)
+    if([string]$vm.State -ne 'Running' -or $vm.Generation -ne 2 -or $connected.Count -ne 1){
+        throw 'The owned path interface requires one existing switch connection on a running generation-2 test VM.'
+    }
+    $name='NetperfPath-'+[guid]::NewGuid().ToString('N').Substring(0,12)
+    $mac='02'+([guid]::NewGuid().ToString('N').Substring(0,10)).ToUpperInvariant()
+    $created=$null;$failure=$null
+    try{
+        # Configure the new disconnected guest interface before connecting it, so it never requests a management DHCP lease.
+        $created=Add-VMNetworkAdapter -VMName $VmName -Name $name -StaticMacAddress $mac -Passthru -ErrorAction Stop
+        $state=@{owner='tcp-churn-path-fixture-v1';vmName=$VmName;vmId=[string]$vm.Id
+            adapterId=[string]$created.Id;name=$name;mac=$mac}
+        $state|Export-Clixml -LiteralPath $StateFile -NoClobber
+        $guest=Invoke-Command -Session $Session -ErrorAction Stop -ScriptBlock {
+            param($mac,$name)
+            $wait=[Diagnostics.Stopwatch]::StartNew()
+            do{
+                $adapters=@(Get-NetAdapter -ErrorAction Stop|Where-Object{($_.MacAddress -replace '[-:]','') -eq $mac})
+                if($adapters.Count -gt 1){throw 'The newly owned guest MAC is not unique.'}
+                if($adapters.Count -eq 1){break}
+                if($wait.Elapsed.TotalSeconds -gt 20){throw 'The disconnected owned VM interface did not appear.'}
+                Start-Sleep -Milliseconds 100
+            }while($true)
+            $adapter=$adapters[0]
+            if(@(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop|Where-Object InterfaceIndex -eq $adapter.ifIndex).Count){
+                throw 'The disconnected new interface unexpectedly has an IPv4 configuration.'
+            }
+            Set-NetIPInterface -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -Dhcp Disabled -ErrorAction Stop
+            Rename-NetAdapter -Name $adapter.Name -NewName $name -ErrorAction Stop
+            [pscustomobject]@{alias=$name;guid=[string]$adapter.InterfaceGuid}
+        } -ArgumentList $mac,$name
+        Connect-VMNetworkAdapter -VMNetworkAdapter $created -SwitchName $connected[0].SwitchName -ErrorAction Stop
+        $state.guestGuid=$guest.guid
+        $state|Export-Clixml -LiteralPath $StateFile
+        [pscustomobject]@{Alias=$guest.alias;Guid=$guest.guid}
+        return
+    }catch{$failure=$_}
+    if($null -ne $created){
+        try{
+            if(Test-Path -LiteralPath $StateFile){Remove-TcpChurnVmPathFixture -StateFile $StateFile}
+            else{Remove-VMNetworkAdapter -VMNetworkAdapter $created -Confirm:$false -ErrorAction Stop}
+        }catch{throw [AggregateException]::new('VM path-interface setup and owned rollback failed.',[Exception[]]@($failure.Exception,$_.Exception))}
+    }
+    throw $failure
+}
+Export-ModuleMember -Function New-TcpChurnVmPathFixture,Remove-TcpChurnVmPathFixture
