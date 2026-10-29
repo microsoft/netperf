@@ -40,6 +40,21 @@ try {
         }
         $child.Dispose();$child=$null;$checks++
     }
+    foreach($pacing in @('nodelay','nagle')){
+        $rejectedOutput=Join-Path $directory 'rejected-framed.json'
+        $info.ArgumentList.Clear()
+        $descriptor=if($pacing -eq 'nodelay'){'exchanges:64:framed'}else{'exchanges:64:unknown'}
+        foreach($argument in @('127.0.0.1','127.0.0.2',[string]$port,'16','128','1460',$rejectedOutput,
+            'client','1460','14529','16',$pacing,'dispatch:pool',$descriptor)){$info.ArgumentList.Add($argument)}
+        $child=[Diagnostics.Process]::Start($info)
+        $errorText=$child.StandardError.ReadToEndAsync()
+        if(-not $child.WaitForExit(5000) -or $child.ExitCode -eq 0 -or
+            $errorText.GetAwaiter().GetResult() -notmatch 'Framed exchanges require' -or
+            (Test-Path -LiteralPath $rejectedOutput)){
+            throw 'Invalid framed pacing/descriptor was not rejected before network mutation.'
+        }
+        $child.Dispose();$child=$null;$checks++
+    }
     $serverOutput=Join-Path $directory 'server.json'
     $clientOutput=Join-Path $directory 'client.json'
     $info.ArgumentList.Clear()

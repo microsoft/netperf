@@ -159,6 +159,7 @@ public static class ArrivalTcp
     private static bool noDelay;
     private static int receiveBudgetBytes;
     private static int exchangesPerConnection=1;
+    private static bool framedWrites;
     private static int observedMaximumPostedReadBytes;
     private static int maximumPerConnectionReadBufferBytes;
     private static int inFlight,peakInFlight,completed,started,connectedCount,acceptedCount;
@@ -298,10 +299,20 @@ public static class ArrivalTcp
             offset+=count;
         }
     }
+    private static Task WriteMessage(NetworkStream stream,byte[] data)
+    {
+        return framedWrites?WriteFramedMessage(stream,data):stream.WriteAsync(data,0,data.Length);
+    }
+    private static async Task WriteFramedMessage(NetworkStream stream,byte[] data)
+    {
+        await stream.WriteAsync(data,0,4).ConfigureAwait(false);
+        await stream.WriteAsync(data,4,data.Length-4).ConfigureAwait(false);
+    }
     private static async Task Serve(Socket socket,int size,byte[] response)
     {
         using(socket) {
             socket.NoDelay=noDelay;
+            if(framedWrites && socket.NoDelay)throw new InvalidOperationException("The requested Nagle setting did not verify.");
             if(receiveBudgetBytes>0) {
                 socket.ReceiveBufferSize=receiveBudgetBytes;
                 if(socket.ReceiveBufferSize!=receiveBudgetBytes)
@@ -311,7 +322,7 @@ public static class ArrivalTcp
             byte[] data=CreateValidationBuffer(size);
             for(int exchange=0;exchange<exchangesPerConnection;exchange++){
                 await ReadPattern(stream,data,size,null).ConfigureAwait(false);
-                await stream.WriteAsync(response,0,response.Length).ConfigureAwait(false);
+                await WriteMessage(stream,response).ConfigureAwait(false);
             }
             socket.Shutdown(SocketShutdown.Send);
             if(await stream.ReadAsync(new byte[1],0,1).ConfigureAwait(false)!=0)
@@ -338,12 +349,13 @@ public static class ArrivalTcp
         using(var socket=new TcpClient(new IPEndPoint(IPAddress.Parse(source),0))) {
             long bound=Stopwatch.GetTimestamp();Interlocked.Add(ref bindTicks,bound-start);
             socket.NoDelay=noDelay;
+            if(framedWrites && socket.NoDelay)throw new InvalidOperationException("The requested Nagle setting did not verify.");
             await socket.ConnectAsync(peer,port).ConfigureAwait(false);
             Interlocked.Increment(ref connectedCount);
             long connected=Stopwatch.GetTimestamp();Interlocked.Add(ref connectTicks,connected-bound);
             var reply=CreateValidationBuffer(expectedResponse.Length);
             for(int exchange=0;exchange<exchangesPerConnection;exchange++){
-                await socket.GetStream().WriteAsync(data,0,data.Length).ConfigureAwait(false);
+                await WriteMessage(socket.GetStream(),data).ConfigureAwait(false);
                 await ReadPattern(socket.GetStream(),reply,expectedResponse.Length,expectedResponse).ConfigureAwait(false);
             }
             long received=Stopwatch.GetTimestamp();Interlocked.Add(ref responseTicks,received-connected);
@@ -389,12 +401,16 @@ public static class ArrivalTcp
                 throw new ArgumentException("The bounded receive budget requires GC server role and an explicit 16384-byte budget.");
         }
         exchangesPerConnection=1;
+        framedWrites=false;
         if(args.Length==14){
             string[] exchangeOption=args[13].Split(':');
-            if(exchangeOption.Length!=2 || exchangeOption[0]!="exchanges" ||
+            if((exchangeOption.Length!=2 && exchangeOption.Length!=3) || exchangeOption[0]!="exchanges" ||
                 !int.TryParse(exchangeOption[1],out exchangesPerConnection) || exchangesPerConnection!=64 ||
                 size!=1460 || responseSize!=1460)
                 throw new ArgumentException("Persistent mode requires exchanges:64 and 1460-byte requests and responses.");
+            framedWrites=exchangeOption.Length==3;
+            if(framedWrites && (exchangeOption[2]!="framed" || noDelay))
+                throw new ArgumentException("Framed exchanges require exchanges:64:framed with Nagle enabled.");
         }
         if(File.Exists(args[6]))throw new IOException("Use a new result file.");
         if(gcHeapMiB>0 && File.Exists(args[6]+".gc.json"))throw new IOException("Use a new GC observation file.");
@@ -446,6 +462,7 @@ public static class ArrivalTcp
                 File.WriteAllText(args[6],"{\"schema\":1,\"outcome\":\"collected\",\"role\":\"server\",\"connections\":"+count+
                     ",\"bytesReceived\":"+((long)count*size*exchangesPerConnection)+",\"bytesSent\":"+((long)count*responseSize*exchangesPerConnection)+
                     ",\"exchangesPerConnection\":"+exchangesPerConnection+
+                    ",\"framedWrites\":"+(framedWrites?"true":"false")+",\"noDelay\":"+(noDelay?"true":"false")+
                     ",\"maximumPerConnectionReadBufferBytes\":"+maximumPerConnectionReadBufferBytes+
                     ",\"networkErrors\":0,\"protocolErrors\":0,\"barrier\":false,\"peakInFlight\":"+serverPeakInFlight+
                     ",\"requestDispatch\":\""+(gcHeapMiB>0?"thread-pool":"inline")+"\",\"managedGc\":"+gcObservation.Json()+"}");
@@ -490,6 +507,7 @@ public static class ArrivalTcp
                 ",\"bytesSent\":"+((long)count*size*exchangesPerConnection)+",\"networkErrors\":0,\"protocolErrors\":0,\"milliseconds\":"+clock.ElapsedMilliseconds+
                 ",\"bytesReceived\":"+((long)count*responseSize*exchangesPerConnection)+
                 ",\"exchangesPerConnection\":"+exchangesPerConnection+
+                ",\"framedWrites\":"+(framedWrites?"true":"false")+
                 ",\"maximumPerConnectionReadBufferBytes\":"+maximumPerConnectionReadBufferBytes+
                 ",\"arrivalRate\":"+rate+",\"seed\":"+seed+",\"barrier\":false"+
                 ",\"arrivalDispatch\":\""+(gcHeapMiB>0||poolDispatch?"thread-pool":"inline")+"\""+
@@ -527,7 +545,7 @@ public static class ArrivalTcp
     {
         try {
             if(args.Length<7 || args.Length>14) {
-                Console.Error.WriteLine("Usage: ArrivalTcp sources peer port count rate request-bytes output.json [role [response-bytes [seed [maximum-in-flight [nodelay|nagle [gc:heap-MiB:minimum-launched|dispatch:pool [exchanges:64]]]]]]]");
+                Console.Error.WriteLine("Usage: ArrivalTcp sources peer port count rate request-bytes output.json [role [response-bytes [seed [maximum-in-flight [nodelay|nagle [gc:heap-MiB:minimum-launched|dispatch:pool [exchanges:64[:framed]]]]]]]]");
                 return 2;
             }
             if(!Run(args).Wait(TimeSpan.FromSeconds(150))){

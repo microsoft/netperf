@@ -407,8 +407,10 @@ $peerLaunch=@($traffic.FindAll({
         'root' -in @($node.ScriptBlock.ParamBlock.Parameters.Name.VariablePath.UserPath)
 },$true))
 if($peerLaunch.Count -ne 1){throw 'The actual independent peer launch must be uniquely identified.'}
-foreach($pressureEnabled in @($false,$true)){
+foreach($mode in @(@{Pressure=$false;Framed=$false},@{Pressure=$true;Framed=$false},
+    @{Pressure=$false;Framed=$true},@{Pressure=$true;Framed=$true})){
     try{
+        $pressureEnabled=$mode.Pressure;$framed=$mode.Framed
         $global:OwnedManagedGcPeer=@{}
         $peerChildren=[Collections.Generic.List[object]]::new()
         function Start-TcpChurnCollector {
@@ -416,9 +418,11 @@ foreach($pressureEnabled in @($false,$true)){
             $peerChildren.Add([pscustomobject]@{Arguments=$Arguments})
             [pscustomobject]@{Process=$null}
         }
-        & $peerLaunch[0].ScriptBlock.GetScriptBlock() 'unused-owned-root' '192.0.2.1' '192.0.2.2' 20300 4096 4096 1460 1024 $pressureEnabled 64
+        & $peerLaunch[0].ScriptBlock.GetScriptBlock() 'unused-owned-root' '192.0.2.1' '192.0.2.2' 20300 4096 4096 1460 1024 $pressureEnabled 64 $framed
         if($peerChildren.Count -ne $(if($pressureEnabled){2}else{1})){throw 'Optional pressure changed the ordinary peer launch count.'}
-        if($peerChildren[0].Arguments.Count -ne 14 -or $peerChildren[0].Arguments[13] -ne 'exchanges:64'){
+        if($peerChildren[0].Arguments.Count -ne 14 -or
+            $peerChildren[0].Arguments[13] -ne $(if($framed){'exchanges:64:framed'}else{'exchanges:64'}) -or
+            $peerChildren[0].Arguments[11] -ne $(if($framed){'nagle'}else{'nodelay'})){
             throw 'The actual persistent producer lost its exchange-count protocol argument.'
         }
         if($pressureEnabled -and

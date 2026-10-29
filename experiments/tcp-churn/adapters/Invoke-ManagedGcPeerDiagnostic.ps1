@@ -21,6 +21,7 @@ param(
     [switch]$RetireDuringGc,
     [switch]$KeepCacheValid,
     [switch]$NoTcpProbes,
+    [switch]$FramedNagle,
     [ValidateSet(0,16384)][int]$ReceiveBudgetBytes=0,
     [ValidateSet(0,1,1024,8192,24576,49152)][int]$CacheRetirePaths=0,
     [switch]$WprProbes,
@@ -37,6 +38,9 @@ if($RetireDuringGc -and -not $CacheInterfaceAlias){throw 'GC-active retirement r
 if($KeepCacheValid -and -not $CacheInterfaceAlias){throw 'Surviving cache population requires the owned unused-interface control.'}
 if($NoTcpProbes -and (-not $WprProbes -or $PeerRecovery)){
     throw 'CPU/CLR-only diagnosis requires WPR without a TCP recovery experiment.'
+}
+if($FramedNagle -and ($GcProcessRole -ne 'server' -or $ExchangesPerConnection -ne 64 -or $PayloadBytes -ne 1460)){
+    throw 'Framed Nagle exchanges require bounded receiver-GC persistent64 mode.'
 }
 if($Connections -gt 1024 -and ($GcProcessRole -ne 'server' -or $ReceiveBudgetBytes -ne 16384)){
     throw 'High concurrency requires receiver-GC mode and the verified 16384-byte receive budget.'
@@ -277,7 +281,7 @@ try {
         $receiverState=@{Peer=$peer;PeerRoot=$remote;Directory=$diagnostics;Executable=$exe
             ServerAddress=$clientAddress;PeerAddress=$peerAddress;Port=$port;Count=$count;Rate=$rate;Payload=$payloadBytes
             Connections=$Connections;HeapMiB=$heapMiB;HeapLayout=$HeapLayout;ReceiveBudgetBytes=$ReceiveBudgetBytes
-            PeerGcPressure=([bool]$PeerGcPressure);ExchangesPerConnection=$ExchangesPerConnection
+            PeerGcPressure=([bool]$PeerGcPressure);ExchangesPerConnection=$ExchangesPerConnection;FramedNagle=([bool]$FramedNagle)
             ServerOutput=$localOutput;Rule=$null;Receiver=$null;LocalClient=$null}
         Start-GcReceiver -State $receiverState
         $localServer=$receiverState.Receiver
@@ -507,6 +511,7 @@ try {
     $result.probeCollectorBackend=$(if($WprProbes){'wpr-exact-events'}else{'traceevent-exact-events'})
     $result.kernelSpinlockEventsRequested=[bool]$SpinLocks
     $result.recorderControlScope='unique-owned-named-instance'
+    $result.framedWrites=[bool]$r.framedWrites;$result.noDelay=[bool]$r.noDelay
     if($GcProcessRole -eq 'server'){$result.launchSpanScope='maximum-independent-producer-span';$result.workloadScope='both-independent-producers-plus-profiled-receiver'}
     if($PeerRecovery){$result.peerRecovery=$pulseResult;$result.peerDataInterfaceDhcpEnabled=$peerDhcpEnabled}
 }catch{$failure=$_}

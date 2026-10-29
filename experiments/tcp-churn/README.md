@@ -746,6 +746,15 @@ barrier. See the [Winsock listen contract](https://learn.microsoft.com/windows/w
 
 The separate `managed_gc_cache_retire_paths=1|1024|8192|24576|49152` mechanism control
 requires the ordinary receiver setup described above.
+The opt-in `managed_gc_mixed=persistent64-framed-nagle` contrast preserves the
+same 64 exchanges, 1460-byte message patterns, total byte budget and independent
+connection arrivals. Each request and reply uses two immediate ordinary
+`WriteAsync` calls (a 4-byte prefix and the remaining body) with Nagle enabled.
+There is no sleep, forced first-packet wait or shared data-release barrier.
+Every endpoint reports and verifies applied pacing/framing. The ordinary
+single-write `TCP_NODELAY` modes remain the default; framing changes are not
+evidence that the customer used these settings.
+
 The explicit `managed_gc_mixed=persistent64` variant keeps each independently
 arriving TCP connection for64 validated1460-byte request/response exchanges.
 There is no preconnection phase or data-release barrier. Both endpoints report

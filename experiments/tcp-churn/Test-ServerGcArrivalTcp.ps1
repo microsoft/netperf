@@ -5,7 +5,8 @@ param([ValidateSet('arrays','graph')][string]$HeapLayout='arrays',
     [ValidateSet(0,16384)][int]$ReceiveBudgetBytes=0,
     [ValidateSet(1,64)][int]$ExchangesPerConnection=1,
     [ValidateRange(1,4096)][int]$MaximumInFlight=64,
-    [switch]$LargeStreaming)
+    [switch]$LargeStreaming,
+    [switch]$FramedNagle)
 $ErrorActionPreference='Stop'
 $directory=Join-Path ([IO.Path]::GetTempPath()) ('server-gc-arrival-'+[guid]::NewGuid().ToString('N'))
 $null=New-Item -ItemType Directory -Path $directory
@@ -30,22 +31,24 @@ try {
     $descriptor="gc:32:32:{0}" -f $HeapLayout
     if($ReceiveBudgetBytes){$descriptor+=':'+$ReceiveBudgetBytes}
     if($LargeStreaming -and $ExchangesPerConnection -ne 1){throw 'Large streaming is separate from small-message persistent mode.'}
+    if($FramedNagle -and $ExchangesPerConnection -ne 64){throw 'Framed Nagle mode requires persistent64 exchanges.'}
     $requestBytes=if($LargeStreaming){1048576}elseif($ExchangesPerConnection -eq 64){1460}else{65536}
     $responseBytes=if($LargeStreaming){1048576}elseif($ExchangesPerConnection -eq 64){1460}else{262144}
-    $repeatOption=if($ExchangesPerConnection -eq 64){@('exchanges:64')}else{@()}
+    $repeatOption=if($ExchangesPerConnection -eq 64){@($(if($FramedNagle){'exchanges:64:framed'}else{'exchanges:64'}))}else{@()}
+    $pacing=if($FramedNagle){'nagle'}else{'nodelay'}
     $server=Start-Child (@('127.0.0.1','127.0.0.2',[string]$port,'128','4000',[string]$requestBytes,
-        $serverOutput,'server',[string]$responseBytes,'14529',[string]$MaximumInFlight,'nodelay',$descriptor)+$repeatOption)
+        $serverOutput,'server',[string]$responseBytes,'14529',[string]$MaximumInFlight,$pacing,$descriptor)+$repeatOption)
     $wait=[Diagnostics.Stopwatch]::StartNew()
     while(-not(Test-Path ($serverOutput+'.ready'))) {
         if($server.process.HasExited -or $wait.Elapsed.TotalSeconds -gt 15){throw 'The GC receiver did not become ready.'}
         Start-Sleep -Milliseconds 20
     }
     $first=Start-Child (@('127.0.0.1','127.0.0.2',[string]$port,'64','2000',[string]$requestBytes,
-        (Join-Path $directory 'first.json'),'client',[string]$responseBytes,'14529',[string]$MaximumInFlight,'nodelay','dispatch:pool')+$repeatOption)
+        (Join-Path $directory 'first.json'),'client',[string]$responseBytes,'14529',[string]$MaximumInFlight,$pacing,'dispatch:pool')+$repeatOption)
     $second=Start-Child (@('127.0.0.4','127.0.0.2',[string]$port,'64','2000',[string]$requestBytes,
-        (Join-Path $directory 'second.json'),'client',[string]$responseBytes,'23521',[string]$MaximumInFlight,'nodelay','dispatch:pool')+$repeatOption)
+        (Join-Path $directory 'second.json'),'client',[string]$responseBytes,'23521',[string]$MaximumInFlight,$pacing,'dispatch:pool')+$repeatOption)
     foreach($child in @($first,$second,$server)) {
-        if(-not $child.process.WaitForExit(30000)){throw 'An independent server-GC endpoint exceeded its deadline.'}
+        if(-not $child.process.WaitForExit($(if($FramedNagle){120000}else{30000}))){throw 'An independent server-GC endpoint exceeded its deadline.'}
         if($child.process.ExitCode -ne 0){throw "An independent server-GC endpoint failed: $($child.error.GetAwaiter().GetResult())"}
     }
     $r=Get-Content $serverOutput -Raw|ConvertFrom-Json
@@ -54,6 +57,7 @@ try {
     foreach($client in @($a,$b)) {
         if($client.outcome -ne 'collected' -or $client.connections -ne 64 -or
             $client.exchangesPerConnection -ne $ExchangesPerConnection -or
+            $client.framedWrites -ne [bool]$FramedNagle -or $client.noDelay -ne (-not [bool]$FramedNagle) -or
             $client.maximumPerConnectionReadBufferBytes -ne [Math]::Min($responseBytes,65536) -or
             $client.bytesSent -ne 64*$requestBytes*$ExchangesPerConnection -or
             $client.bytesReceived -ne 64*$responseBytes*$ExchangesPerConnection -or
@@ -62,6 +66,7 @@ try {
         }
     }
     if($r.outcome -ne 'collected' -or $r.connections -ne 128 -or $r.exchangesPerConnection -ne $ExchangesPerConnection -or
+        $r.framedWrites -ne [bool]$FramedNagle -or $r.noDelay -ne (-not [bool]$FramedNagle) -or
         $r.bytesReceived -ne $a.bytesSent+$b.bytesSent -or
         $r.bytesSent -ne $a.bytesReceived+$b.bytesReceived -or $r.requestDispatch -ne 'thread-pool' -or
         $r.maximumPerConnectionReadBufferBytes -ne [Math]::Min($requestBytes,65536) -or

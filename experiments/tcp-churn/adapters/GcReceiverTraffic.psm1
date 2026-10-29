@@ -15,12 +15,14 @@ function Start-GcReceiver {
     $gcDescriptor="gc:{0}:2048:{1}" -f $State.HeapMiB,$State.HeapLayout
     if($State.ReceiveBudgetBytes){$gcDescriptor+=':'+$State.ReceiveBudgetBytes}
     if(-not $State.ContainsKey('ExchangesPerConnection')){$State.ExchangesPerConnection=1}
+    if(-not $State.ContainsKey('FramedNagle')){$State.FramedNagle=$false}
+    $pacing=if($State.FramedNagle){'nagle'}else{'nodelay'}
     $arguments=@(
         $State.PeerAddress,$State.ServerAddress,[string]$State.Port,[string]$State.Count,[string]$State.Rate,
         [string]$State.Payload,$State.ServerOutput,'server',[string]$State.Payload,'14529',
-        [string]$State.Connections,'nodelay',$gcDescriptor
+        [string]$State.Connections,$pacing,$gcDescriptor
     )
-    if($State.ExchangesPerConnection -eq 64){$arguments+='exchanges:64'}
+    if($State.ExchangesPerConnection -eq 64){$arguments+=$(if($State.FramedNagle){'exchanges:64:framed'}else{'exchanges:64'})}
     $State.Receiver=Start-TcpChurnCollector -Program $State.Executable -Arguments $arguments `
         -Directory $State.Directory -LogPrefix (Join-Path $State.Directory 'gc-receiver')
 }
@@ -30,13 +32,13 @@ function Invoke-GcReceiverTraffic {
     $clock=[Diagnostics.Stopwatch]::StartNew()
     $State.Stage='start-remote-producer'
     Invoke-Command -Session $State.Peer -ScriptBlock {
-        param($root,$source,$target,$port,$count,$rate,$payload,$concurrency,$peerPressure,$exchanges)
+        param($root,$source,$target,$port,$count,$rate,$payload,$concurrency,$peerPressure,$exchanges,$framedNagle)
         $output=Join-Path $root 'client.json'
         $arguments=@(
             $source,$target,[string]$port,[string]$count,[string]$rate,[string]$payload,
-            $output,'client',[string]$payload,'23521',[string]$concurrency,'nodelay','dispatch:pool'
+            $output,'client',[string]$payload,'23521',[string]$concurrency,$(if($framedNagle){'nagle'}else{'nodelay'}),'dispatch:pool'
         )
-        if($exchanges -eq 64){$arguments+='exchanges:64'}
+        if($exchanges -eq 64){$arguments+=$(if($framedNagle){'exchanges:64:framed'}else{'exchanges:64'})}
         $global:OwnedManagedGcPeer.Process=Start-TcpChurnCollector -Program (Join-Path $root 'ArrivalTcp.exe') `
             -Arguments $arguments -Directory $root -LogPrefix (Join-Path $root 'receiver-remote-client')
         if($peerPressure){
@@ -46,15 +48,15 @@ function Invoke-GcReceiverTraffic {
                 'client','1048576','34711','256','nodelay','dispatch:pool'
             ) -Directory $root -LogPrefix (Join-Path $root 'pressure-client')
         }
-    } -ArgumentList $State.PeerRoot,$State.PeerAddress,$State.ServerAddress,$State.Port,($State.Count/2),([int][Math]::Ceiling($State.Rate/2.0)),$State.Payload,$State.Connections,([bool]$State.PeerGcPressure),$State.ExchangesPerConnection
+    } -ArgumentList $State.PeerRoot,$State.PeerAddress,$State.ServerAddress,$State.Port,($State.Count/2),([int][Math]::Ceiling($State.Rate/2.0)),$State.Payload,$State.Connections,([bool]$State.PeerGcPressure),$State.ExchangesPerConnection,([bool]$State.FramedNagle)
     $localOutput=Join-Path $State.Directory 'receiver-local-client.json'
     $State.Stage='start-local-producer'
     $arguments=@(
         $State.ServerAddress,$State.ServerAddress,[string]$State.Port,[string]($State.Count/2),
         [string]([int][Math]::Ceiling($State.Rate/2.0)),[string]$State.Payload,$localOutput,
-        'client',[string]$State.Payload,'14529',[string]$State.Connections,'nodelay','dispatch:pool'
+        'client',[string]$State.Payload,'14529',[string]$State.Connections,$(if($State.FramedNagle){'nagle'}else{'nodelay'}),'dispatch:pool'
     )
-    if($State.ExchangesPerConnection -eq 64){$arguments+='exchanges:64'}
+    if($State.ExchangesPerConnection -eq 64){$arguments+=$(if($State.FramedNagle){'exchanges:64:framed'}else{'exchanges:64'})}
     $State.LocalClient=Start-TcpChurnCollector -Program $State.Executable -Arguments $arguments `
         -Directory $State.Directory -LogPrefix (Join-Path $State.Directory 'receiver-local-client')
     $State.Stage='wait-local-producer'
@@ -105,6 +107,7 @@ function Invoke-GcReceiverTraffic {
     $State.Stage='verify-endpoints'
     foreach($endpoint in @($local,$remote,$server)) {
         if($endpoint.outcome -ne 'collected' -or $endpoint.exchangesPerConnection -ne $State.ExchangesPerConnection -or
+            $endpoint.framedWrites -ne [bool]$State.FramedNagle -or $endpoint.noDelay -ne (-not [bool]$State.FramedNagle) -or
             $endpoint.maximumPerConnectionReadBufferBytes -ne [Math]::Min($State.Payload,65536) -or
             $endpoint.networkErrors -ne 0 -or $endpoint.protocolErrors -ne 0 -or $endpoint.barrier){
             throw 'A receiver-GC endpoint failed protocol verification.'
@@ -130,6 +133,7 @@ function Invoke-GcReceiverTraffic {
     [pscustomobject]@{
         connections=$server.connections;bytesSent=$server.bytesSent;bytesReceived=$server.bytesReceived;managedGc=$server.managedGc
         exchangesPerConnection=$server.exchangesPerConnection
+        framedWrites=$server.framedWrites;noDelay=$server.noDelay
         maximumPerConnectionReadBufferBytes=$server.maximumPerConnectionReadBufferBytes
         peerGcPressure=$remoteBundle.Pressure
         arrivalRate=(2*[Math]::Ceiling($State.Rate/2.0));arrivalDispatch='independent-client-processes';peakInFlight=$server.peakInFlight

@@ -13,6 +13,7 @@ param(
     [switch]$RetireDuringGc,
     [switch]$KeepCacheValid,
     [switch]$NoTcpProbes,
+    [switch]$FramedNagle,
     [switch]$PeerRecovery,
     [switch]$IsolatedData,
     [int]$RecoveryMilliseconds=8000,
