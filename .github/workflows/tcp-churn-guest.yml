@@ -134,6 +134,8 @@ jobs:
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-ScopedPathRetirement.ps1
       - shell: pwsh
+        run: ./experiments/tcp-churn/Test-GcControlPlan.ps1
+      - shell: pwsh
         run: ./experiments/tcp-churn/Test-OwnedTcpTable.ps1
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-GcProbeWprProfile.ps1 -CaptureSmoke
@@ -272,8 +274,8 @@ jobs:
           if ($env:MANAGED_GC_RECEIVE_BUDGET_BYTES -ne '0' -and ($env:MANAGED_GC_MIXED -ne 'true' -or $env:MANAGED_GC_PROCESS_ROLE -ne 'server')) {
             throw 'A bounded receive budget requires receiver-GC diagnostic mode.'
           }
-          if ($env:MANAGED_GC_CACHE_RETIRE_PATHS -ne '0' -and ($env:MANAGED_GC_MIXED -ne 'true' -or $env:MANAGED_GC_PROCESS_ROLE -ne 'server' -or $env:MANAGED_GC_ISOLATED_DATA -ne 'true' -or $env:MANAGED_GC_PEER_RECOVERY -eq 'true' -or $env:MANAGED_GC_ROUTE_REFRESH -eq 'true')) {
-            throw 'Cache retirement requires isolated receiver GC without another fault or route control.'
+          if ($env:MANAGED_GC_CACHE_RETIRE_PATHS -ne '0' -and ($env:MANAGED_GC_MIXED -ne 'true' -or $env:MANAGED_GC_PROCESS_ROLE -ne 'server' -or $env:MANAGED_GC_ISOLATED_DATA -ne 'true' -or $env:MANAGED_GC_PEER_RECOVERY -eq 'true')) {
+            throw 'Cache retirement requires isolated receiver GC without a neighbor fault.'
           }
           if ($env:MANAGED_GC_WPR_PROBES -eq 'true' -and $env:MANAGED_GC_MIXED -ne 'true') {
             throw 'Exact WPR probes require managed-GC diagnostic mode.'

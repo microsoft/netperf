@@ -745,7 +745,7 @@ backlog. This is ordinary accept-queue capacity, not a preconnected/data-release
 barrier. See the [Winsock listen contract](https://learn.microsoft.com/windows/win32/api/winsock2/nf-winsock2-listen).
 
 The separate `managed_gc_cache_retire_paths=1024|8192|24576` mechanism control
-requires isolated receiver GC and excludes route refresh and neighbor pulses.
+requires isolated receiver GC and excludes neighbor pulses.
 It populates measured idle UDP paths using only the extra source
 `198.19.0.1/17`, sends no UDP payloads, and retires that secondary address after
 the real-GC signal while ordinary TCP continues on `198.19.240.1`.
@@ -757,6 +757,12 @@ reported separately from sampled lock waits. This deliberately tests address
 retirement/cache maintenance; it is not evidence that an unobserved application
 pause causes address changes or that this trigger occurred elsewhere.
 No VM CPU settings or host scheduling policies are changed.
+Explicitly selecting both cache retirement and route refresh runs an
+interaction control: one owned next-hop change makes cached TCP path
+information stale while the separate owned-source retirement exercises
+cache maintenance. Each agent has its own lifecycle, snapshot and report,
+and both restorations must pass. Selecting either control alone retains its
+original behavior.
 Path-population snapshots use the documented IP Helper path table, filtered
 by the owned interface and source, rather than launching a command-line
 enumerator in the GC-triggered interval. The native structure layout and

@@ -45,8 +45,8 @@ if($ManagedGcReceiveBudgetBytes -and (-not $ManagedGc -or $ManagedGcProcessRole 
     throw 'A bounded receive budget requires receiver-GC diagnostic mode.'
 }
 if($ManagedGcCacheRetirePaths -and (-not $ManagedGc -or $ManagedGcProcessRole -ne 'server' -or
-    -not $ManagedGcIsolatedData -or $ManagedGcPeerRecovery -or $ManagedGcRouteRefresh)){
-    throw 'Cache retirement requires isolated receiver-GC mode without another fault or route control.'
+    -not $ManagedGcIsolatedData -or $ManagedGcPeerRecovery)){
+    throw 'Cache retirement requires isolated receiver-GC mode without a neighbor fault.'
 }
 if($ManagedGcRouteRefresh -and (-not $ManagedGc -or $ManagedGcProcessRole -ne 'server' -or -not $ManagedGcIsolatedData -or $ManagedGcPeerRecovery)){
     throw 'Route refresh requires isolated receiver-GC mode without a neighbor pulse.'
