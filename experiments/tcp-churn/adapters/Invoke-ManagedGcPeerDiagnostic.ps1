@@ -673,7 +673,7 @@ finally {
                 if(Test-Path -LiteralPath $entry.path) {
                     $receiverEvidence[$entry.key]=Get-Content $entry.path -Raw|ConvertFrom-Json|
                         Select-Object schema,outcome,role,connections,connectionsStarted,connectionsConnected,connectionsCompleted,
-                            acceptedConnections,errorType,errorCode,socketError,managedGc,requestDispatch,peakInFlight
+                            acceptedConnections,errorType,errorCode,socketError,failureUtc,firstError,managedGc,requestDispatch,peakInFlight
                 }
                 if(Test-Path -LiteralPath ($receiverState.ServerOutput+'.gc.json')){
                     $receiverEvidence.gcObservation=Get-Content ($receiverState.ServerOutput+'.gc.json') -Raw|ConvertFrom-Json
@@ -688,12 +688,13 @@ finally {
                     param($root)
                     $child=if($global:OwnedManagedGcPeer -and $global:OwnedManagedGcPeer.ContainsKey('Process')){$global:OwnedManagedGcPeer.Process}else{$null}
                     $path=Join-Path $root 'client.json'
+                    if($null -ne $child -and -not $child.Process.HasExited){$null=$child.Process.WaitForExit(20000)}
                     [pscustomobject]@{
                         exited=$(if($null -ne $child){$child.Process.HasExited}else{$null})
                         exitCode=$(if($null -ne $child -and $child.Process.HasExited){$child.Process.ExitCode}else{$null})
                         result=$(if(Test-Path -LiteralPath $path){Get-Content -LiteralPath $path -Raw|ConvertFrom-Json|
                             Select-Object schema,outcome,role,connections,connectionsStarted,connectionsConnected,connectionsCompleted,
-                                errorType,errorCode,socketError,networkErrors,protocolErrors,peakInFlight,launchSpanMilliseconds}else{$null})
+                                errorType,errorCode,socketError,failureUtc,firstError,networkErrors,protocolErrors,peakInFlight,launchSpanMilliseconds}else{$null})
                     }
                 } -ArgumentList $receiverState.PeerRoot -ErrorAction Stop
             }catch{$receiverEvidence.remoteProducer=@{diagnosticErrorType=$_.Exception.GetType().FullName}}

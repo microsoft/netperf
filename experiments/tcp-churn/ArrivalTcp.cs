@@ -473,6 +473,21 @@ public static class ArrivalTcp
     private static int serviceRequestOrdinal,serviceWaitsCompleted;
     private static bool serviceRequestPipelining;
     private static int serviceDelayMinimumMilliseconds=250;
+    private static string firstErrorJson;
+    private static string RemoteText(Socket socket)
+    {
+        try {return socket.RemoteEndPoint is IPEndPoint ? ((IPEndPoint)socket.RemoteEndPoint).Address.ToString() : "";}
+        catch(Exception) {return "";}
+    }
+    private static void RecordFirstError(Exception error,string phase,string remote)
+    {
+        Exception cause=error.GetBaseException();
+        SocketException socket=cause as SocketException;
+        // Only the earliest failing connection is kept, so the server and producer reports can be ordered in time.
+        Interlocked.CompareExchange(ref firstErrorJson,"{\"utc\":\""+DateTime.UtcNow.ToString("o",CultureInfo.InvariantCulture)+
+            "\",\"phase\":\""+phase+"\",\"remoteAddress\":\""+remote+"\",\"errorType\":\""+cause.GetType().FullName+
+            "\",\"socketError\":"+(socket==null?"null":socket.NativeErrorCode.ToString(CultureInfo.InvariantCulture))+"}",null);
+    }
     private static int serviceDelaySpanMilliseconds=501;
     private static int clientPacingWaitsCompleted;
     private static int preparedGraphNodeCount;
@@ -716,15 +731,23 @@ public static class ArrivalTcp
         Interlocked.Increment(ref serverStarted);
         do {prior=serverPeakInFlight;if(active<=prior)break;}
             while(Interlocked.CompareExchange(ref serverPeakInFlight,active,prior)!=prior);
+        string remote=RemoteText(socket);
         try {
             await Serve(socket,size,response,gcObservation,gcMinimumLaunch).ConfigureAwait(false);
             Interlocked.Increment(ref serverCompleted);
-        } finally {Interlocked.Decrement(ref serverInFlight);}
+        } catch(Exception error) {RecordFirstError(error,"serve",remote);throw;}
+        finally {Interlocked.Decrement(ref serverInFlight);}
         gcObservation.TryCollect(gcMinimumLaunch,Volatile.Read(ref acceptedCount),Volatile.Read(ref serverStarted),
             (idleKeepalive || serviceWait)?Volatile.Read(ref serverResponsesCompleted):Volatile.Read(ref serverCompleted),
             Volatile.Read(ref serverInFlight),"completion",(idleKeepalive || serviceWait)?"application-responses":"connections");
     }
     private static async Task Send(string source,IPAddress peer,int port,byte[] data,byte[] expectedResponse)
+    {
+        string phase="connect";
+        try {await SendCore(source,peer,port,data,expectedResponse,value=>phase=value).ConfigureAwait(false);}
+        catch(Exception error) {RecordFirstError(error,"client-"+phase,peer.ToString());throw;}
+    }
+    private static async Task SendCore(string source,IPAddress peer,int port,byte[] data,byte[] expectedResponse,Action<string> setPhase)
     {
         long start=Stopwatch.GetTimestamp();
         using(var socket=new TcpClient(new IPEndPoint(IPAddress.Parse(source),0))) {
@@ -737,6 +760,7 @@ public static class ArrivalTcp
             long connected=Stopwatch.GetTimestamp();Interlocked.Add(ref connectTicks,connected-bound);
             var stream=socket.GetStream();
             var reply=CreateValidationBuffer(expectedResponse.Length);
+            setPhase("exchange");
             if(serviceRequestPipelining){
                 await Task.WhenAll(WritePacedServiceRequests(stream,data,connectionOrdinal),
                     ReadServiceResponses(stream,reply,expectedResponse)).ConfigureAwait(false);
@@ -752,6 +776,7 @@ public static class ArrivalTcp
                 await Task.Delay(TimeSpan.FromSeconds(holdSeconds)).ConfigureAwait(false);
                 socket.Client.Shutdown(SocketShutdown.Send);
             }
+            setPhase("eof");
             if(await stream.ReadAsync(new byte[1],0,1).ConfigureAwait(false)!=0)
                 throw new IOException("Unexpected response data after completion.");
             Interlocked.Add(ref eofTicks,Stopwatch.GetTimestamp()-received);
@@ -998,7 +1023,8 @@ public static class ArrivalTcp
         File.WriteAllText(args[6],"{\"schema\":1,\"outcome\":\"failed\",\"connectionsStarted\":"+Volatile.Read(ref started)+
             ",\"connectionsConnected\":"+Volatile.Read(ref connectedCount)+",\"connectionsCompleted\":"+Volatile.Read(ref completed)+
             ",\"acceptedConnections\":"+Volatile.Read(ref acceptedCount)+",\"errorType\":\""+cause.GetType().FullName+
-            "\",\"errorCode\":"+cause.HResult+",\"socketError\":"+(socket==null?"null":socket.NativeErrorCode.ToString(CultureInfo.InvariantCulture))+"}");
+            "\",\"errorCode\":"+cause.HResult+",\"socketError\":"+(socket==null?"null":socket.NativeErrorCode.ToString(CultureInfo.InvariantCulture))+
+            ",\"failureUtc\":\""+DateTime.UtcNow.ToString("o",CultureInfo.InvariantCulture)+"\",\"firstError\":"+(Volatile.Read(ref firstErrorJson)??"null")+"}");
     }
     private static int Main(string[] args)
     {
