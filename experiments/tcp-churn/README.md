@@ -821,6 +821,10 @@ buffer size and exact byte pattern/count are verified, including large-payload
 tests at the higher limit. The total connection budget remains 8,192 and arrivals remain
 independent; the existing 8,192-entry listen hint bounds backlog buildup during
 GC. Modes without the required receiver budget reject before VM mutation.
+The receiver rechecks the one-shot GC condition on both acceptance and
+completion, reporting which observation claimed it. This preserves the
+completed-plus-in-flight requirement when all requests are accepted before
+the first large transfer finishes; it does not hold or release TCP traffic.
 
 The explicit `managed_gc_unused_interface=true` variant creates one
 disposable synthetic NIC on the owned generation-2 VM. It is first added

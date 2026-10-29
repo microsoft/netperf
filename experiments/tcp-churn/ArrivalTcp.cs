@@ -175,14 +175,15 @@ public static class ArrivalTcp
         private readonly string observationFile;
         private int claim,launched,started,completed,pending,before,after;
         private double milliseconds;
-        private string start="",end="";
+        private string start="",end="",trigger="";
         public GcObservation(int heap,string layout,string output) {heapMiB=heap;heapLayout=layout;observationFile=output;}
         public bool Triggered {get {return Volatile.Read(ref claim)==2;}}
-        public void TryCollect(int minimum,int launchedNow,int startedNow,int completedNow,int pendingNow)
+        public void TryCollect(int minimum,int launchedNow,int startedNow,int completedNow,int pendingNow,string triggerEdge="launch")
         {
             if(heapMiB==0 || launchedNow<minimum || completedNow<1 || pendingNow<1 ||
                 Interlocked.CompareExchange(ref claim,1,0)!=0)return;
             launched=launchedNow;started=startedNow;completed=completedNow;pending=pendingNow;
+            trigger=triggerEdge;
             File.WriteAllText(observationFile+".begin","pre-collection-call");
             before=GC.CollectionCount(GC.MaxGeneration);
             start=DateTime.UtcNow.ToString("o",CultureInfo.InvariantCulture);
@@ -208,6 +209,7 @@ public static class ArrivalTcp
                 ",\"launchedAtCollection\":"+launched+",\"startedBeforeCollection\":"+started+
                 ",\"completedBeforeCollection\":"+completed+",\"inFlightBeforeCollection\":"+pending+
                 ",\"gen2CollectionsBefore\":"+before+",\"gen2CollectionsAfter\":"+after+
+                ",\"triggerObservation\":\""+trigger+"\""+
                 ",\"blockingCollectionMilliseconds\":"+milliseconds.ToString("R",CultureInfo.InvariantCulture)+
                 ",\"collectionStartUtc\":\""+start+"\",\"collectionEndUtc\":\""+end+
                 "\",\"serverGc\":"+(System.Runtime.GCSettings.IsServerGC?"true":"false")+"}";
@@ -317,7 +319,7 @@ public static class ArrivalTcp
             }
         }
     }
-    private static async Task ServeTracked(Socket socket,int size,byte[] response)
+    private static async Task ServeTracked(Socket socket,int size,byte[] response,GcObservation gcObservation,int gcMinimumLaunch)
     {
         int active=Interlocked.Increment(ref serverInFlight),prior;
         Interlocked.Increment(ref serverStarted);
@@ -327,6 +329,8 @@ public static class ArrivalTcp
             await Serve(socket,size,response).ConfigureAwait(false);
             Interlocked.Increment(ref serverCompleted);
         } finally {Interlocked.Decrement(ref serverInFlight);}
+        gcObservation.TryCollect(gcMinimumLaunch,Volatile.Read(ref acceptedCount),Volatile.Read(ref serverStarted),
+            Volatile.Read(ref serverCompleted),Volatile.Read(ref serverInFlight),"completion");
     }
     private static async Task Send(string source,IPAddress peer,int port,byte[] data,byte[] expectedResponse)
     {
@@ -422,11 +426,11 @@ public static class ArrivalTcp
                         Interlocked.Increment(ref acceptedCount);
                         if(gcHeapMiB>0 && role=="server") {
                             accepted.Add(Task.Run(async delegate {
-                                try {await ServeTracked(connection,size,response).ConfigureAwait(false);}
+                                try {await ServeTracked(connection,size,response,gcObservation,gcMinimumLaunch).ConfigureAwait(false);}
                                 finally {serverCapacity.Release();}
                             }));
                             gcObservation.TryCollect(gcMinimumLaunch,Volatile.Read(ref acceptedCount),Volatile.Read(ref serverStarted),
-                                Volatile.Read(ref serverCompleted),Volatile.Read(ref serverInFlight));
+                                Volatile.Read(ref serverCompleted),Volatile.Read(ref serverInFlight),"accept");
                         } else accepted.Add(Serve(connection,size,response));
                     }
                     await Task.WhenAll(accepted).ConfigureAwait(false);
