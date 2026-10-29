@@ -847,6 +847,12 @@ adds its strict kernel spinlock keyword, and increases the owned system
 collector's buffers. It requires the explicit WPR backend. Raw addresses and
 ETLs remain guest-local; the public sampled CPU densities are still not
 presented as same-lock simultaneous-waiter proof.
+The spinlock summary decodes the installed public x64 Thread/SpinLock schema,
+groups records by their actual address privately, and resolves TCP release
+sites against the capture's exact public PDB identity. Only per-capture lock
+ordinals, public function names and aggregate counts leave the guest.
+Recorded cycle-interval overlap and the no-interrupt DISPATCH-level subset
+remain separate from sampled CPU density; no raw address is exported.
 It also reports numeric free-space admission information for the guest temporary
 drives; busy or residual-resource failures retain fixed failure categories rather
 than exporting process names, paths or exception messages.

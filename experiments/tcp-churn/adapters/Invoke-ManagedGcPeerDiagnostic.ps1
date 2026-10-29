@@ -659,6 +659,12 @@ try {
     $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @((Join-Path $diagnostics 'cpu.etl'),
         (Join-Path $PublishDirectory 'cpu-load.json'),$start,$end) -Directory $diagnostics `
         -LogPrefix (Join-Path $diagnostics 'cpu-analysis') -TimeoutSeconds 300
+    if($SpinLocks){
+        $phase='analyze-owned-spinlock-evidence'
+        $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @('--spin-summary',(Join-Path $diagnostics 'cpu.etl'),
+            (Join-Path $PublishDirectory 'lock-evidence.json'),$start,$end) -Directory $diagnostics `
+            -LogPrefix (Join-Path $diagnostics 'spinlock-evidence') -TimeoutSeconds 300
+    }
     $postStart=([datetime]$r.managedGc.collectionEndUtc).ToUniversalTime()
     $endUtc=([datetime]$end).ToUniversalTime()
     $postEnd=if($postStart.AddSeconds(2) -lt $endUtc){$postStart.AddSeconds(2)}else{$endUtc}

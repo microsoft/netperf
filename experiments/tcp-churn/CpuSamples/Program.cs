@@ -59,6 +59,8 @@ internal static class Program
 
     private static int Main(string[] args)
     {
+        if (args.Length == 5 && args[0] == "--spin-summary")
+            return SpinLockEvidence.Run(args[1], args[2], args[3], args[4]);
         if (args.Length == 6 && args[0] == "--capture-probes")
         {
             string captureStage = "input";
@@ -149,6 +151,7 @@ internal static class Program
         }
         if (args.Length == 1 && args[0] == "--self-test")
         {
+            if (!SpinLockEvidence.SelfTest()) return 1;
             var counts = new Dictionary<string, long>();
             Add(counts, "public"); Add(counts, "public");
             if (!IsNetwork("tcpip.sys") || IsNetwork("other.sys") || counts["public"] != 2)
