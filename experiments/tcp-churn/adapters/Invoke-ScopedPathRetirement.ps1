@@ -7,7 +7,7 @@ param(
     [Parameter(Mandatory)][string]$DataStateFile,
     [Parameter(Mandatory)][string]$StateFile,
     [Parameter(Mandatory)][string]$ReportFile,
-    [ValidateSet(1024,8192,24576)][int]$PathCount=8192,
+    [ValidateSet(1,1024,8192,24576)][int]$PathCount=8192,
     [string]$ReceiverExecutable,[int]$ReceiverProcessId,
     [string]$UnusedInterfaceGuid,
     [string]$ReadyFile,[string]$BeginFile,[string]$EndFile,[string]$StopFile,

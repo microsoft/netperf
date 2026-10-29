@@ -72,7 +72,7 @@ on:
       managed_gc_cache_retire_paths:
         description: Optional owned secondary-source retirement control; 0 disables it
         type: choice
-        options: ['0', '1024', '8192', '24576']
+        options: ['0', '1', '1024', '8192', '24576']
         default: '0'
       managed_gc_wpr_probes:
         description: Explicit alternate WPR controller for exact TCP/CLR event filters

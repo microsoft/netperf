@@ -744,7 +744,7 @@ The requested hint is recorded; Windows provides no query for the actual
 backlog. This is ordinary accept-queue capacity, not a preconnected/data-release
 barrier. See the [Winsock listen contract](https://learn.microsoft.com/windows/win32/api/winsock2/nf-winsock2-listen).
 
-The separate `managed_gc_cache_retire_paths=1024|8192|24576` mechanism control
+The separate `managed_gc_cache_retire_paths=1|1024|8192|24576` mechanism control
 requires isolated receiver GC and excludes neighbor pulses.
 It populates measured idle UDP paths using only the extra source
 `198.19.0.1/17`, sends no UDP payloads, and retires that secondary address after
@@ -893,6 +893,10 @@ The spinlock summary decodes the installed public x64 Thread/SpinLock schema,
 groups records by their actual address privately, and resolves TCP release
 sites against the capture's exact public PDB identity. Only per-capture lock
 ordinals, public function names and aggregate counts leave the guest.
+Same-lock maintenance attribution accepts either the exact public
+`IppValidatePaths` or `IppGarbageCollectPaths` writer together with an actual
+path-refresh reader site. It retains separate garbage-collector-only and
+any-maintenance-writer flags; a validation writer by itself is not a reader.
 Recorded cycle-interval overlap and the no-interrupt DISPATCH-level subset
 remain separate from sampled CPU density; no raw address is exported.
 It also reports numeric free-space admission information for the guest temporary

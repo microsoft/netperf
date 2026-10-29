@@ -58,6 +58,18 @@ internal static class SpinLockEvidence
         return peak;
     }
 
+    private static bool IsPathReader(string function)
+    {
+        string name = function.TrimStart('?');
+        return name == "IppGetNextHopFromPath" || name == "TcpUpdatePathInfoTcb";
+    }
+
+    private static bool IsMaintenanceWriter(string function)
+    {
+        string name = function.TrimStart('?');
+        return name == "IppGarbageCollectPaths" || name == "IppValidatePaths";
+    }
+
     internal static bool SelfTest()
     {
         var data = new byte[56];
@@ -76,7 +88,11 @@ internal static class SpinLockEvidence
         interrupted.Interrupts = 1;
         return first.Wait == 50 && first.Caller == 0x5678 && first.Irql == 2 &&
             Peak(new[] { first, second, sameCpu, interrupted }, false) == 3 &&
-            Peak(new[] { first, second, sameCpu, interrupted }, true) == 2;
+            Peak(new[] { first, second, sameCpu, interrupted }, true) == 2 &&
+            IsPathReader("??IppGetNextHopFromPath") && IsPathReader("TcpUpdatePathInfoTcb") &&
+            !IsPathReader("IppValidatePaths") && !IsPathReader("IppValidatePath") &&
+            IsMaintenanceWriter("IppValidatePaths") && IsMaintenanceWriter("??IppGarbageCollectPaths") &&
+            !IsMaintenanceWriter("IppValidatePath") && !IsMaintenanceWriter("TcpUpdatePathInfoTcb");
     }
 
     internal static int Run(string traceFile, string output, string startText, string endText)
@@ -148,13 +164,14 @@ internal static class SpinLockEvidence
                         {
                             var sites = group.GroupBy(value => names[value.Caller]).Select(site =>
                                 new { function = site.Key, events = site.Count(), maximumHoldCycles = site.Max(value => value.Release - value.Acquire) }).ToArray();
-                            bool readerSite = sites.Any(site => site.function.Contains("IppGetNextHopFromPath") ||
-                                site.function.Contains("TcpUpdatePathInfoTcb") || site.function.Contains("IppValidatePath"));
-                            bool writerSite = sites.Any(site => site.function.Contains("IppGarbageCollectPaths"));
+                            bool readerSite = sites.Any(site => IsPathReader(site.function));
+                            bool writerSite = sites.Any(site => site.function.TrimStart('?') == "IppGarbageCollectPaths");
+                            bool maintenanceSite = sites.Any(site => IsMaintenanceWriter(site.function));
                             return new { lockOrdinal = ++ordinal, events = group.Count(), positiveWaits = group.Count(value => value.Wait > 0),
                                 peakRecordedWaitingCpus = Peak(group, false),
                                 peakUninterruptedDispatchLevelWaitingCpus = Peak(group, true),
-                                pathRefreshAndGarbageCollectorShareLock = readerSite && writerSite, publicReleaseSites = sites };
+                                pathRefreshAndGarbageCollectorShareLock = readerSite && writerSite,
+                                pathRefreshAndMaintenanceWriterShareLock = readerSite && maintenanceSite, publicReleaseSites = sites };
                         }).ToArray();
                     File.WriteAllText(output, JsonConvert.SerializeObject(new {
                         schema = 1, outcome = spinEvents > 0 ? "decoded" : "no-spinlock-records",

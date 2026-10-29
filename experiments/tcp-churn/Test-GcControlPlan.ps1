@@ -16,6 +16,7 @@ foreach($case in @('route','cache','both','unused-cache')){
     & {
         $RouteRefresh=$case -ne 'cache';$CacheRetirePaths=if($case -ne 'route'){24576}else{0}
         if($case -eq 'unused-cache'){$RouteRefresh=$false}
+        if($case -eq 'cache'){$CacheRetirePaths=1}
         $CacheInterfaceGuid=if($case -eq 'unused-cache'){'owned-guid'}else{''}
         $CacheInterfaceAlias=if($case -eq 'unused-cache'){'NetperfPath-123456abcdef'}else{''}
         $cacheStem=if($RouteRefresh -and $CacheRetirePaths){'cache-control'}else{'route-control'}
@@ -54,6 +55,10 @@ foreach($case in @('route','cache','both','unused-cache')){
                     throw 'Unused-interface retirement must use the actual receiver GC-completion observation.'
                 }
             }elseif($endIndex -ge 0){throw 'A non-unused-interface control changed its GC-start trigger.'}
+            $countIndex=[Array]::IndexOf($control.Arguments,'-PathCount')
+            if($countIndex -ge 0 -and $control.Arguments[$countIndex+1] -ne [string]$CacheRetirePaths){
+                throw 'The requested cache fixture count was changed during actual child argument transport.'
+            }
         }
     }
 }

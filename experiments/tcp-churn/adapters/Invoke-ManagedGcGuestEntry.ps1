@@ -17,7 +17,7 @@ param(
     [switch]$RouteRefresh,
     [ValidateSet('onlink','peer-gateway')][string]$RouteVariant='onlink',
     [ValidateSet(0,16384)][int]$ReceiveBudgetBytes=0,
-    [ValidateSet(0,1024,8192,24576)][int]$CacheRetirePaths=0,
+    [ValidateSet(0,1,1024,8192,24576)][int]$CacheRetirePaths=0,
     [switch]$WprProbes,
     [switch]$PeerGcPressure,
     [string]$CacheInterfaceAlias,
