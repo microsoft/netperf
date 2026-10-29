@@ -12,7 +12,7 @@ try{
             addresses=@('198.19.240.1');originalDefaultKeys=@('7/192.0.2.254/10')}|Export-Clixml -LiteralPath $dataFile
         @{interfaceGuid=$guid;source='198.19.0.1';prefix='198.19.0.0/17';originalAbsent=$true
             originalAddresses=@('198.19.255.254/32/True');detachInterface=$true}|Export-Clixml -LiteralPath $stateFile
-        $fixture=@{binding=$false;address=$true;writes=0}
+        $fixture=@{binding=$false;address=$true;writes=0;interfaceReads=0}
         $failed=$false
         try{
             & {
@@ -31,7 +31,9 @@ try{
                 }
                 function Set-NetIPInterface {
                     [CmdletBinding()]param($InterfaceIndex,$AddressFamily,$Dhcp)
-                    if($InterfaceIndex -ne 9 -or $Dhcp -ne 'Disabled'){throw 'The original interface policy was touched.'}
+                    if($InterfaceIndex -ne 9 -or $Dhcp -ne 'Disabled' -or $fixture.interfaceReads -lt 2){
+                        throw 'The original interface policy was touched or the rebound interface was not ready.'
+                    }
                     $fixture.writes++
                 }
                 function Get-NetIPAddress {
@@ -53,7 +55,8 @@ try{
                 }
                 function Get-NetIPInterface {
                     [CmdletBinding()]param($InterfaceIndex,$AddressFamily)
-                    [pscustomobject]@{Dhcp='Disabled'}
+                    $fixture.interfaceReads++
+                    if($fixture.interfaceReads -ge 2){[pscustomobject]@{InterfaceIndex=9;Dhcp='Disabled'}}
                 }
                 & (Join-Path $PSScriptRoot 'adapters\Invoke-ScopedPathRetirement.ps1') -InterfaceAlias $alias `
                     -UnusedInterfaceGuid $guid -DataStateFile $dataFile -StateFile $stateFile -ReportFile $reportFile -RestoreOnly

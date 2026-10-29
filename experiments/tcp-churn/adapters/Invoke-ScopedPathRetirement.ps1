@@ -76,7 +76,30 @@ function Restore-Control {
         if(-not $binding[0].Enabled){
             Enable-NetAdapterBinding -Name $InterfaceAlias -ComponentID ms_tcpip -Confirm:$false -ErrorAction Stop
         }
+        $wait=[Diagnostics.Stopwatch]::StartNew()
+        do{
+            $currentAdapter=@(Get-NetAdapter -Name $InterfaceAlias -ErrorAction Stop)
+            if($currentAdapter.Count -ne 1 -or [string]$currentAdapter[0].InterfaceGuid -ne $saved.interfaceGuid){
+                throw 'The unused interface changed identity during IPv4 restoration.'
+            }
+            $adapter=$currentAdapter
+            $ipInterfaces=@(Get-NetIPInterface -AddressFamily IPv4 -ErrorAction Stop|Where-Object InterfaceIndex -eq $adapter[0].ifIndex)
+            if($ipInterfaces.Count -eq 1){break}
+            if($wait.Elapsed.TotalSeconds -gt 15){throw 'The unused IPv4 interface did not return after binding restoration.'}
+            Start-Sleep -Milliseconds 50
+        }while($true)
         Set-NetIPInterface -InterfaceIndex $adapter[0].ifIndex -AddressFamily IPv4 -Dhcp Disabled -ErrorAction Stop
+        if('198.19.255.254/32/True' -in @($saved.originalAddresses)){
+            $bootstrap=@(Get-NetIPAddress -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|
+                Where-Object IPAddress -eq '198.19.255.254')
+            if($bootstrap.Count -eq 0){
+                $null=New-NetIPAddress -InterfaceIndex $adapter[0].ifIndex -IPAddress '198.19.255.254' -PrefixLength 32 `
+                    -SkipAsSource $true -PolicyStore ActiveStore -ErrorAction Stop
+            }elseif($bootstrap.Count -ne 1 -or $bootstrap[0].InterfaceIndex -ne $adapter[0].ifIndex -or
+                $bootstrap[0].PrefixLength -ne 32 -or -not $bootstrap[0].SkipAsSource){
+                throw 'The owned static bootstrap address changed identity during restoration.'
+            }
+        }
     }
     $current=@(Read-OwnedAddress)
     if($current.Count -gt 1){throw 'The owned source address is no longer unique.'}
@@ -210,7 +233,10 @@ finally {
     }catch{$restoreFailure=$_}
     $report.outcome=if($null -eq $failure -and $null -eq $restoreFailure){'completed'}else{'failed'}
     if($null -ne $failure){$report.failureType=$failure.Exception.GetType().FullName}
-    if($null -ne $restoreFailure){$report.restoreFailureType=$restoreFailure.Exception.GetType().FullName}
+    if($null -ne $restoreFailure){
+        $report.restoreFailureType=$restoreFailure.Exception.GetType().FullName
+        $report.restoreFailureSourceLine=$restoreFailure.InvocationInfo.ScriptLineNumber
+    }
     $report|ConvertTo-Json|Set-Content -LiteralPath $ReportFile
 }
 if($null -ne $failure -or $null -ne $restoreFailure){

@@ -782,6 +782,10 @@ control, not a claim that the trigger happened in a customer workload.
 A unique skip-as-source `/32` bootstrap address is assigned while disconnected
 to prevent automatic link-local configuration; it has no gateway and is
 removed with the disposable interface.
+Binding restoration waits for the identity-matched IPv4 interface to return
+before restoring its static configuration. A cleanup failure always rejects
+the benchmark; an available capture may still be analyzed as explicitly
+rejected diagnostic evidence, never promoted to a successful workload.
 Path-population snapshots use the documented IP Helper path table, filtered
 by the owned interface and source, rather than launching a command-line
 enumerator in the GC-triggered interval. The native structure layout and

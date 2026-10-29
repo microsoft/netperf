@@ -549,7 +549,8 @@ finally {
 }
 if($null -ne $failure -or $cleanupErrors.Count) {
     $diagnosticVerified=$false;$diagnosticFailure=$null
-    if(($null -ne $clientFailure -or $null -ne $receiverState) -and $cleanupErrors.Count -eq 0 -and $profileOwned) {
+    if(($null -ne $clientFailure -or $null -ne $receiverState) -and $profileOwned -and
+        (Test-Path -LiteralPath (Join-Path $diagnostics 'cpu.etl'))) {
         try {
             $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @((Join-Path $diagnostics 'cpu.etl'),
                 (Join-Path $PublishDirectory 'cpu-load.json'),$start,$end) -Directory $diagnostics `
