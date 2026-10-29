@@ -129,6 +129,36 @@ $cacheStem=if($RouteRefresh -and $CacheRetirePaths){'cache-control'}else{'route-
 $probeStartup=[ordered]@{}
 $failure=$null;$cleanupErrors=[Collections.Generic.List[Exception]]::new()
 $phase='preflight';$start=$null;$end=$null;$tcpEnd=$null;$result=$null
+# Global IPv4 TCP and data-NIC counters; read-only snapshots used to locate post-GC segment loss.
+$transportSnapshot={
+    param($nicAlias)
+    $counters=[ordered]@{}
+    foreach($line in @(& netstat.exe -s -p tcp)){
+        if($line -match '^\s*(Active Opens|Passive Opens|Failed Connection Attempts|Reset Connections|Segments Received|Segments Sent|Segments Retransmitted)\s*=\s*(\d+)'){
+            $counters[($Matches[1] -replace ' ','')]=[long]$Matches[2]
+        }
+    }
+    $nic=$null
+    if($nicAlias){
+        $s=Get-NetAdapterStatistics -Name $nicAlias -ErrorAction Stop
+        $nic=[ordered]@{SentBytes=$s.SentBytes;ReceivedBytes=$s.ReceivedBytes;ReceivedDiscardedPackets=$s.ReceivedDiscardedPackets
+            ReceivedPacketErrors=$s.ReceivedPacketErrors;OutboundDiscardedPackets=$s.OutboundDiscardedPackets;OutboundPacketErrors=$s.OutboundPacketErrors}
+    }
+    [pscustomobject]@{tcp=[pscustomobject]$counters;nic=$(if($null -ne $nic){[pscustomobject]$nic}else{$null})}
+}
+function Get-SnapshotDelta($First,$Second){
+    if($null -eq $First -or $null -eq $Second){return $null}
+    $delta=[ordered]@{}
+    foreach($group in 'tcp','nic'){
+        if($null -eq $First.$group -or $null -eq $Second.$group){continue}
+        foreach($p in $Second.$group.PSObject.Properties){
+            if($p.Value -isnot [ValueType] -or $p.Value -is [bool]){continue}
+            $old=$First.$group.($p.Name);if($null -ne $old){$delta["$group.$($p.Name)"]=[long]$p.Value-[long]$old}
+        }
+    }
+    $delta
+}
+$localTransportBefore=$null;$peerTransportBefore=$null
 $port=20300;$count=8192;$heapMiB=$(if($requestedHeapLayout -eq 'graph-2g'){2048}else{1024})
 $rate=[int][Math]::Ceiling($count/[double]$Seconds)
 $analyzer=Join-Path $AnalyzerDirectory 'CpuSamples.exe'
@@ -459,6 +489,10 @@ try {
     Wait-Ready $clrProbe (Join-Path $diagnostics 'clr.ready')
     }
     $before=Get-NetAdapterStatistics -Name $alias
+    if($ClusterProfile -ne 'none'){
+        $localTransportBefore=& $transportSnapshot $null
+        $peerTransportBefore=Invoke-Command -Session $peer -ScriptBlock $transportSnapshot -ArgumentList $peerData.alias
+    }
     $start=[DateTime]::UtcNow.ToString('o')
     $phase='managed-gc-traffic'
     $clientOutput=Join-Path $diagnostics 'client.json'
@@ -606,13 +640,18 @@ try {
     }
     $remoteTargets=@($r.targets|Where-Object{-not $_.loopback})
     $after=Get-NetAdapterStatistics -Name $alias
+    $transportDelta=$null
+    if($null -ne $localTransportBefore){
+        $transportDelta=[ordered]@{local=Get-SnapshotDelta $localTransportBefore (& $transportSnapshot $null)
+            peer=Get-SnapshotDelta $peerTransportBefore (Invoke-Command -Session $peer -ScriptBlock $transportSnapshot -ArgumentList $peerData.alias)}
+    }
     # The profiled receiver sends responses and receives requests; a profiled client does the reverse.
     $nicSentFloor=if($GcProcessRole -eq 'server'){($remoteTargets|Measure-Object responseBytes -Sum).Sum}else{($remoteTargets|Measure-Object requestBytes -Sum).Sum}
     $nicReceivedFloor=if($GcProcessRole -eq 'server'){($remoteTargets|Measure-Object requestBytes -Sum).Sum}else{($remoteTargets|Measure-Object responseBytes -Sum).Sum}
     if($after.SentBytes-$before.SentBytes -lt $nicSentFloor -or
         $after.ReceivedBytes-$before.ReceivedBytes -lt $nicReceivedFloor){throw 'The non-loopback NIC did not account for the remote payload.'}
     $result=[ordered]@{schema=1;workload='managed-gc-mixed';outcome='collected';connections=$r.connections
-        clusterProfile=$ClusterProfile;cluster=$clusterReport;routeEpochDial=$epochDialReport;partialOutage=$(if($r.PSObject.Properties['partialOutage']){$r.partialOutage}else{$null})
+        clusterProfile=$ClusterProfile;cluster=$clusterReport;routeEpochDial=$epochDialReport;transportDelta=$transportDelta;partialOutage=$(if($r.PSObject.Properties['partialOutage']){$r.partialOutage}else{$null})
         responseBytesPerExchange=$(if($r.PSObject.Properties['responseBytesPerExchange']){$r.responseBytesPerExchange}else{$null})
         fixtureOrdering=$(if($SteadyStateFixture){'during-ongoing-pipelined-traffic'}else{'before-traffic'})
         requestedReferencedTcpPaths=$ReferencedTcpPaths
@@ -704,6 +743,14 @@ finally {
                     }
                 } -ArgumentList $receiverState.PeerRoot -ErrorAction Stop
             }catch{$receiverEvidence.remoteProducer=@{diagnosticErrorType=$_.Exception.GetType().FullName}}
+        }
+        $receiverEvidence.transportDelta=$null
+        if($null -ne $localTransportBefore){
+            try {
+                $receiverEvidence.transportDelta=[ordered]@{
+                    local=Get-SnapshotDelta $localTransportBefore (& $transportSnapshot $null)
+                    peer=Get-SnapshotDelta $peerTransportBefore (Invoke-Command -Session $peer -ScriptBlock $transportSnapshot -ArgumentList $peerData.alias -ErrorAction Stop)}
+            }catch{$receiverEvidence.transportDelta=@{diagnosticErrorType=$_.Exception.GetType().FullName}}
         }
         $receiverEvidence.dataNicDelta=$null
         if($null -ne $before){
