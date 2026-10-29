@@ -253,6 +253,16 @@ try {
     }
     if(-not $rejected -or (Test-Path -LiteralPath $directory)){throw 'Invalid pipelining mode mutated state or was accepted.'}
     $checks++
+    $rejected=$false
+    try{
+        & (Join-Path $PSScriptRoot 'adapters\Invoke-NetperfGuestTcpChurn.ps1') `
+            -VmName 'unused-test-only' -Credential $credential -PublishDirectory $directory -ManagedGcSteadyStateFixture
+    }catch{
+        if($_.Exception.Message -notmatch 'Steady-state fixture setup requires'){throw}
+        $rejected=$true
+    }
+    if(-not $rejected -or (Test-Path -LiteralPath $directory)){throw 'Invalid steady-state mode mutated state or was accepted.'}
+    $checks++
     foreach($extra in @(@{ManagedGc=$true;ProfileCpu=$true;ManagedGcHeapLayout='graph-2g'},@{ManagedGcCacheRetirePaths=294912})){
         $rejected=$false
         try{
@@ -362,6 +372,7 @@ try {
         $ManagedGcIdleKeepalive=[switch]::new($true)
         $ManagedGcServiceWait=[switch]::new($true)
         $ManagedGcPipelinedServiceWait=[switch]::new($true)
+        $ManagedGcSteadyStateFixture=[switch]::new($true)
         $ManagedGcHeapLayout='graph-2g'
         $ManagedGcRouteRefresh=[switch]::new($true)
         $ManagedGcRouteVariant='peer-gateway'
@@ -376,7 +387,8 @@ try {
         $dataGuid='66666666-7777-8888-9999-000000000000'
         & ([scriptblock]::Create($launch[0].Extent.Text))
     }
-    if($actual.Count -ne 34 -or $actual[33] -isnot [bool] -or -not $actual[33] -or
+    if($actual.Count -ne 35 -or $actual[34] -isnot [bool] -or -not $actual[34] -or
+        $actual[33] -isnot [bool] -or -not $actual[33] -or
         $actual[32] -isnot [bool] -or -not $actual[32] -or
         $actual[31] -isnot [bool] -or -not $actual[31] -or
         $actual[30] -isnot [bool] -or -not $actual[30] -or

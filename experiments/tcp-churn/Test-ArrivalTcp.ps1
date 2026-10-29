@@ -58,6 +58,28 @@ try {
         }
         $child.Dispose();$child=$null;$checks++
     }
+    foreach($case in @('wrong-role','wrong-directory','existing-ready')){
+        $rejectedOutput=Join-Path $directory 'rejected-readiness.json'
+        $ready=Join-Path $directory 'route-control.ready'
+        if($case -eq 'wrong-directory'){$ready=Join-Path (Split-Path $directory) 'route-control.ready'}
+        if($case -eq 'existing-ready'){[IO.File]::WriteAllText($ready,'stale')}
+        $role=if($case -eq 'wrong-role'){'client'}else{'server'}
+        $gcDescriptor=if($case -eq 'wrong-role'){'dispatch:pool'}else{'gc:32:1:graph:16384'}
+        $info.ArgumentList.Clear()
+        foreach($argument in @('127.0.0.1','127.0.0.2',[string]$port,'16','128','512',$rejectedOutput,
+            $role,'512','14529','16','nodelay',$gcDescriptor,'servicewait64:pipelined',$ready)){
+            $info.ArgumentList.Add($argument)
+        }
+        $child=[Diagnostics.Process]::Start($info)
+        $errorText=$child.StandardError.ReadToEndAsync()
+        if(-not $child.WaitForExit(5000) -or $child.ExitCode -eq 0 -or
+            $errorText.GetAwaiter().GetResult() -notmatch 'Fixture readiness gates require|fresh owned fixture readiness file' -or
+            (Test-Path -LiteralPath $rejectedOutput)){
+            throw 'Invalid or reused fixture readiness was not rejected before heap/network setup.'
+        }
+        $child.Dispose();$child=$null;$checks++
+        if($case -eq 'existing-ready'){Remove-Item -LiteralPath $ready}
+    }
     $serverOutput=Join-Path $directory 'server.json'
     $clientOutput=Join-Path $directory 'client.json'
     $info.ArgumentList.Clear()

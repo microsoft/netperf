@@ -20,6 +20,7 @@ function Start-GcReceiver {
     if(-not $State.ContainsKey('IdleKeepalive')){$State.IdleKeepalive=$false}
     if(-not $State.ContainsKey('ServiceWait')){$State.ServiceWait=$false}
     if(-not $State.ContainsKey('PipelinedServiceWait')){$State.PipelinedServiceWait=$false}
+    if(-not $State.ContainsKey('GcReadinessFile')){$State.GcReadinessFile=$null}
     $pacing=if($State.FramedNagle){'nagle'}else{'nodelay'}
     $arguments=@(
         $State.PeerAddress,$State.ServerAddress,[string]$State.Port,[string]$State.Count,[string]$State.Rate,
@@ -29,10 +30,11 @@ function Start-GcReceiver {
     if($State.ServiceWait){$arguments+=$(if($State.PipelinedServiceWait){'servicewait64:pipelined'}else{'servicewait64'})}
     elseif($State.ExchangesPerConnection -eq 64){$arguments+=$(if($State.FramedNagle){'exchanges:64:framed'}else{'exchanges:64'})}
     elseif($State.IdleKeepalive){$arguments+='idlekeepalive'}
+    if($State.GcReadinessFile){$arguments+=$State.GcReadinessFile}
     $State.Receiver=Start-TcpChurnCollector -Program $State.Executable -Arguments $arguments `
         -Directory $State.Directory -LogPrefix (Join-Path $State.Directory 'gc-receiver') -CoreClr:([bool]$State.CoreClr)
 }
-function Invoke-GcReceiverTraffic {
+function Start-GcReceiverTraffic {
     [CmdletBinding()]
     param([Parameter(Mandatory)][hashtable]$State)
     $clock=[Diagnostics.Stopwatch]::StartNew()
@@ -69,6 +71,14 @@ function Invoke-GcReceiverTraffic {
     elseif($State.IdleKeepalive){$arguments+='idlekeepalive'}
     $State.LocalClient=Start-TcpChurnCollector -Program $State.Executable -Arguments $arguments `
         -Directory $State.Directory -LogPrefix (Join-Path $State.Directory 'receiver-local-client') -CoreClr:([bool]$State.CoreClr)
+    $State.TrafficClock=$clock
+    $State.LocalOutput=$localOutput
+}
+function Complete-GcReceiverTraffic {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][hashtable]$State)
+    $clock=$State.TrafficClock
+    $localOutput=$State.LocalOutput
     $State.Stage='wait-local-producer'
     if(-not $State.LocalClient.Process.WaitForExit(180000) -or $State.LocalClient.Process.ExitCode -ne 0){
         throw 'The independent local producer did not complete successfully.'
@@ -141,6 +151,8 @@ function Invoke-GcReceiverTraffic {
         $server.bytesSent -ne $local.bytesReceived+$remote.bytesReceived -or
         -not $server.managedGc.enabled -or $server.managedGc.gen2CollectionsAfter -le $server.managedGc.gen2CollectionsBefore -or
         -not $server.managedGc.serverGc -or $server.managedGc.heapMiB -ne $State.HeapMiB -or
+        $server.managedGc.readinessGateRequired -ne [bool]$State.GcReadinessFile -or
+        $server.managedGc.readinessGateSatisfied -ne [bool]$State.GcReadinessFile -or
         $server.managedGc.heapLayout -ne $State.HeapLayout -or $server.managedGc.preparedManagedHeapBytes -le 0 -or
         $server.managedGc.preparedGraphNodeCount -ne $(if($State.HeapLayout -eq 'graph'){
             ([long][Math]::Floor(([long]$State.HeapMiB*1024*1024)/40))-band -2L
@@ -186,4 +198,10 @@ function Invoke-GcReceiverTraffic {
         )
     }
 }
-Export-ModuleMember -Function Start-GcReceiver,Invoke-GcReceiverTraffic
+function Invoke-GcReceiverTraffic {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][hashtable]$State)
+    Start-GcReceiverTraffic -State $State
+    Complete-GcReceiverTraffic -State $State
+}
+Export-ModuleMember -Function Start-GcReceiver,Start-GcReceiverTraffic,Complete-GcReceiverTraffic,Invoke-GcReceiverTraffic

@@ -195,14 +195,16 @@ public static class ArrivalTcp
         private readonly int heapMiB;
         private readonly string heapLayout;
         private readonly string observationFile;
+        private readonly string readinessFile;
         private int claim,launched,started,completed,pending,before,after;
         private double milliseconds;
         private string start="",end="",trigger="",completedUnit="connections";
-        public GcObservation(int heap,string layout,string output) {heapMiB=heap;heapLayout=layout;observationFile=output;}
+        public GcObservation(int heap,string layout,string output,string ready=null) {heapMiB=heap;heapLayout=layout;observationFile=output;readinessFile=ready;}
         public bool Triggered {get {return Volatile.Read(ref claim)==2;}}
         public void TryCollect(int minimum,int launchedNow,int startedNow,int completedNow,int pendingNow,string triggerEdge="launch",string completionUnit="connections")
         {
-            if(heapMiB==0 || launchedNow<minimum || completedNow<1 || pendingNow<1 ||
+            if(heapMiB==0 || Volatile.Read(ref claim)!=0 || launchedNow<minimum || completedNow<1 || pendingNow<1 ||
+                (readinessFile!=null && !File.Exists(readinessFile)) ||
                 Interlocked.CompareExchange(ref claim,1,0)!=0)return;
             launched=launchedNow;started=startedNow;completed=completedNow;pending=pendingNow;
             trigger=triggerEdge;
@@ -226,6 +228,8 @@ public static class ArrivalTcp
         public string Json()
         {
             return "{\"enabled\":"+(Triggered?"true":"false")+",\"heapMiB\":"+heapMiB+",\"heapLayout\":\""+heapLayout+"\""+
+                ",\"readinessGateRequired\":"+(readinessFile!=null?"true":"false")+
+                ",\"readinessGateSatisfied\":"+(readinessFile!=null && Triggered?"true":"false")+
                 ",\"preparedGraphNodeCount\":"+preparedGraphNodeCount+",\"preparedManagedHeapBytes\":"+preparedManagedHeapBytes+
                 ",\"largeHeapFreePhysicalBytesBeforePreparation\":"+largeHeapFreePhysicalBytesBeforePreparation+
                 ",\"configuredReceiveBudgetBytes\":"+receiveBudgetBytes+",\"maximumPostedReadBytes\":"+receiveBudgetBytes+
@@ -499,7 +503,7 @@ public static class ArrivalTcp
         idleKeepalive=false;
         serviceWait=false;
         serviceRequestPipelining=false;
-        if(args.Length==14){
+        if(args.Length>=14){
             if(args[13]=="servicewait64" || args[13]=="servicewait64:pipelined"){
                 if(size!=512 || responseSize!=512 || role=="local")
                     throw new ArgumentException("Service wait mode requires bounded client/server 512-byte messages.");
@@ -522,6 +526,15 @@ public static class ArrivalTcp
                 throw new ArgumentException("Framed exchanges require exchanges:64:framed with Nagle enabled.");
             }
         }
+        string gcReadinessFile=null;
+        if(args.Length==15){
+            if(role!="server" || gcHeapMiB==0 || !serviceRequestPipelining)
+                throw new ArgumentException("Fixture readiness gates require the pipelined GC receiver.");
+            gcReadinessFile=Path.GetFullPath(args[14]);
+            if(!string.Equals(Path.GetDirectoryName(gcReadinessFile),Path.GetDirectoryName(Path.GetFullPath(args[6])),StringComparison.OrdinalIgnoreCase) ||
+                Path.GetFileName(gcReadinessFile)!="route-control.ready" || File.Exists(gcReadinessFile))
+                throw new ArgumentException("Use a fresh owned fixture readiness file beside the receiver output.");
+        }
         if(File.Exists(args[6]))throw new IOException("Use a new result file.");
         if(gcHeapMiB>0 && File.Exists(args[6]+".gc.json"))throw new IOException("Use a new GC observation file.");
         if(gcHeapMiB>0 && File.Exists(args[6]+".gc.json.begin"))throw new IOException("Use a new GC pre-call signal file.");
@@ -531,7 +544,7 @@ public static class ArrivalTcp
             for(int i=0;i<response.Length;i++)response[i]=(byte)(i%251);
             if(responseSize==1)response[0]=0x5a;
             object pressureHeap=PrepareHeap(gcHeapMiB,heapLayout);
-            var gcObservation=new GcObservation(gcHeapMiB,heapLayout,args[6]+".gc.json");
+            var gcObservation=new GcObservation(gcHeapMiB,heapLayout,args[6]+".gc.json",gcReadinessFile);
             Task receiver=null;
             if(role!="client") {
                 listener=new Socket(peer.AddressFamily,SocketType.Stream,ProtocolType.Tcp);
@@ -670,8 +683,8 @@ public static class ArrivalTcp
     private static int Main(string[] args)
     {
         try {
-            if(args.Length<7 || args.Length>14) {
-                Console.Error.WriteLine("Usage: ArrivalTcp sources peer port count rate request-bytes output.json [role [response-bytes [seed [maximum-in-flight [nodelay|nagle [gc:heap-MiB:minimum-launched|dispatch:pool [exchanges:64[:framed]|idlekeepalive|servicewait64[:pipelined]]]]]]]");
+            if(args.Length<7 || args.Length>15) {
+                Console.Error.WriteLine("Usage: ArrivalTcp sources peer port count rate request-bytes output.json [role [response-bytes [seed [maximum-in-flight [nodelay|nagle [gc:heap-MiB:minimum-launched|dispatch:pool [exchanges:64[:framed]|idlekeepalive|servicewait64[:pipelined] [fixture-ready-file]]]]]]]]");
                 return 2;
             }
             if(!Run(args).Wait(TimeSpan.FromSeconds(150))){

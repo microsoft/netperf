@@ -31,6 +31,7 @@ param(
     [switch]$ManagedGcIdleKeepalive,
     [switch]$ManagedGcServiceWait,
     [switch]$ManagedGcPipelinedServiceWait,
+    [switch]$ManagedGcSteadyStateFixture,
     [ValidateSet(0,16384)][int]$ManagedGcReceiveBudgetBytes=0,
     [ValidateSet(0,1,1024,8192,24576,49152,98304,196608,294912)][int]$ManagedGcCacheRetirePaths=0,
     [switch]$ManagedGcWprProbes,
@@ -74,7 +75,7 @@ if($ManagedGcHeapLayout -eq 'graph-2g' -and
     ($ManagedGcProcessRole -ne 'server' -or -not $ManagedGcCoreClr -or -not $ManagedGcIsolatedData -or $ManagedGcPeerRecovery)){
     throw 'The 2-GiB graph comparison requires isolated CoreCLR receiver GC without a neighbor fault.'
 }
-if($ManagedGcCacheRetirePaths -gt 98304 -and $ManagedGcHeapLayout -ne 'graph-2g'){
+if($ManagedGcCacheRetirePaths -gt 196608 -and $ManagedGcHeapLayout -ne 'graph-2g'){
     throw 'Larger path populations require the admitted 2-GiB graph snapshot window.'
 }
 if($ManagedGcExchanges -ne 1 -and (-not $ManagedGc -or $ManagedGcProcessRole -ne 'server' -or
@@ -97,6 +98,10 @@ if($ManagedGcServiceWait -and (-not $ManagedGc -or $ManagedGcProcessRole -ne 'se
     throw 'Service-wait comparison requires receiver-GC64 exchanges of512 bytes without other protocol variants.'
 }
 if($ManagedGcPipelinedServiceWait -and -not $ManagedGcServiceWait){throw 'Pipelined requests require service-wait mode.'}
+if($ManagedGcSteadyStateFixture -and (-not $ManagedGcPipelinedServiceWait -or -not $ManagedGcKeepCacheValid -or
+    -not $ManagedGcRetireDuringGc -or -not $ManagedGcCacheRetirePaths -or -not $ManagedGcUnusedInterface -or $ManagedGcRouteRefresh)){
+    throw 'Steady-state fixture setup requires pipelined receiver traffic and only the owned GC-active valid-cache control.'
+}
 if($Connections -gt 1024 -and (-not $ManagedGc -or $ManagedGcProcessRole -ne 'server' -or $ManagedGcReceiveBudgetBytes -ne 16384)){
     throw 'High concurrency requires receiver-GC mode and the verified 16384-byte receive budget.'
 }
@@ -287,7 +292,7 @@ try {
     }
     $phase='guest-traffic'
     $exit=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
-        param($root,$seconds,$connections,$profile,$synDrop,$peerMeasurement,$managedGc,$managedGcPayloadBytes,$peerRecovery,$isolatedData,$recoveryMilliseconds,$gcProcessRole,$heapLayout,$routeRefresh,$routeVariant,$receiveBudgetBytes,$cacheRetirePaths,$wprProbes,$peerPressure,$fixtureAlias,$fixtureGuid,$spinLocks,$dataAlias,$dataGuid,$credential,$exchanges,$retireDuringGc,$keepCacheValid,$noTcpProbes,$framedNagle,$coreClr,$idleKeepalive,$serviceWait,$pipelinedServiceWait)
+        param($root,$seconds,$connections,$profile,$synDrop,$peerMeasurement,$managedGc,$managedGcPayloadBytes,$peerRecovery,$isolatedData,$recoveryMilliseconds,$gcProcessRole,$heapLayout,$routeRefresh,$routeVariant,$receiveBudgetBytes,$cacheRetirePaths,$wprProbes,$peerPressure,$fixtureAlias,$fixtureGuid,$spinLocks,$dataAlias,$dataGuid,$credential,$exchanges,$retireDuringGc,$keepCacheValid,$noTcpProbes,$framedNagle,$coreClr,$idleKeepalive,$serviceWait,$pipelinedServiceWait,$steadyStateFixture)
         if (@(Get-Process -Name 'Runner.Worker','ctsTraffic' -ErrorAction Ignore).Count) {
             throw 'Guest became busy before traffic setup.'
         }
@@ -316,6 +321,7 @@ try {
             if($idleKeepalive){$extra+='-IdleKeepalive'}
             if($serviceWait){$extra+='-ServiceWait'}
             if($pipelinedServiceWait){$extra+='-PipelinedServiceWait'}
+            if($steadyStateFixture){$extra+='-SteadyStateFixture'}
             if($receiveBudgetBytes){$extra+=@('-ReceiveBudgetBytes',[string]$receiveBudgetBytes)}
             if($cacheRetirePaths){$extra+=@('-CacheRetirePaths',[string]$cacheRetirePaths)}
             if($wprProbes){$extra+='-WprProbes'}
@@ -346,7 +352,7 @@ try {
             $launch|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $root 'child-startup.json')
             if($credentialFile -and (Test-Path -LiteralPath $credentialFile)){Remove-Item -LiteralPath $credentialFile -ErrorAction Stop}
         }
-    } -ArgumentList $guestRoot,$Seconds,$Connections,([bool]$ProfileCpu),([bool]$SynDrop),([bool]$PeerMeasurement),([bool]$ManagedGc),$ManagedGcPayloadBytes,([bool]$ManagedGcPeerRecovery),([bool]$ManagedGcIsolatedData),$ManagedGcRecoveryMilliseconds,$ManagedGcProcessRole,$ManagedGcHeapLayout,([bool]$ManagedGcRouteRefresh),$ManagedGcRouteVariant,$ManagedGcReceiveBudgetBytes,$ManagedGcCacheRetirePaths,([bool]$ManagedGcWprProbes),([bool]$ManagedGcPeerPressure),$fixtureAlias,$fixtureGuid,([bool]$ManagedGcSpinLocks),$dataAlias,$dataGuid,$Credential,$ManagedGcExchanges,([bool]$ManagedGcRetireDuringGc),([bool]$ManagedGcKeepCacheValid),([bool]$ManagedGcNoTcpProbes),([bool]$ManagedGcFramedNagle),([bool]$ManagedGcCoreClr),([bool]$ManagedGcIdleKeepalive),([bool]$ManagedGcServiceWait),([bool]$ManagedGcPipelinedServiceWait)
+    } -ArgumentList $guestRoot,$Seconds,$Connections,([bool]$ProfileCpu),([bool]$SynDrop),([bool]$PeerMeasurement),([bool]$ManagedGc),$ManagedGcPayloadBytes,([bool]$ManagedGcPeerRecovery),([bool]$ManagedGcIsolatedData),$ManagedGcRecoveryMilliseconds,$ManagedGcProcessRole,$ManagedGcHeapLayout,([bool]$ManagedGcRouteRefresh),$ManagedGcRouteVariant,$ManagedGcReceiveBudgetBytes,$ManagedGcCacheRetirePaths,([bool]$ManagedGcWprProbes),([bool]$ManagedGcPeerPressure),$fixtureAlias,$fixtureGuid,([bool]$ManagedGcSpinLocks),$dataAlias,$dataGuid,$Credential,$ManagedGcExchanges,([bool]$ManagedGcRetireDuringGc),([bool]$ManagedGcKeepCacheValid),([bool]$ManagedGcNoTcpProbes),([bool]$ManagedGcFramedNagle),([bool]$ManagedGcCoreClr),([bool]$ManagedGcIdleKeepalive),([bool]$ManagedGcServiceWait),([bool]$ManagedGcPipelinedServiceWait),([bool]$ManagedGcSteadyStateFixture)
     $startup=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
         param($root)
         Get-Content -LiteralPath (Join-Path $root 'child-startup.json') -Raw|ConvertFrom-Json|

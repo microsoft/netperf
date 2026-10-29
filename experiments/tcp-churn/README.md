@@ -749,13 +749,16 @@ requires the ordinary receiver setup described above.
 The larger populations retain 24,576 destinations per source and use eight or
 twelve exclusively owned source aliases inside the same guarded fixture prefix.
 All source identities must verify before any removal, including the final alias.
-They require `managed_gc_heap_layout=graph-2g`, an isolated CoreCLR receiver-only
+The 294,912-path option requires `managed_gc_heap_layout=graph-2g`, an isolated CoreCLR receiver-only
 variant with a nominal 2-GiB graph budget to allow the real during-GC path census
 to finish. Both controller admission and the receiver immediately before graph
 allocation require at least 8 GiB of free physical memory. Prepared node count,
 managed heap bytes, and the large receiver's admission memory are reported.
 The default graph remains 1 GiB. First compare the same cache population at both
 heap budgets before attributing a larger-cache result to population alone.
+The 196,608-path option can instead retain the original graph budget, but is
+accepted only if its actual census finishes within the real GC window; a
+too-short collection still rejects the control rather than relaxing that gate.
 No census, GC-phase, loss, byte, ownership, or restoration gate is relaxed.
 Whole-workload CPU and requested spin summaries are generated before checking
 the scenario-control gates. A rejected census still fails the experiment and
@@ -781,6 +784,16 @@ The exact 63 completed client pacing waits per connection and the server's
 small requests during a receiver GC produces delayed ACK work that a
 closed-loop request/reply workload stops offering. The original service-wait
 mode remains closed-loop and unchanged.
+
+With the pipelined model, `managed_gc_unused_interface=valid-paths-steady-during-gc`
+starts ordinary producers before building the owned idle-path fixture. Only the
+one-shot GC trigger waits for that fixture's verified readiness file; request
+writes, response reads, server service waits, and replies continue normally.
+The receiver reports the readiness condition and completed responses before GC.
+All actual during-GC census, live-cohort, loss, byte and restoration checks remain.
+This tests steady service activity rather than startup ordering. Compare the
+`cpu-cache-maintenance.json` interval, not a whole-workload peak that could include
+fixture construction; the construction/snapshot/maintenance times are separate.
 
 The opt-in `managed_gc_mixed=coreclr-keepalive` test sends one ordinary 1460-byte
 request immediately on each independent connection and validates the reply.

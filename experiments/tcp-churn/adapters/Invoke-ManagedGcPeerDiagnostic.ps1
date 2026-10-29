@@ -26,6 +26,7 @@ param(
     [switch]$IdleKeepalive,
     [switch]$ServiceWait,
     [switch]$PipelinedServiceWait,
+    [switch]$SteadyStateFixture,
     [ValidateSet(0,16384)][int]$ReceiveBudgetBytes=0,
     [ValidateSet(0,1,1024,8192,24576,49152,98304,196608,294912)][int]$CacheRetirePaths=0,
     [switch]$WprProbes,
@@ -44,7 +45,7 @@ if($HeapLayout -eq 'graph-2g'){
     }
     $HeapLayout='graph'
 }
-if($CacheRetirePaths -gt 98304 -and $requestedHeapLayout -ne 'graph-2g'){
+if($CacheRetirePaths -gt 196608 -and $requestedHeapLayout -ne 'graph-2g'){
     throw 'Larger path populations require the admitted 2-GiB graph snapshot window.'
 }
 $focusedCpuCapture=$NoTcpProbes -or $ExchangesPerConnection -eq 64 -or $Connections -gt 1024
@@ -64,6 +65,10 @@ if($ServiceWait -and ($GcProcessRole -ne 'server' -or $ExchangesPerConnection -n
     throw 'Service-wait comparison requires receiver-GC64 exchanges of512 bytes without other protocol variants.'
 }
 if($PipelinedServiceWait -and -not $ServiceWait){throw 'Pipelined requests require service-wait mode.'}
+if($SteadyStateFixture -and (-not $PipelinedServiceWait -or -not $KeepCacheValid -or -not $RetireDuringGc -or
+    -not $CacheRetirePaths -or -not $CacheInterfaceGuid -or $RouteRefresh)){
+    throw 'Steady-state fixture setup requires pipelined receiver traffic and only the owned GC-active valid-cache control.'
+}
 if($Connections -gt 1024 -and ($GcProcessRole -ne 'server' -or $ReceiveBudgetBytes -ne 16384)){
     throw 'High concurrency requires receiver-GC mode and the verified 16384-byte receive budget.'
 }
@@ -106,6 +111,7 @@ $neighborPulse=$null;$neighborArguments=@();$pulseResult=$null;$ownedCounts=$nul
 $localDataStarted=$false;$remoteDataStarted=$false
 $peerAddressPlan=if($RouteVariant -eq 'peer-gateway'){'198.19.240.5,198.19.240.6'}else{'198.19.240.6'}
 $receiverState=$null;$receiverEvidence=$null
+$receiverTrafficStarted=$false
 $pathControls=[Collections.Generic.List[object]]::new()
 $routeReport=$null;$cacheReport=$null
 $cacheStem=if($RouteRefresh -and $CacheRetirePaths){'cache-control'}else{'route-control'}
@@ -307,6 +313,7 @@ try {
             ServerAddress=$clientAddress;PeerAddress=$peerAddress;Port=$port;Count=$count;Rate=$rate;Payload=$payloadBytes
             Connections=$Connections;HeapMiB=$heapMiB;HeapLayout=$HeapLayout;ReceiveBudgetBytes=$ReceiveBudgetBytes
             PeerGcPressure=([bool]$PeerGcPressure);ExchangesPerConnection=$ExchangesPerConnection;FramedNagle=([bool]$FramedNagle);CoreClr=([bool]$CoreClr);IdleKeepalive=([bool]$IdleKeepalive);ServiceWait=([bool]$ServiceWait);PipelinedServiceWait=([bool]$PipelinedServiceWait)
+            GcReadinessFile=$(if($SteadyStateFixture){Join-Path $diagnostics ($cacheStem+'.ready')}else{$null})
             ServerOutput=$localOutput;Rule=$null;Receiver=$null;LocalClient=$null}
         Start-GcReceiver -State $receiverState
         $localServer=$receiverState.Receiver
@@ -392,6 +399,10 @@ try {
     $start=[DateTime]::UtcNow.ToString('o')
     $phase='managed-gc-traffic'
     $clientOutput=Join-Path $diagnostics 'client.json'
+    if($SteadyStateFixture){
+        Start-GcReceiverTraffic -State $receiverState
+        $receiverTrafficStarted=$true
+    }
     if($RouteRefresh -or $CacheRetirePaths) {
         $controlTypes=@()
         if($RouteRefresh){$controlTypes+='route'}
@@ -445,7 +456,7 @@ try {
     $phase='managed-gc-traffic'
     if($GcProcessRole -eq 'server') {
         $clientPid=$localServer.Process.Id
-        $r=Invoke-GcReceiverTraffic -State $receiverState
+        $r=if($receiverTrafficStarted){Complete-GcReceiverTraffic -State $receiverState}else{Invoke-GcReceiverTraffic -State $receiverState}
         $end=[DateTime]::UtcNow.ToString('o')
     } else {
     $client=Start-TcpChurnCollector -Program $exe -Arguments @(
@@ -505,6 +516,7 @@ try {
     if($after.SentBytes-$before.SentBytes -lt ($remoteTargets|Measure-Object requestBytes -Sum).Sum -or
         $after.ReceivedBytes-$before.ReceivedBytes -lt ($remoteTargets|Measure-Object responseBytes -Sum).Sum){throw 'The non-loopback NIC did not account for the remote payload.'}
     $result=[ordered]@{schema=1;workload='managed-gc-mixed';outcome='collected';connections=$r.connections
+        fixtureOrdering=$(if($SteadyStateFixture){'during-ongoing-pipelined-traffic'}else{'before-traffic'})
         bytesSent=$r.bytesSent;bytesReceived=$r.bytesReceived;payloadBytesPerDirection=$payloadBytes
         exchangesPerConnection=$ExchangesPerConnection
         configuredMaximumInFlightPerProducer=$Connections
@@ -776,6 +788,7 @@ if($null -ne $failure -or $cleanupErrors.Count) {
             })
             peerRecovery=$pulseResult;peerDataInterfaceDhcpEnabled=$peerDhcpEnabled;clientFailure=$clientFailure
             receiverEvidence=$receiverEvidence
+            fixtureOrdering=$(if($SteadyStateFixture){'during-ongoing-pipelined-traffic'}else{'before-traffic'})
             routeRefreshControl=$(if($RouteRefresh){$routeReport}else{$null})
             cacheRetirementControl=$cacheReport
             tcpRecovery=$ownedCounts
@@ -970,6 +983,7 @@ try {
         managedGc=$r.managedGc;peerGcPressure=$r.peerGcPressure;connections=$r.connections
         rejectedVerifiedWorkload=($r|Select-Object bytesSent,bytesReceived,exchangesPerConnection,arrivalRate,
             launchSpanMilliseconds,maxLaunchLagMilliseconds,serviceWaitsCompleted,clientPacingWaitsCompleted)
+        fixtureOrdering=$(if($SteadyStateFixture){'during-ongoing-pipelined-traffic'}else{'before-traffic'})
         conclusion='analysis-not-accepted'}|
         ConvertTo-Json -Depth 6|Set-Content (Join-Path $PublishDirectory 'result.json')
     throw

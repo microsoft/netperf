@@ -10,7 +10,8 @@ param([ValidateSet('arrays','graph')][string]$HeapLayout='arrays',
     [switch]$CoreClr,
     [switch]$IdleKeepalive,
     [switch]$ServiceWait,
-    [switch]$PipelinedServiceWait)
+    [switch]$PipelinedServiceWait,
+    [switch]$SteadyStateFixture)
 $ErrorActionPreference='Stop'
 $directory=Join-Path ([IO.Path]::GetTempPath()) ('server-gc-arrival-'+[guid]::NewGuid().ToString('N'))
 $null=New-Item -ItemType Directory -Path $directory
@@ -52,14 +53,18 @@ try {
         throw 'Service wait test requires only64 small exchanges.'
     }
     if($PipelinedServiceWait -and -not $ServiceWait){throw 'Pipelined requests require service-wait mode.'}
+    if($SteadyStateFixture -and -not $PipelinedServiceWait){throw 'Steady-state fixture tests require pipelined traffic.'}
     $requestBytes=if($ServiceWait){512}elseif($LargeStreaming){1048576}elseif($ExchangesPerConnection -eq 64 -or $IdleKeepalive){1460}else{65536}
     $responseBytes=if($ServiceWait){512}elseif($LargeStreaming){1048576}elseif($ExchangesPerConnection -eq 64 -or $IdleKeepalive){1460}else{262144}
     $repeatOption=if($ExchangesPerConnection -eq 64){@($(if($FramedNagle){'exchanges:64:framed'}else{'exchanges:64'}))}else{@()}
     if($IdleKeepalive){$repeatOption=@('idlekeepalive')}
     if($ServiceWait){$repeatOption=@($(if($PipelinedServiceWait){'servicewait64:pipelined'}else{'servicewait64'}))}
     $pacing=if($FramedNagle){'nagle'}else{'nodelay'}
-    $server=Start-Child (@('127.0.0.1','127.0.0.2',[string]$port,'128','4000',[string]$requestBytes,
-        $serverOutput,'server',[string]$responseBytes,'14529',[string]$MaximumInFlight,$pacing,$descriptor)+$repeatOption)
+    $serverArguments=@('127.0.0.1','127.0.0.2',[string]$port,'128','4000',[string]$requestBytes,
+        $serverOutput,'server',[string]$responseBytes,'14529',[string]$MaximumInFlight,$pacing,$descriptor)+$repeatOption
+    $fixtureReady=Join-Path $directory 'route-control.ready'
+    if($SteadyStateFixture){$serverArguments+=$fixtureReady}
+    $server=Start-Child $serverArguments
     $wait=[Diagnostics.Stopwatch]::StartNew()
     while(-not(Test-Path ($serverOutput+'.ready'))) {
         if($server.process.HasExited -or $wait.Elapsed.TotalSeconds -gt 15){throw 'The GC receiver did not become ready.'}
@@ -69,6 +74,17 @@ try {
         (Join-Path $directory 'first.json'),'client',[string]$responseBytes,'14529',[string]$MaximumInFlight,$pacing,'dispatch:pool')+$repeatOption)
     $second=Start-Child (@('127.0.0.4','127.0.0.2',[string]$port,'64','2000',[string]$requestBytes,
         (Join-Path $directory 'second.json'),'client',[string]$responseBytes,'23521',[string]$MaximumInFlight,$pacing,'dispatch:pool')+$repeatOption)
+    if($SteadyStateFixture){
+        $counter=[Reflection.Assembly]::Load([IO.File]::ReadAllBytes($exe)).GetType('ArrivalTcp').GetMethod('CountEstablishedConnections')
+        $wait.Restart()
+        while($counter.Invoke($null,@([int]$server.process.Id,[int]$port)) -lt 32){
+            if($server.process.HasExited -or $wait.Elapsed.TotalSeconds -gt 10){throw 'Steady producers did not establish ordinary connections.'}
+            Start-Sleep -Milliseconds 20
+        }
+        Start-Sleep -Milliseconds 1500
+        if(Test-Path -LiteralPath ($serverOutput+'.gc.json.begin')){throw 'The GC ignored fixture readiness.'}
+        [IO.File]::WriteAllText($fixtureReady,'verified-test-fixture')
+    }
     foreach($child in @($first,$second,$server)) {
         if(-not $child.process.WaitForExit($(if($FramedNagle -or $IdleKeepalive -or $ServiceWait){120000}else{30000}))){throw 'An independent server-GC endpoint exceeded its deadline.'}
         if($child.process.ExitCode -ne 0){throw "An independent server-GC endpoint failed: $($child.error.GetAwaiter().GetResult())"}
@@ -110,6 +126,11 @@ try {
         throw 'Receiver dispatch, capacity, or endpoint byte accounting failed.'
     }
     $gc=$r.managedGc
+    if($gc.readinessGateRequired -ne [bool]$SteadyStateFixture -or
+        $gc.readinessGateSatisfied -ne [bool]$SteadyStateFixture -or
+        ($SteadyStateFixture -and $gc.completedBeforeCollection -lt 16)){
+        throw 'Fixture readiness delayed traffic progress or did not gate only the collection.'
+    }
     if($gc.preparedManagedHeapBytes -le 0 -or
         $gc.preparedGraphNodeCount -ne $(if($HeapLayout -eq 'graph'){838860}else{0})){
         throw 'The actual prepared heap layout was not reported.'
@@ -141,7 +162,7 @@ try {
         if(-not $child.process.WaitForExit(5000)){throw 'An owned server-GC endpoint remained.'}
         $child.process.Dispose()
     }
-    foreach($file in @('ArrivalTcp.exe','ArrivalTcp.exe.config','Invoke-ArrivalTcpCore.ps1','server.json','server.json.ready','server.json.gc.json','server.json.gc.json.begin','first.json','second.json')) {
+    foreach($file in @('ArrivalTcp.exe','ArrivalTcp.exe.config','Invoke-ArrivalTcpCore.ps1','server.json','server.json.ready','server.json.gc.json','server.json.gc.json.begin','first.json','second.json','route-control.ready')) {
         $path=Join-Path $directory $file
         if(Test-Path $path){Remove-Item -LiteralPath $path -ErrorAction Stop}
     }

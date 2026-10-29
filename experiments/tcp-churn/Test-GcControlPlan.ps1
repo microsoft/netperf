@@ -536,4 +536,38 @@ $prefix=($analysisTry[0].Body.Statements|Where-Object{$_.Extent.StartOffset -le 
         throw 'A rejected census either bypassed its failure gate or lost independent CPU/spin diagnostics.'
     }
 }
+$steadyLaunch=@($ast.FindAll({
+    param($node)
+    $node -is [Management.Automation.Language.IfStatementAst] -and
+        $node.Clauses[0].Item1.Extent.Text -eq '$SteadyStateFixture' -and
+        $node.Extent.Text.Contains('Start-GcReceiverTraffic')
+},$true))
+$fixtureLaunch=@($ast.FindAll({
+    param($node)
+    $node -is [Management.Automation.Language.IfStatementAst] -and
+        $node.Clauses[0].Item1.Extent.Text -eq '$RouteRefresh -or $CacheRetirePaths'
+},$true))
+$completion=@($ast.FindAll({
+    param($node)
+    $node -is [Management.Automation.Language.AssignmentStatementAst] -and
+        $node.Left.Extent.Text -eq '$r' -and $node.Extent.Text.Contains('Complete-GcReceiverTraffic')
+},$true))
+if($steadyLaunch.Count -ne 1 -or $fixtureLaunch.Count -ne 1 -or $completion.Count -ne 1 -or
+    $steadyLaunch[0].Extent.StartOffset -ge $fixtureLaunch[0].Extent.StartOffset){
+    throw 'Steady-state producers must start before fixture construction with a separate completion phase.'
+}
+foreach($steady in @($false,$true)){
+    & {
+        $SteadyStateFixture=$steady;$receiverTrafficStarted=$false;$receiverState=@{}
+        $calls=[Collections.Generic.List[string]]::new()
+        function Start-GcReceiverTraffic {param($State);$calls.Add('start')}
+        function Complete-GcReceiverTraffic {param($State);$calls.Add('complete')}
+        function Invoke-GcReceiverTraffic {param($State);$calls.Add('legacy')}
+        . ([scriptblock]::Create($steadyLaunch[0].Extent.Text))
+        . ([scriptblock]::Create($completion[0].Extent.Text))
+        if(($calls-join ',') -ne $(if($steady){'start,complete'}else{'legacy'})){
+            throw 'The actual traffic dispatch duplicated or withheld a producer phase.'
+        }
+    }
+}
 Write-Output 'Passed standalone/combined path plans and failure-safe companion cleanup; no network operations were performed.'

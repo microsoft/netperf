@@ -18,6 +18,7 @@ param(
     [switch]$IdleKeepalive,
     [switch]$ServiceWait,
     [switch]$PipelinedServiceWait,
+    [switch]$SteadyStateFixture,
     [switch]$PeerRecovery,
     [switch]$IsolatedData,
     [int]$RecoveryMilliseconds=8000,

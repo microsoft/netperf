@@ -87,7 +87,7 @@ on:
       managed_gc_unused_interface:
         description: Create/retire/remove one disposable VM NIC; never detach the data or management NIC
         type: choice
-        options: ['false', 'true', 'during-gc', 'valid-paths', 'valid-paths-during-gc']
+        options: ['false', 'true', 'during-gc', 'valid-paths', 'valid-paths-during-gc', 'valid-paths-steady-during-gc']
         default: 'false'
       managed_gc_spinlocks:
         description: Add kernel spinlock events to the explicitly selected WPR capture
@@ -155,6 +155,8 @@ jobs:
         run: ./experiments/tcp-churn/Test-ServerGcArrivalTcp.ps1 -HeapLayout graph -ReceiveBudgetBytes 16384 -CoreClr -ExchangesPerConnection 64 -ServiceWait -MaximumInFlight 256
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-ServerGcArrivalTcp.ps1 -HeapLayout graph -ReceiveBudgetBytes 16384 -CoreClr -ExchangesPerConnection 64 -ServiceWait -PipelinedServiceWait -MaximumInFlight 256
+      - shell: pwsh
+        run: ./experiments/tcp-churn/Test-ServerGcArrivalTcp.ps1 -HeapLayout graph -ReceiveBudgetBytes 16384 -CoreClr -ExchangesPerConnection 64 -ServiceWait -PipelinedServiceWait -SteadyStateFixture -MaximumInFlight 256
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-ServerGcArrivalTcp.ps1 -HeapLayout graph -ReceiveBudgetBytes 16384 -ExchangesPerConnection 64
       - shell: pwsh
@@ -267,8 +269,9 @@ jobs:
           $serviceWaitRequested = $env:MANAGED_GC_MIXED -in @('coreclr-servicewait', 'coreclr-servicewait-pipelined')
           $pipelinedServiceWaitRequested = $env:MANAGED_GC_MIXED -eq 'coreclr-servicewait-pipelined'
           if ($coreClrRequested) { $env:MANAGED_GC_MIXED = 'true' }
-          $duringGcRequested = $env:MANAGED_GC_UNUSED_INTERFACE -in @('during-gc', 'valid-paths-during-gc')
-          $validCacheRequested = $env:MANAGED_GC_UNUSED_INTERFACE -in @('valid-paths', 'valid-paths-during-gc')
+          $steadyFixtureRequested = $env:MANAGED_GC_UNUSED_INTERFACE -eq 'valid-paths-steady-during-gc'
+          $duringGcRequested = $env:MANAGED_GC_UNUSED_INTERFACE -in @('during-gc', 'valid-paths-during-gc', 'valid-paths-steady-during-gc')
+          $validCacheRequested = $env:MANAGED_GC_UNUSED_INTERFACE -in @('valid-paths', 'valid-paths-during-gc', 'valid-paths-steady-during-gc')
           $noTcpRequested = $env:MANAGED_GC_WPR_PROBES -eq 'clr-only'
           if ($noTcpRequested) { $env:MANAGED_GC_WPR_PROBES = 'true' }
           if ($duringGcRequested -or $validCacheRequested) { $env:MANAGED_GC_UNUSED_INTERFACE = 'true' }
@@ -338,6 +341,7 @@ jobs:
               $extra.ManagedGcUnusedInterface = $true
               if ($duringGcRequested) { $extra.ManagedGcRetireDuringGc = $true }
               if ($validCacheRequested) { $extra.ManagedGcKeepCacheValid = $true }
+              if ($steadyFixtureRequested) { $extra.ManagedGcSteadyStateFixture = $true }
             }
             if ($env:MANAGED_GC_SPINLOCKS -eq 'true') { $extra.ManagedGcSpinLocks = $true }
             if ($env:MANAGED_GC_RSS_PROCESSORS -ne '0') { $extra.ManagedGcRssProcessors = [int]$env:MANAGED_GC_RSS_PROCESSORS }
