@@ -87,6 +87,8 @@ $analyzer=Join-Path $AnalyzerDirectory 'CpuSamples.exe'
 $exe=Join-Path $diagnostics 'ArrivalTcp.exe'
 $compiler="$env:SystemRoot\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
 $wpr="$env:SystemRoot\System32\wpr.exe"
+$wprInstance='NetperfGc-'+[guid]::NewGuid().ToString('N')
+$wprStartAttempted=$false
 $tcpTrace=Join-Path $diagnostics $(if($WprProbes){'cpu.etl'}else{'tcp.etl'})
 $clrTrace=Join-Path $diagnostics $(if($WprProbes){'cpu.etl'}else{'clr.etl'})
 function Wait-Ready($Child,[string]$File,[int]$TimeoutSeconds=20) {
@@ -106,6 +108,12 @@ try {
     finally {if(Test-Path -LiteralPath $CredentialFile){Remove-Item -LiteralPath $CredentialFile -ErrorAction Stop}}
     $phase='module-load'
     Import-Module (Join-Path $PSScriptRoot 'WindowsCts.psm1') -Force
+    $phase='wpr-instance-support'
+    $null=Invoke-TcpChurnTool -Program $wpr -Arguments @('-help','advanced') -Directory $diagnostics `
+        -LogPrefix (Join-Path $diagnostics 'wpr-instance-help')
+    if((Get-Content -LiteralPath (Join-Path $diagnostics 'wpr-instance-help.out.txt') -Raw) -notmatch '(?i)-instancename'){
+        throw 'The installed WPR must support uniquely named recorder instances; no default-instance fallback is permitted.'
+    }
     $phase='preflight'
     if(@(Get-Process -Name Runner.Worker,ctsTraffic,ArrivalTcp -ErrorAction Ignore).Count){throw 'Client guest is busy.'}
     if((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory*1024 -lt $heapMiB*4MB){throw 'Insufficient free guest memory for the bounded GC diagnostic.'}
@@ -278,7 +286,8 @@ try {
     Wait-Ready $localServer ($localOutput+'.ready') $receiverReadySeconds
     $phase='trace-start'
     if(-not $WprProbes){
-        $null=Invoke-TcpChurnTool -Program $wpr -Arguments @('-start','CPU','-filemode') -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'wpr-start')
+        $wprStartAttempted=$true
+        $null=Invoke-TcpChurnTool -Program $wpr -Arguments @('-start','CPU','-filemode','-instancename',$wprInstance) -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'wpr-start')
         $profileOwned=$true
     }
     $phase='tcp-provider-snapshot'
@@ -326,7 +335,8 @@ try {
             }
         }
         & (Join-Path $PSScriptRoot 'New-GcProbeWprProfile.ps1') @profileArguments
-        $null=Invoke-TcpChurnTool -Program $wpr -Arguments @('-start',$cpuProfile,'-start',($wprProfile+'!GcProbeEvents'),'-filemode') `
+        $wprStartAttempted=$true
+        $null=Invoke-TcpChurnTool -Program $wpr -Arguments @('-start',$cpuProfile,'-start',($wprProfile+'!GcProbeEvents'),'-filemode','-instancename',$wprInstance) `
             -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'wpr-start')
         $profileOwned=$true
     }else{
@@ -488,6 +498,7 @@ try {
     }
     $result.probeCollectorBackend=$(if($WprProbes){'wpr-exact-events'}else{'traceevent-exact-events'})
     $result.kernelSpinlockEventsRequested=[bool]$SpinLocks
+    recorderControlScope='unique-owned-named-instance'
     if($GcProcessRole -eq 'server'){$result.launchSpanScope='maximum-independent-producer-span';$result.workloadScope='both-independent-producers-plus-profiled-receiver'}
     if($PeerRecovery){$result.peerRecovery=$pulseResult;$result.peerDataInterfaceDhcpEnabled=$peerDhcpEnabled}
 }catch{$failure=$_}
@@ -577,15 +588,21 @@ finally {
     if($profileOwned) {
         if($WprProbes -and $focusedCpuCapture){
             try{
-                $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @('--session-health',(Join-Path $PublishDirectory 'collector-health.json')) `
+                $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @('--session-health',(Join-Path $PublishDirectory 'collector-health.json'),$wprInstance) `
                     -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'collector-health') -TimeoutSeconds 20
             }catch{$cleanupErrors.Add($_.Exception)}
         }
         $stopArguments=@('-stop',(Join-Path $diagnostics 'cpu.etl'))
         if($WprProbes){$stopArguments+='-skipPdbGen'}
+        $stopArguments+=@('-instancename',$wprInstance)
         try {$null=Invoke-TcpChurnTool -Program $wpr -Arguments $stopArguments `
             -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'wpr-stop') -TimeoutSeconds 120}
         catch{$cleanupErrors.Add($_.Exception)}
+    }elseif($wprStartAttempted){
+        try {
+            $null=Invoke-TcpChurnTool -Program $wpr -Arguments @('-cancel','-instancename',$wprInstance) `
+                -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'wpr-owned-failed-start-cancel') -TimeoutSeconds 20
+        }catch{$cleanupErrors.Add($_.Exception)}
     }
     if($peerOwned -and $null -ne $peer) {
         try {Invoke-Command -Session $peer -ScriptBlock {

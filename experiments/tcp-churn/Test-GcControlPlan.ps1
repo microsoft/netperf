@@ -191,6 +191,48 @@ if($wprFailure.Count -ne 1){throw 'The actual bounded WPR failure diagnostic mus
         throw 'WPR diagnostics lost the public error terms or exported private raw text.'
     }
 }
+$wprStarts=@($ast.FindAll({
+    param($node)
+    $node -is [Management.Automation.Language.CommandAst] -and
+        $node.GetCommandName() -eq 'Invoke-TcpChurnTool' -and $node.Extent.Text.Contains("'-start'")
+},$true))
+$wprStop=@($ast.FindAll({
+    param($node)
+    $node -is [Management.Automation.Language.IfStatementAst] -and
+        $node.Clauses[0].Item1.Extent.Text -eq '$profileOwned'
+},$true))
+if($wprStarts.Count -ne 2 -or $wprStop.Count -ne 1){throw 'All actual recorder start/stop paths must be identified.'}
+& {
+    $wpr='unused-wpr';$cpuProfile='unused-cpu!CPU';$wprProfile='unused-probes.wprp'
+    $diagnostics=[IO.Path]::GetTempPath();$PublishDirectory=$diagnostics;$analyzer='unused-analyzer'
+    $wprInstance='NetperfGc-'+('1'*32)
+    $calls=[Collections.Generic.List[object]]::new()
+    function Invoke-TcpChurnTool {
+        param($Program,$Arguments,$Directory,$LogPrefix,$TimeoutSeconds)
+        $calls.Add([pscustomobject]@{Program=$Program;Arguments=$Arguments})
+    }
+    foreach($start in $wprStarts){& ([scriptblock]::Create($start.Extent.Text))}
+    foreach($call in $calls){
+        if($call.Arguments[-2] -ne '-instancename' -or $call.Arguments[-1] -ne $wprInstance){
+            throw 'Recorder start lost the owned instance or failed to place it last.'
+        }
+    }
+    $calls.Clear()
+    $profileOwned=$true;$focusedCpuCapture=$true;$WprProbes=$true;$wprStartAttempted=$true
+    $cleanupErrors=[Collections.Generic.List[Exception]]::new()
+    & ([scriptblock]::Create($wprStop[0].Extent.Text))
+    if($calls.Count -ne 2 -or $calls[0].Arguments[0] -ne '--session-health' -or
+        $calls[0].Arguments[-1] -ne $wprInstance -or $calls[1].Arguments[0] -ne '-stop' -or
+        $calls[1].Arguments[-2] -ne '-instancename' -or $calls[1].Arguments[-1] -ne $wprInstance -or $cleanupErrors.Count){
+        throw 'Recorder health or stop escaped the owning instance.'
+    }
+    $calls.Clear();$profileOwned=$false
+    & ([scriptblock]::Create($wprStop[0].Extent.Text))
+    if($calls.Count -ne 1 -or $calls[0].Arguments[0] -ne '-cancel' -or
+        $calls[0].Arguments[-2] -ne '-instancename' -or $calls[0].Arguments[-1] -ne $wprInstance){
+        throw 'Partial-start cleanup must target only the new owned instance, never the default recording.'
+    }
+}
 $traffic=[Management.Automation.Language.Parser]::ParseFile(
     (Join-Path $PSScriptRoot 'adapters\GcReceiverTraffic.psm1'),[ref]$tokens,[ref]$errors)
 if($errors.Count){throw ($errors|Out-String)}

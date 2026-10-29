@@ -59,6 +59,7 @@ try{
         }
         $exactExit=$null
         foreach($case in @('tcp-only','clr-only','keyword-only','exact-combined','sampled-combined')){
+            $instance='NetperfGc-'+[guid]::NewGuid().ToString('N')
             [xml]$variant=$xml.OuterXml
             if($case -in @('tcp-only','clr-only')){
                 $removeId=if($case -eq 'tcp-only'){'Clr'}else{'Tcp'}
@@ -79,6 +80,7 @@ try{
                 if($case -eq 'sampled-combined'){$cpuProfile=$sampledKernel+'!CPU'}
                 $arguments=if($case -in @('exact-combined','sampled-combined')){@('-start',$cpuProfile,'-start',($variantPath+'!GcProbeEvents'),'-filemode')}
                     else{@('-start',($variantPath+'!GcProbeEvents'),'-filemode')}
+                $arguments+=@('-instancename',$instance)
                 & $wpr @arguments
                 $activationExit=$LASTEXITCODE
                 Write-Output ("WPR activation case={0} exit=0x{1:X8}" -f $case,$activationExit)
@@ -86,13 +88,13 @@ try{
                 if($case -eq 'sampled-combined' -and $activationExit -ne 0){throw 'Dedicated-runner focused CPU/event activation failed.'}
                 if($activationExit -eq 0){
                     Start-Sleep -Milliseconds 250
-                    & $wpr -stop (Join-Path $directory ($case+'.etl')) -skipPdbGen
+                    & $wpr -stop (Join-Path $directory ($case+'.etl')) -skipPdbGen -instancename $instance
                     if($LASTEXITCODE){throw 'Dedicated-runner recording could not stop.'}
                     $attempted=$false
                 }
             }finally{
-                if($attempted -and ((@(& $wpr -status)-join "`n") -notmatch 'WPR is not recording')){
-                    & $wpr -cancel
+                if($attempted -and ((@(& $wpr -status -instancename $instance)-join "`n") -notmatch 'WPR is not recording')){
+                    & $wpr -cancel -instancename $instance
                     if($LASTEXITCODE){throw 'The dedicated smoke recording could not be cancelled.'}
                 }
             }

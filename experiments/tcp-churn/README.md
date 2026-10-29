@@ -841,6 +841,10 @@ High-concurrency cohorts use the same focused CPU capture as persistent mode,
 omitting scheduling/power/memory and auxiliary CPU-event collectors while
 retaining sampled stacks, explicit buffers and strict zero-loss gates. Ordinary
 single-exchange TCP event coverage remains unchanged.
+Recorder control uses a unique owned `-instancename` for start, health queries,
+stop and partial-start cleanup. The installed recorder must advertise this
+support. Default-instance state is never cancelled or reset; loss health is
+filtered to the generated instance and exports no session names.
 
 The explicit `managed_gc_unused_interface=true` variant creates one
 disposable synthetic NIC on the owned generation-2 VM. It is first added
