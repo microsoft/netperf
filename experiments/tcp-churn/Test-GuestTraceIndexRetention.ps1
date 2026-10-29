@@ -28,9 +28,10 @@ try{
         [IO.File]::WriteAllText($raw,'original synthetic trace fixture')
         [IO.File]::WriteAllText($index,'regenerable synthetic index fixture')
         $rejected=$false
+        $details=@{examinedCollections=0;nearbyTicks=[Collections.Generic.List[long]]::new()}
         try{
             $tick=if($case -eq 'wrong-collection'){$time.Ticks+1}else{$time.Ticks}
-            $plan=@(Get-OwnedIndexPlan $directory @($tick))
+            $plan=@(Get-OwnedIndexPlan $directory @($tick) $details)
             if($plan.Count -ne 1 -or $plan[0].Index -ne $index){throw 'The actual plan did not isolate the selected derived index.'}
             if($case -eq 'changed-index'){[IO.File]::AppendAllText($index,'changed')}
             if($case -eq 'changed-raw'){[IO.File]::AppendAllText($raw,'changed')}
@@ -45,6 +46,10 @@ try{
             -not(Test-Path -LiteralPath $raw) -or
             (Test-Path -LiteralPath $index) -ne ($case -ne 'prune')){
             throw 'Retention deleted an original trace, mutated a rejected scope, or failed to remove only a derived index.'
+        }
+        if($case -eq 'wrong-collection' -and
+            ($details.examinedCollections -ne 1 -or -not $details.nearbyTicks.Contains($time.Ticks))){
+            throw 'Scope rejection lost its bounded numeric-only collection diagnostics.'
         }
         foreach($path in @($marker,$raw,$index)){if(Test-Path -LiteralPath $path){Remove-Item -LiteralPath $path}}
         Remove-Item -LiteralPath $diagnostics;Remove-Item -LiteralPath $root

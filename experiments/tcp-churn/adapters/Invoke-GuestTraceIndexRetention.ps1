@@ -14,7 +14,7 @@ if(Test-Path -LiteralPath $ReportFile){throw 'Use a fresh numeric retention repo
 $worker={
     param([long[]]$AllowedTicks,[bool]$RemoveIndexes)
     $ErrorActionPreference='Stop'
-    function Get-OwnedIndexPlan([string]$Parent,[long[]]$Ticks) {
+    function Get-OwnedIndexPlan([string]$Parent,[long[]]$Ticks,[Collections.IDictionary]$Details) {
         if(-not $Ticks.Count -or @($Ticks|Sort-Object -Unique).Count -ne $Ticks.Count -or @($Ticks|Where-Object{$_ -le 0}).Count){
             throw 'Distinct positive synthetic collection timestamps are required.'
         }
@@ -31,6 +31,11 @@ $worker={
             $gc=Get-Content -LiteralPath $marker -Raw|ConvertFrom-Json
             if(-not $gc.enabled -or $gc.heapLayout -ne 'graph' -or $gc.heapMiB -ne 1024){continue}
             $tick=([datetime]$gc.collectionStartUtc).ToUniversalTime().Ticks
+            if($null -ne $Details){
+                $Details.examinedCollections++
+                if(@($Ticks|Where-Object{[Math]::Abs($tick-$_) -le [TimeSpan]::FromMinutes(5).Ticks}).Count -and
+                    -not $Details.nearbyTicks.Contains($tick)){$Details.nearbyTicks.Add($tick)}
+            }
             if($tick -notin $Ticks){continue}
             if($matchedCollections.ContainsKey($tick)){throw 'An allowed collection timestamp matched more than one owned root.'}
             $matchedCollections[$tick]=$true
@@ -80,7 +85,14 @@ $worker={
     }
     $drive=[IO.Path]::GetPathRoot($env:TEMP).Substring(0,1)
     $before=[long](Get-PSDrive -Name $drive).Free
-    $plan=@(Get-OwnedIndexPlan $env:TEMP $AllowedTicks)
+    $details=@{examinedCollections=0;nearbyTicks=[Collections.Generic.List[long]]::new()}
+    try{$plan=@(Get-OwnedIndexPlan $env:TEMP $AllowedTicks $details)}catch{
+        if($_.Exception.Message -notmatch 'Not every allowed synthetic collection'){throw}
+        return [pscustomobject]@{schema=1;outcome='failed';failureReason='collection-match'
+            requestedCollectionTicks=$AllowedTicks;nearbyCollectionTicks=$details.nearbyTicks.ToArray()
+            examinedCollections=$details.examinedCollections;temporaryFreeMiBBefore=[long][Math]::Floor($before/1MB)
+            pruned=$false;pathsExported=$false;rawTracesExported=$false}
+    }
     $bytes=[long]0
     foreach($entry in $plan){$bytes+=$entry.IndexBytes}
     if($RemoveIndexes){Remove-OwnedIndexes $plan}
@@ -95,8 +107,10 @@ try{
     $report=Invoke-Command -VMName $VmName -Credential $Credential -ErrorAction Stop -ScriptBlock $worker `
         -ArgumentList $CollectionStartTicks,([bool]$Prune)
     $report|Select-Object schema,outcome,matchedCollections,derivedIndexCount,derivedIndexBytes,pruned,
-        originalEtlHashesPreserved,temporaryFreeMiBBefore,temporaryFreeMiBAfter,pathsExported,rawTracesExported|
+        originalEtlHashesPreserved,temporaryFreeMiBBefore,temporaryFreeMiBAfter,pathsExported,rawTracesExported,
+        failureReason,requestedCollectionTicks,nearbyCollectionTicks,examinedCollections|
         ConvertTo-Json|Set-Content -LiteralPath $ReportFile
+    if($report.outcome -eq 'failed'){throw 'The exact retention collection match failed; no files were removed.'}
 }catch{
     $reason=switch -Regex ($_.Exception.Message){
         'active workload or analyzer' {'busy';break}
@@ -109,7 +123,9 @@ try{
         'not enough space|disk is full|disk full' {'storage';break}
         default {'unclassified'}
     }
-    @{schema=1;outcome='failed';failureType=$_.Exception.GetType().FullName;failureCode=$_.Exception.HResult
-        failureReason=$reason;pathsExported=$false;rawTracesExported=$false}|ConvertTo-Json|Set-Content -LiteralPath $ReportFile
+    if(-not(Test-Path -LiteralPath $ReportFile)){
+        @{schema=1;outcome='failed';failureType=$_.Exception.GetType().FullName;failureCode=$_.Exception.HResult
+            failureReason=$reason;pathsExported=$false;rawTracesExported=$false}|ConvertTo-Json|Set-Content -LiteralPath $ReportFile
+    }
     throw 'The bounded guest trace-index retention operation failed; no private paths or raw traces were published.'
 }
