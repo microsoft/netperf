@@ -184,7 +184,7 @@ try {
     $peerOwned=$true
     $phase='start-remote-peer'
     Invoke-Command -Session $peer -ScriptBlock {
-        param($root,$listen,$client,$port,$count,$rate,$payloadBytes,$gcRole,$peerPressure)
+        param($root,$listen,$client,$port,$count,$rate,$payloadBytes,$gcRole,$peerPressure,$pressureMinimum)
         if(@(Get-NetIPAddress -AddressFamily IPv4|Where-Object IPAddress -eq $listen).Count -ne 1){throw 'The peer does not uniquely own the declared listen address.'}
         Import-Module (Join-Path $root 'WindowsCts.psm1') -Force
         $global:OwnedManagedGcPeer=@{Process=$null;Rule=$null;Root=$root;PressureServer=$null;PressureClient=$null}
@@ -200,7 +200,7 @@ try {
             $pressureOutput=Join-Path $root 'pressure-server.json'
             $global:OwnedManagedGcPeer.PressureServer=Start-TcpChurnCollector -Program $exe -Arguments @(
                 '127.0.0.1','127.0.0.2','20301','4096','819','1048576',$pressureOutput,
-                'server','1048576','34711','256','nodelay','gc:1024:1024:graph'
+                'server','1048576','34711','256','nodelay',("gc:1024:{0}:graph" -f $pressureMinimum)
             ) -Directory $root -LogPrefix (Join-Path $root 'pressure-server')
             $ready=[Diagnostics.Stopwatch]::StartNew()
             while(-not(Test-Path -LiteralPath ($pressureOutput+'.ready'))){
@@ -224,7 +224,7 @@ try {
             if($global:OwnedManagedGcPeer.Process.Process.HasExited -or $clock.Elapsed.TotalSeconds -gt 20){throw 'Peer listener did not become ready.'}
             Start-Sleep -Milliseconds 50
         }
-    } -ArgumentList $remote,$peerAddress,$cohortSources,$port,($count/2),$rate,$payloadBytes,$GcProcessRole,([bool]$PeerGcPressure)
+    } -ArgumentList $remote,$peerAddress,$cohortSources,$port,($count/2),$rate,$payloadBytes,$GcProcessRole,([bool]$PeerGcPressure),$(if($CacheInterfaceAlias){2048}else{1024})
     if($GcProcessRole -eq 'server') {
         $phase='start-profiled-receiver'
         Import-Module (Join-Path $PSScriptRoot 'GcReceiverTraffic.psm1') -Force
@@ -414,8 +414,9 @@ try {
     $result.profiledProcessRole=$GcProcessRole
     if($PeerGcPressure){
         $pressure=$r.peerGcPressure
-        if(([datetime]$pressure.managedGc.collectionEndUtc).ToUniversalTime() -lt ([datetime]$r.managedGc.collectionStartUtc).ToUniversalTime() -or
-            ([datetime]$pressure.managedGc.collectionStartUtc).ToUniversalTime() -gt ([datetime]$r.managedGc.collectionEndUtc).ToUniversalTime()){
+        if(-not $CacheInterfaceAlias -and
+            (([datetime]$pressure.managedGc.collectionEndUtc).ToUniversalTime() -lt ([datetime]$r.managedGc.collectionStartUtc).ToUniversalTime() -or
+            ([datetime]$pressure.managedGc.collectionStartUtc).ToUniversalTime() -gt ([datetime]$r.managedGc.collectionEndUtc).ToUniversalTime())){
             throw 'The independent companion collection did not overlap the profiled real GC.'
         }
         $result.peerGcPressure=$pressure
@@ -631,6 +632,14 @@ try {
             throw 'The bounded source-retirement population, live cohort, timing or restoration did not verify.'
         }
         $result.cacheRetirementControl=$cacheReport
+        if($PeerGcPressure -and $CacheInterfaceAlias){
+            $pressure=$r.peerGcPressure
+            if(([datetime]$pressure.managedGc.collectionEndUtc).ToUniversalTime() -lt ([datetime]$cacheReport.removeApiStartUtc).ToUniversalTime() -or
+                ([datetime]$pressure.managedGc.collectionStartUtc).ToUniversalTime() -gt ([datetime]$cacheReport.removeApiEndUtc).ToUniversalTime()){
+                throw 'The independent companion collection did not overlap the unused-interface cleanup API.'
+            }
+            $result.peerGcPressure|Add-Member NoteProperty overlapTarget 'unused-interface-cleanup-api' -Force
+        }
     }
     if($RouteRefresh) {
         $phase='verify-route-control'

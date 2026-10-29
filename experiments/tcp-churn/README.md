@@ -770,6 +770,10 @@ burner or data-release barrier. Both heaps must fit admission limits, both
 loopback endpoints must finish, and their measured generation-2 collection
 must overlap the profiled collection. This tests concurrent managed-service
 CPU pressure without changing VM processor allocation or host scheduling.
+With the disposable-interface variant, the companion's ordinary accepted-flow
+threshold is later (2,048 rather than 1,024), and its measured collection must
+instead overlap the interface-cleanup API. This targets lock-holder scheduling
+during maintenance, not merely two collections that end before maintenance.
 The explicit `managed_gc_unused_interface=true` variant creates one
 disposable synthetic NIC on the owned generation-2 VM. It is first added
 disconnected, configured without DHCP, and only then attached to the VM's

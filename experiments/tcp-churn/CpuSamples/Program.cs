@@ -210,6 +210,7 @@ internal static class Program
                 long samples = 0, withStack = 0, network = 0, unresolved = 0;
                 long pathRefreshWait = 0, timerPathRefreshWait = 0, hypervisorNotifiedPathRefreshWait = 0;
                 var timerWaitTicks = new List<long>();
+                var pathWaitTicks = new List<long>();
                 foreach (var record in log.Events)
                 {
                     var sample = record as SampledProfileTraceData;
@@ -264,6 +265,7 @@ internal static class Program
                     if (IsPathRefreshWait(frames))
                     {
                         pathRefreshWait++;
+                        pathWaitTicks.Add((utc - start).Ticks);
                         if (IsTimerPathRefreshWait(frames))
                         {
                             timerPathRefreshWait++;
@@ -278,6 +280,7 @@ internal static class Program
                 double profileIntervalMs = log.SampleProfileInterval.TotalMilliseconds;
                 if (profileIntervalMs <= 0) throw new InvalidOperationException("A positive profile sampling interval is required.");
                 timerWaitTicks.Sort();
+                pathWaitTicks.Sort();
                 File.WriteAllText(args[1], JsonConvert.SerializeObject(new
                 {
                     schema = 1, outcome = samples > 0 ? "sampled" : "no-samples",
@@ -288,6 +291,12 @@ internal static class Program
                     publicTimerPathRefreshWaitSamples = timerPathRefreshWait,
                     publicHypervisorNotifiedPathRefreshWaitSamples = hypervisorNotifiedPathRefreshWait,
                     profileIntervalMilliseconds = profileIntervalMs,
+                    pathRefreshWaitPeaks = new[] { 10.0, 100.0, 500.0, 620.0 }.Select(window =>
+                    {
+                        int peak = PeakSampleCount(pathWaitTicks, TimeSpan.FromMilliseconds(window).Ticks);
+                        return new { windowMilliseconds = window, samples = peak,
+                            sampledWaitingCpuEquivalents = peak * profileIntervalMs / window };
+                    }).ToArray(),
                     timerPathRefreshWaitPeaks = new[] { 10.0, 100.0, 500.0, 620.0 }.Select(window =>
                     {
                         int peak = PeakSampleCount(timerWaitTicks, TimeSpan.FromMilliseconds(window).Ticks);
