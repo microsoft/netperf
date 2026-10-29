@@ -141,6 +141,7 @@ internal static class Program
                     File.WriteAllText(args[2], JsonConvert.SerializeObject(new {
                         schema = 1, outcome = "counted", providerEventsInInterval = total,
                         processFilterApplied = ownerProcessId != 0,
+                        requestedPublicProbeTasks = names.Values.Distinct().OrderBy(name => name).ToArray(),
                         publicProbeCounts = counts, eventsLost = source.EventsLost,
                         conclusion = "events-do-not-prove-lock-waiting"
                     }, Formatting.Indented));

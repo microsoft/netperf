@@ -124,11 +124,11 @@ foreach($exchangeMode in @(1,64)){
         $tcpKeywords=[long]0x500000084;$omittedTcpTasks=@()
         . ([scriptblock]::Create($selection[0].Extent.Text))
         foreach($required in @('TcpTcbSynSend','TcpDisconnectTcbRtoTimeout','TcpAcceptListenerComplete',
-            'TcpCloseTcbRequest','TcpInsertConnectionTuple','TcpBlackHoleDetectionEntry','TcpBlackHoleDetectionExit','TcpBlackHoleDetectionFailed')){
-            if($required -notin $tasks){throw 'Persistent selection lost required lifetime or actual BH event coverage.'}
+            'TcpCloseTcbRequest','TcpInsertConnectionTuple')){
+            if($required -notin $tasks){throw 'Persistent selection lost required lifetime event coverage.'}
         }
         if($exchangeMode -eq 64 -and
-            (($tcpKeywords -band [long]0x100000080) -ne 0 -or $omittedTcpTasks.Count -ne 4 -or
+            (($tcpKeywords -band [long]0x8100000084) -ne 0 -or $omittedTcpTasks.Count -ne 7 -or
                 @($tasks|Where-Object{$_ -in $omittedTcpTasks}).Count)){
             throw 'Persistent selection retained broad per-message send/diagnosis event volume.'
         }

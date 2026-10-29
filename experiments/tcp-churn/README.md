@@ -759,11 +759,12 @@ sampled CPU stacks, process/thread lifetime and image metadata. Optional
 spinlock events remain a separate explicit choice. The report states that
 scheduling events were omitted; these captures must not be used to infer
 off-CPU owner intervals. CLR filtering and zero-loss acceptance are unchanged.
-Persistent TCP probes request only connection/TCB lifetime and actual BH
-entry/exit/failure keywords. Broad per-message send/diagnosis keywords are
-omitted; the result explicitly lists unrequested retransmission-round,
-zero-window-state and full-size-ACK tasks so their zero counts are not
-interpreted as measured absence. Ordinary single-exchange coverage is unchanged.
+Persistent TCP probes request only connection/close lifetime keywords.
+Broad global, per-message send/diagnosis and TCB-detail keywords are omitted.
+The result explicitly lists unrequested BH, retransmission-round,
+zero-window-state and full-size-ACK tasks; omitted coverage is not measured
+absence. Event summaries list requested public tasks. Ordinary single-exchange
+coverage is unchanged.
 
 The idle-cache mechanism control
 requires isolated receiver GC and excludes neighbor pulses.

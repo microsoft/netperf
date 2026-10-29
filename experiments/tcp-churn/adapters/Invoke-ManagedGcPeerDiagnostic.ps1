@@ -283,14 +283,15 @@ try {
     $tcpKeywords=[long]0x500000084
     $omittedTcpTasks=@()
     if($ExchangesPerConnection -eq 64){
-        $omittedTcpTasks=@('TcpDataTransferRetransmitRound','TcpBhDetectFullSizeAck','TcpZeroWindowProbingBegin','TcpZeroWindowProbingEnd')
+        $omittedTcpTasks=@('TcpDataTransferRetransmitRound','TcpBhDetectFullSizeAck','TcpZeroWindowProbingBegin','TcpZeroWindowProbingEnd',
+            'TcpBlackHoleDetectionEntry','TcpBlackHoleDetectionExit','TcpBlackHoleDetectionFailed')
         $tasks=@($tasks|Where-Object{$_ -notin $omittedTcpTasks})
-        $tcpKeywords=[long]0x8400000004
+        $tcpKeywords=[long]0x1400000000
     }
     $events=@($provider.Events|Where-Object{$null -ne $_.Task -and $_.Task.Name -in $tasks}|
         ForEach-Object{[pscustomobject]@{Id=$_.Id;Task=$_.Task.Name}})
     foreach($task in $tasks){if($task -notin @($events.Task)){throw 'A required public TCP event is unavailable.'}}
-    # Persistent mode requests lifecycle and BH events without broad per-message diagnosis/send keywords.
+    # Persistent mode requests lifecycle only, excluding broad global/diagnosis/send keywords.
     foreach($event in @($provider.Events|Where-Object{$null -ne $_.Task -and $_.Task.Name -in $tasks})){
         if(@($event.Keywords).Count -and -not @($event.Keywords|Where-Object{($_.Value -band $tcpKeywords) -ne 0}).Count){
             throw 'The bounded TCP keyword selection does not cover a required public event.'
@@ -448,7 +449,7 @@ try {
         bytesSent=$r.bytesSent;bytesReceived=$r.bytesReceived;payloadBytesPerDirection=$payloadBytes
         exchangesPerConnection=$ExchangesPerConnection
         kernelSchedulingEventsRequested=($ExchangesPerConnection -ne 64)
-        tcpProbeCoverage=$(if($ExchangesPerConnection -eq 64){'lifecycle-and-black-hole-only'}else{'bounded-diagnosis-send-connect-tcb'})
+        tcpProbeCoverage=$(if($ExchangesPerConnection -eq 64){'lifecycle-only'}else{'bounded-diagnosis-send-connect-tcb'})
         omittedTcpProbeTasks=$omittedTcpTasks
         dataInterfaceMtuBytes=$mtu
         targets=$r.targets;managedGc=$r.managedGc
