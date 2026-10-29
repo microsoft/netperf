@@ -170,6 +170,27 @@ foreach($case in @('during-valid','during-late','after-valid','after-early','hel
         }
     }
 }
+$wprFailure=@($ast.FindAll({
+    param($node)
+    $node -is [Management.Automation.Language.IfStatementAst] -and
+        $node.Clauses[0].Item1.Extent.Text -eq '$phase -eq ''wpr-exact-probe-start'''
+},$true))
+if($wprFailure.Count -ne 1){throw 'The actual bounded WPR failure diagnostic must be unique.'}
+& {
+    $phase='wpr-exact-probe-start';$diagnostics=[IO.Path]::GetTempPath();$probeStartup=@{}
+    function Test-Path {[CmdletBinding()]param($LiteralPath) $true}
+    function Get-Content {
+        [CmdletBinding()]param($LiteralPath,[switch]$Raw)
+        'The requested profile was not found. C:\private\synthetic-secret\sample.wprp'
+    }
+    & ([scriptblock]::Create($wprFailure[0].Extent.Text))
+    $evidence=$probeStartup.wpr
+    if($evidence.outputLogsPresent -ne 2 -or $evidence.rawMessagesExported -or
+        'profile' -notin $evidence.publicDiagnosticTerms -or 'found' -notin $evidence.publicDiagnosticTerms -or
+        ($evidence|ConvertTo-Json -Compress) -match 'private|synthetic-secret|sample\.wprp'){
+        throw 'WPR diagnostics lost the public error terms or exported private raw text.'
+    }
+}
 $traffic=[Management.Automation.Language.Parser]::ParseFile(
     (Join-Path $PSScriptRoot 'adapters\GcReceiverTraffic.psm1'),[ref]$tokens,[ref]$errors)
 if($errors.Count){throw ($errors|Out-String)}

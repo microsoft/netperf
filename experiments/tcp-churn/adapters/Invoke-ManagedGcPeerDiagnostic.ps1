@@ -673,6 +673,16 @@ if($null -ne $failure -or $cleanupErrors.Count) {
         $type=if($null -ne $failure){$failure.Exception.GetType().FullName}else{'cleanup-failure'}
         $code=if($null -ne $failure){$failure.Exception.HResult}else{$null}
         $toolCode=if($null -ne $failure -and $failure.Exception.Data.Contains('ToolExitCode')){$failure.Exception.Data['ToolExitCode']}else{$null}
+        if($phase -eq 'wpr-exact-probe-start'){
+            $logs=@('wpr-start.out.txt','wpr-start.err.txt'|ForEach-Object{Join-Path $diagnostics $_}|Where-Object{Test-Path -LiteralPath $_})
+            $text=(@($logs|ForEach-Object{Get-Content -LiteralPath $_ -Raw}) -join "`n")
+            $vocabulary=@('already','running','recording','profile','profiles','file','missing','find','found','exists','invalid',
+                'configuration','session','failed','buffer','memory','denied','match','logger','loading','not','no','instance',
+                'provider','disk','resources','access','pending','empty','create','start','mismatch','unique','enabled','duplicate')
+            $probeStartup['wpr']=@{outputLogsPresent=$logs.Count
+                publicDiagnosticTerms=@($vocabulary|Where-Object{$text -match ('(?i)\b'+[regex]::Escape($_)+'\b')})
+                rawMessagesExported=$false}
+        }
         @{schema=1;workload='managed-gc-mixed';outcome='failed';phase=$phase;failureType=$type;failureCode=$code
             failureSourceLine=$(if($null -ne $failure){$failure.InvocationInfo.ScriptLineNumber}else{$null})
             probeStartup=$probeStartup
