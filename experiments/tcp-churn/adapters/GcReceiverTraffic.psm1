@@ -140,6 +140,12 @@ function Invoke-GcReceiverTraffic {
         $server.bytesReceived -ne $local.bytesSent+$remote.bytesSent -or
         $server.bytesSent -ne $local.bytesReceived+$remote.bytesReceived -or
         -not $server.managedGc.enabled -or $server.managedGc.gen2CollectionsAfter -le $server.managedGc.gen2CollectionsBefore -or
+        -not $server.managedGc.serverGc -or $server.managedGc.heapMiB -ne $State.HeapMiB -or
+        $server.managedGc.heapLayout -ne $State.HeapLayout -or $server.managedGc.preparedManagedHeapBytes -le 0 -or
+        $server.managedGc.preparedGraphNodeCount -ne $(if($State.HeapLayout -eq 'graph'){
+            ([long][Math]::Floor(([long]$State.HeapMiB*1024*1024)/40))-band -2L
+        }else{0}) -or
+        ($State.HeapMiB -gt 1024 -and $server.managedGc.largeHeapFreePhysicalBytesBeforePreparation -lt ([long]$State.HeapMiB*4MB)) -or
         $server.requestDispatch -ne 'thread-pool' -or $server.peakInFlight -gt $State.Connections -or
         $server.managedGc.configuredReceiveBudgetBytes -ne $State.ReceiveBudgetBytes -or
         $server.managedGc.maximumPostedReadBytes -ne $State.ReceiveBudgetBytes -or

@@ -7,7 +7,7 @@ param(
     [Parameter(Mandatory)][string]$DataStateFile,
     [Parameter(Mandatory)][string]$StateFile,
     [Parameter(Mandatory)][string]$ReportFile,
-    [ValidateSet(1,1024,8192,24576,49152,98304)][int]$PathCount=8192,
+    [ValidateSet(1,1024,8192,24576,49152,98304,196608,294912)][int]$PathCount=8192,
     [string]$ReceiverExecutable,[int]$ReceiverProcessId,
     [string]$UnusedInterfaceGuid,
     [string]$PopulationInterfaceAlias,
@@ -31,8 +31,7 @@ if(-not $RestoreOnly -and (!$ReadyFile -or !$BeginFile -or !$StopFile)){
 }
 $source='198.19.0.1';$prefix='198.19.0.0/17'
 $sources=@($source)
-if($PathCount -eq 49152){$sources+='198.19.0.2'}
-if($PathCount -eq 98304){$sources+=@('198.19.0.2','198.19.0.3','198.19.0.4')}
+if($PathCount -gt 24576){foreach($number in 2..($PathCount/24576)){$sources+="198.19.0.$number"}}
 $adapter=@(Get-NetAdapter -Name $InterfaceAlias -ErrorAction Stop)
 if($adapter.Count -ne 1){throw 'The owned data adapter must be unique.'}
 $data=Import-Clixml -LiteralPath $DataStateFile -ErrorAction Stop

@@ -253,6 +253,18 @@ try {
     }
     if(-not $rejected -or (Test-Path -LiteralPath $directory)){throw 'Invalid pipelining mode mutated state or was accepted.'}
     $checks++
+    foreach($extra in @(@{ManagedGc=$true;ProfileCpu=$true;ManagedGcHeapLayout='graph-2g'},@{ManagedGcCacheRetirePaths=294912})){
+        $rejected=$false
+        try{
+            & (Join-Path $PSScriptRoot 'adapters\Invoke-NetperfGuestTcpChurn.ps1') `
+                -VmName 'unused-test-only' -Credential $credential -PublishDirectory $directory @extra
+        }catch{
+            if($_.Exception.Message -notmatch '2-GiB graph comparison requires|Larger path populations require'){throw}
+            $rejected=$true
+        }
+        if(-not $rejected -or (Test-Path -LiteralPath $directory)){throw 'A larger heap/cache option was accepted without its guarded receiver mode.'}
+        $checks++
+    }
     foreach($extra in @(@{ManagedGcCacheRetirePaths=1024},@{ManagedGcPeerPressure=$true})){
         $rejected=$false
         try{
@@ -350,7 +362,7 @@ try {
         $ManagedGcIdleKeepalive=[switch]::new($true)
         $ManagedGcServiceWait=[switch]::new($true)
         $ManagedGcPipelinedServiceWait=[switch]::new($true)
-        $ManagedGcHeapLayout='graph'
+        $ManagedGcHeapLayout='graph-2g'
         $ManagedGcRouteRefresh=[switch]::new($true)
         $ManagedGcRouteVariant='peer-gateway'
         $ManagedGcReceiveBudgetBytes=16384
@@ -383,7 +395,7 @@ try {
         $actual[16] -isnot [int] -or $actual[16] -ne 8192 -or
         $actual[15] -isnot [int] -or $actual[15] -ne 16384 -or
         $actual[14] -ne 'peer-gateway' -or $actual[13] -isnot [bool] -or -not $actual[13] -or
-        $actual[12] -ne 'graph' -or $actual[11] -ne 'client' -or $actual[7] -ne 2048 -or $actual[8] -isnot [bool] -or -not $actual[8] -or
+        $actual[12] -ne 'graph-2g' -or $actual[11] -ne 'client' -or $actual[7] -ne 2048 -or $actual[8] -isnot [bool] -or -not $actual[8] -or
         $actual[9] -isnot [bool] -or -not $actual[9] -or $actual[10] -ne 3000 -or
         $actual[3] -isnot [bool] -or -not $actual[3] -or
         $actual[4] -isnot [bool] -or $actual[4] -or $actual[5] -isnot [bool] -or $actual[5] -or

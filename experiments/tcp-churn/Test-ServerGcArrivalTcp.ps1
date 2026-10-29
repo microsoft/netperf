@@ -110,6 +110,10 @@ try {
         throw 'Receiver dispatch, capacity, or endpoint byte accounting failed.'
     }
     $gc=$r.managedGc
+    if($gc.preparedManagedHeapBytes -le 0 -or
+        $gc.preparedGraphNodeCount -ne $(if($HeapLayout -eq 'graph'){838860}else{0})){
+        throw 'The actual prepared heap layout was not reported.'
+    }
     if($gc.completedUnit -ne $(if($IdleKeepalive -or $ServiceWait){'application-responses'}else{'connections'})){
         throw 'GC completion units must distinguish serviced requests from idle connection teardown.'
     }

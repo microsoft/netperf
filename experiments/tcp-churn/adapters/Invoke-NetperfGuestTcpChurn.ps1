@@ -19,7 +19,7 @@ param(
     [switch]$ManagedGcIsolatedData,
     [ValidateRange(100,8000)][int]$ManagedGcRecoveryMilliseconds=8000,
     [ValidateSet('client','server')][string]$ManagedGcProcessRole='client',
-    [ValidateSet('arrays','graph')][string]$ManagedGcHeapLayout='arrays',
+    [ValidateSet('arrays','graph','graph-2g')][string]$ManagedGcHeapLayout='arrays',
     [switch]$ManagedGcRouteRefresh,
     [ValidateSet('onlink','peer-gateway','destination-flush','onlink-after-gc')][string]$ManagedGcRouteVariant='onlink',
     [ValidateSet(1,64)][int]$ManagedGcExchanges=1,
@@ -32,7 +32,7 @@ param(
     [switch]$ManagedGcServiceWait,
     [switch]$ManagedGcPipelinedServiceWait,
     [ValidateSet(0,16384)][int]$ManagedGcReceiveBudgetBytes=0,
-    [ValidateSet(0,1,1024,8192,24576,49152,98304)][int]$ManagedGcCacheRetirePaths=0,
+    [ValidateSet(0,1,1024,8192,24576,49152,98304,196608,294912)][int]$ManagedGcCacheRetirePaths=0,
     [switch]$ManagedGcWprProbes,
     [switch]$ManagedGcPeerPressure,
     [switch]$ManagedGcUnusedInterface,
@@ -70,6 +70,13 @@ if($ManagedGcProcessRole -eq 'server' -and (-not $ManagedGc -or -not $ManagedGcI
     throw 'Receiver GC requires managed-GC mode, isolated data and no neighbor pulse.'
 }
 if($ManagedGcHeapLayout -ne 'arrays' -and -not $ManagedGc){throw 'GC heap layout selection requires managed-GC diagnostic mode.'}
+if($ManagedGcHeapLayout -eq 'graph-2g' -and
+    ($ManagedGcProcessRole -ne 'server' -or -not $ManagedGcCoreClr -or -not $ManagedGcIsolatedData -or $ManagedGcPeerRecovery)){
+    throw 'The 2-GiB graph comparison requires isolated CoreCLR receiver GC without a neighbor fault.'
+}
+if($ManagedGcCacheRetirePaths -gt 98304 -and $ManagedGcHeapLayout -ne 'graph-2g'){
+    throw 'Larger path populations require the admitted 2-GiB graph snapshot window.'
+}
 if($ManagedGcExchanges -ne 1 -and (-not $ManagedGc -or $ManagedGcProcessRole -ne 'server' -or
     (-not($ManagedGcServiceWait -and $ManagedGcPayloadBytes -eq 512) -and $ManagedGcPayloadBytes -ne 1460))){
     throw 'Persistent exchanges require receiver-GC mode and 1460-byte request/response payloads.'
@@ -154,7 +161,7 @@ try {
             if($LASTEXITCODE -ne 0){throw 'The read-only ETW session query failed.'}
             $exactLoggers=@($loggerRows|Where-Object{$_ -match '^\s*TcpChurnExact-[0-9a-fA-F]{32}\s'}).Count
             $activeWprLoggers=@($loggerRows|Where-Object{$_ -match '^\s*WPR_initiated_'}).Count
-            $clientAliases=@(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop|Where-Object{$_.IPAddress -match '^198\.19\.240\.[1-6]$' -or $_.IPAddress -match '^198\.19\.0\.[1-4]$'}).Count
+            $clientAliases=@(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop|Where-Object{$_.IPAddress -match '^198\.19\.240\.[1-6]$' -or $_.IPAddress -match '^198\.19\.0\.([1-9]|1[0-2])$'}).Count
             $clientPathInterfaces=@(Get-NetAdapter -ErrorAction Stop|Where-Object Name -match '^NetperfPath-[0-9a-f]{12}$').Count
             $clientDataInterfaces=@(Get-NetAdapter -ErrorAction Stop|Where-Object Name -match '^NetperfData-[0-9a-f]{12}$').Count
             $clientRules=@(Get-NetFirewallRule -PolicyStore ActiveStore -ErrorAction Stop|Where-Object{$_.Name -like 'ManagedGcPeer-*' -or $_.Name -like 'ManagedGcReceiver-*'}).Count

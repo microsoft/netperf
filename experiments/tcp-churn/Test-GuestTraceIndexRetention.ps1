@@ -59,13 +59,14 @@ try{
         }
     }
     $global:LASTEXITCODE=0
+    foreach($heapBudget in @(1024,2048)){
     foreach($case in @('inspect','prune','wrong-collection','changed-index','changed-raw','changed-marker')){
         $root=Join-Path $directory ('netperf-churn-'+[guid]::NewGuid().ToString('N'))
         $diagnostics=Join-Path $root 'managed-gc-diagnostics'
         $null=New-Item -ItemType Directory -Path $diagnostics
         $marker=Join-Path $diagnostics 'profiled-server.json.gc.json'
         $time=[datetime]::UtcNow
-        @{enabled=$true;heapMiB=1024;heapLayout='graph';collectionStartUtc=$time.ToString('o')}|
+        @{enabled=$true;heapMiB=$heapBudget;heapLayout='graph';collectionStartUtc=$time.ToString('o')}|
             ConvertTo-Json|Set-Content -LiteralPath $marker
         $raw=Join-Path $diagnostics 'cpu.etl';$index=Join-Path $diagnostics 'cpu.etlx'
         [IO.File]::WriteAllText($raw,'original synthetic trace fixture')
@@ -99,6 +100,7 @@ try{
         }
         foreach($path in @($marker,$raw,$index)){if(Test-Path -LiteralPath $path){Remove-Item -LiteralPath $path}}
         Remove-Item -LiteralPath $diagnostics;Remove-Item -LiteralPath $root
+    }
     }
     foreach($prune in @($false,$true)){
         & {

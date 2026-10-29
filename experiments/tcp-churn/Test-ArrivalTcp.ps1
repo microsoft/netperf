@@ -96,6 +96,22 @@ try {
     $checks++
     $flags=[Reflection.BindingFlags]'Static,NonPublic'
     $type=$probeMethod.DeclaringType
+    $memoryType=$type.GetNestedType('MemoryStatus',[Reflection.BindingFlags]::NonPublic)
+    $memory=[Activator]::CreateInstance($memoryType)
+    if([Runtime.InteropServices.Marshal]::SizeOf($memory) -ne 64){throw 'The memory-admission structure does not match the documented Windows layout.'}
+    $memoryType.GetField('Length').SetValue($memory,[uint32]64)
+    $memoryArguments=@($memory)
+    if(-not $type.GetMethod('GlobalMemoryStatusEx',$flags).Invoke($null,$memoryArguments) -or
+        $memoryType.GetField('AvailablePhysical').GetValue($memoryArguments[0]) -le 0){
+        throw 'The actual read-only large-heap memory admission query failed.'
+    }
+    $checks++
+    foreach($heapMiB in @(32,1024,2048)){
+        $nodes=[long]$type.GetMethod('GraphNodeCount',$flags).Invoke($null,@([int]$heapMiB))
+        $expected=([long][Math]::Floor(([long]$heapMiB*1024*1024)/40))-band -2L
+        if($nodes -ne $expected -or $nodes -le 0){throw 'Graph node count overflowed or lost the bounded even-root layout.'}
+        $checks++
+    }
     $savedFields=@{}
     $listener=$null;$receiver=$null
     try{

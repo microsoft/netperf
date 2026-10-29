@@ -14,7 +14,7 @@ param(
     [switch]$IsolatedData,
     [ValidateRange(100,8000)][int]$RecoveryMilliseconds=8000,
     [ValidateSet('client','server')][string]$GcProcessRole='client',
-    [ValidateSet('arrays','graph')][string]$HeapLayout='arrays',
+    [ValidateSet('arrays','graph','graph-2g')][string]$HeapLayout='arrays',
     [switch]$RouteRefresh,
     [ValidateSet('onlink','peer-gateway','destination-flush','onlink-after-gc')][string]$RouteVariant='onlink',
     [ValidateSet(1,64)][int]$ExchangesPerConnection=1,
@@ -27,7 +27,7 @@ param(
     [switch]$ServiceWait,
     [switch]$PipelinedServiceWait,
     [ValidateSet(0,16384)][int]$ReceiveBudgetBytes=0,
-    [ValidateSet(0,1,1024,8192,24576,49152,98304)][int]$CacheRetirePaths=0,
+    [ValidateSet(0,1,1024,8192,24576,49152,98304,196608,294912)][int]$CacheRetirePaths=0,
     [switch]$WprProbes,
     [switch]$PeerGcPressure,
     [string]$CacheInterfaceAlias,
@@ -37,6 +37,16 @@ param(
     [string]$DataInterfaceGuid
 )
 $ErrorActionPreference='Stop'
+$requestedHeapLayout=$HeapLayout
+if($HeapLayout -eq 'graph-2g'){
+    if($GcProcessRole -ne 'server' -or -not $CoreClr -or -not $IsolatedData -or $PeerRecovery){
+        throw 'The 2-GiB graph comparison requires isolated CoreCLR receiver GC without a neighbor fault.'
+    }
+    $HeapLayout='graph'
+}
+if($CacheRetirePaths -gt 98304 -and $requestedHeapLayout -ne 'graph-2g'){
+    throw 'Larger path populations require the admitted 2-GiB graph snapshot window.'
+}
 $focusedCpuCapture=$NoTcpProbes -or $ExchangesPerConnection -eq 64 -or $Connections -gt 1024
 if($RetireDuringGc -and -not $CacheInterfaceAlias){throw 'GC-active retirement requires the owned unused-interface control.'}
 if($KeepCacheValid -and -not $CacheInterfaceAlias){throw 'Surviving cache population requires the owned unused-interface control.'}
@@ -102,7 +112,7 @@ $cacheStem=if($RouteRefresh -and $CacheRetirePaths){'cache-control'}else{'route-
 $probeStartup=[ordered]@{}
 $failure=$null;$cleanupErrors=[Collections.Generic.List[Exception]]::new()
 $phase='preflight';$start=$null;$end=$null;$tcpEnd=$null;$result=$null
-$port=20300;$count=8192;$heapMiB=1024
+$port=20300;$count=8192;$heapMiB=$(if($requestedHeapLayout -eq 'graph-2g'){2048}else{1024})
 $rate=[int][Math]::Ceiling($count/[double]$Seconds)
 $analyzer=Join-Path $AnalyzerDirectory 'CpuSamples.exe'
 $exe=Join-Path $diagnostics 'ArrivalTcp.exe'

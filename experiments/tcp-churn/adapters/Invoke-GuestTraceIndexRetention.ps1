@@ -53,7 +53,7 @@ $worker={
             if(-not(Test-Path -LiteralPath $marker -PathType Leaf)){continue}
             if((Get-Item -LiteralPath $marker).Attributes -band [IO.FileAttributes]::ReparsePoint){throw 'A collection marker is a reparse point.'}
             $gc=Get-Content -LiteralPath $marker -Raw|ConvertFrom-Json
-            if(-not $gc.enabled -or $gc.heapLayout -ne 'graph' -or $gc.heapMiB -ne 1024){continue}
+            if(-not $gc.enabled -or $gc.heapLayout -ne 'graph' -or $gc.heapMiB -notin @(1024,2048)){continue}
             $tick=([datetime]$gc.collectionStartUtc).ToUniversalTime().Ticks
             if($null -ne $Details){
                 $Details.examinedCollections++

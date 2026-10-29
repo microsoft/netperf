@@ -13,6 +13,14 @@ using System.Runtime.InteropServices;
 
 public static class ArrivalTcp
 {
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MemoryStatus
+    {
+        public uint Length,MemoryLoad;
+        public ulong TotalPhysical,AvailablePhysical,TotalPageFile,AvailablePageFile,TotalVirtual,AvailableVirtual,AvailableExtendedVirtual;
+    }
+    [DllImport("kernel32.dll",SetLastError=true)]
+    private static extern bool GlobalMemoryStatusEx(ref MemoryStatus status);
     [DllImport("iphlpapi.dll")]
     private static extern uint GetExtendedTcpTable(IntPtr table,ref uint bytes,bool order,int family,int tableClass,uint reserved);
     [DllImport("iphlpapi.dll")]
@@ -92,11 +100,13 @@ public static class ArrivalTcp
     }
     public static UdpClient[] CreateIdlePathSockets(string sourceAddress,int count,int[] occupiedPorts)
     {
-        if((sourceAddress!="198.19.0.1" && sourceAddress!="198.19.0.2" &&
-            sourceAddress!="198.19.0.3" && sourceAddress!="198.19.0.4") ||
+        IPAddress source;
+        if(!IPAddress.TryParse(sourceAddress,out source) || source.AddressFamily!=AddressFamily.InterNetwork)
+            throw new ArgumentException("Only a bounded owned IPv4 source is supported.");
+        byte[] sourceBytes=source.GetAddressBytes();
+        if(sourceBytes[0]!=198 || sourceBytes[1]!=19 || sourceBytes[2]!=0 || sourceBytes[3]<1 || sourceBytes[3]>12 ||
             (count!=1 && count!=1024 && count!=8192 && count!=24576) || occupiedPorts==null)
             throw new ArgumentException("Only a bounded owned path-retirement fixture is supported.");
-        var source=IPAddress.Parse(sourceAddress);
         var occupied=new HashSet<int>(occupiedPorts);
         var sockets=new List<UdpClient>(count);
         int port=10000;
@@ -168,6 +178,9 @@ public static class ArrivalTcp
     private static int serviceRequestOrdinal,serviceWaitsCompleted;
     private static bool serviceRequestPipelining;
     private static int clientPacingWaitsCompleted;
+    private static int preparedGraphNodeCount;
+    private static long preparedManagedHeapBytes;
+    private static ulong largeHeapFreePhysicalBytesBeforePreparation;
     private static int observedMaximumPostedReadBytes;
     private static int maximumPerConnectionReadBufferBytes;
     private static int inFlight,peakInFlight,completed,started,connectedCount,acceptedCount;
@@ -213,6 +226,8 @@ public static class ArrivalTcp
         public string Json()
         {
             return "{\"enabled\":"+(Triggered?"true":"false")+",\"heapMiB\":"+heapMiB+",\"heapLayout\":\""+heapLayout+"\""+
+                ",\"preparedGraphNodeCount\":"+preparedGraphNodeCount+",\"preparedManagedHeapBytes\":"+preparedManagedHeapBytes+
+                ",\"largeHeapFreePhysicalBytesBeforePreparation\":"+largeHeapFreePhysicalBytesBeforePreparation+
                 ",\"configuredReceiveBudgetBytes\":"+receiveBudgetBytes+",\"maximumPostedReadBytes\":"+receiveBudgetBytes+
                 ",\"observedMaximumPostedReadBytes\":"+observedMaximumPostedReadBytes+
                 ",\"requestedListenBacklogHint\":"+(receiveBudgetBytes>0?8192:0)+
@@ -226,12 +241,25 @@ public static class ArrivalTcp
                 "\",\"serverGc\":"+(System.Runtime.GCSettings.IsServerGC?"true":"false")+"}";
         }
     }
+    private static int GraphNodeCount(int heapMiB)
+    {
+        return checked((int)(((long)heapMiB*1024*1024/40)&~1L));
+    }
     private static object PrepareHeap(int heapMiB,string layout)
     {
         if(heapMiB==0)return null;
+        if(heapMiB>1024){
+            var status=new MemoryStatus{Length=(uint)Marshal.SizeOf(typeof(MemoryStatus))};
+            if(!GlobalMemoryStatusEx(ref status))
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+            largeHeapFreePhysicalBytesBeforePreparation=status.AvailablePhysical;
+            if(status.AvailablePhysical<(ulong)heapMiB*4*1024*1024)
+                throw new InvalidOperationException("Insufficient free physical memory for the larger graph receiver.");
+        }
         if(layout=="graph") {
             // An x64 two-reference node plus its root slot nominally occupies 40 bytes.
-            int count=(heapMiB*1024*1024/40)&~1;
+            int count=GraphNodeCount(heapMiB);
+            preparedGraphNodeCount=count;
             var nodes=new GcGraphNode[count];
             for(int i=0;i<count;i++)nodes[i]=new GcGraphNode();
             for(int i=0;i<count;i++) {
@@ -240,12 +268,14 @@ public static class ArrivalTcp
             }
             GC.Collect(GC.MaxGeneration,GCCollectionMode.Forced,true,true);
             for(int i=0;i<count;i+=2)nodes[i]=null;
+            preparedManagedHeapBytes=GC.GetTotalMemory(false);
             return nodes;
         }
         var heap=new byte[heapMiB*1024][];
         for(int i=0;i<heap.Length;i++)heap[i]=new byte[1024];
         GC.Collect(GC.MaxGeneration,GCCollectionMode.Forced,true,true);
         for(int i=0;i<heap.Length;i+=2)heap[i]=null;
+        preparedManagedHeapBytes=GC.GetTotalMemory(false);
         return heap;
     }
     private static async Task SendWithSlot(SemaphoreSlim capacity,string source,IPAddress peer,int port,byte[] data,byte[] expectedResponse,long queuedAt=0)
@@ -452,8 +482,8 @@ public static class ArrivalTcp
             if(args[12]=="dispatch:pool" && role=="client")poolDispatch=true;
             else if((gc.Length!=3 && gc.Length!=4 && gc.Length!=5) || gc[0]!="gc" || (role!="client" && role!="server") ||
                 !int.TryParse(gc[1],out gcHeapMiB) || !int.TryParse(gc[2],out gcMinimumLaunch) ||
-                gcHeapMiB<16 || gcHeapMiB>1024 || gcMinimumLaunch<1 || gcMinimumLaunch>=count)
-                throw new ArgumentException("GC mode requires client/server role and gc:heap-MiB:minimum-launched, with 16-1024 MiB and a trigger before the final request; dispatch:pool requires client role.");
+                gcHeapMiB<16 || gcHeapMiB>2048 || gcMinimumLaunch<1 || gcMinimumLaunch>=count)
+                throw new ArgumentException("GC mode requires client/server role and gc:heap-MiB:minimum-launched, with 16-2048 MiB and a trigger before the final request; dispatch:pool requires client role.");
             if(!poolDispatch && gc.Length>=4) {
                 heapLayout=gc[3];
                 if(heapLayout!="arrays" && heapLayout!="graph")throw new ArgumentException("Unknown GC heap layout.");
@@ -461,6 +491,8 @@ public static class ArrivalTcp
             if(!poolDispatch && gc.Length==5 &&
                 (role!="server" || !int.TryParse(gc[4],out receiveBudgetBytes) || receiveBudgetBytes!=16384))
                 throw new ArgumentException("The bounded receive budget requires GC server role and an explicit 16384-byte budget.");
+            if(gcHeapMiB>1024 && (role!="server" || heapLayout!="graph"))
+                throw new ArgumentException("The larger GC budget requires the graph receiver layout.");
         }
         exchangesPerConnection=1;
         framedWrites=false;

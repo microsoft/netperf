@@ -63,7 +63,7 @@ on:
       managed_gc_heap_layout:
         description: Bounded GC pressure layout; graph uses same nominal heap budget with many linked objects
         type: choice
-        options: ['arrays', 'graph']
+        options: ['arrays', 'graph', 'graph-2g']
         default: 'arrays'
       managed_gc_receive_budget_bytes:
         description: Receiver-only socket and posted-read budget; 0 preserves defaults
@@ -73,7 +73,7 @@ on:
       managed_gc_cache_retire_paths:
         description: Optional owned secondary-source retirement control; 0 disables it
         type: choice
-        options: ['0', '1', '1024', '8192', '24576', '49152', '98304']
+        options: ['0', '1', '1024', '8192', '24576', '49152', '98304', '196608', '294912']
         default: '0'
       managed_gc_wpr_probes:
         description: Exact WPR probes; clr-only explicitly omits TCP events for collector isolation
