@@ -32,10 +32,20 @@ function New-TcpChurnVmPathFixture {
     if(@(Get-VMNetworkAdapter -VMName $VmName -ErrorAction Stop|Where-Object Name -match '^NetperfPath-').Count){
         throw 'An existing owned VM path interface requires restoration first.'
     }
-    $connected=@(Get-VMNetworkAdapter -VMName $VmName -ErrorAction Stop|Where-Object SwitchName)
-    if([string]$vm.State -ne 'Running' -or $vm.Generation -ne 2 -or $connected.Count -ne 1){
-        throw 'The owned path interface requires one existing switch connection on a running generation-2 test VM.'
+    if([string]$vm.State -ne 'Running' -or $vm.Generation -ne 2){
+        throw 'The owned path interface requires a running generation-2 test VM.'
     }
+    $sourceMac=Invoke-Command -Session $Session -ErrorAction Stop -ScriptBlock {
+        $peer=@([Net.Dns]::GetHostAddresses('netperf-peer')|Where-Object AddressFamily -eq InterNetwork)[0].ToString()
+        $route=@(Find-NetRoute -RemoteIPAddress $peer -ErrorAction Stop|Where-Object{$_.PSObject.Properties['IPAddress']})
+        if($route.Count -ne 1){throw 'The peer route must identify one existing data interface.'}
+        $nic=@(Get-NetAdapter -Name $route[0].InterfaceAlias -ErrorAction Stop)
+        if($nic.Count -ne 1){throw 'The existing data MAC is not unique.'}
+        $nic[0].MacAddress -replace '[-:]',''
+    }
+    $connected=@(Get-VMNetworkAdapter -VMName $VmName -ErrorAction Stop|
+        Where-Object{$_.SwitchName -and ($_.MacAddress -replace '[-:]','') -eq $sourceMac})
+    if($connected.Count -ne 1){throw 'The guest data MAC must match exactly one existing VM switch connection.'}
     $name='NetperfPath-'+[guid]::NewGuid().ToString('N').Substring(0,12)
     $mac='02'+([guid]::NewGuid().ToString('N').Substring(0,10)).ToUpperInvariant()
     $created=$null;$failure=$null
