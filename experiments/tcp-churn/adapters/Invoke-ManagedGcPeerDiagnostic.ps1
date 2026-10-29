@@ -27,7 +27,7 @@ param(
     [switch]$ServiceWait,
     [switch]$PipelinedServiceWait,
     [switch]$SteadyStateFixture,
-    [ValidateSet('none','nodes1000','nodes1000-outage')][string]$ClusterProfile='none',
+    [ValidateSet('none','nodes1000','nodes1000-outage','nodes1000-epochdial')][string]$ClusterProfile='none',
     [ValidateSet(0,1024,4096,8192,49152,98304,196608,294912)][int]$ReferencedTcpPaths=0,
     [ValidateSet(0,16384)][int]$ReceiveBudgetBytes=0,
     [ValidateSet(0,1,1024,8192,24576,49152,98304,196608,294912)][int]$CacheRetirePaths=0,
@@ -120,6 +120,7 @@ $neighborPulse=$null;$neighborArguments=@();$pulseResult=$null;$ownedCounts=$nul
 $localDataStarted=$false;$remoteDataStarted=$false
 $peerAddressPlan=if($RouteVariant -eq 'peer-gateway' -or $ClusterProfile -ne 'none'){'198.19.240.5,198.19.240.6'}else{'198.19.240.6'}
 $clusterAddressesStarted=$false;$clusterRoutesStarted=$false;$clusterReport=$null;$clusterSources=$null
+$epochDial=$null;$epochDialReport=$null;$epochDialStarted=$false
 $receiverState=$null;$receiverEvidence=$null
 $receiverTrafficStarted=$false
 $pathControls=[Collections.Generic.List[object]]::new()
@@ -297,7 +298,10 @@ try {
             remoteConnections=7168;loopbackConnections=1024;responseBytes=16384
             outageAddresses=$(if($ClusterProfile -eq 'nodes1000-outage'){250}else{0})
             outageDelayMilliseconds=$(if($ClusterProfile -eq 'nodes1000-outage'){5000}else{0})
-            outageDurationMilliseconds=$(if($ClusterProfile -eq 'nodes1000-outage'){4000}else{0})}
+            outageDurationMilliseconds=$(if($ClusterProfile -eq 'nodes1000-outage'){4000}else{0})
+            routeEpochDialIntervalMilliseconds=$(if($ClusterProfile -eq 'nodes1000-epochdial'){20}else{0})}
+        if($ClusterProfile -eq 'nodes1000-epochdial' -and @(Get-NetRoute -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|
+            Where-Object{$_.DestinationPrefix -match '^198\.19\.24[89]\.|^198\.19\.25[0-5]\.'}).Count){throw 'The owned epoch-dial prefix is already routed.'}
     }
     $phase='compile-client'
     $null=Invoke-TcpChurnTool -Program $compiler -Arguments @('/nologo','/target:exe','/platform:x64',"/out:$exe",(Join-Path $sourceRoot 'ArrivalTcp.cs')) `
@@ -509,7 +513,27 @@ try {
     $phase='managed-gc-traffic'
     if($GcProcessRole -eq 'server') {
         $clientPid=$localServer.Process.Id
+        if($ClusterProfile -eq 'nodes1000-epochdial'){
+            $phase='start-route-epoch-dial'
+            $epochDialStarted=$true
+            $epochDial=Start-TcpChurnCollector -Program $exe -Arguments @('--route-epoch-dial',[string]$dataIndex,'5000','4000','20',
+                (Join-Path $diagnostics 'epoch-dial.ready'),(Join-Path $diagnostics 'epoch-dial.stop'),(Join-Path $diagnostics 'epoch-dial.json')) `
+                -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'epoch-dial')
+            Wait-Ready $epochDial (Join-Path $diagnostics 'epoch-dial.ready')
+            $phase='managed-gc-traffic'
+        }
         $r=if($receiverTrafficStarted){Complete-GcReceiverTraffic -State $receiverState}else{Invoke-GcReceiverTraffic -State $receiverState}
+        if($null -ne $epochDial){
+            $phase='verify-route-epoch-dial'
+            [IO.File]::WriteAllText((Join-Path $diagnostics 'epoch-dial.stop'),'stop')
+            if(-not $epochDial.Process.WaitForExit(30000) -or $epochDial.Process.ExitCode -ne 0){throw 'The route-epoch dial did not complete and remove its route.'}
+            $epochDialReport=Get-Content -LiteralPath (Join-Path $diagnostics 'epoch-dial.json') -Raw|ConvertFrom-Json
+            if(-not $epochDialReport.routeRemoved -or $epochDialReport.failures -ne 0 -or $epochDialReport.routeOperations -lt 100 -or
+                @(Get-NetRoute -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|Where-Object DestinationPrefix -eq '198.19.248.0/24').Count){
+                throw 'The route-epoch dial did not run its bounded operations and restore routing.'
+            }
+            $phase='managed-gc-traffic'
+        }
         $end=[DateTime]::UtcNow.ToString('o')
     } else {
     $client=Start-TcpChurnCollector -Program $exe -Arguments @(
@@ -572,7 +596,7 @@ try {
     if($after.SentBytes-$before.SentBytes -lt $nicSentFloor -or
         $after.ReceivedBytes-$before.ReceivedBytes -lt $nicReceivedFloor){throw 'The non-loopback NIC did not account for the remote payload.'}
     $result=[ordered]@{schema=1;workload='managed-gc-mixed';outcome='collected';connections=$r.connections
-        clusterProfile=$ClusterProfile;cluster=$clusterReport;partialOutage=$(if($r.PSObject.Properties['partialOutage']){$r.partialOutage}else{$null})
+        clusterProfile=$ClusterProfile;cluster=$clusterReport;routeEpochDial=$epochDialReport;partialOutage=$(if($r.PSObject.Properties['partialOutage']){$r.partialOutage}else{$null})
         responseBytesPerExchange=$(if($r.PSObject.Properties['responseBytesPerExchange']){$r.responseBytesPerExchange}else{$null})
         fixtureOrdering=$(if($SteadyStateFixture){'during-ongoing-pipelined-traffic'}else{'before-traffic'})
         requestedReferencedTcpPaths=$ReferencedTcpPaths
@@ -755,6 +779,15 @@ finally {
             }
             if($errors.Count){throw [AggregateException]::new('Owned peer workload cleanup failed.',$errors)}
         }}catch{$cleanupErrors.Add($_.Exception)}
+    }
+    if($epochDialStarted){
+        try{
+            [IO.File]::WriteAllText((Join-Path $diagnostics 'epoch-dial.stop'),'stop')
+            if($null -ne $epochDial){$null=$epochDial.Process.WaitForExit(15000);Stop-TcpChurnCollector $epochDial}
+            $leftover=@(Get-NetRoute -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|Where-Object{$_.DestinationPrefix -eq '198.19.248.0/24' -and $_.InterfaceIndex -eq $dataIndex})
+            foreach($route in $leftover){Remove-NetRoute -InterfaceIndex $dataIndex -DestinationPrefix '198.19.248.0/24' -PolicyStore ActiveStore -Confirm:$false -ErrorAction Stop}
+            if(@(Get-NetRoute -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|Where-Object DestinationPrefix -eq '198.19.248.0/24').Count){throw 'The epoch-dial route remains.'}
+        }catch{$_.Exception.Data['CleanupPhase']='route-epoch-dial';$cleanupErrors.Add($_.Exception)}
     }
     if($clusterRoutesStarted -and (Test-Path -LiteralPath (Join-Path $diagnostics 'cluster-routes-original.clixml'))){
         try{

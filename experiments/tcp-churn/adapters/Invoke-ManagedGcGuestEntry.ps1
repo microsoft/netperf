@@ -20,7 +20,7 @@ param(
     [switch]$PipelinedServiceWait,
     [switch]$SteadyStateFixture,
     [ValidateSet(0,1024,4096,8192,49152,98304,196608,294912)][int]$ReferencedTcpPaths=0,
-    [ValidateSet('none','nodes1000','nodes1000-outage')][string]$ClusterProfile='none',
+    [ValidateSet('none','nodes1000','nodes1000-outage','nodes1000-epochdial')][string]$ClusterProfile='none',
     [switch]$PeerRecovery,
     [switch]$IsolatedData,
     [int]$RecoveryMilliseconds=8000,

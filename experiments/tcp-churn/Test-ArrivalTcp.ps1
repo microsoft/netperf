@@ -96,6 +96,28 @@ try {
         }
         $child.Dispose();$child=$null;$checks++
     }
+    foreach($case in @('interval-zero','duration-too-long','bad-interface')){
+        $dialReport=Join-Path $directory "dial-$case.json"
+        $info.ArgumentList.Clear()
+        $dialArgs=switch($case){
+            'interval-zero'{@('--route-epoch-dial','5','0','1000','0')}
+            'duration-too-long'{@('--route-epoch-dial','5','0','60000','20')}
+            'bad-interface'{@('--route-epoch-dial','0','0','1000','20')}
+        }
+        foreach($argument in $dialArgs+@((Join-Path $directory 'dial.ready'),(Join-Path $directory 'dial.stop'),$dialReport)){$info.ArgumentList.Add($argument)}
+        $child=[Diagnostics.Process]::Start($info)
+        $errorText=$child.StandardError.ReadToEndAsync()
+        if(-not $child.WaitForExit(5000) -or $child.ExitCode -eq 0 -or
+            $errorText.GetAwaiter().GetResult() -notmatch 'route-epoch dial requires' -or
+            (Test-Path -LiteralPath $dialReport) -or (Test-Path -LiteralPath (Join-Path $directory 'dial.ready'))){
+            throw 'An unbounded route-epoch dial was not rejected before any route operation.'
+        }
+        $child.Dispose();$child=$null;$checks++
+    }
+    if(-not [Reflection.Assembly]::Load([IO.File]::ReadAllBytes($exe)).GetType('ArrivalTcp').GetMethod('VerifyForwardRowLayout').Invoke($null,@())){
+        throw 'The documented forward-row layout did not verify.'
+    }
+    $checks++
     $serverOutput=Join-Path $directory 'server.json'
     $clientOutput=Join-Path $directory 'client.json'
     $info.ArgumentList.Clear()

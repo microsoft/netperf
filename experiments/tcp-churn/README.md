@@ -824,7 +824,16 @@ interface (via peer-owned 198.19.240.5), standing in for that interface's single
 default gateway. The management interface and its default route are untouched.
 Accepted connections are source-constrained to the data interface, so dead-gateway
 detection has no alternate route here; this mode isolates the other path-cache
-writers (black-hole confirmation, path suspicion and per-path revalidation). Of 8,192 pipelined
+writers (black-hole confirmation, path suspicion and per-path revalidation).
+
+The `coreclr-cluster-epochdial` control keeps that same one-gateway topology and
+traffic, and on the profiled node alternately adds and removes one owned on-link
+route (198.19.248.0/24, no gateway) every 20 ms for 4 s, starting 5 s into the
+workload. Each operation increments the routing epoch shared by every path in
+the compartment, standing in for any routing-state change (for example a
+dead-gateway transition between two interfaces). The prefix must be unused
+beforehand, the route is removed on every exit path, and the run is rejected
+unless at least 100 operations completed without error and routing is restored. Of 8,192 pipelined
 connections, 7,168 arrive from those remote addresses and 1,024 use loopback.
 Requests are 512 bytes; responses are 16 KiB, so healthy traffic sends full-size
 segments and exercises black-hole confirmation in the TCP delay queue. The

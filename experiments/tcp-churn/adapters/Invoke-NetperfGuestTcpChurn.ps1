@@ -33,7 +33,7 @@ param(
     [switch]$ManagedGcPipelinedServiceWait,
     [switch]$ManagedGcSteadyStateFixture,
     [ValidateSet(0,1024,4096,8192,49152,98304,196608,294912)][int]$ManagedGcReferencedTcpPaths=0,
-    [ValidateSet('none','nodes1000','nodes1000-outage')][string]$ManagedGcClusterProfile='none',
+    [ValidateSet('none','nodes1000','nodes1000-outage','nodes1000-epochdial')][string]$ManagedGcClusterProfile='none',
     [ValidateSet(0,16384)][int]$ManagedGcReceiveBudgetBytes=0,
     [ValidateSet(0,1,1024,8192,24576,49152,98304,196608,294912)][int]$ManagedGcCacheRetirePaths=0,
     [switch]$ManagedGcWprProbes,

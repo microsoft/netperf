@@ -36,6 +36,77 @@ public static class ArrivalTcp
         ref SockaddrInet destination,uint options,out BestRouteRow route,out SockaddrInet bestSource);
     [DllImport("iphlpapi.dll")]
     private static extern void FreeMibTable(IntPtr table);
+    [DllImport("iphlpapi.dll")]
+    private static extern void InitializeIpForwardEntry(IntPtr row);
+    [DllImport("iphlpapi.dll")]
+    private static extern uint CreateIpForwardEntry2(IntPtr row);
+    [DllImport("iphlpapi.dll")]
+    private static extern uint DeleteIpForwardEntry2(IntPtr row);
+    // MIB_IPFORWARD_ROW2 (x64): InterfaceIndex@8, DestinationPrefix@12 (address@16, length@40), NextHop@44, ValidLifetime@76, Metric@84.
+    private const int ForwardRowBytes=104;
+    private static IntPtr NewOnLinkRouteRow(int interfaceIndex,uint prefixAddress,byte prefixLength)
+    {
+        IntPtr row=Marshal.AllocHGlobal(ForwardRowBytes);
+        for(int i=0;i<ForwardRowBytes;i++)Marshal.WriteByte(row,i,0);
+        InitializeIpForwardEntry(row);
+        if((uint)Marshal.ReadInt32(row,76)!=uint.MaxValue){
+            Marshal.FreeHGlobal(row);
+            throw new InvalidOperationException("The documented forward-row layout did not verify.");
+        }
+        Marshal.WriteInt32(row,8,interfaceIndex);
+        Marshal.WriteInt16(row,12,2);
+        Marshal.WriteInt32(row,16,(int)prefixAddress);
+        Marshal.WriteByte(row,40,prefixLength);
+        Marshal.WriteInt16(row,44,2);
+        Marshal.WriteInt32(row,48,0);
+        Marshal.WriteInt32(row,84,256);
+        return row;
+    }
+    public static bool VerifyForwardRowLayout()
+    {
+        IntPtr row=NewOnLinkRouteRow(1,0x00F813C6u,24);
+        try{return Marshal.ReadInt32(row,8)==1 && Marshal.ReadInt16(row,12)==2 && Marshal.ReadByte(row,40)==24 &&
+            (uint)Marshal.ReadInt32(row,16)==0x00F813C6u;}
+        finally{Marshal.FreeHGlobal(row);}
+    }
+    // Adds and removes one owned on-link /24 so each operation bumps the compartment routing epoch.
+    private static int RunRouteEpochDial(string[] args)
+    {
+        int interfaceIndex=int.Parse(args[1]),delay=int.Parse(args[2]),duration=int.Parse(args[3]),interval=int.Parse(args[4]);
+        if(interfaceIndex<1 || delay<0 || delay>30000 || duration<100 || duration>10000 || interval<1 || interval>1000)
+            throw new ArgumentException("The route-epoch dial requires bounded delay, duration and interval.");
+        if(File.Exists(args[7]))throw new IOException("Use a fresh dial report.");
+        IntPtr row=NewOnLinkRouteRow(interfaceIndex,0x00F813C6u,24);
+        long operations=0,failures=0;bool present=false;string start="",end="";uint lastError=0;
+        try{
+            File.WriteAllText(args[5],"ready");
+            var clock=Stopwatch.StartNew();
+            while(clock.ElapsedMilliseconds<delay){if(File.Exists(args[6]))break;Thread.Sleep(5);}
+            if(!File.Exists(args[6])){
+                start=DateTime.UtcNow.ToString("o",CultureInfo.InvariantCulture);
+                var window=Stopwatch.StartNew();long next=0;
+                while(window.ElapsedMilliseconds<duration && !File.Exists(args[6])){
+                    uint status=present?DeleteIpForwardEntry2(row):CreateIpForwardEntry2(row);
+                    if(status==0){present=!present;operations++;}else{failures++;lastError=status;if(failures>16)break;}
+                    next+=interval;
+                    long wait=next-window.ElapsedMilliseconds;
+                    if(wait>0)Thread.Sleep((int)wait);
+                }
+                end=DateTime.UtcNow.ToString("o",CultureInfo.InvariantCulture);
+            }
+        }finally{
+            if(present){
+                uint status=DeleteIpForwardEntry2(row);
+                if(status==0){present=false;operations++;}else{lastError=status;}
+            }
+            Marshal.FreeHGlobal(row);
+            File.WriteAllText(args[7],"{\"schema\":1,\"prefix\":\"198.19.248.0/24\",\"intervalMilliseconds\":"+interval+
+                ",\"durationMilliseconds\":"+duration+",\"routeOperations\":"+operations+",\"failures\":"+failures+
+                ",\"lastError\":"+lastError+",\"routeRemoved\":"+(present?"false":"true")+
+                ",\"startUtc\":\""+start+"\",\"endUtc\":\""+end+"\"}");
+        }
+        return (failures>0 || present)?1:0;
+    }
     [StructLayout(LayoutKind.Explicit,Size=28)]
     private struct SockaddrInet
     {
@@ -912,6 +983,7 @@ public static class ArrivalTcp
     private static int Main(string[] args)
     {
         try {
+            if(args.Length==8 && args[0]=="--route-epoch-dial")return RunRouteEpochDial(args);
             if(args.Length<7 || args.Length>15) {
                 Console.Error.WriteLine("Usage: ArrivalTcp sources peer port count rate request-bytes output.json [role [response-bytes [seed [maximum-in-flight [nodelay|nagle [gc:heap-MiB:minimum-launched|dispatch:pool [exchanges:64[:framed]|idlekeepalive|servicewait64[:pipelined] [fixture-ready-file]]]]]]]]");
                 return 2;
