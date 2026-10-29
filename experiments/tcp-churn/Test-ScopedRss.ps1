@@ -11,8 +11,8 @@ public static class NetperfRssNative {
 $directory=Join-Path ([IO.Path]::GetTempPath()) ('scoped-rss-'+[guid]::NewGuid().ToString('N'))
 $null=New-Item -ItemType Directory -Path $directory
 try{
-    foreach($case in @('cycle','partial-readback','changed-identity')){
-        $fixture=@{Guid='owned-interface';Writes=0;ArrayCount=20
+    foreach($case in @('cycle','partial-readback','changed-identity','owned-data-cycle')){
+        $fixture=@{Guid=$(if($case -eq 'owned-data-cycle'){'44444444-4444-4444-4444-444444444444'}else{'owned-interface'});Writes=0;Restarts=0;ArrayCount=20
             Settings=@{Enabled=$true;Profile='NUMAStatic';Queues=20;MaxProcessors=20;BaseGroup=0;BaseNumber=0;MaxGroup=0;MaxNumber=19}}
         $stateFile=Join-Path $directory 'state.clixml';$reportFile=Join-Path $directory 'report.json'
         & {
@@ -30,11 +30,16 @@ try{
             function Set-NetAdapterRss {
                 [CmdletBinding()]param($Name,$Enabled,$Profile,$NumberOfReceiveQueues,$MaxProcessors,
                     $BaseProcessorGroup,$BaseProcessorNumber,$MaxProcessorGroup,$MaxProcessorNumber,[switch]$NoRestart)
-                if($Name -ne 'owned-data' -or -not $NoRestart){throw 'RSS attempted to mutate an unowned adapter or restart it.'}
+                if($Name -ne $targetAlias -or -not $NoRestart){throw 'RSS attempted to mutate an unowned adapter or implicitly restart it.'}
                 $fixture.Writes++
                 $fixture.Settings=@{Enabled=$Enabled;Profile=$Profile;Queues=$NumberOfReceiveQueues;MaxProcessors=$MaxProcessors
                     BaseGroup=$BaseProcessorGroup;BaseNumber=$BaseProcessorNumber;MaxGroup=$MaxProcessorGroup;MaxNumber=$MaxProcessorNumber}
-                $fixture.ArrayCount=if($case -eq 'partial-readback' -and $fixture.Writes -eq 1){20}else{$MaxProcessors}
+                $fixture.ArrayCount=if($case -in @('partial-readback','owned-data-cycle') -and $fixture.Writes -eq 1){20}else{$MaxProcessors}
+            }
+            function Restart-NetAdapter {
+                [CmdletBinding(SupportsShouldProcess=$true)]param($Name)
+                if($case -ne 'owned-data-cycle' -or $Name -ne $targetAlias){throw 'A non-disposable adapter restart was attempted.'}
+                $fixture.Restarts++;$fixture.ArrayCount=$fixture.Settings.MaxProcessors
             }
             function Get-CimInstance {
                 [CmdletBinding()]param($ClassName)
@@ -47,15 +52,18 @@ try{
             }
             function Get-NetRoute {
                 [CmdletBinding()]param($AddressFamily,$PolicyStore)
-                [pscustomobject]@{DestinationPrefix='0.0.0.0/0';InterfaceIndex=5;NextHop='192.0.2.254';RouteMetric=10}
+                [pscustomobject]@{DestinationPrefix='0.0.0.0/0';InterfaceIndex=$(if($case -eq 'owned-data-cycle'){7}else{5});NextHop='192.0.2.254';RouteMetric=10}
             }
             $program=Join-Path $PSScriptRoot 'adapters\Set-ScopedRss.ps1'
+            $targetAlias=if($case -eq 'owned-data-cycle'){'NetperfData-123456abcdef'}else{'owned-data'}
+            $extra=if($case -eq 'owned-data-cycle'){@{DisposableInterfaceGuid=$fixture.Guid}}else{@{}}
             $prepareFailed=$false
-            try{& $program -Action prepare -InterfaceAlias 'owned-data' -Processors 64 -StateFile $stateFile -ReportFile $reportFile}catch{
+            try{& $program -Action prepare -InterfaceAlias $targetAlias -Processors 64 -StateFile $stateFile -ReportFile $reportFile @extra}catch{
                 if($case -ne 'partial-readback' -or $_.Exception.Message -notmatch 'active RSS processor array'){throw}
                 $prepareFailed=$true
             }
             if($prepareFailed -ne ($case -eq 'partial-readback')){throw 'Unexpected RSS preparation verdict.'}
+            if($fixture.Restarts -ne $(if($case -eq 'owned-data-cycle'){1}else{0})){throw 'RSS restart scope did not match disposable ownership.'}
             if($fixture.Settings.MaxGroup -ne 1 -or $fixture.Settings.MaxNumber -ne 23){
                 throw 'RSS assumed 64 active processors per group instead of the observed 40/40 layout.'
             }

@@ -95,6 +95,10 @@ on:
         type: choice
         options: ['0','40','64','80']
         default: '0'
+      managed_gc_owned_data_interface:
+        description: Use a disposable no-gateway data NIC so required RSS activation never restarts management
+        type: boolean
+        default: false
       managed_gc_route_refresh:
         description: One owned equivalent host-route control; requires isolated receiver GC without neighbor pulse
         type: boolean
@@ -232,11 +236,13 @@ jobs:
           MANAGED_GC_UNUSED_INTERFACE: ${{ inputs.managed_gc_unused_interface }}
           MANAGED_GC_SPINLOCKS: ${{ inputs.managed_gc_spinlocks }}
           MANAGED_GC_RSS_PROCESSORS: ${{ inputs.managed_gc_rss_processors }}
+          MANAGED_GC_OWNED_DATA_INTERFACE: ${{ inputs.managed_gc_owned_data_interface }}
           MANAGED_GC_ROUTE_REFRESH: ${{ inputs.managed_gc_route_refresh }}
           MANAGED_GC_ROUTE_VARIANT: ${{ inputs.managed_gc_route_variant }}
         run: |
           $publish = Join-Path $env:RUNNER_TEMP "tcp-churn-guest-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           if ($env:PROBE_128_TOPOLOGY -eq 'true') {
+            if ($env:MANAGED_GC_OWNED_DATA_INTERFACE -eq 'true') { throw 'Disposable data transport is separate from topology probing.' }
             if ($env:MANAGED_GC_RSS_PROCESSORS -ne '0') { throw 'Scoped RSS is separate from topology probing.' }
             if ($env:MANAGED_GC_SPINLOCKS -eq 'true') { throw 'Spinlock capture is separate from topology probing.' }
             if ($env:MANAGED_GC_UNUSED_INTERFACE -eq 'true') { throw 'Unused-interface retirement is separate from topology probing.' }
@@ -287,6 +293,7 @@ jobs:
             if ($env:MANAGED_GC_UNUSED_INTERFACE -eq 'true') { $extra.ManagedGcUnusedInterface = $true }
             if ($env:MANAGED_GC_SPINLOCKS -eq 'true') { $extra.ManagedGcSpinLocks = $true }
             if ($env:MANAGED_GC_RSS_PROCESSORS -ne '0') { $extra.ManagedGcRssProcessors = [int]$env:MANAGED_GC_RSS_PROCESSORS }
+            if ($env:MANAGED_GC_OWNED_DATA_INTERFACE -eq 'true') { $extra.ManagedGcOwnedDataInterface = $true }
           }
           if ($env:MANAGED_GC_PEER_RECOVERY -eq 'true') {
             if ($env:MANAGED_GC_MIXED -ne 'true') { throw 'Peer recovery requires managed-GC diagnostic mode.' }
@@ -326,6 +333,9 @@ jobs:
           }
           if ($env:MANAGED_GC_RSS_PROCESSORS -ne '0' -and $env:MANAGED_GC_MIXED -ne 'true') {
             throw 'Scoped RSS requires managed-GC diagnostic mode.'
+          }
+          if ($env:MANAGED_GC_OWNED_DATA_INTERFACE -eq 'true' -and ($env:MANAGED_GC_MIXED -ne 'true' -or $env:MANAGED_GC_ISOLATED_DATA -ne 'true' -or $env:MANAGED_GC_RSS_PROCESSORS -eq '0')) {
+            throw 'Disposable data transport requires isolated managed-GC mode and an explicit RSS count.'
           }
           if ($env:MANAGED_GC_ROUTE_REFRESH -eq 'true') {
             if ($env:MANAGED_GC_MIXED -ne 'true' -or $env:MANAGED_GC_PROCESS_ROLE -ne 'server' -or $env:MANAGED_GC_ISOLATED_DATA -ne 'true' -or $env:MANAGED_GC_PEER_RECOVERY -eq 'true') {

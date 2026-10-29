@@ -28,9 +28,13 @@ param(
     [switch]$ManagedGcPeerPressure,
     [switch]$ManagedGcUnusedInterface,
     [switch]$ManagedGcSpinLocks,
-    [ValidateSet(0,40,64,80)][int]$ManagedGcRssProcessors=0
+    [ValidateSet(0,40,64,80)][int]$ManagedGcRssProcessors=0,
+    [switch]$ManagedGcOwnedDataInterface
 )
 $ErrorActionPreference='Stop'
+if($ManagedGcOwnedDataInterface -and (-not $ManagedGc -or -not $ManagedGcIsolatedData -or -not $ManagedGcRssProcessors)){
+    throw 'Disposable data transport requires isolated managed-GC mode and an explicit RSS count.'
+}
 if($ManagedGcRssProcessors -and -not $ManagedGc){throw 'Scoped RSS requires managed-GC diagnostic mode.'}
 if($ManagedGcSpinLocks -and (-not $ManagedGc -or -not $ManagedGcWprProbes)){
     throw 'Owned spinlock capture requires managed-GC mode and the exact-event WPR controller.'
@@ -75,8 +79,10 @@ if (Test-Path -LiteralPath $PublishDirectory) { throw 'Use a new publication dir
 New-Item -ItemType Directory -Path $PublishDirectory -ErrorAction Stop | Out-Null
 $session=$null; $guestRoot=$null; $phase='guest-connect'; $success=$false; $startup=$null
 $vmFixture=$null;$fixtureAlias='';$fixtureGuid=''
+$dataFixture=$null;$dataAlias='';$dataGuid=''
 $rssAttempted=$false;$rssEvidence=$null
 $vmFixtureState=Join-Path $PublishDirectory 'owned-vm-path-interface.clixml'
+$dataFixtureState=Join-Path $PublishDirectory 'owned-vm-data-interface.clixml'
 try {
     $vmInfo=Get-VM -Name $VmName -ErrorAction Stop
     if ($vmInfo.State -ne 'Running') {
@@ -113,11 +119,12 @@ try {
             $exactLoggers=@($loggerRows|Where-Object{$_ -match '^\s*TcpChurnExact-[0-9a-fA-F]{32}\s'}).Count
             $clientAliases=@(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop|Where-Object{$_.IPAddress -match '^198\.19\.240\.[1-6]$' -or $_.IPAddress -eq '198.19.0.1'}).Count
             $clientPathInterfaces=@(Get-NetAdapter -ErrorAction Stop|Where-Object Name -match '^NetperfPath-[0-9a-f]{12}$').Count
+            $clientDataInterfaces=@(Get-NetAdapter -ErrorAction Stop|Where-Object Name -match '^NetperfData-[0-9a-f]{12}$').Count
             $clientRules=@(Get-NetFirewallRule -PolicyStore ActiveStore -ErrorAction Stop|Where-Object{$_.Name -like 'ManagedGcPeer-*' -or $_.Name -like 'ManagedGcReceiver-*'}).Count
             $clientStatic=@(Get-NetNeighbor -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|
                 Where-Object{$_.IPAddress -match '^198\.19\.240\.[1-6]$' -and [string]$_.State -eq 'Permanent'}).Count
             $clientRoutes=@(Get-NetRoute -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|Where-Object DestinationPrefix -in @('198.19.240.6/32','198.19.0.0/17')).Count
-            if($clientAliases -or $clientRules -or $clientStatic -or $clientRoutes -or $clientPathInterfaces){throw 'Owned client GC resources require restoration before further tests.'}
+            if($clientAliases -or $clientRules -or $clientStatic -or $clientRoutes -or $clientPathInterfaces -or $clientDataInterfaces){throw 'Owned client GC resources require restoration before further tests.'}
             $clientCpus=(Get-CimInstance Win32_Processor|Measure-Object NumberOfLogicalProcessors -Sum).Sum
             $peerIp=@([Net.Dns]::GetHostAddresses('netperf-peer')|Where-Object AddressFamily -eq InterNetwork)[0].ToString()
             $dataRoute=@(Find-NetRoute -RemoteIPAddress $peerIp -ErrorAction Stop|Where-Object{$_.PSObject.Properties['IPAddress']})
@@ -150,6 +157,7 @@ try {
                     clientWprCpuProfileReported=[bool]$wprCpu
                     clientExactProbeLoggerCount=$exactLoggers
                     clientOwnedPathInterfaces=$clientPathInterfaces
+                    clientOwnedDataInterfaces=$clientDataInterfaces
                     clientDataRssEnabled=[bool]$rss[0].Enabled
                     clientDataRssQueues=[int]$rss[0].NumberOfReceiveQueues
                     clientDataRssMaxProcessors=[int]$rss[0].MaxProcessors
@@ -164,6 +172,7 @@ try {
             clientWprStatusExitCode,clientWprRecordingNotRunning,clientWprCpuProfileReported,
             clientExactProbeLoggerCount,
             clientOwnedPathInterfaces,
+            clientOwnedDataInterfaces,
             clientDataRssEnabled,clientDataRssQueues,clientDataRssMaxProcessors,clientDataRssProcessorArrayCount,
             clientTempFreeMiB,peerTempFreeMiB,conclusion|ConvertTo-Json |
             Set-Content -LiteralPath (Join-Path $PublishDirectory 'peer-check.json') -Encoding utf8
@@ -205,7 +214,14 @@ try {
     foreach ($file in $adapterFiles) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $file) -Destination (Join-Path $remoteRoot "adapters\$file") -ToSession $session -ErrorAction Stop
     }
-    if($ManagedGcRssProcessors){
+    if($ManagedGcOwnedDataInterface){
+        $phase='owned-vm-data-interface'
+        Import-Module (Join-Path $PSScriptRoot 'VmPathFixture.psm1') -Force
+        $dataFixture=New-TcpChurnVmPathFixture -VmName $VmName -Session $session -StateFile $dataFixtureState `
+            -Purpose data -GuestRoot $guestRoot -RssProcessors $ManagedGcRssProcessors
+        $dataAlias=$dataFixture.Alias;$dataGuid=$dataFixture.Guid
+    }
+    if($ManagedGcRssProcessors -and -not $ManagedGcOwnedDataInterface){
         $phase='guest-scoped-rss-prepare';$rssAttempted=$true
         $rssEvidence=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
             param($root,$processors)
@@ -221,7 +237,7 @@ try {
     }
     $phase='guest-traffic'
     $exit=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
-        param($root,$seconds,$connections,$profile,$synDrop,$peerMeasurement,$managedGc,$managedGcPayloadBytes,$peerRecovery,$isolatedData,$recoveryMilliseconds,$gcProcessRole,$heapLayout,$routeRefresh,$routeVariant,$receiveBudgetBytes,$cacheRetirePaths,$wprProbes,$peerPressure,$fixtureAlias,$fixtureGuid,$spinLocks,$credential)
+        param($root,$seconds,$connections,$profile,$synDrop,$peerMeasurement,$managedGc,$managedGcPayloadBytes,$peerRecovery,$isolatedData,$recoveryMilliseconds,$gcProcessRole,$heapLayout,$routeRefresh,$routeVariant,$receiveBudgetBytes,$cacheRetirePaths,$wprProbes,$peerPressure,$fixtureAlias,$fixtureGuid,$spinLocks,$dataAlias,$dataGuid,$credential)
         if (@(Get-Process -Name 'Runner.Worker','ctsTraffic' -ErrorAction Ignore).Count) {
             throw 'Guest became busy before traffic setup.'
         }
@@ -247,6 +263,7 @@ try {
             if($peerPressure){$extra+='-PeerGcPressure'}
             if($spinLocks){$extra+='-SpinLocks'}
             if($fixtureAlias){$extra+=@('-CacheInterfaceAlias',$fixtureAlias,'-CacheInterfaceGuid',$fixtureGuid)}
+            if($dataAlias){$extra+=@('-DataInterfaceAlias',$dataAlias,'-DataInterfaceGuid',$dataGuid)}
             if($routeRefresh){$extra+='-RouteRefresh'}
             if($routeRefresh){$extra+=@('-RouteVariant',$routeVariant)}
         } else {
@@ -270,7 +287,7 @@ try {
             $launch|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $root 'child-startup.json')
             if($credentialFile -and (Test-Path -LiteralPath $credentialFile)){Remove-Item -LiteralPath $credentialFile -ErrorAction Stop}
         }
-    } -ArgumentList $guestRoot,$Seconds,$Connections,([bool]$ProfileCpu),([bool]$SynDrop),([bool]$PeerMeasurement),([bool]$ManagedGc),$ManagedGcPayloadBytes,([bool]$ManagedGcPeerRecovery),([bool]$ManagedGcIsolatedData),$ManagedGcRecoveryMilliseconds,$ManagedGcProcessRole,$ManagedGcHeapLayout,([bool]$ManagedGcRouteRefresh),$ManagedGcRouteVariant,$ManagedGcReceiveBudgetBytes,$ManagedGcCacheRetirePaths,([bool]$ManagedGcWprProbes),([bool]$ManagedGcPeerPressure),$fixtureAlias,$fixtureGuid,([bool]$ManagedGcSpinLocks),$Credential
+    } -ArgumentList $guestRoot,$Seconds,$Connections,([bool]$ProfileCpu),([bool]$SynDrop),([bool]$PeerMeasurement),([bool]$ManagedGc),$ManagedGcPayloadBytes,([bool]$ManagedGcPeerRecovery),([bool]$ManagedGcIsolatedData),$ManagedGcRecoveryMilliseconds,$ManagedGcProcessRole,$ManagedGcHeapLayout,([bool]$ManagedGcRouteRefresh),$ManagedGcRouteVariant,$ManagedGcReceiveBudgetBytes,$ManagedGcCacheRetirePaths,([bool]$ManagedGcWprProbes),([bool]$ManagedGcPeerPressure),$fixtureAlias,$fixtureGuid,([bool]$ManagedGcSpinLocks),$dataAlias,$dataGuid,$Credential
     $startup=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
         param($root)
         Get-Content -LiteralPath (Join-Path $root 'child-startup.json') -Raw|ConvertFrom-Json|
@@ -357,6 +374,32 @@ try {
         }catch{
             $success=$false
             @{schema=1;outcome='failed';phase='owned-vm-path-interface-cleanup';cleanupVerified=$false
+                failureType=$_.Exception.GetType().FullName;conclusion='no-accepted-measurement'}|
+                ConvertTo-Json|Set-Content -LiteralPath (Join-Path $PublishDirectory 'result.json')
+        }
+    }
+    if($ManagedGcOwnedDataInterface -and (Test-Path -LiteralPath $dataFixtureState)){
+        try{
+            Remove-TcpChurnVmPathFixture -StateFile $dataFixtureState
+            $resultFile=Join-Path $PublishDirectory 'result.json'
+            if(Test-Path -LiteralPath $resultFile){
+                $published=Get-Content -LiteralPath $resultFile -Raw|ConvertFrom-Json
+                $published|Add-Member NoteProperty ownedVmDataInterfaceRemoved $true -Force
+                if($null -ne $dataFixture){$published|Add-Member NoteProperty ownedDataRss $dataFixture.Rss -Force}
+                elseif($null -ne $session){
+                    $dataRssFailure=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
+                        param($root)
+                        $path=Join-Path $root 'data-rss-prepared.json'
+                        if(Test-Path -LiteralPath $path){Get-Content -LiteralPath $path -Raw|ConvertFrom-Json}
+                    } -ArgumentList $guestRoot|Select-Object schema,action,verified,phase,failureType,failureCode,sourceLine,
+                        requestedProcessors,actualQueues,actualMaxProcessors,actualProcessorArrayCount
+                    if($null -ne $dataRssFailure){$published|Add-Member NoteProperty ownedDataRss $dataRssFailure -Force}
+                }
+                $published|ConvertTo-Json -Depth 10|Set-Content -LiteralPath $resultFile
+            }
+        }catch{
+            $success=$false
+            @{schema=1;outcome='failed';phase='owned-vm-data-interface-cleanup';cleanupVerified=$false
                 failureType=$_.Exception.GetType().FullName;conclusion='no-accepted-measurement'}|
                 ConvertTo-Json|Set-Content -LiteralPath (Join-Path $PublishDirectory 'result.json')
         }

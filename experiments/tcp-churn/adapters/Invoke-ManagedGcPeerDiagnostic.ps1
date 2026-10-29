@@ -23,7 +23,9 @@ param(
     [switch]$PeerGcPressure,
     [string]$CacheInterfaceAlias,
     [string]$CacheInterfaceGuid,
-    [switch]$SpinLocks
+    [switch]$SpinLocks,
+    [string]$DataInterfaceAlias,
+    [string]$DataInterfaceGuid
 )
 $ErrorActionPreference='Stop'
 if($GcProcessRole -eq 'server' -and (-not $IsolatedData -or $PeerRecovery)){
@@ -35,6 +37,10 @@ if($RouteRefresh -and ($GcProcessRole -ne 'server' -or -not $IsolatedData -or $P
 if($RouteVariant -ne 'onlink' -and -not $RouteRefresh){throw 'Logical gateway selection requires the owned route-refresh control.'}
 if($ReceiveBudgetBytes -and $GcProcessRole -ne 'server'){throw 'A bounded receive budget requires receiver-GC mode.'}
 if($SpinLocks -and -not $WprProbes){throw 'Owned spinlock capture requires the exact-event WPR controller.'}
+if(($DataInterfaceAlias -or $DataInterfaceGuid) -and
+    (-not $IsolatedData -or $DataInterfaceAlias -notmatch '^NetperfData-[0-9a-f]{12}$' -or -not $DataInterfaceGuid)){
+    throw 'Disposable data transport requires an identity-matched isolated data interface.'
+}
 if($PeerGcPressure -and ($GcProcessRole -ne 'server' -or -not $IsolatedData -or $PeerRecovery)){
     throw 'Peer GC pressure requires isolated receiver GC without a neighbor fault.'
 }
@@ -104,7 +110,15 @@ try {
     $route=@(Find-NetRoute -RemoteIPAddress $peerAddress|Where-Object{$_.PSObject.Properties['IPAddress']})
     if($route.Count -ne 1){throw 'A unique client-to-peer route is required.'}
     $clientAddress=$route[0].IPAddress;$alias=$route[0].InterfaceAlias
-    $ipInterface=@(Get-NetIPInterface -InterfaceIndex $route[0].InterfaceIndex -AddressFamily IPv4)
+    $dataIndex=$route[0].InterfaceIndex
+    if($DataInterfaceAlias){
+        $ownedData=@(Get-NetAdapter -Name $DataInterfaceAlias -ErrorAction Stop)
+        if($ownedData.Count -ne 1 -or [string]$ownedData[0].InterfaceGuid -ne $DataInterfaceGuid){
+            throw 'The disposable data interface changed identity.'
+        }
+        $alias=$DataInterfaceAlias;$dataIndex=$ownedData[0].ifIndex
+    }
+    $ipInterface=@(Get-NetIPInterface -InterfaceIndex $dataIndex -AddressFamily IPv4)
     if($ipInterface.Count -ne 1 -or $ipInterface[0].NlMtu -lt 1){throw 'A unique client data interface with positive MTU is required.'}
     $mtu=$ipInterface[0].NlMtu
     if($PeerRecovery -or $IsolatedData) {

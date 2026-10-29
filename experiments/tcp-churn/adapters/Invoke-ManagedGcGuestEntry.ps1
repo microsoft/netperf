@@ -22,7 +22,9 @@ param(
     [switch]$PeerGcPressure,
     [string]$CacheInterfaceAlias,
     [string]$CacheInterfaceGuid,
-    [switch]$SpinLocks
+    [switch]$SpinLocks,
+    [string]$DataInterfaceAlias,
+    [string]$DataInterfaceGuid
 )
 $ErrorActionPreference='Stop'
 if($PublishDirectory -ne (Join-Path $ScratchParent 'publish')) {

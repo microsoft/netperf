@@ -7,10 +7,11 @@ param(
     [Parameter(Mandatory)][string]$StateFile,
     [Parameter(Mandatory)][string]$ReportFile,
     [string]$InterfaceAlias,
+    [string]$DisposableInterfaceGuid,
     [ValidateRange(1,128)][int]$Processors=64
 )
 $ErrorActionPreference='Stop'
-$adapter=$null;$rssPhase='input'
+$adapter=$null;$rssPhase='input';$restartOwned=$false
 trap {
     if($Action -eq 'prepare'){
         $failure=[ordered]@{schema=1;action='prepare';verified=$false;phase=$rssPhase
@@ -75,6 +76,15 @@ if($Action -eq 'prepare'){
     $adapters=@(Get-NetAdapter -Name $InterfaceAlias -ErrorAction Stop)
     if($adapters.Count -ne 1){throw 'The RSS control adapter is not unique.'}
     $adapter=$adapters[0]
+    if($DisposableInterfaceGuid){
+        if($adapter.Name -notmatch '^NetperfData-[0-9a-f]{12}$' -or
+            [guid]$DisposableInterfaceGuid -ne $adapter.InterfaceGuid -or
+            @(Get-NetRoute -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|
+                Where-Object{$_.DestinationPrefix -eq '0.0.0.0/0' -and $_.InterfaceIndex -eq $adapter.ifIndex}).Count){
+            throw 'Only an identity-matched disposable data interface without a default route may restart.'
+        }
+        $restartOwned=$true
+    }
     $rss=@(Get-NetAdapterRss -Name $adapter.Name -ErrorAction Stop)
     if($rss.Count -ne 1 -or -not $rss[0].Enabled){throw 'The RSS control requires an already-enabled supported adapter.'}
     $logical=(Get-CimInstance Win32_Processor|Measure-Object NumberOfLogicalProcessors -Sum).Sum
@@ -97,6 +107,10 @@ if($Action -eq 'prepare'){
 }
 $rssPhase='apply-no-restart'
 Apply-Rss $adapter $target
+if($restartOwned){
+    $rssPhase='owned-interface-restart'
+    Restart-NetAdapter -Name $adapter.Name -Confirm:$false -ErrorAction Stop
+}
 $rssPhase='active-readback'
 $actual=@(Get-NetAdapterRss -Name $adapter.Name -ErrorAction Stop)
 if($actual.Count -ne 1){throw 'The applied RSS configuration is not unique.'}
@@ -114,7 +128,7 @@ if((@(Read-Addresses $adapter)-join '|') -ne (@($saved.addresses)-join '|') -or
     (@(Read-Defaults)-join '|') -ne (@($saved.defaults)-join '|')){
     throw 'RSS setup/restoration changed original IPv4 addresses or default routes.'
 }
-@{schema=1;action=$Action;verified=$true;adapterRestarted=$false
+@{schema=1;action=$Action;verified=$true;adapterRestarted=$restartOwned
     queues=$settings.Queues;maxProcessors=$settings.MaxProcessors
     activeProcessorArrayCount=@($actual[0].RssProcessorArray).Count
     originalQueues=$saved.settings.Queues;originalMaxProcessors=$saved.settings.MaxProcessors

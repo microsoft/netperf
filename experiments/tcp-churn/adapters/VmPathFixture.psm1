@@ -7,7 +7,7 @@ function Remove-TcpChurnVmPathFixture {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$StateFile)
     $state=Import-Clixml -LiteralPath $StateFile -ErrorAction Stop
-    if($state.owner -ne 'tcp-churn-path-fixture-v1' -or $state.name -notmatch '^NetperfPath-[0-9a-f]{12}$'){
+    if($state.owner -ne 'tcp-churn-path-fixture-v1' -or $state.name -notmatch '^Netperf(?:Path|Data)-[0-9a-f]{12}$'){
         throw 'The VM path-interface snapshot is not owned by this fixture.'
     }
     $vm=Get-VM -Name $state.vmName -ErrorAction Stop
@@ -26,10 +26,12 @@ function Remove-TcpChurnVmPathFixture {
 }
 function New-TcpChurnVmPathFixture {
     [CmdletBinding()]
-    param([Parameter(Mandatory)][string]$VmName,[Parameter(Mandatory)]$Session,[Parameter(Mandatory)][string]$StateFile)
+    param([Parameter(Mandatory)][string]$VmName,[Parameter(Mandatory)]$Session,[Parameter(Mandatory)][string]$StateFile,
+        [ValidateSet('path','data')][string]$Purpose='path',[string]$GuestRoot,[ValidateRange(1,128)][int]$RssProcessors=64)
     if(Test-Path -LiteralPath $StateFile){throw 'A fresh VM path-interface snapshot is required.'}
     $vm=Get-VM -Name $VmName -ErrorAction Stop
-    if(@(Get-VMNetworkAdapter -VMName $VmName -ErrorAction Stop|Where-Object Name -match '^NetperfPath-').Count){
+    $prefix=if($Purpose -eq 'data'){'NetperfData-'}else{'NetperfPath-'}
+    if(@(Get-VMNetworkAdapter -VMName $VmName -ErrorAction Stop|Where-Object{$_.Name.StartsWith($prefix)}).Count){
         throw 'An existing owned VM path interface requires restoration first.'
     }
     if([string]$vm.State -ne 'Running' -or $vm.Generation -ne 2){
@@ -46,7 +48,9 @@ function New-TcpChurnVmPathFixture {
     $connected=@(Get-VMNetworkAdapter -VMName $VmName -ErrorAction Stop|
         Where-Object{$_.SwitchName -and ($_.MacAddress -replace '[-:]','') -eq $sourceMac})
     if($connected.Count -ne 1){throw 'The guest data MAC must match exactly one existing VM switch connection.'}
-    $name='NetperfPath-'+[guid]::NewGuid().ToString('N').Substring(0,12)
+    if($Purpose -eq 'data' -and [string]::IsNullOrWhiteSpace($GuestRoot)){throw 'The disposable data interface requires its owned guest scratch root.'}
+    $name=$prefix+[guid]::NewGuid().ToString('N').Substring(0,12)
+    $bootstrap=if($Purpose -eq 'data'){'198.19.255.253'}else{'198.19.255.254'}
     $mac='02'+([guid]::NewGuid().ToString('N').Substring(0,10)).ToUpperInvariant()
     $created=$null;$failure=$null
     try{
@@ -56,7 +60,7 @@ function New-TcpChurnVmPathFixture {
             adapterId=[string]$created.Id;name=$name;mac=$mac}
         $state|Export-Clixml -LiteralPath $StateFile -NoClobber
         $guest=Invoke-Command -Session $Session -ErrorAction Stop -ScriptBlock {
-            param($mac,$name)
+            param($mac,$name,$bootstrap)
             $wait=[Diagnostics.Stopwatch]::StartNew()
             do{
                 $adapters=@(Get-NetAdapter -ErrorAction Stop|Where-Object{($_.MacAddress -replace '[-:]','') -eq $mac})
@@ -69,19 +73,31 @@ function New-TcpChurnVmPathFixture {
             if(@(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop|Where-Object InterfaceIndex -eq $adapter.ifIndex).Count){
                 throw 'The disconnected new interface unexpectedly has an IPv4 configuration.'
             }
-            if(@(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop|Where-Object IPAddress -eq '198.19.255.254').Count){
+            if(@(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop|Where-Object IPAddress -eq $bootstrap).Count){
                 throw 'The disposable static bootstrap address is already in use.'
             }
             Set-NetIPInterface -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -Dhcp Disabled -ErrorAction Stop
             Rename-NetAdapter -Name $adapter.Name -NewName $name -ErrorAction Stop
-            $null=New-NetIPAddress -InterfaceIndex $adapter.ifIndex -IPAddress '198.19.255.254' -PrefixLength 32 `
-                -SkipAsSource $true -PolicyStore ActiveStore -ErrorAction Stop
+            $null=New-NetIPAddress -InterfaceIndex $adapter.ifIndex -IPAddress $bootstrap -PrefixLength 32 `
+                -SkipAsSource $true -ErrorAction Stop
             [pscustomobject]@{alias=$name;guid=[string]$adapter.InterfaceGuid}
-        } -ArgumentList $mac,$name
+        } -ArgumentList $mac,$name,$bootstrap
         Connect-VMNetworkAdapter -VMNetworkAdapter $created -SwitchName $connected[0].SwitchName -ErrorAction Stop
+        $rss=$null
+        if($Purpose -eq 'data'){
+            $rss=Invoke-Command -Session $Session -ErrorAction Stop -ScriptBlock {
+                param($root,$alias,$guid,$processors)
+                & (Join-Path $root 'experiment\adapters\Set-ScopedRss.ps1') -Action prepare -InterfaceAlias $alias `
+                    -DisposableInterfaceGuid $guid -Processors $processors -StateFile (Join-Path $root 'data-rss-original.clixml') `
+                    -ReportFile (Join-Path $root 'data-rss-prepared.json')
+                Get-Content -LiteralPath (Join-Path $root 'data-rss-prepared.json') -Raw|ConvertFrom-Json
+            } -ArgumentList $GuestRoot,$guest.alias,$guest.guid,$RssProcessors|
+                Select-Object schema,action,verified,adapterRestarted,queues,maxProcessors,activeProcessorArrayCount,
+                    originalQueues,originalMaxProcessors,originalAddressesAndDefaultsPreserved,carriesDefaultRoute
+        }
         $state.guestGuid=$guest.guid
         $state|Export-Clixml -LiteralPath $StateFile
-        [pscustomobject]@{Alias=$guest.alias;Guid=$guest.guid}
+        [pscustomobject]@{Alias=$guest.alias;Guid=$guest.guid;Rss=$rss}
         return
     }catch{$failure=$_}
     if($null -ne $created){

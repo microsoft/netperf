@@ -61,13 +61,13 @@ try {
     }
     if(-not $rejected -or (Test-Path -LiteralPath $directory)){throw 'Peer recovery outside managed-GC mode mutated state or was accepted.'}
     $checks++
-    foreach($extra in @(@{ManagedGcIsolatedData=$true},@{ManagedGcRecoveryMilliseconds=3000},@{ManagedGcHeapLayout='graph'},@{ManagedGcRouteVariant='peer-gateway'},@{ManagedGcWprProbes=$true},@{ManagedGcRssProcessors=64})) {
+    foreach($extra in @(@{ManagedGcIsolatedData=$true},@{ManagedGcRecoveryMilliseconds=3000},@{ManagedGcHeapLayout='graph'},@{ManagedGcRouteVariant='peer-gateway'},@{ManagedGcWprProbes=$true},@{ManagedGcRssProcessors=64},@{ManagedGcOwnedDataInterface=$true})) {
         $rejected=$false
         try {
             & (Join-Path $PSScriptRoot 'adapters\Invoke-NetperfGuestTcpChurn.ps1') `
                 -VmName 'unused-test-only' -Credential $credential -PublishDirectory $directory @extra
         }catch {
-            if($_.Exception.Message -notmatch 'Isolated data addresses require|Recovery duration selection requires|GC heap layout selection requires|Logical gateway selection requires|Exact WPR probes require|Scoped RSS requires'){throw}
+            if($_.Exception.Message -notmatch 'Isolated data addresses require|Recovery duration selection requires|GC heap layout selection requires|Logical gateway selection requires|Exact WPR probes require|Scoped RSS requires|Disposable data transport requires'){throw}
             $rejected=$true
         }
         if(-not $rejected -or (Test-Path -LiteralPath $directory)){throw 'Invalid data-fixture or recovery-duration selection mutated state.'}
@@ -199,9 +199,13 @@ try {
         $fixtureAlias='NetperfPath-123456abcdef'
         $fixtureGuid='11111111-2222-3333-4444-555555555555'
         $ManagedGcSpinLocks=[switch]::new($true)
+        $dataAlias='NetperfData-abcdef123456'
+        $dataGuid='66666666-7777-8888-9999-000000000000'
         & ([scriptblock]::Create($launch[0].Extent.Text))
     }
-    if($actual.Count -ne 23 -or $actual[21] -isnot [bool] -or -not $actual[21] -or
+    if($actual.Count -ne 25 -or $actual[22] -ne 'NetperfData-abcdef123456' -or
+        $actual[23] -ne '66666666-7777-8888-9999-000000000000' -or
+        $actual[21] -isnot [bool] -or -not $actual[21] -or
         $actual[19] -ne 'NetperfPath-123456abcdef' -or
         $actual[20] -ne '11111111-2222-3333-4444-555555555555' -or
         $actual[18] -isnot [bool] -or -not $actual[18] -or

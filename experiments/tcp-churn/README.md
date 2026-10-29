@@ -834,6 +834,13 @@ from actual active processor groups, and requires exact setting readback plus
 an active processor array of the requested size. Original RSS fields, active
 array size, data-adapter IPv4 addresses and default routes must restore.
 The host NIC, VM CPU allocation and switch configuration are not changed.
+If the existing adapter cannot activate the requested queues without a
+restart, the control is rejected and restored. The explicit
+`managed_gc_owned_data_interface=true` alternative instead creates a separate
+identity-checked, no-gateway `NetperfData-*` NIC. Only that disposable NIC may
+restart for RSS activation; the original management/data adapters are never
+restarted. Experimental aliases/traffic move to the new NIC and the VM's
+original hardware layout is restored by identity-checked removal.
 Failed TCP/CLR collector startup reports a fixed capture stage, exception
 type and numeric error code. Provider discovery, TCP startup and CLR startup
 remain separate adapter phases; private exception messages and raw ETLs are
