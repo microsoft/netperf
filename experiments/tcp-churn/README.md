@@ -813,6 +813,11 @@ Acceptance verifies the API starts before collection ends and reports measured
 collection/API overlap, including operations that return after collection.
 It does not pause TCP, alter scheduling policy or insert a data-release barrier.
 The ordinary `true` mode retains GC-completion timing.
+An explicit concurrency limit up to 4,096 per producer/receiver is supported
+only for 1460-byte request/response payloads with the verified 16-KiB receive
+budget. The total connection budget remains 8,192 and arrivals remain
+independent; the existing 8,192-entry listen hint bounds backlog buildup during
+GC. Large-payload/high-concurrency combinations reject before VM mutation.
 
 The explicit `managed_gc_unused_interface=true` variant creates one
 disposable synthetic NIC on the owned generation-2 VM. It is first added

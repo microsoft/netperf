@@ -167,6 +167,16 @@ try {
     }
     if(-not $rejected -or (Test-Path -LiteralPath $directory)){throw 'Invalid persistent mode mutated state or was accepted.'}
     $checks++
+    $rejected=$false
+    try{
+        & (Join-Path $PSScriptRoot 'adapters\Invoke-NetperfGuestTcpChurn.ps1') `
+            -VmName 'unused-test-only' -Credential $credential -PublishDirectory $directory -Connections 4096
+    }catch{
+        if($_.Exception.Message -notmatch 'High concurrency requires receiver-GC mode'){throw}
+        $rejected=$true
+    }
+    if(-not $rejected -or (Test-Path -LiteralPath $directory)){throw 'Unbounded high-concurrency mode mutated state or was accepted.'}
+    $checks++
     foreach($extra in @(@{ManagedGcCacheRetirePaths=1024},@{ManagedGcPeerPressure=$true})){
         $rejected=$false
         try{
@@ -249,7 +259,7 @@ try {
             param($Session,[scriptblock]$ScriptBlock,[object[]]$ArgumentList)
             Write-Output -NoEnumerate $ArgumentList
         }
-        $session=$null;$guestRoot='unused-test-root';$Seconds=5;$Connections=1024;$ManagedGcPayloadBytes=2048
+        $session=$null;$guestRoot='unused-test-root';$Seconds=5;$Connections=4096;$ManagedGcPayloadBytes=2048
         $ProfileCpu=[switch]::new($true);$SynDrop=[switch]::new($false)
         $PeerMeasurement=[switch]::new($false);$ManagedGc=[switch]::new($true)
         $ManagedGcPeerRecovery=[switch]::new($true)
@@ -271,7 +281,7 @@ try {
         $dataGuid='66666666-7777-8888-9999-000000000000'
         & ([scriptblock]::Create($launch[0].Extent.Text))
     }
-    if($actual.Count -ne 27 -or $actual[26] -isnot [bool] -or -not $actual[26] -or
+    if($actual.Count -ne 27 -or $actual[2] -ne 4096 -or $actual[26] -isnot [bool] -or -not $actual[26] -or
         $actual[25] -isnot [int] -or $actual[25] -ne 64 -or
         $actual[22] -ne 'NetperfData-abcdef123456' -or
         $actual[23] -ne '66666666-7777-8888-9999-000000000000' -or

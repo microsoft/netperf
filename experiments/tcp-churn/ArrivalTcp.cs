@@ -347,8 +347,10 @@ public static class ArrivalTcp
         if(args.Length>=12 && args[11]!="nodelay" && args[11]!="nagle")throw new ArgumentException("Unknown socket pacing.");
         noDelay=args.Length>=12 && args[11]=="nodelay";
         if(count<1||count>8192||rate<1||rate>10000||size<1||size>1048576||responseSize<1||responseSize>1048576||port<1024||port>65535||
-            sources.Length<1||sources.Length>8||(double)count/rate>120||concurrency<1||concurrency>1024)
+            sources.Length<1||sources.Length>8||(double)count/rate>120||concurrency<1||concurrency>4096)
             throw new ArgumentException("Invalid bounded arrival workload.");
+        if(concurrency>1024 && (size!=1460 || responseSize!=1460))
+            throw new ArgumentException("High concurrency requires bounded 1460-byte requests and responses.");
         int gcHeapMiB=0,gcMinimumLaunch=0;bool poolDispatch=false;string heapLayout="arrays";
         if(args.Length>=13) {
             string[] gc=args[12].Split(':');
