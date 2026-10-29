@@ -566,8 +566,11 @@ try {
     }
     $remoteTargets=@($r.targets|Where-Object{-not $_.loopback})
     $after=Get-NetAdapterStatistics -Name $alias
-    if($after.SentBytes-$before.SentBytes -lt ($remoteTargets|Measure-Object requestBytes -Sum).Sum -or
-        $after.ReceivedBytes-$before.ReceivedBytes -lt ($remoteTargets|Measure-Object responseBytes -Sum).Sum){throw 'The non-loopback NIC did not account for the remote payload.'}
+    # The profiled receiver sends responses and receives requests; a profiled client does the reverse.
+    $nicSentFloor=if($GcProcessRole -eq 'server'){($remoteTargets|Measure-Object responseBytes -Sum).Sum}else{($remoteTargets|Measure-Object requestBytes -Sum).Sum}
+    $nicReceivedFloor=if($GcProcessRole -eq 'server'){($remoteTargets|Measure-Object requestBytes -Sum).Sum}else{($remoteTargets|Measure-Object responseBytes -Sum).Sum}
+    if($after.SentBytes-$before.SentBytes -lt $nicSentFloor -or
+        $after.ReceivedBytes-$before.ReceivedBytes -lt $nicReceivedFloor){throw 'The non-loopback NIC did not account for the remote payload.'}
     $result=[ordered]@{schema=1;workload='managed-gc-mixed';outcome='collected';connections=$r.connections
         clusterProfile=$ClusterProfile;cluster=$clusterReport;partialOutage=$(if($r.PSObject.Properties['partialOutage']){$r.partialOutage}else{$null})
         responseBytesPerExchange=$(if($r.PSObject.Properties['responseBytesPerExchange']){$r.responseBytesPerExchange}else{$null})
