@@ -846,6 +846,10 @@ Recorder control uses a unique owned `-instancename` for start, health queries,
 stop and partial-start cleanup. The installed recorder must advertise this
 support. Default-instance state is never cancelled or reset; loss health is
 filtered to the generated instance and exports no session names.
+After traffic completes, capture closes before fixture teardown is signalled.
+Every guarded restoration is still attempted if recording shutdown fails.
+Native-tool errors and child-cleanup errors are preserved together rather than
+letting a secondary termination failure mask the original failure.
 
 The explicit `managed_gc_unused_interface=true` variant creates one
 disposable synthetic NIC on the owned generation-2 VM. It is first added

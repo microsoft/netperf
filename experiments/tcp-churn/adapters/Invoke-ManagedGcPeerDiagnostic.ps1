@@ -559,26 +559,6 @@ finally {
         try{Remove-NetFirewallRule -Name $receiverState.Rule -ErrorAction Stop}catch{$cleanupErrors.Add($_.Exception)}
     }
     $tcpEnd=[DateTime]::UtcNow.ToString('o')
-    foreach($control in $pathControls) {
-        try {
-            [IO.File]::WriteAllText((Join-Path $diagnostics ($control.Stem+'.stop')),'stop')
-            if($null -ne $control.Child -and -not $control.Child.Process.WaitForExit(30000)){
-                $control.Child.Process.Kill($true)
-                if(-not $control.Child.Process.WaitForExit(10000)){throw 'The owned path-control process tree did not terminate.'}
-                throw 'The route-control agent exceeded its bounded restoration deadline.'
-            }
-        }catch{$cleanupErrors.Add($_.Exception)}
-        finally {
-            if($null -ne $control.Child){try{Stop-TcpChurnCollector $control.Child}catch{$cleanupErrors.Add($_.Exception)}}
-            if(Test-Path -LiteralPath (Join-Path $diagnostics ($control.Stem+'-original.clixml'))) {
-                try {
-                    $null=Invoke-TcpChurnTool -Program $control.Program -Arguments ($control.Arguments+@('-RestoreOnly',
-                        '-ReportFile',(Join-Path $diagnostics ($control.Stem+'-restored.json')))) -Directory $diagnostics `
-                        -LogPrefix (Join-Path $diagnostics ($control.Stem+'-restore')) -TimeoutSeconds 30
-                }catch{$_.Exception.Data['CleanupPhase']='path-control-restore';$cleanupErrors.Add($_.Exception)}
-            }
-        }
-    }
     foreach($entry in @(@{child=$tcpProbe;stop='tcp.stop'},@{child=$clrProbe;stop='clr.stop'})) {
         if($null -eq $entry.child){continue}
         try {
@@ -613,6 +593,26 @@ finally {
             $null=Invoke-TcpChurnTool -Program $wpr -Arguments @('-cancel','-instancename',$wprInstance) `
                 -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'wpr-owned-failed-start-cancel') -TimeoutSeconds 20
         }catch{$cleanupErrors.Add($_.Exception)}
+    }
+    foreach($control in $pathControls) {
+        try {
+            [IO.File]::WriteAllText((Join-Path $diagnostics ($control.Stem+'.stop')),'stop')
+            if($null -ne $control.Child -and -not $control.Child.Process.WaitForExit(30000)){
+                $control.Child.Process.Kill($true)
+                if(-not $control.Child.Process.WaitForExit(10000)){throw 'The owned path-control process tree did not terminate.'}
+                throw 'The route-control agent exceeded its bounded restoration deadline.'
+            }
+        }catch{$cleanupErrors.Add($_.Exception)}
+        finally {
+            if($null -ne $control.Child){try{Stop-TcpChurnCollector $control.Child}catch{$cleanupErrors.Add($_.Exception)}}
+            if(Test-Path -LiteralPath (Join-Path $diagnostics ($control.Stem+'-original.clixml'))) {
+                try {
+                    $null=Invoke-TcpChurnTool -Program $control.Program -Arguments ($control.Arguments+@('-RestoreOnly',
+                        '-ReportFile',(Join-Path $diagnostics ($control.Stem+'-restored.json')))) -Directory $diagnostics `
+                        -LogPrefix (Join-Path $diagnostics ($control.Stem+'-restore')) -TimeoutSeconds 30
+                }catch{$_.Exception.Data['CleanupPhase']='path-control-restore';$cleanupErrors.Add($_.Exception)}
+            }
+        }
     }
     if($peerOwned -and $null -ne $peer) {
         try {Invoke-Command -Session $peer -ScriptBlock {
@@ -722,7 +722,8 @@ if($null -ne $failure -or $cleanupErrors.Count) {
                     errorId=$(if($_.Data.Contains('CleanupErrorId')){$_.Data['CleanupErrorId']}else{$null})
                     sourceLine=$(if($_.Data.Contains('CleanupSourceLine')){$_.Data['CleanupSourceLine']}else{$null})
                     outputLogsPresent=$(if($_.Data.Contains('CleanupOutputLogsPresent')){$_.Data['CleanupOutputLogsPresent']}else{$null})
-                    deadlineExceeded=($_.Message -eq 'Test tool deadline exceeded.')
+                    deadlineExceeded=$(if($_.Data.Contains('PrimaryDeadlineExceeded')){[bool]$_.Data['PrimaryDeadlineExceeded']}else{$_.Message -eq 'Test tool deadline exceeded.'})
+                    innerFailureTypes=$(if($_ -is [AggregateException]){@($_.InnerExceptions|ForEach-Object{$_.GetType().FullName})}else{@()})
                     publicDiagnosticTerms=@('deadline','process','exit','restoration','route','address','changed','ownership','failed','tool','timeout','removed','terminated','recording','stop',
                         'null','method','argument','variable','overwrite','read','only','constant','overload','cannot','property','disposed','index','parameter','binding','unexpected','non','zero'|
                         Where-Object{$message -match ('(?i)\b'+[regex]::Escape($_)+'\b')})}

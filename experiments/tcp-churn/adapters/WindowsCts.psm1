@@ -47,6 +47,7 @@ function Invoke-TcpChurnTool {
         [ValidateRange(1,600)][int]$TimeoutSeconds=60
     )
     $child=Start-ChurnChild $Program $Arguments $Directory $LogPrefix
+    $toolFailure=$null
     try {
         if (-not $child.Process.WaitForExit($TimeoutSeconds*1000)) { throw 'Test tool deadline exceeded.' }
         $code=$child.Process.ExitCode
@@ -55,8 +56,21 @@ function Invoke-TcpChurnTool {
             $error.Data['ToolExitCode']=$code
             throw $error
         }
-        [pscustomobject]@{ ExitCode=$code }
-    } finally { Close-ChurnChild $child }
+        $result=[pscustomobject]@{ ExitCode=$code }
+    }catch{$toolFailure=$_;throw}
+    finally {
+        try{Close-ChurnChild $child}catch{
+            if($null -eq $toolFailure){throw}
+            $combined=[AggregateException]::new('The native tool and owned child cleanup both failed.',
+                [Exception[]]@($toolFailure.Exception,$_.Exception))
+            if($toolFailure.Exception.Data.Contains('ToolExitCode')){
+                $combined.Data['ToolExitCode']=$toolFailure.Exception.Data['ToolExitCode']
+            }
+            $combined.Data['PrimaryDeadlineExceeded']=$toolFailure.Exception.Message -eq 'Test tool deadline exceeded.'
+            throw $combined
+        }
+    }
+    $result
 }
 
 function Start-WindowsChurnPeer($State,$Plan) {

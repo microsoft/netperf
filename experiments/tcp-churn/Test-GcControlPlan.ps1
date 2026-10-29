@@ -202,6 +202,14 @@ $wprStop=@($ast.FindAll({
         $node.Clauses[0].Item1.Extent.Text -eq '$profileOwned'
 },$true))
 if($wprStarts.Count -ne 2 -or $wprStop.Count -ne 1){throw 'All actual recorder start/stop paths must be identified.'}
+$restoration=@($ast.FindAll({
+    param($node)
+    $node -is [Management.Automation.Language.ForEachStatementAst] -and
+        $node.Condition.Extent.Text -eq '$pathControls'
+},$true))
+if($restoration.Count -ne 1 -or $wprStop[0].Extent.EndOffset -ge $restoration[0].Extent.StartOffset){
+    throw 'Capture must close before signalling fixture teardown; restoration must still follow a failed stop.'
+}
 & {
     $wpr='unused-wpr';$cpuProfile='unused-cpu!CPU';$wprProfile='unused-probes.wprp'
     $diagnostics=Join-Path ([IO.Path]::GetTempPath()) ('uncreated-recorder-test-'+[guid]::NewGuid().ToString('N'))
@@ -280,6 +288,45 @@ if($cleanupTables.Count -ne 1){throw 'The actual cleanup failure serialization m
     if($facts.Count -ne 2 -or $facts[0].stage -ne 'wpr-stop' -or -not $facts[0].deadlineExceeded -or
         $facts[1].toolExitCode -ne -1 -or ($facts|ConvertTo-Json -Compress) -match 'private|fixture-secret'){
         throw 'Cleanup diagnostics lost the failure stage/code or leaked private exception text.'
+    }
+}
+$tools=[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'adapters\WindowsCts.psm1'),[ref]$tokens,[ref]$errors)
+if($errors.Count){throw ($errors|Out-String)}
+$invoke=@($tools.FindAll({
+    param($node)
+    $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Invoke-TcpChurnTool'
+},$true))
+if($invoke.Count -ne 1){throw 'Actual bounded native-tool execution must be unique.'}
+foreach($case in @('native-and-close','deadline-and-close','close-only','native-only','success')){
+    & {
+        $fixture=@{Closes=0}
+        function Start-ChurnChild {
+            param($Program,$Arguments,$Directory,$LogPrefix)
+            $process=[pscustomobject]@{TimesOut=($case -eq 'deadline-and-close');ExitCode=$(if($case.StartsWith('native')){7}else{0})}
+            $process|Add-Member ScriptMethod WaitForExit {param($Milliseconds) -not $this.TimesOut}
+            @{Process=$process}
+        }
+        function Close-ChurnChild {
+            param($Child)
+            $fixture.Closes++
+            if($case -in @('native-and-close','deadline-and-close','close-only')){throw [IO.IOException]::new('Synthetic owned cleanup failure.')}
+        }
+        . ([scriptblock]::Create($invoke[0].Extent.Text))
+        $failure=$null;$value=$null
+        try{$value=Invoke-TcpChurnTool -Program 'unused' -Arguments @('unused') -Directory 'unused' -LogPrefix 'unused' -TimeoutSeconds 1}
+        catch{$failure=$_.Exception}
+        if($fixture.Closes -ne 1){throw 'Native command cleanup was skipped or duplicated.'}
+        if($case -in @('native-and-close','deadline-and-close')){
+            if($failure -isnot [AggregateException] -or $failure.InnerExceptions.Count -ne 2 -or
+                [bool]$failure.Data['PrimaryDeadlineExceeded'] -ne ($case -eq 'deadline-and-close') -or
+                ($case -eq 'native-and-close' -and $failure.Data['ToolExitCode'] -ne 7)){
+                throw 'Owned cleanup masked the primary native error or deadline.'
+            }
+        }elseif($case -eq 'native-only'){
+            if($failure -isnot [InvalidOperationException] -or $failure.Data['ToolExitCode'] -ne 7){throw 'Native exit failure identity changed.'}
+        }elseif($case -eq 'close-only'){
+            if($failure -isnot [IO.IOException] -or $null -ne $value){throw 'Cleanup failure returned a success-shaped value.'}
+        }elseif($null -ne $failure -or $value.ExitCode -ne 0){throw 'Successful native execution behavior changed.'}
     }
 }
 $traffic=[Management.Automation.Language.Parser]::ParseFile(
