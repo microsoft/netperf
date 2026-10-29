@@ -127,10 +127,12 @@ try {
             $fixture=if($count -eq 1){[ArrivalTcp+ReferencedTcpPathFixture]::Create($count)}
                 else{$referenceType.GetMethod('Create').Invoke($null,@([int]$count))}
             $fixture.VerifyHeld()
+            $fixture.PreparePaths($loopback[0].InterfaceIndex)
             $snapshot=$type.GetMethod('ReadPathPopulation').Invoke($null,@([int]$loopback[0].InterfaceIndex,
                 [string[]]@('127.0.0.1'),[int]$loopback[0].InterfaceIndex,[int]$count))
             $connections=$type.GetMethod('CountEstablishedConnectionsInLargeTable').Invoke($null,@([int]$PID,[int]$fixture.Port))
-            if($fixture.Count -ne $count -or $snapshot.ReferencedTcpPaths -ne $count -or $connections -ne 2*$count -or
+            if($fixture.Count -ne $count -or $fixture.PreparationQueries -ne $count -or
+                $snapshot.ReferencedTcpPaths -ne $count -or $connections -ne 2*$count -or
                 $fixture.AvailablePhysicalBytesAtCreate -lt ([long]$count*65536+256MB)){
                 throw 'Referenced fixture pairs, actual path range, TCP ownership, or memory admission did not verify.'
             }

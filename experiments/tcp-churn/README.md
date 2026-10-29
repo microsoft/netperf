@@ -774,6 +774,11 @@ every pair are held and verified until recording/workload completion. Teardown
 then uses abortive closes to avoid a large TIME_WAIT population outside the
 measurement. Creation has a 120-second deadline, 32-connect batches, explicit
 memory admission, and all-attempt disposal; any failed gate rejects the run.
+After connecting pairs, documented `GetBestRoute2` queries prepare every exact
+source/destination path on the verified loopback interface before the native
+census. This is setup only: the query count/time is reported, no configuration
+is changed or fixture application payload sent, and this work cannot qualify
+the maintenance CPU signature. The later during-GC census must still verify.
 The 294,912-path option requires `managed_gc_heap_layout=graph-2g`, an isolated CoreCLR receiver-only
 variant with a nominal 2-GiB graph budget to allow the real during-GC path census
 to finish. Both controller admission and the receiver immediately before graph

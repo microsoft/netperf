@@ -287,10 +287,13 @@ try {
         if($loopback.Count -ne 1 -or $loopback[0].PrefixLength -ne 8){throw 'The referenced fixture requires one verified loopback interface.'}
         $loopbackInterfaceIndex=$loopback[0].InterfaceIndex
         $referencedFixture=[ArrivalTcp+ReferencedTcpPathFixture]::Create($ReferencedTcpPaths)
+        $referencedFixture.PreparePaths($loopbackInterfaceIndex)
         $report.pathReferenceKind='established-loopback-tcp'
         $report.requestedReferencedTcpPaths=$ReferencedTcpPaths
         $report.referencedTcpConnectionPairs=$referencedFixture.Count
         $report.referencedTcpCreationMilliseconds=$referencedFixture.CreationMilliseconds
+        $report.referencedTcpPreparationQueries=$referencedFixture.PreparationQueries
+        $report.referencedTcpPreparationMilliseconds=$referencedFixture.PreparationMilliseconds
         $report.referencedTcpAdmissionFreePhysicalBytes=$referencedFixture.AvailablePhysicalBytesAtCreate
         $report.referencedTcpConnectBatchLimit=32
         $report.populationMaximumParallelism=1

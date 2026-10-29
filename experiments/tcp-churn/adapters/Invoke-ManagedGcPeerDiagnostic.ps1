@@ -838,6 +838,7 @@ try {
         }
         if($ReferencedTcpPaths -and ($cacheReport.pathReferenceKind -ne 'established-loopback-tcp' -or
             $cacheReport.requestedReferencedTcpPaths -ne $ReferencedTcpPaths -or
+            $cacheReport.referencedTcpPreparationQueries -ne $ReferencedTcpPaths -or
             $cacheReport.measuredReferencedTcpPathsAtSnapshot -lt $ReferencedTcpPaths -or
             $cacheReport.heldTcpConnectionPairsAtVerification -ne $ReferencedTcpPaths)){
             throw 'The actual referenced-path census or held TCP-pair population did not verify.'

@@ -25,6 +25,15 @@ public static class ArrivalTcp
     private static extern uint GetExtendedTcpTable(IntPtr table,ref uint bytes,bool order,int family,int tableClass,uint reserved);
     [DllImport("iphlpapi.dll")]
     private static extern uint GetIpPathTable(ushort family,out IntPtr table);
+    [StructLayout(LayoutKind.Explicit,Size=104)]
+    private struct BestRouteRow
+    {
+        [FieldOffset(0)]public ulong InterfaceLuid;
+        [FieldOffset(8)]public uint InterfaceIndex;
+    }
+    [DllImport("iphlpapi.dll")]
+    private static extern uint GetBestRoute2(IntPtr interfaceLuid,uint interfaceIndex,ref SockaddrInet source,
+        ref SockaddrInet destination,uint options,out BestRouteRow route,out SockaddrInet bestSource);
     [DllImport("iphlpapi.dll")]
     private static extern void FreeMibTable(IntPtr table);
     [StructLayout(LayoutKind.Explicit,Size=28)]
@@ -200,6 +209,8 @@ public static class ArrivalTcp
         public int Port {get;private set;}
         public ulong AvailablePhysicalBytesAtCreate {get;private set;}
         public double CreationMilliseconds {get;private set;}
+        public int PreparationQueries {get;private set;}
+        public double PreparationMilliseconds {get;private set;}
         private ReferencedTcpPathFixture(int count)
         {
             Count=count;clients=new Socket[count];servers=new Socket[count];
@@ -270,6 +281,23 @@ public static class ArrivalTcp
                     ((IPEndPoint)clients[i].LocalEndPoint).Port!=Port || ((IPEndPoint)servers[i].LocalEndPoint).Port!=Port)
                     throw new InvalidOperationException("A referenced TCP fixture connection changed.");
             }
+        }
+        public void PreparePaths(int loopbackInterfaceIndex)
+        {
+            VerifyHeld();
+            if(loopbackInterfaceIndex<1)throw new ArgumentException("A verified loopback interface is required.");
+            var clock=Stopwatch.StartNew();
+            var source=new SockaddrInet{Family=2,Ipv4=0x0100007F};
+            for(int i=1;i<=Count;i++){
+                var destination=new SockaddrInet{Family=2,Ipv4=BitConverter.ToUInt32(SourceFor(i).GetAddressBytes(),0)};
+                BestRouteRow route;SockaddrInet bestSource;
+                uint status=GetBestRoute2(IntPtr.Zero,(uint)loopbackInterfaceIndex,ref source,ref destination,0,out route,out bestSource);
+                if(status!=0)throw new System.ComponentModel.Win32Exception((int)status);
+                if(route.InterfaceIndex!=(uint)loopbackInterfaceIndex || bestSource.Family!=2 || bestSource.Ipv4!=source.Ipv4)
+                    throw new InvalidOperationException("A referenced-path route query escaped its verified loopback scope.");
+                PreparationQueries++;
+            }
+            PreparationMilliseconds=clock.Elapsed.TotalMilliseconds;
         }
         public void Dispose()
         {

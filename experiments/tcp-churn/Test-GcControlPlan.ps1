@@ -594,12 +594,13 @@ $referenceGate=@($ast.FindAll({
         $node.Clauses[0].Item1.Extent.Text.StartsWith('$ReferencedTcpPaths -and ($cacheReport.pathReferenceKind')
 },$true))
 if($referenceGate.Count -ne 1){throw 'The actual referenced-path acceptance gate must be unique.'}
-foreach($case in @('valid','wrong-kind','missing-paths','missing-pairs')){
+foreach($case in @('valid','wrong-kind','missing-preparation','missing-paths','missing-pairs')){
     & {
         $ReferencedTcpPaths=49152
         $cacheReport=[pscustomobject]@{pathReferenceKind='established-loopback-tcp';requestedReferencedTcpPaths=49152
-            measuredReferencedTcpPathsAtSnapshot=49152;heldTcpConnectionPairsAtVerification=49152}
+            referencedTcpPreparationQueries=49152;measuredReferencedTcpPathsAtSnapshot=49152;heldTcpConnectionPairsAtVerification=49152}
         if($case -eq 'wrong-kind'){$cacheReport.pathReferenceKind='socket-count-only'}
+        if($case -eq 'missing-preparation'){$cacheReport.referencedTcpPreparationQueries=0}
         if($case -eq 'missing-paths'){$cacheReport.measuredReferencedTcpPathsAtSnapshot=49151}
         if($case -eq 'missing-pairs'){$cacheReport.heldTcpConnectionPairsAtVerification=49151}
         $rejected=$false
