@@ -76,10 +76,18 @@ public static class ArrivalTcp
         if(interfaceIndex<1 || delay<0 || delay>30000 || duration<100 || duration>10000 || interval<1 || interval>1000)
             throw new ArgumentException("The route-epoch dial requires bounded delay, duration and interval.");
         if(File.Exists(args[7]))throw new IOException("Use a fresh dial report.");
+        string startAfterFile=args.Length==9?args[8]:null;
         IntPtr row=NewOnLinkRouteRow(interfaceIndex,0x00F813C6u,24);
         long operations=0,failures=0;bool present=false;string start="",end="";uint lastError=0;
         try{
             File.WriteAllText(args[5],"ready");
+            if(startAfterFile!=null){
+                var trigger=Stopwatch.StartNew();
+                while(!File.Exists(startAfterFile) && !File.Exists(args[6])){
+                    if(trigger.Elapsed.TotalSeconds>120)throw new TimeoutException("The dial start trigger did not appear.");
+                    Thread.Sleep(1);
+                }
+            }
             var clock=Stopwatch.StartNew();
             while(clock.ElapsedMilliseconds<delay){if(File.Exists(args[6]))break;Thread.Sleep(5);}
             if(!File.Exists(args[6])){
@@ -90,7 +98,9 @@ public static class ArrivalTcp
                     if(status==0){present=!present;operations++;}else{failures++;lastError=status;if(failures>16)break;}
                     next+=interval;
                     long wait=next-window.ElapsedMilliseconds;
-                    if(wait>0)Thread.Sleep((int)wait);
+                    // Sleep only for long gaps; spin one thread for short ones instead of raising global timer resolution.
+                    if(wait>=20)Thread.Sleep((int)wait-16);
+                    while(next>window.ElapsedMilliseconds && !File.Exists(args[6]))Thread.SpinWait(200);
                 }
                 end=DateTime.UtcNow.ToString("o",CultureInfo.InvariantCulture);
             }
@@ -103,6 +113,7 @@ public static class ArrivalTcp
             File.WriteAllText(args[7],"{\"schema\":1,\"prefix\":\"198.19.248.0/24\",\"intervalMilliseconds\":"+interval+
                 ",\"durationMilliseconds\":"+duration+",\"routeOperations\":"+operations+",\"failures\":"+failures+
                 ",\"lastError\":"+lastError+",\"routeRemoved\":"+(present?"false":"true")+
+                ",\"startAfterGc\":"+(startAfterFile!=null?"true":"false")+",\"pacing\":\"sleep-long-spin-short\""+
                 ",\"startUtc\":\""+start+"\",\"endUtc\":\""+end+"\"}");
         }
         return (failures>0 || present)?1:0;
@@ -983,7 +994,7 @@ public static class ArrivalTcp
     private static int Main(string[] args)
     {
         try {
-            if(args.Length==8 && args[0]=="--route-epoch-dial")return RunRouteEpochDial(args);
+            if((args.Length==8 || args.Length==9) && args[0]=="--route-epoch-dial")return RunRouteEpochDial(args);
             if(args.Length<7 || args.Length>15) {
                 Console.Error.WriteLine("Usage: ArrivalTcp sources peer port count rate request-bytes output.json [role [response-bytes [seed [maximum-in-flight [nodelay|nagle [gc:heap-MiB:minimum-launched|dispatch:pool [exchanges:64[:framed]|idlekeepalive|servicewait64[:pipelined] [fixture-ready-file]]]]]]]]");
                 return 2;

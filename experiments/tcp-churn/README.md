@@ -833,7 +833,12 @@ workload. Each operation increments the routing epoch shared by every path in
 the compartment, standing in for any routing-state change (for example a
 dead-gateway transition between two interfaces). The prefix must be unused
 beforehand, the route is removed on every exit path, and the run is rejected
-unless at least 100 operations completed without error and routing is restored. Of 8,192 pipelined
+unless at least 100 operations completed without error and routing is restored.
+`coreclr-cluster-epochdial2` uses a 2 ms interval. Short gaps are paced by
+spinning the dial's own thread rather than raising the global timer resolution,
+which would also change TCP timer behavior. `coreclr-cluster-epochdial2-aftergc`
+starts the same 4 s, 2 ms dial when the receiver's real GC completes, modelling
+invalidation during post-GC catch-up. Of 8,192 pipelined
 connections, 7,168 arrive from those remote addresses and 1,024 use loopback.
 Requests are 512 bytes; responses are 16 KiB, so healthy traffic sends full-size
 segments and exercises black-hole confirmation in the TCP delay queue. The

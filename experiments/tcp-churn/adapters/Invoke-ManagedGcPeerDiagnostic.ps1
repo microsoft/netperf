@@ -27,7 +27,7 @@ param(
     [switch]$ServiceWait,
     [switch]$PipelinedServiceWait,
     [switch]$SteadyStateFixture,
-    [ValidateSet('none','nodes1000','nodes1000-outage','nodes1000-epochdial')][string]$ClusterProfile='none',
+    [ValidateSet('none','nodes1000','nodes1000-outage','nodes1000-epochdial','nodes1000-epochdial2','nodes1000-epochdial2-aftergc')][string]$ClusterProfile='none',
     [ValidateSet(0,1024,4096,8192,49152,98304,196608,294912)][int]$ReferencedTcpPaths=0,
     [ValidateSet(0,16384)][int]$ReceiveBudgetBytes=0,
     [ValidateSet(0,1,1024,8192,24576,49152,98304,196608,294912)][int]$CacheRetirePaths=0,
@@ -299,8 +299,9 @@ try {
             outageAddresses=$(if($ClusterProfile -eq 'nodes1000-outage'){250}else{0})
             outageDelayMilliseconds=$(if($ClusterProfile -eq 'nodes1000-outage'){5000}else{0})
             outageDurationMilliseconds=$(if($ClusterProfile -eq 'nodes1000-outage'){4000}else{0})
-            routeEpochDialIntervalMilliseconds=$(if($ClusterProfile -eq 'nodes1000-epochdial'){20}else{0})}
-        if($ClusterProfile -eq 'nodes1000-epochdial' -and @(Get-NetRoute -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|
+            routeEpochDialIntervalMilliseconds=$(switch($ClusterProfile){'nodes1000-epochdial'{20}'nodes1000-epochdial2'{2}'nodes1000-epochdial2-aftergc'{2}default{0}})
+            routeEpochDialStartsAfterGc=($ClusterProfile -eq 'nodes1000-epochdial2-aftergc')}
+        if($ClusterProfile -like 'nodes1000-epochdial*' -and @(Get-NetRoute -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|
             Where-Object{$_.DestinationPrefix -match '^198\.19\.24[89]\.|^198\.19\.25[0-5]\.'}).Count){throw 'The owned epoch-dial prefix is already routed.'}
     }
     $phase='compile-client'
@@ -513,11 +514,14 @@ try {
     $phase='managed-gc-traffic'
     if($GcProcessRole -eq 'server') {
         $clientPid=$localServer.Process.Id
-        if($ClusterProfile -eq 'nodes1000-epochdial'){
+        if($ClusterProfile -like 'nodes1000-epochdial*'){
             $phase='start-route-epoch-dial'
             $epochDialStarted=$true
-            $epochDial=Start-TcpChurnCollector -Program $exe -Arguments @('--route-epoch-dial',[string]$dataIndex,'5000','4000','20',
-                (Join-Path $diagnostics 'epoch-dial.ready'),(Join-Path $diagnostics 'epoch-dial.stop'),(Join-Path $diagnostics 'epoch-dial.json')) `
+            $afterGc=$ClusterProfile -eq 'nodes1000-epochdial2-aftergc'
+            $dialArguments=@('--route-epoch-dial',[string]$dataIndex,$(if($afterGc){'0'}else{'5000'}),'4000',$(if($ClusterProfile -eq 'nodes1000-epochdial'){'20'}else{'2'}),
+                (Join-Path $diagnostics 'epoch-dial.ready'),(Join-Path $diagnostics 'epoch-dial.stop'),(Join-Path $diagnostics 'epoch-dial.json'))
+            if($afterGc){$dialArguments+=($localOutput+'.gc.json')}
+            $epochDial=Start-TcpChurnCollector -Program $exe -Arguments $dialArguments `
                 -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'epoch-dial')
             Wait-Ready $epochDial (Join-Path $diagnostics 'epoch-dial.ready')
             $phase='managed-gc-traffic'
