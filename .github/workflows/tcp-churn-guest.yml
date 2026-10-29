@@ -104,9 +104,9 @@ on:
         type: boolean
         default: false
       managed_gc_route_variant:
-        description: Logical next-hop variant for the owned route control; peer-gateway verifies the same receiver MAC
+        description: Owned path-refresh control; destination-flush resets only both verified data destinations after GC
         type: choice
-        options: ['onlink', 'peer-gateway']
+        options: ['onlink', 'peer-gateway', 'destination-flush']
         default: 'onlink'
   push:
     branches: [main, 'user/mtfriesen/tcp-churn-public']
@@ -152,6 +152,8 @@ jobs:
         run: ./experiments/tcp-churn/Test-ScopedDataAddresses.ps1
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-ScopedPathRefresh.ps1
+      - shell: pwsh
+        run: ./experiments/tcp-churn/Test-ScopedDestinationCacheFlush.ps1
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-ScopedPathRetirement.ps1
       - shell: pwsh

@@ -16,7 +16,7 @@ param(
     [ValidateSet('client','server')][string]$GcProcessRole='client',
     [ValidateSet('arrays','graph')][string]$HeapLayout='arrays',
     [switch]$RouteRefresh,
-    [ValidateSet('onlink','peer-gateway')][string]$RouteVariant='onlink',
+    [ValidateSet('onlink','peer-gateway','destination-flush')][string]$RouteVariant='onlink',
     [ValidateSet(0,16384)][int]$ReceiveBudgetBytes=0,
     [ValidateSet(0,1,1024,8192,24576,49152)][int]$CacheRetirePaths=0,
     [switch]$WprProbes,
@@ -35,6 +35,9 @@ if($RouteRefresh -and ($GcProcessRole -ne 'server' -or -not $IsolatedData -or $P
     throw 'Route refresh requires isolated receiver-GC mode without a neighbor pulse.'
 }
 if($RouteVariant -ne 'onlink' -and -not $RouteRefresh){throw 'Logical gateway selection requires the owned route-refresh control.'}
+if($RouteVariant -eq 'destination-flush' -and ($CacheRetirePaths -or $CacheInterfaceAlias -or $PeerGcPressure)){
+    throw 'Destination-cache flush requires an isolated control without cache retirement or companion pressure.'
+}
 if($ReceiveBudgetBytes -and $GcProcessRole -ne 'server'){throw 'A bounded receive budget requires receiver-GC mode.'}
 if($SpinLocks -and -not $WprProbes){throw 'Owned spinlock capture requires the exact-event WPR controller.'}
 if(($DataInterfaceAlias -or $DataInterfaceGuid) -and
@@ -328,6 +331,7 @@ try {
             $phase=$stem+'-start'
             $program=(Get-Command pwsh -CommandType Application -ErrorAction Stop).Source
             $script=if($type -eq 'cache'){'Invoke-ScopedPathRetirement.ps1'}else{'Invoke-ScopedPathRefresh.ps1'}
+            if($type -eq 'route' -and $RouteVariant -eq 'destination-flush'){$script='Invoke-ScopedDestinationCacheFlush.ps1'}
             $controlAlias=if($type -eq 'cache' -and $CacheInterfaceAlias){$CacheInterfaceAlias}else{$alias}
             $arguments=@('-NoProfile','-NonInteractive','-File',(Join-Path $PSScriptRoot $script),
                 '-InterfaceAlias',$controlAlias,'-DataStateFile',(Join-Path $diagnostics 'data-original.clixml'),
@@ -335,6 +339,10 @@ try {
             if($type -eq 'cache'){$arguments+=@('-PathCount',[string]$CacheRetirePaths,
                 '-ReceiverExecutable',$exe,'-ReceiverProcessId',[string]$localServer.Process.Id)
                 if($CacheInterfaceGuid){$arguments+=@('-UnusedInterfaceGuid',$CacheInterfaceGuid,'-EndFile',($localOutput+'.gc.json'))}
+            }
+            elseif($RouteVariant -eq 'destination-flush'){
+                $arguments+=@('-EndFile',($localOutput+'.gc.json'),'-ReceiverExecutable',$exe,
+                    '-ReceiverProcessId',[string]$localServer.Process.Id,'-ExpectedPeerMac',$peerMac)
             }
             else{$arguments+=@('-NextHop',$(if($RouteVariant -eq 'peer-gateway'){'198.19.240.5'}else{'0.0.0.0'}),'-ExpectedPeerMac',$peerMac)}
             $control=[pscustomobject]@{Stem=$stem;Program=$program;Arguments=$arguments;Child=$null}
@@ -666,7 +674,17 @@ try {
     if($RouteRefresh) {
         $phase='verify-route-control'
         $routeReport=Get-Content (Join-Path $diagnostics 'route-control.json') -Raw|ConvertFrom-Json
-        if($routeReport.outcome -ne 'completed' -or -not $routeReport.added -or -not $routeReport.removed -or
+        if($RouteVariant -eq 'destination-flush'){
+            if($routeReport.outcome -ne 'completed' -or $routeReport.scenario -ne 'owned-destination-cache-flush' -or
+                $routeReport.destinationFlushes -ne 2 -or -not $routeReport.networkConfigurationPreserved -or
+                -not $routeReport.peerMacVerified -or $routeReport.establishedAtSnapshot -lt 8 -or
+                ([datetime]$routeReport.snapshotCompletedUtc).ToUniversalTime() -lt ([datetime]$r.managedGc.collectionStartUtc).ToUniversalTime() -or
+                ([datetime]$routeReport.snapshotCompletedUtc).ToUniversalTime() -gt ([datetime]$r.managedGc.collectionEndUtc).ToUniversalTime() -or
+                ([datetime]$routeReport.applyStartUtc).ToUniversalTime() -lt ([datetime]$r.managedGc.collectionEndUtc).ToUniversalTime() -or
+                ([datetime]$routeReport.applyEndUtc).ToUniversalTime() -gt ([datetime]$end).ToUniversalTime()){
+                throw 'The exact owned-destination flush, live cohort, GC phase or unchanged network configuration did not verify.'
+            }
+        }elseif($routeReport.outcome -ne 'completed' -or -not $routeReport.added -or -not $routeReport.removed -or
             -not $routeReport.sameInterface -or -not $routeReport.defaultRoutesPreserved -or
             ($RouteVariant -eq 'onlink' -and -not $routeReport.sameInterfaceAndNextHop) -or
             ($RouteVariant -eq 'peer-gateway' -and (-not $routeReport.peerMacVerified -or $routeReport.nextHopKind -ne 'owned-peer-gateway')) -or

@@ -901,9 +901,11 @@ The spinlock summary decodes the installed public x64 Thread/SpinLock schema,
 groups records by their actual address privately, and resolves TCP release
 sites against the capture's exact public PDB identity. Only per-capture lock
 ordinals, public function names and aggregate counts leave the guest.
-Same-lock maintenance attribution accepts either the exact public
-`IppValidatePaths` or `IppGarbageCollectPaths` writer together with an actual
-path-refresh reader site. It retains separate garbage-collector-only and
+Same-lock maintenance attribution accepts the exact public `IppValidatePaths`,
+`IppGarbageCollectPaths` or `IppFlushPaths` writer together with the unambiguous
+`IppGetNextHopFromPath` reader site. `TcpUpdatePathInfoTcb` alone is not reader
+proof because it can contain inlined on-demand write validation.
+It retains separate garbage-collector-only and
 any-maintenance-writer flags; a validation writer by itself is not a reader.
 Recorded cycle-interval overlap and the no-interrupt DISPATCH-level subset
 remain separate from sampled CPU density; no raw address is exported.
@@ -920,7 +922,18 @@ original ETL hashes and rejecting changed files or reparse-point directories.
 Raw ETLs, numeric summaries and symbols remain guest-local. No trace path or
 raw capture is published; inspection is the default.
 
-The optional `managed_gc_route_refresh=true` mechanism control requires isolated
+The explicit `managed_gc_route_refresh=true` plus
+`managed_gc_route_variant=destination-flush` alternative tests on-demand
+validation after atomic path invalidation, without interface deletion or a
+large idle-cache fixture. It snapshots a live cohort during the actual GC,
+waits for collection completion, and invokes the documented destination-cache
+delete for only `198.19.240.1` and `198.19.240.6`, always with the verified
+owned interface specified. Management destinations and whole-cache flushes
+are excluded. Both operations, original addresses/default routes/static IPv4
+policy, peer identity and timing must verify. This mode rejects cache
+retirement and companion-pressure combinations.
+
+The `onlink` and `peer-gateway` route-refresh variants require isolated
 receiver GC and no neighbor pulse. An independent agent observes a pre-call GC
 signal and adds exactly one host route to the owned benchmark peer, retaining
 the connected prefix's interface and on-link next hop. The more-specific entry

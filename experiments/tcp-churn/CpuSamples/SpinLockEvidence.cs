@@ -61,13 +61,13 @@ internal static class SpinLockEvidence
     private static bool IsPathReader(string function)
     {
         string name = function.TrimStart('?');
-        return name == "IppGetNextHopFromPath" || name == "TcpUpdatePathInfoTcb";
+        return name == "IppGetNextHopFromPath";
     }
 
     private static bool IsMaintenanceWriter(string function)
     {
         string name = function.TrimStart('?');
-        return name == "IppGarbageCollectPaths" || name == "IppValidatePaths";
+        return name == "IppGarbageCollectPaths" || name == "IppValidatePaths" || name == "IppFlushPaths";
     }
 
     internal static bool SelfTest()
@@ -89,9 +89,9 @@ internal static class SpinLockEvidence
         return first.Wait == 50 && first.Caller == 0x5678 && first.Irql == 2 &&
             Peak(new[] { first, second, sameCpu, interrupted }, false) == 3 &&
             Peak(new[] { first, second, sameCpu, interrupted }, true) == 2 &&
-            IsPathReader("??IppGetNextHopFromPath") && IsPathReader("TcpUpdatePathInfoTcb") &&
+            IsPathReader("??IppGetNextHopFromPath") && !IsPathReader("TcpUpdatePathInfoTcb") &&
             !IsPathReader("IppValidatePaths") && !IsPathReader("IppValidatePath") &&
-            IsMaintenanceWriter("IppValidatePaths") && IsMaintenanceWriter("??IppGarbageCollectPaths") &&
+            IsMaintenanceWriter("IppValidatePaths") && IsMaintenanceWriter("??IppGarbageCollectPaths") && IsMaintenanceWriter("IppFlushPaths") &&
             !IsMaintenanceWriter("IppValidatePath") && !IsMaintenanceWriter("TcpUpdatePathInfoTcb");
     }
 

@@ -21,7 +21,7 @@ param(
     [ValidateSet('client','server')][string]$ManagedGcProcessRole='client',
     [ValidateSet('arrays','graph')][string]$ManagedGcHeapLayout='arrays',
     [switch]$ManagedGcRouteRefresh,
-    [ValidateSet('onlink','peer-gateway')][string]$ManagedGcRouteVariant='onlink',
+    [ValidateSet('onlink','peer-gateway','destination-flush')][string]$ManagedGcRouteVariant='onlink',
     [ValidateSet(0,16384)][int]$ManagedGcReceiveBudgetBytes=0,
     [ValidateSet(0,1,1024,8192,24576,49152)][int]$ManagedGcCacheRetirePaths=0,
     [switch]$ManagedGcWprProbes,
@@ -72,6 +72,10 @@ if($ManagedGcRouteRefresh -and (-not $ManagedGc -or $ManagedGcProcessRole -ne 's
     throw 'Route refresh requires isolated receiver-GC mode without a neighbor pulse.'
 }
 if($ManagedGcRouteVariant -ne 'onlink' -and -not $ManagedGcRouteRefresh){throw 'Logical gateway selection requires the owned route-refresh control.'}
+if($ManagedGcRouteVariant -eq 'destination-flush' -and
+    ($ManagedGcCacheRetirePaths -or $ManagedGcUnusedInterface -or $ManagedGcPeerPressure)){
+    throw 'Destination-cache flush requires an isolated control without cache retirement or companion pressure.'
+}
 if($PSBoundParameters.ContainsKey('ManagedGcRecoveryMilliseconds') -and -not $ManagedGcPeerRecovery){
     throw 'Recovery duration selection requires managed-GC peer recovery.'
 }

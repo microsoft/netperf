@@ -156,7 +156,21 @@ try {
     }
     if(-not $rejected -or (Test-Path $directory)){throw 'Invalid spinlock mode mutated state or was accepted.'}
     $checks++
-    foreach($file in @('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1','Invoke-NetperfGuestTcpChurn.ps1','Invoke-ScopedNeighborPulse.ps1','Set-ScopedDataAddresses.ps1','GcReceiverTraffic.psm1','Invoke-ScopedPathRefresh.ps1','Invoke-ScopedPathRetirement.ps1','New-GcProbeWprProfile.ps1')) {
+    foreach($extra in @(@{ManagedGcCacheRetirePaths=1024},@{ManagedGcPeerPressure=$true})){
+        $rejected=$false
+        try{
+            & (Join-Path $PSScriptRoot 'adapters\Invoke-NetperfGuestTcpChurn.ps1') `
+                -VmName 'unused-test-only' -Credential $credential -PublishDirectory $directory `
+                -ManagedGc -ProfileCpu -ManagedGcIsolatedData -ManagedGcProcessRole server `
+                -ManagedGcRouteRefresh -ManagedGcRouteVariant destination-flush @extra
+        }catch{
+            if($_.Exception.Message -notmatch 'Destination-cache flush requires an isolated control'){throw}
+            $rejected=$true
+        }
+        if(-not $rejected -or (Test-Path -LiteralPath $directory)){throw 'A confounded destination flush mutated state or was accepted.'}
+        $checks++
+    }
+    foreach($file in @('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1','Invoke-NetperfGuestTcpChurn.ps1','Invoke-ScopedNeighborPulse.ps1','Set-ScopedDataAddresses.ps1','GcReceiverTraffic.psm1','Invoke-ScopedPathRefresh.ps1','Invoke-ScopedPathRetirement.ps1','New-GcProbeWprProfile.ps1','Invoke-ScopedDestinationCacheFlush.ps1')) {
         $tokens=$null;$errors=$null
         $parsed=[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot "adapters\$file"),[ref]$tokens,[ref]$errors)
         if($errors.Count){throw ($errors|Out-String)}

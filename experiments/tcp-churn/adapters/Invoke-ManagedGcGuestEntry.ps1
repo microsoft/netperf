@@ -15,7 +15,7 @@ param(
     [ValidateSet('client','server')][string]$GcProcessRole='client',
     [ValidateSet('arrays','graph')][string]$HeapLayout='arrays',
     [switch]$RouteRefresh,
-    [ValidateSet('onlink','peer-gateway')][string]$RouteVariant='onlink',
+    [ValidateSet('onlink','peer-gateway','destination-flush')][string]$RouteVariant='onlink',
     [ValidateSet(0,16384)][int]$ReceiveBudgetBytes=0,
     [ValidateSet(0,1,1024,8192,24576,49152)][int]$CacheRetirePaths=0,
     [switch]$WprProbes,
