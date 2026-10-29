@@ -797,6 +797,9 @@ ordinary loopback path enumeration are validated by the source tests.
 Socket population uses a bounded compiled loop and reports its duration;
 the requested count still must match measured cached paths, rather than
 assuming that successful socket creation pins every path.
+Fixture socket release is also a measured compiled loop, avoiding
+interpreter overhead between the observed GC signal and cache maintenance.
+No productive TCP connection is preconnected or released by this operation.
 
 CPU summaries separately count queued lock-owner waits under path refresh
 and the narrower timer/header-send/path-refresh signature, including a

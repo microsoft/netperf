@@ -200,7 +200,9 @@ try {
         if($wait.Elapsed.TotalSeconds -gt 60){throw 'No real-GC signal reached the bounded retirement control.'}
         Start-Sleep -Milliseconds 25
     }
-    foreach($socket in $sockets){$socket.Dispose()}
+    $release=[Diagnostics.Stopwatch]::StartNew()
+    [ArrivalTcp]::ReleaseIdlePathSockets($sockets)
+    $report.socketReleaseMilliseconds=$release.Elapsed.TotalMilliseconds
     $sockets.Clear()
     $report.measuredReleasedPaths=Read-PathCount
     if($report.measuredReleasedPaths -lt $PathCount){throw 'Released cached paths did not persist until retirement.'}
@@ -226,7 +228,7 @@ try {
     }
 }catch{$failure=$_}
 finally {
-    foreach($socket in $sockets){$socket.Dispose()}
+    [ArrivalTcp]::ReleaseIdlePathSockets($sockets)
     try {
         Restore-Control
         $report.restored=$true;$report.dataAndManagementAddressesPreserved=$true;$report.defaultRoutesPreserved=$true

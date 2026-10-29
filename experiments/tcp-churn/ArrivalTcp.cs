@@ -91,6 +91,11 @@ public static class ArrivalTcp
             throw;
         }
     }
+    public static void ReleaseIdlePathSockets(IEnumerable<UdpClient> sockets)
+    {
+        if(sockets==null)throw new ArgumentNullException("sockets");
+        foreach(var socket in sockets)socket.Dispose();
+    }
     public static bool IsListenerReady(int processId,int port)
     {
         return CountOwnedTcpRows(processId,port,true)>0;

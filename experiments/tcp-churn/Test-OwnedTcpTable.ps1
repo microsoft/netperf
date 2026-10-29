@@ -11,6 +11,7 @@ try {
         "/out:$assembly" (Join-Path $PSScriptRoot 'ArrivalTcp.cs')
     if($LASTEXITCODE){throw 'Owned TCP table helper compilation failed.'}
     $null=[Reflection.Assembly]::Load([IO.File]::ReadAllBytes($assembly))
+    [ArrivalTcp]::ReleaseIdlePathSockets([Net.Sockets.UdpClient[]]@())
     foreach($source in @('127.0.0.1','198.19.240.1')){
         $rejected=$false
         try{$null=[ArrivalTcp]::CreateIdlePathSockets($source,1024,[int[]]@())}catch{
