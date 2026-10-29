@@ -28,7 +28,7 @@ param(
     [switch]$ManagedGcPeerPressure,
     [switch]$ManagedGcUnusedInterface,
     [switch]$ManagedGcSpinLocks,
-    [ValidateSet(0,40,64,80)][int]$ManagedGcRssProcessors=0,
+    [ValidateSet(0,32,40,64,80)][int]$ManagedGcRssProcessors=0,
     [switch]$ManagedGcOwnedDataInterface
 )
 $ErrorActionPreference='Stop'

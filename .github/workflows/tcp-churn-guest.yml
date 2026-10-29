@@ -93,7 +93,7 @@ on:
       managed_gc_rss_processors:
         description: Optional identity-checked no-restart RSS queue/processor control; 0 preserves settings
         type: choice
-        options: ['0','40','64','80']
+        options: ['0','32','40','64','80']
         default: '0'
       managed_gc_owned_data_interface:
         description: Use a disposable no-gateway data NIC so required RSS activation never restarts management
