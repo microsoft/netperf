@@ -43,7 +43,7 @@ $worker={
     }
     if(@(Get-Process -Name 'Runner.Worker','ctsTraffic' -ErrorAction Ignore).Count){throw 'The client guest has an active worker.'}
     $clientBefore=& $inventory
-    $report=[ordered]@{schema=1;restoreRequested=$Apply;clientBefore=$clientBefore;clientProcessesStopped=0;clientRecorderSessionsStopped=0
+    $report=[ordered]@{schema=1;restoreRequested=$Apply;clientBefore=$clientBefore;clientProcessesStopped=0;clientRecorderSessionsStopped=0;clientRecorderNames=@();clientRecorderExitCodes=@()
         clientRootsRestored=0;clientDialRoutesRemoved=0;clientRulesRemoved=0;peerBefore=$null;peerProcessesStopped=0
         peerRootsRestored=0;peerRulesRemoved=0;clientAfter=$null;peerAfter=$null;stage='client';failureStage=$null;failureType=$null}
     try {
@@ -51,11 +51,15 @@ $worker={
         $report.stage='client-processes'
         $report.clientProcessesStopped=Stop-OwnedProcess '\\netperf-churn-[0-9a-f]{32}\\'
         $report.stage='client-recorders'
+        $wpr="$env:SystemRoot\System32\wpr.exe"
         foreach($row in @(& logman.exe query -ets)){
-            if($row -match '^\s*((WPR_initiated_|TcpChurnExact-)\S+)'){
-                & logman.exe stop $Matches[1] -ets *> $null
-                if($LASTEXITCODE -eq 0){$report.clientRecorderSessionsStopped++}
-            }
+            if($row -notmatch '^\s*((WPR_initiated_|TcpChurnExact-)\S+)'){continue}
+            $logger=$Matches[1]
+            $report.clientRecorderNames+=$(if($logger -match '(NetperfGc-[0-9a-f]{32}|TcpChurnExact-[0-9a-f]{32})'){$Matches[1]}else{'other'})
+            if($logger -match '(NetperfGc-[0-9a-f]{32})'){& $wpr -cancel -instancename $Matches[1] *> $null}
+            else{& logman.exe stop $logger -ets *> $null}
+            $report.clientRecorderExitCodes+=$LASTEXITCODE
+            if($LASTEXITCODE -eq 0){$report.clientRecorderSessionsStopped++}
         }
         $report.stage='client-roots'
         $roots=@(Get-ChildItem -LiteralPath $env:TEMP -Directory -Filter 'netperf-churn-*'|
@@ -100,7 +104,7 @@ $worker={
         }
         $report.stage='client-rules'
         foreach($rule in @(Get-NetFirewallRule -PolicyStore ActiveStore -ErrorAction Stop|Where-Object{$_.Name -like 'ManagedGcReceiver-*' -or $_.Name -like 'ManagedGcPeer-*'})){
-            Remove-NetFirewallRule -Name $rule.Name -PolicyStore ActiveStore -ErrorAction Stop;$report.clientRulesRemoved++
+            Remove-NetFirewallRule -Name $rule.Name -ErrorAction Stop;$report.clientRulesRemoved++
         }
     }
     $report.stage='peer-session'
@@ -120,7 +124,7 @@ $worker={
                     Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue;$result.processesStopped++
                 }
                 foreach($rule in @(Get-NetFirewallRule -PolicyStore ActiveStore -ErrorAction Stop|Where-Object{$_.Name -like 'ManagedGcPeer-*' -or $_.Name -like 'NetperfClusterOutage-*' -or $_.Name -like 'ManagedGcReceiver-*'})){
-                    Remove-NetFirewallRule -Name $rule.Name -PolicyStore ActiveStore -ErrorAction Stop;$result.rulesRemoved++
+                    Remove-NetFirewallRule -Name $rule.Name -ErrorAction Stop;$result.rulesRemoved++
                 }
                 $roots=@(Get-ChildItem -LiteralPath $env:TEMP -Directory -Filter 'managed-gc-peer-*'|
                     Where-Object{$_.Name -match '^managed-gc-peer-[0-9a-f]{32}$' -and -not($_.Attributes -band [IO.FileAttributes]::ReparsePoint)}|
@@ -163,7 +167,7 @@ try{
         if($null -eq $side){$clean=$false;continue}
         foreach($name in 'aliases','rules','staticNeighbors','routes','recorderLoggers','ownedAdapters'){if($side.$name -ne 0){$clean=$false}}
     }
-    $report|Select-Object schema,restoreRequested,clientBefore,clientProcessesStopped,clientRecorderSessionsStopped,clientRootsRestored,
+    $report|Select-Object schema,restoreRequested,clientBefore,clientProcessesStopped,clientRecorderSessionsStopped,clientRecorderNames,clientRecorderExitCodes,clientRootsRestored,
         clientDialRoutesRemoved,clientRulesRemoved,clientAfter,peerBefore,peerProcessesStopped,peerRootsRestored,peerRulesRemoved,peerAfter,failureStage,failureType,
         @{n='ownedResourcesClear';e={$clean}},@{n='pathsExported';e={$false}},@{n='rawTracesExported';e={$false}}|
         Select-Object * -ExcludeProperty PSComputerName,RunspaceId,PSShowComputerName|
