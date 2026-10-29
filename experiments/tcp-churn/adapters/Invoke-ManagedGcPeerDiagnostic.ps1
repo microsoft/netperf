@@ -295,12 +295,12 @@ try {
         $clusterReport=[ordered]@{remoteNodeAddresses=1000;prefix='198.19.64.0/22';gatewayRoutes=1;gatewaysPerInterface=1
             peerPreparationMilliseconds=$peerClusterReport.preparationMilliseconds
             deadGatewayDetectionSetting=[int](Get-NetIPv4Protocol -ErrorAction Stop).DeadGatewayDetection
-            remoteConnections=7168;loopbackConnections=1024;responseBytes=16384
+            remoteConnections=7168;loopbackConnections=1024;responseBytes=$(if($ClusterProfile -like 'nodes1000-hot*'){1460}else{16384})
             outageAddresses=$(if($ClusterProfile -eq 'nodes1000-outage'){250}else{0})
             outageDelayMilliseconds=$(if($ClusterProfile -eq 'nodes1000-outage'){5000}else{0})
             outageDurationMilliseconds=$(if($ClusterProfile -eq 'nodes1000-outage'){4000}else{0})
             routeEpochDialIntervalMilliseconds=$(switch($ClusterProfile){'nodes1000-epochdial'{20}'nodes1000-epochdial2'{2}'nodes1000-epochdial2-aftergc'{2}'nodes1000-hot-epochdial2'{2}default{0}})
-            hotService=($ClusterProfile -like 'nodes1000-hot*');exchangesPerConnection=$(if($ClusterProfile -like 'nodes1000-hot*'){128}else{64})
+            hotService=($ClusterProfile -like 'nodes1000-hot*');exchangesPerConnection=$(if($ClusterProfile -like 'nodes1000-hot*'){512}else{64})
             serviceDelayMinimumMilliseconds=$(if($ClusterProfile -like 'nodes1000-hot*'){20}else{250})
             serviceDelayMaximumMilliseconds=$(if($ClusterProfile -like 'nodes1000-hot*'){60}else{750})
             routeEpochDialStartsAfterGc=($ClusterProfile -eq 'nodes1000-epochdial2-aftergc')}
@@ -368,7 +368,7 @@ try {
             ServerOutput=$localOutput;Rule=$null;Receiver=$null;LocalClient=$null}
         if($ClusterProfile -ne 'none'){
             $receiverState.ResponseBytes=16384;$receiverState.RemoteCount=7168
-            if($ClusterProfile -like 'nodes1000-hot*'){$receiverState.ExchangesPerConnection=128}
+            if($ClusterProfile -like 'nodes1000-hot*'){$receiverState.ExchangesPerConnection=512;$receiverState.ResponseBytes=1460}
             $receiverState.RemoteSources=$clusterSources -join ',';$receiverState.ClusterPrefix='198.19.64.0/22'
             if($ClusterProfile -eq 'nodes1000-outage'){
                 # Every fourth remote node (25%) silently drops inbound traffic for a bounded window.
@@ -680,6 +680,24 @@ finally {
                 }
             }
         }catch{$receiverEvidence.diagnosticErrorType=$_.Exception.GetType().FullName}
+        $receiverEvidence.remoteProducer=$null
+        if($null -ne $receiverState.Peer -and $receiverState.PeerRoot){
+            try {
+                # Numeric/exception-type facts only; the producer is our own synthetic workload.
+                $receiverEvidence.remoteProducer=Invoke-Command -Session $receiverState.Peer -ScriptBlock {
+                    param($root)
+                    $child=if($global:OwnedManagedGcPeer -and $global:OwnedManagedGcPeer.ContainsKey('Process')){$global:OwnedManagedGcPeer.Process}else{$null}
+                    $path=Join-Path $root 'client.json'
+                    [pscustomobject]@{
+                        exited=$(if($null -ne $child){$child.Process.HasExited}else{$null})
+                        exitCode=$(if($null -ne $child -and $child.Process.HasExited){$child.Process.ExitCode}else{$null})
+                        result=$(if(Test-Path -LiteralPath $path){Get-Content -LiteralPath $path -Raw|ConvertFrom-Json|
+                            Select-Object schema,outcome,role,connections,connectionsStarted,connectionsConnected,connectionsCompleted,
+                                errorType,errorCode,socketError,networkErrors,protocolErrors,peakInFlight,launchSpanMilliseconds}else{$null})
+                    }
+                } -ArgumentList $receiverState.PeerRoot -ErrorAction Stop
+            }catch{$receiverEvidence.remoteProducer=@{diagnosticErrorType=$_.Exception.GetType().FullName}}
+        }
         $client=$receiverState.LocalClient
         $localServer=$receiverState.Receiver
     }

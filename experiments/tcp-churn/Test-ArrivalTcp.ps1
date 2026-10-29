@@ -58,12 +58,12 @@ try {
         }
         $child.Dispose();$child=$null;$checks++
     }
-    foreach($case in @('hot-nagle','hot-small-response','hot-large-request')){
+    foreach($case in @('hot-nagle','hot-wrong-response','hot-large-request')){
         $rejectedOutput=Join-Path $directory 'rejected-hot.json'
         $info.ArgumentList.Clear()
         foreach($argument in @('127.0.0.1','127.0.0.2',[string]$port,'16','128',$(if($case -eq 'hot-large-request'){'1460'}else{'512'}),$rejectedOutput,
-            'client',$(if($case -eq 'hot-small-response'){'512'}else{'16384'}),'14529','16',$(if($case -eq 'hot-nagle'){'nagle'}else{'nodelay'}),
-            'dispatch:pool','servicehot128:pipelined')){$info.ArgumentList.Add($argument)}
+            'client',$(if($case -eq 'hot-wrong-response'){'16384'}else{'1460'}),'14529','16',$(if($case -eq 'hot-nagle'){'nagle'}else{'nodelay'}),
+            'dispatch:pool','servicehot512:pipelined')){$info.ArgumentList.Add($argument)}
         $child=[Diagnostics.Process]::Start($info)
         $errorText=$child.StandardError.ReadToEndAsync()
         if(-not $child.WaitForExit(5000) -or $child.ExitCode -eq 0 -or
