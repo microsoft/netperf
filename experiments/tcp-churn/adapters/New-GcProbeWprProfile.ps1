@@ -21,10 +21,14 @@ if($KernelOutput){
         Where-Object{'SampledProfile' -in @($_.Keywords.Keyword.Value)})
     if($systems.Count -ne 1){throw 'The installed sampled CPU system provider is not unique.'}
     if($KernelMode -ne 'SpinWithScheduling'){
-        foreach($node in @($systems[0].Keywords.Keyword|Where-Object{$_.Value -in @('CSwitch','ReadyThread','ThreadPriority','IdealProcessor')})){
+        foreach($node in @($systems[0].Keywords.Keyword|Where-Object{$_.Value -notin @('CpuConfig','Loader','ProcessThread','SampledProfile')})){
             $null=$node.ParentNode.RemoveChild($node)
         }
         foreach($node in @($systems[0].Stacks.Stack|Where-Object{$_.Value -in @('CSwitch','ReadyThread')})){
+            $null=$node.ParentNode.RemoveChild($node)
+        }
+        foreach($node in @($kernel.SelectNodes('//Profile/Collectors/EventCollectorId'))){$null=$node.ParentNode.RemoveChild($node)}
+        foreach($node in @($kernel.SelectNodes('/WindowsPerformanceRecorder/Profiles/EventCollector|/WindowsPerformanceRecorder/Profiles/EventProvider'))){
             $null=$node.ParentNode.RemoveChild($node)
         }
     }

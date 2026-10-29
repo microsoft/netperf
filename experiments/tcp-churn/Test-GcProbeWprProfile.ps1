@@ -38,6 +38,8 @@ try{
         -KernelOutput $sampledKernel -KernelMode SampledOnly
     [xml]$sampled=Get-Content -LiteralPath $sampledKernel -Raw
     if(@($sampled.SelectNodes("//SystemProvider/Keywords/Keyword[@Value='CSwitch' or @Value='ReadyThread' or @Value='SpinLock']")).Count -or
+        @($sampled.SelectNodes("//SystemProvider/Keywords/Keyword")).Count -ne 4 -or
+        @($sampled.SelectNodes("//EventCollector|//EventProvider|//Profile/Collectors/EventCollectorId")).Count -ne 0 -or
         @($sampled.SelectNodes("//SystemProvider/Stacks/Stack[@Value='CSwitch' or @Value='ReadyThread']")).Count -or
         @($sampled.SelectNodes("//SystemProvider/Keywords/Keyword[@Value='SampledProfile']")).Count -ne 1 -or
         @($sampled.SelectNodes("//SystemProvider/Stacks/Stack[@Value='SampledProfile']")).Count -ne 1 -or

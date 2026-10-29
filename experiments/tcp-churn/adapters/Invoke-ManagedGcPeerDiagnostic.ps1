@@ -449,6 +449,7 @@ try {
         bytesSent=$r.bytesSent;bytesReceived=$r.bytesReceived;payloadBytesPerDirection=$payloadBytes
         exchangesPerConnection=$ExchangesPerConnection
         kernelSchedulingEventsRequested=($ExchangesPerConnection -ne 64)
+        kernelProfileCoverage=$(if($ExchangesPerConnection -eq 64){'focused-sampled-cpu-lifetime-images'}else{'installed-cpu-profile'})
         tcpProbeCoverage=$(if($ExchangesPerConnection -eq 64){'lifecycle-only'}else{'bounded-diagnosis-send-connect-tcb'})
         omittedTcpProbeTasks=$omittedTcpTasks
         dataInterfaceMtuBytes=$mtu
