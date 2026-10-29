@@ -76,9 +76,28 @@ try{
             Remove-Item -LiteralPath $reportFile
         }
     }
-    'Passed actual owned-index retention, changed-scope/raw/index rejection, array/bool host transport and numeric-only serialization; originals preserved.'
+    & {
+        function Invoke-Command {
+            [CmdletBinding()]param($VMName,$Credential,$ScriptBlock,$ArgumentList)
+            throw 'Not every allowed synthetic collection matched exactly one owned root.'
+        }
+        $credential=[pscredential]::new('unused-test-only',(ConvertTo-SecureString 'unused-test-only' -AsPlainText -Force))
+        $reportFile=Join-Path $directory 'host-failed.json'
+        $rejected=$false
+        try{& (Join-Path $PSScriptRoot 'adapters\Invoke-GuestTraceIndexRetention.ps1') `
+            -Credential $credential -CollectionStartTicks @(1001) -ReportFile $reportFile}catch{
+            if($_.Exception.Message -notmatch 'bounded guest trace-index retention operation failed'){throw}
+            $rejected=$true
+        }
+        $failure=Get-Content -LiteralPath $reportFile -Raw|ConvertFrom-Json
+        if(-not $rejected -or $failure.outcome -ne 'failed' -or $failure.failureReason -ne 'collection-match'){
+            throw 'A rejected collection must retain its fixed public-safe failure reason.'
+        }
+        Remove-Item -LiteralPath $reportFile
+    }
+    'Passed actual owned-index retention, changed-scope/raw/index rejection, array/bool transport and safe success/failure serialization; originals preserved.'
 }finally{
-    foreach($name in @('host-inspect.json','host-prune.json')){
+    foreach($name in @('host-inspect.json','host-prune.json','host-failed.json')){
         $path=Join-Path $directory $name
         if(Test-Path -LiteralPath $path){Remove-Item -LiteralPath $path}
     }

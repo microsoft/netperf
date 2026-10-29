@@ -98,7 +98,18 @@ try{
         originalEtlHashesPreserved,temporaryFreeMiBBefore,temporaryFreeMiBAfter,pathsExported,rawTracesExported|
         ConvertTo-Json|Set-Content -LiteralPath $ReportFile
 }catch{
+    $reason=switch -Regex ($_.Exception.Message){
+        'active workload or analyzer' {'busy';break}
+        'idle WPR state' {'recording-active';break}
+        'Not every allowed synthetic collection' {'collection-match';break}
+        'matched more than one owned root' {'duplicate-collection';break}
+        'changed after planning' {'scope-changed';break}
+        'reparse point' {'reparse-point';break}
+        'nonempty original ETL' {'original-trace';break}
+        'not enough space|disk is full|disk full' {'storage';break}
+        default {'unclassified'}
+    }
     @{schema=1;outcome='failed';failureType=$_.Exception.GetType().FullName;failureCode=$_.Exception.HResult
-        pathsExported=$false;rawTracesExported=$false}|ConvertTo-Json|Set-Content -LiteralPath $ReportFile
+        failureReason=$reason;pathsExported=$false;rawTracesExported=$false}|ConvertTo-Json|Set-Content -LiteralPath $ReportFile
     throw 'The bounded guest trace-index retention operation failed; no private paths or raw traces were published.'
 }
