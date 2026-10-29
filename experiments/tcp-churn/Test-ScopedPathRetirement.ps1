@@ -195,11 +195,13 @@ public static class ArrivalTcp {
     public static string ReadyPath;
     public static bool ExpectedReady;
     public static int Releases;
+    public static bool FailRelease;
     public static int CountEstablishedConnections(int processId, int port) { return 16; }
     public static void ReleaseIdlePathSockets(IList sockets) {
         if (File.Exists(ReadyPath) != ExpectedReady || sockets.Count != 1)
             throw new InvalidOperationException("The real lifecycle released sockets in the wrong phase.");
         Releases++;
+        if (FailRelease) throw new IOException("Synthetic idle-socket release failure.");
     }
 }
 '@
@@ -268,9 +270,29 @@ public static class ArrivalTcp {
         }
         $checks++
     }
+    & {
+        $PopulationInterfaceAlias='owned-data-interface'
+        $ReadyFile=Join-Path $directory 'ready'
+        [IO.File]::WriteAllText($ReadyFile,'ready')
+        [ArrivalTcp]::ReadyPath=$ReadyFile;[ArrivalTcp]::ExpectedReady=$true;[ArrivalTcp]::FailRelease=$true
+        $sockets=[Collections.ArrayList]::new();$null=$sockets.Add([object]::new())
+        $failure=$null;$releaseFailure=$null;$restoreFailure=$null
+        $fixture=@{Restores=0};$report=[ordered]@{}
+        $ReportFile=Join-Path $directory 'release-failure.json'
+        function Restore-Control {$fixture.Restores++}
+        try {
+            $cleanup=($body[0].Finally.Statements|ForEach-Object{$_.Extent.Text})-join "`n"
+            & ([scriptblock]::Create($cleanup))
+            if($fixture.Restores -ne 1 -or $report.outcome -ne 'failed' -or
+                -not $report.restored -or -not $report.socketReleaseFailureType){
+                throw 'An idle-socket release failure skipped restoration or was reported as success.'
+            }
+        }finally{[ArrivalTcp]::FailRelease=$false}
+    }
+    $checks++
     Write-Host "Passed $checks source-retirement ownership, restoration and actual socket-release lifecycle cases; no network operations were performed."
 }finally{
-    foreach($name in @('data.clixml','state.clixml','report.json','ready','begin','end')){
+    foreach($name in @('data.clixml','state.clixml','report.json','release-failure.json','ready','begin','end')){
         $file=Join-Path $directory $name
         if(Test-Path -LiteralPath $file){Remove-Item -LiteralPath $file}
     }

@@ -50,6 +50,7 @@ if(-not $ownedInterface -or -not $data.originalDhcpDisabled -or
 $populationAdapter=$adapter
 if($PopulationInterfaceAlias){
     if(-not $detachInterface){throw 'Keeping cache sources valid requires a separate owned unused-interface event.'}
+    if(-not $RestoreOnly -and -not $EndFile){throw 'Surviving cache population requires the actual GC-completion signal.'}
     $populationAdapter=@(Get-NetAdapter -Name $PopulationInterfaceAlias -ErrorAction Stop)
     if($populationAdapter.Count -ne 1 -or [string]$populationAdapter[0].InterfaceGuid -ne $data.interfaceGuid -or
         $populationAdapter[0].ifIndex -eq $adapter[0].ifIndex){
@@ -244,7 +245,7 @@ if((Read-PrefixPathCount) -ne 0){throw 'Existing cached paths conflict with the 
     populationInterfaceGuid=[string]$populationAdapter[0].InterfaceGuid
     populationOriginalAddresses=@(Read-PopulationAddresses)}|Export-Clixml -LiteralPath $StateFile -NoClobber
 $sockets=[Collections.Generic.List[Net.Sockets.UdpClient]]::new()
-$failure=$null;$restoreFailure=$null
+$failure=$null;$restoreFailure=$null;$releaseFailure=$null
 $report=[ordered]@{schema=1;scenario=$(if($detachInterface){'owned-unused-interface-ipv4-detach'}else{'owned-secondary-source-address-retirement'});scope='owned-benchmark-state-only'
     triggerPhase=$(if($PopulationInterfaceAlias -and $RetireDuringGc){'gc-active-held-valid-cache'}
         elseif($PopulationInterfaceAlias){'gc-complete-held-valid-cache'}
@@ -344,26 +345,30 @@ try {
     }
 }catch{$failure=$_}
 finally {
-    if($PopulationInterfaceAlias){
-        $release=[Diagnostics.Stopwatch]::StartNew()
-        [ArrivalTcp]::ReleaseIdlePathSockets($sockets)
-        $report.socketReleaseMilliseconds=$release.Elapsed.TotalMilliseconds
-    }else{[ArrivalTcp]::ReleaseIdlePathSockets($sockets)}
+    try {
+        if($PopulationInterfaceAlias){
+            $release=[Diagnostics.Stopwatch]::StartNew()
+            [ArrivalTcp]::ReleaseIdlePathSockets($sockets)
+            $report.socketReleaseMilliseconds=$release.Elapsed.TotalMilliseconds
+        }else{[ArrivalTcp]::ReleaseIdlePathSockets($sockets)}
+    }catch{$releaseFailure=$_}
     try {
         Restore-Control
         $report.restored=$true;$report.dataAndManagementAddressesPreserved=$true;$report.defaultRoutesPreserved=$true
     }catch{$restoreFailure=$_}
-    $report.outcome=if($null -eq $failure -and $null -eq $restoreFailure){'completed'}else{'failed'}
+    $report.outcome=if($null -eq $failure -and $null -eq $releaseFailure -and $null -eq $restoreFailure){'completed'}else{'failed'}
     if($null -ne $failure){$report.failureType=$failure.Exception.GetType().FullName}
+    if($null -ne $releaseFailure){$report.socketReleaseFailureType=$releaseFailure.Exception.GetType().FullName}
     if($null -ne $restoreFailure){
         $report.restoreFailureType=$restoreFailure.Exception.GetType().FullName
         $report.restoreFailureSourceLine=$restoreFailure.InvocationInfo.ScriptLineNumber
     }
     $report|ConvertTo-Json|Set-Content -LiteralPath $ReportFile
 }
-if($null -ne $failure -or $null -ne $restoreFailure){
+if($null -ne $failure -or $null -ne $releaseFailure -or $null -ne $restoreFailure){
     $errors=[Collections.Generic.List[Exception]]::new()
     if($null -ne $failure){$errors.Add($failure.Exception)}
+    if($null -ne $releaseFailure){$errors.Add($releaseFailure.Exception)}
     if($null -ne $restoreFailure){$errors.Add($restoreFailure.Exception)}
     throw [AggregateException]::new('The owned source-retirement control or restoration failed.',$errors)
 }
