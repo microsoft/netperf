@@ -903,6 +903,15 @@ It also reports numeric free-space admission information for the guest temporary
 drives; busy or residual-resource failures retain fixed failure categories rather
 than exporting process names, paths or exception messages.
 
+The separate manual `tcp-churn-retention.yml` workflow inspects regenerable
+ETLX indexes for an explicit list of exact synthetic GC-start UTC .NET ticks.
+It requires idle workload/analyzer processes and idle WPR, and validates every
+collection match before changing anything. Its opt-in prune removes only
+ordinary `.etlx` files with corresponding nonempty original ETLs, verifying
+original ETL hashes and rejecting changed files or reparse-point directories.
+Raw ETLs, numeric summaries and symbols remain guest-local. No trace path or
+raw capture is published; inspection is the default.
+
 The optional `managed_gc_route_refresh=true` mechanism control requires isolated
 receiver GC and no neighbor pulse. An independent agent observes a pre-call GC
 signal and adds exactly one host route to the owned benchmark peer, retaining

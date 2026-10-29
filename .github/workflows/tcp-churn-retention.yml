@@ -1,0 +1,62 @@
+name: TCP churn private trace-index retention
+on:
+  pull_request:
+    paths:
+      - .github/workflows/tcp-churn-retention.yml
+      - experiments/tcp-churn/adapters/Invoke-GuestTraceIndexRetention.ps1
+      - experiments/tcp-churn/Test-GuestTraceIndexRetention.ps1
+  workflow_dispatch:
+    inputs:
+      collection_start_ticks:
+        description: Comma-separated exact UTC .NET ticks for owned synthetic GC collections
+        required: true
+        type: string
+      prune:
+        description: Remove only regenerable ETLX indexes after original ETL hash verification
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  source-tests:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - shell: pwsh
+        run: ./experiments/tcp-churn/Test-GuestTraceIndexRetention.ps1
+  retention:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    needs: source-tests
+    runs-on: [self-hosted, 'parent=rr1-netperf-26\localadminuser']
+    timeout-minutes: 15
+    concurrency:
+      group: tcp-churn-netperf-guest
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - shell: powershell
+        env:
+          GUEST_USER: ${{ secrets.VM_DUMMY_USERNAME }}
+          GUEST_PASSWORD: ${{ secrets.VM_DUMMY_PASSWORD }}
+          COLLECTION_TICKS: ${{ inputs.collection_start_ticks }}
+          PRUNE: ${{ inputs.prune }}
+        run: |
+          $ErrorActionPreference='Stop'
+          if(!$env:GUEST_USER -or !$env:GUEST_PASSWORD){throw 'Configured VM credentials are required.'}
+          $credential=[pscredential]::new($env:GUEST_USER,(ConvertTo-SecureString $env:GUEST_PASSWORD -AsPlainText -Force))
+          Remove-Item Env:\GUEST_PASSWORD
+          $report=Join-Path $env:RUNNER_TEMP "tcp-churn-retention-$env:GITHUB_RUN_ID.json"
+          ./experiments/tcp-churn/adapters/Invoke-GuestTraceIndexRetention.ps1 `
+            -Credential $credential -CollectionStartTicks ([long[]]($env:COLLECTION_TICKS -split ',')) `
+            -ReportFile $report -Prune:($env:PRUNE -eq 'true')
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
+        if: ${{ always() }}
+        with:
+          name: tcp-churn-retention-result
+          path: ${{ runner.temp }}\tcp-churn-retention-${{ github.run_id }}.json
+          if-no-files-found: warn
+          retention-days: 7
