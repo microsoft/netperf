@@ -203,6 +203,7 @@ public static class ArrivalTcp
     }
     public sealed class ReferencedTcpPathFixture:IDisposable
     {
+        public const int ConnectBatchLimit=256;
         private readonly Socket[] clients,servers;
         private int disposed;
         public int Count {get;private set;}
@@ -211,6 +212,7 @@ public static class ArrivalTcp
         public double CreationMilliseconds {get;private set;}
         public int PreparationQueries {get;private set;}
         public double PreparationMilliseconds {get;private set;}
+        public int MaximumBindParallelism {get{return Math.Min(Count,Math.Min(32,Environment.ProcessorCount));}}
         private ReferencedTcpPathFixture(int count)
         {
             Count=count;clients=new Socket[count];servers=new Socket[count];
@@ -236,25 +238,26 @@ public static class ArrivalTcp
                     listener.Listen(-8192);
                     fixture.Port=((IPEndPoint)listener.LocalEndPoint).Port;
                     var clock=Stopwatch.StartNew();
-                    for(int offset=0;offset<count;offset+=32){
+                    for(int offset=0;offset<count;offset+=ConnectBatchLimit){
                         if(clock.Elapsed.TotalSeconds>120)throw new TimeoutException("Referenced TCP fixture creation exceeded its deadline.");
-                        int batch=Math.Min(32,count-offset);
+                        int batch=Math.Min(ConnectBatchLimit,count-offset);
                         var connects=new Task[batch];
-                        for(int i=0;i<batch;i++){
+                        Parallel.For(0,batch,new ParallelOptions{MaxDegreeOfParallelism=Math.Min(batch,fixture.MaximumBindParallelism)},i=>{
                             var client=new Socket(AddressFamily.InterNetwork,SocketType.Stream,ProtocolType.Tcp);
                             fixture.clients[offset+i]=client;
                             client.ExclusiveAddressUse=true;
-                            client.Bind(new IPEndPoint(SourceFor(offset+i+1),fixture.Port));
+                            client.Bind(new IPEndPoint(SourceFor(offset+i+1),0));
                             connects[i]=client.ConnectAsync(IPAddress.Loopback,fixture.Port);
-                        }
+                        });
                         if(!Task.WaitAll(connects,5000))throw new TimeoutException("A referenced loopback connection exceeded its deadline.");
                         for(int i=0;i<batch;i++){
                             var server=listener.Accept();
                             var remote=(IPEndPoint)server.RemoteEndPoint;
                             byte[] bytes=remote.Address.GetAddressBytes();
                             int ordinal=(bytes[1]-64)*65536+bytes[2]*256+bytes[3];
-                            if(bytes[0]!=127 || ordinal<1 || ordinal>count || remote.Port!=fixture.Port ||
-                                fixture.clients[ordinal-1]==null || fixture.servers[ordinal-1]!=null){
+                            if(bytes[0]!=127 || ordinal<1 || ordinal>count || fixture.clients[ordinal-1]==null ||
+                                fixture.servers[ordinal-1]!=null ||
+                                remote.Port!=((IPEndPoint)fixture.clients[ordinal-1].LocalEndPoint).Port){
                                 server.Dispose();
                                 throw new InvalidOperationException("The private loopback listener accepted an unexpected source.");
                             }
@@ -278,7 +281,10 @@ public static class ArrivalTcp
                 if(clients[i]==null || servers[i]==null || !clients[i].Connected || !servers[i].Connected ||
                     !((IPEndPoint)clients[i].LocalEndPoint).Address.Equals(SourceFor(i+1)) ||
                     !((IPEndPoint)clients[i].RemoteEndPoint).Address.Equals(IPAddress.Loopback) ||
-                    ((IPEndPoint)clients[i].LocalEndPoint).Port!=Port || ((IPEndPoint)servers[i].LocalEndPoint).Port!=Port)
+                    ((IPEndPoint)clients[i].LocalEndPoint).Port<1 ||
+                    ((IPEndPoint)clients[i].RemoteEndPoint).Port!=Port ||
+                    ((IPEndPoint)servers[i].LocalEndPoint).Port!=Port ||
+                    ((IPEndPoint)servers[i].RemoteEndPoint).Port!=((IPEndPoint)clients[i].LocalEndPoint).Port)
                     throw new InvalidOperationException("A referenced TCP fixture connection changed.");
             }
         }
@@ -325,7 +331,11 @@ public static class ArrivalTcp
     {
         return CountOwnedTcpRows(processId,port,false,67108864);
     }
-    private static int CountOwnedTcpRows(int processId,int port,bool listenerOnly,uint maximumBytes=1048576)
+    public static int CountEstablishedLoopbackFixtureServers(int processId,int port)
+    {
+        return CountOwnedTcpRows(processId,port,false,67108864,0x0100007F);
+    }
+    private static int CountOwnedTcpRows(int processId,int port,bool listenerOnly,uint maximumBytes=1048576,uint localAddress=0)
     {
         if(processId<1 || port<1 || port>65535)throw new ArgumentException("Valid listener process and port are required.");
         uint bytes=0;
@@ -345,6 +355,7 @@ public static class ArrivalTcp
                 uint encoded=(uint)Marshal.ReadInt32(row,8);
                 int localPort=(int)(((encoded&255)<<8)|((encoded>>8)&255));
                 if(localPort==port && Marshal.ReadInt32(row,20)==processId &&
+                    (localAddress==0 || (uint)Marshal.ReadInt32(row,4)==localAddress) &&
                     (listenerOnly || Marshal.ReadInt32(row)==5))matched++;
             }
             return matched;

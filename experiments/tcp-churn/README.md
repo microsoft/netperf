@@ -772,8 +772,12 @@ One unused owned data-address anchor preserves the existing guarded interface
 control, but is not counted as the requested TCP-path population. Both ends of
 every pair are held and verified until recording/workload completion. Teardown
 then uses abortive closes to avoid a large TIME_WAIT population outside the
-measurement. Creation has a 120-second deadline, 32-connect batches, explicit
+measurement. Creation has a 120-second deadline, 256-connect batches, explicit
 memory admission, and all-attempt disposal; any failed gate rejects the run.
+Client ports are system-allocated instead of sharing one local port or choosing
+manual ports that could intersect OS reservations. Binds within each batch
+use at most 32 workers, bounded also by the connection/processor count; both endpoint tuples are
+verified. This changes fixture preparation cost, not the measured workload.
 After connecting pairs, documented `GetBestRoute2` queries prepare every exact
 source/destination path on the verified loopback interface before the native
 census. This is setup only: the query count/time is reported, no configuration
