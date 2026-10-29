@@ -125,8 +125,22 @@ $rssPhase='active-readback'
 $actual=@(Get-NetAdapterRss -Name $adapter.Name -ErrorAction Stop)
 if($actual.Count -ne 1){throw 'The applied RSS configuration is not unique.'}
 $settings=Read-Settings $actual[0]
-foreach($key in $target.Keys){
-    if([string]$settings[$key] -ne [string]$target[$key]){throw 'The requested no-restart RSS configuration did not read back exactly.'}
+$comparison=$target.Clone()
+if($Action -eq 'prepare' -and
+    ($settings.MaxGroup -ne $target.MaxGroup -or $settings.MaxNumber -ne $target.MaxNumber)){
+    $eligible=@($actual[0].RssProcessorArray|Sort-Object ProcessorGroup,ProcessorNumber)
+    if($eligible.Count -ge $Processors){
+        $last=$eligible[-1]
+        if($null -ne $last.ProcessorGroup -and $null -ne $last.ProcessorNumber -and
+            $settings.MaxGroup -eq [int]$last.ProcessorGroup -and $settings.MaxNumber -eq [int]$last.ProcessorNumber -and
+            ($settings.MaxGroup -lt $target.MaxGroup -or
+                ($settings.MaxGroup -eq $target.MaxGroup -and $settings.MaxNumber -le $target.MaxNumber))){
+            $comparison.MaxGroup=$settings.MaxGroup;$comparison.MaxNumber=$settings.MaxNumber
+        }
+    }
+}
+foreach($key in $comparison.Keys){
+    if([string]$settings[$key] -ne [string]$comparison[$key]){throw 'The requested no-restart RSS configuration did not read back exactly.'}
 }
 if($Action -eq 'prepare' -and @($actual[0].RssProcessorArray).Count -lt $Processors){
     throw 'The active RSS processor array did not reach the requested count; no adapter restart will be attempted.'

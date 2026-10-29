@@ -836,8 +836,13 @@ simultaneous timer execution.
 control on the verified guest data adapter. It snapshots all RSS settings,
 requests queues/processors without restarting the adapter, exposes the full
 range of actual active processor groups so SMT exclusion does not halve a
-range truncated to the requested RSS count, and requires exact setting readback plus
-an active processor array of the requested size. Original RSS fields, active
+range truncated to the requested RSS count, and requires the requested queue
+and processor budget plus an eligible RSS array covering that budget.
+Settings remain exact except that preparation may normalize the upper bound
+to the final processor in the returned eligible RSS array, within the requested
+range. This handles an excluded final SMT sibling without accepting a queue or
+processor-budget clamp; a different narrowed endpoint remains a rejection.
+Original RSS fields, active
 array size, data-adapter IPv4 addresses and default routes must restore.
 The host NIC, VM CPU allocation and switch configuration are not changed.
 If the existing adapter cannot activate the requested queues without a

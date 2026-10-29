@@ -11,7 +11,7 @@ public static class NetperfRssNative {
 $directory=Join-Path ([IO.Path]::GetTempPath()) ('scoped-rss-'+[guid]::NewGuid().ToString('N'))
 $null=New-Item -ItemType Directory -Path $directory
 try{
-    foreach($case in @('cycle','partial-readback','changed-identity','owned-data-cycle','smt-range')){
+    foreach($case in @('cycle','partial-readback','changed-identity','owned-data-cycle','smt-range','normalized-range','wrong-normalized-range')){
         $fixture=@{Guid=$(if($case -eq 'owned-data-cycle'){'44444444-4444-4444-4444-444444444444'}else{'owned-interface'});Writes=0;Restarts=0;ArrayCount=20
             Settings=@{Enabled=$true;Profile='NUMAStatic';Queues=20;MaxProcessors=20;BaseGroup=0;BaseNumber=0;MaxGroup=0;MaxNumber=19}}
         $stateFile=Join-Path $directory 'state.clixml';$reportFile=Join-Path $directory 'report.json'
@@ -25,7 +25,10 @@ try{
                 $s=$fixture.Settings
                 [pscustomobject]@{Enabled=$s.Enabled;Profile=$s.Profile;NumberOfReceiveQueues=$s.Queues
                     MaxProcessors=$s.MaxProcessors;BaseProcessorGroup=$s.BaseGroup;BaseProcessorNumber=$s.BaseNumber
-                    MaxProcessorGroup=$s.MaxGroup;MaxProcessorNumber=$s.MaxNumber;RssProcessorArray=@(1..$fixture.ArrayCount)}
+                    MaxProcessorGroup=$s.MaxGroup;MaxProcessorNumber=$s.MaxNumber
+                    RssProcessorArray=@(for($i=0;$i -lt $fixture.ArrayCount;$i++){
+                        [pscustomobject]@{ProcessorGroup=[int][Math]::Floor($i/20);ProcessorNumber=($i%20)*2}
+                    })}
             }
             function Set-NetAdapterRss {
                 [CmdletBinding()]param($Name,$Enabled,$Profile,$NumberOfReceiveQueues,$MaxProcessors,
@@ -40,6 +43,9 @@ try{
                     $fixture.ArrayCount=[Math]::Min($MaxProcessors,$eligible)
                     $fixture.Settings.MaxProcessors=$fixture.ArrayCount
                     $fixture.Settings.Queues=[Math]::Min($NumberOfReceiveQueues,$eligible)
+                }
+                if($case -in @('normalized-range','wrong-normalized-range') -and $fixture.Writes -eq 1){
+                    $fixture.Settings.MaxNumber=if($case -eq 'normalized-range'){38}else{36}
                 }
             }
             function Restart-NetAdapter {
@@ -64,20 +70,24 @@ try{
             $targetAlias=if($case -eq 'owned-data-cycle'){'NetperfData-123456abcdef'}else{'owned-data'}
             $extra=if($case -eq 'owned-data-cycle'){@{DisposableInterfaceGuid=$fixture.Guid}}else{@{}}
             $prepareFailed=$false
-            try{& $program -Action prepare -InterfaceAlias $targetAlias -Processors 32 -StateFile $stateFile -ReportFile $reportFile @extra}catch{
-                if($case -ne 'partial-readback' -or $_.Exception.Message -notmatch 'active RSS processor array'){throw}
+            $requested=if($case -in @('normalized-range','wrong-normalized-range')){40}else{32}
+            try{& $program -Action prepare -InterfaceAlias $targetAlias -Processors $requested -StateFile $stateFile -ReportFile $reportFile @extra}catch{
+                $expectedError=if($case -eq 'wrong-normalized-range'){'configuration did not read back exactly'}else{'active RSS processor array'}
+                if($case -notin @('partial-readback','wrong-normalized-range') -or $_.Exception.Message -notmatch $expectedError){throw}
                 $prepareFailed=$true
             }
-            if($prepareFailed -ne ($case -eq 'partial-readback')){throw 'Unexpected RSS preparation verdict.'}
+            if($prepareFailed -ne ($case -in @('partial-readback','wrong-normalized-range'))){throw 'Unexpected RSS preparation verdict.'}
             if($prepareFailed){
                 $diagnostic=Get-Content -LiteralPath $reportFile -Raw|ConvertFrom-Json
-                if($diagnostic.requestedSettings.MaxProcessors -ne 32 -or
-                    $diagnostic.actualSettings.MaxGroup -ne 1 -or $diagnostic.actualSettings.MaxNumber -ne 39){
+                if($diagnostic.requestedSettings.MaxProcessors -ne $requested -or
+                    $diagnostic.actualSettings.MaxGroup -ne 1 -or
+                    $diagnostic.actualSettings.MaxNumber -ne $(if($case -eq 'wrong-normalized-range'){36}else{39})){
                     throw 'RSS rejection must retain complete non-identifying requested and actual setting diagnostics.'
                 }
             }
             if($fixture.Restarts -ne $(if($case -eq 'owned-data-cycle'){1}else{0})){throw 'RSS restart scope did not match disposable ownership.'}
-            if($fixture.Settings.MaxGroup -ne 1 -or $fixture.Settings.MaxNumber -ne 39){
+            $expectedMax=if($case -eq 'normalized-range'){38}elseif($case -eq 'wrong-normalized-range'){36}else{39}
+            if($fixture.Settings.MaxGroup -ne 1 -or $fixture.Settings.MaxNumber -ne $expectedMax){
                 throw 'RSS must expose the full active 40/40 processor range, not restrict it to the requested RSS count.'
             }
             if($case -eq 'changed-identity'){$fixture.Guid='unowned-replacement'}
