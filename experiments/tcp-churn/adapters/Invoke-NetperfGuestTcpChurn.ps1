@@ -217,7 +217,7 @@ try {
                 -StateFile (Join-Path $root 'rss-original.clixml') -ReportFile (Join-Path $root 'rss-prepared.json')
             Get-Content -LiteralPath (Join-Path $root 'rss-prepared.json') -Raw|ConvertFrom-Json
         } -ArgumentList $guestRoot,$ManagedGcRssProcessors|Select-Object schema,action,verified,adapterRestarted,queues,maxProcessors,
-            activeProcessorArrayCount,originalQueues,originalMaxProcessors,originalAddressesAndDefaultsPreserved
+            activeProcessorArrayCount,originalQueues,originalMaxProcessors,originalAddressesAndDefaultsPreserved,carriesDefaultRoute
     }
     $phase='guest-traffic'
     $exit=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
@@ -314,6 +314,14 @@ try {
 } finally {
     if($rssAttempted -and $null -ne $session){
         try{
+            if($null -eq $rssEvidence){
+                $rssEvidence=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
+                    param($root)
+                    $path=Join-Path $root 'rss-prepared.json'
+                    if(Test-Path -LiteralPath $path){Get-Content -LiteralPath $path -Raw|ConvertFrom-Json}
+                } -ArgumentList $guestRoot|Select-Object schema,action,verified,phase,failureType,failureCode,sourceLine,
+                    requestedProcessors,actualQueues,actualMaxProcessors,actualProcessorArrayCount,diagnosticFailureType
+            }
             $rssRestored=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
                 param($root)
                 $state=Join-Path $root 'rss-original.clixml'
@@ -323,7 +331,7 @@ try {
                     Get-Content -LiteralPath (Join-Path $root 'rss-restored.json') -Raw|ConvertFrom-Json
                 }
             } -ArgumentList $guestRoot|Select-Object schema,action,verified,adapterRestarted,queues,maxProcessors,
-                activeProcessorArrayCount,originalQueues,originalMaxProcessors,originalAddressesAndDefaultsPreserved
+                activeProcessorArrayCount,originalQueues,originalMaxProcessors,originalAddressesAndDefaultsPreserved,carriesDefaultRoute
             $resultFile=Join-Path $PublishDirectory 'result.json'
             if($null -ne $rssRestored -and (Test-Path -LiteralPath $resultFile)){
                 $published=Get-Content -LiteralPath $resultFile -Raw|ConvertFrom-Json

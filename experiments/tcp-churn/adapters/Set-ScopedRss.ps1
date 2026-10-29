@@ -10,6 +10,26 @@ param(
     [ValidateRange(1,128)][int]$Processors=64
 )
 $ErrorActionPreference='Stop'
+$adapter=$null;$rssPhase='input'
+trap {
+    if($Action -eq 'prepare'){
+        $failure=[ordered]@{schema=1;action='prepare';verified=$false;phase=$rssPhase
+            failureType=$_.Exception.GetType().FullName;failureCode=$_.Exception.HResult
+            sourceLine=$_.InvocationInfo.ScriptLineNumber;requestedProcessors=$Processors}
+        if($null -ne $adapter){
+            try{
+                $current=@(Get-NetAdapterRss -Name $adapter.Name -ErrorAction Stop)
+                if($current.Count -eq 1){
+                    $failure.actualQueues=[int]$current[0].NumberOfReceiveQueues
+                    $failure.actualMaxProcessors=[int]$current[0].MaxProcessors
+                    $failure.actualProcessorArrayCount=@($current[0].RssProcessorArray).Count
+                }
+            }catch{$failure.diagnosticFailureType=$_.Exception.GetType().FullName}
+        }
+        $failure|ConvertTo-Json|Set-Content -LiteralPath $ReportFile
+    }
+    break
+}
 function Read-Addresses($Adapter) {
     @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop|
         Where-Object InterfaceIndex -eq $Adapter.ifIndex|
@@ -75,7 +95,9 @@ if($Action -eq 'prepare'){
     }
     $adapter=$adapters[0];$target=$saved.settings
 }
+$rssPhase='apply-no-restart'
 Apply-Rss $adapter $target
+$rssPhase='active-readback'
 $actual=@(Get-NetAdapterRss -Name $adapter.Name -ErrorAction Stop)
 if($actual.Count -ne 1){throw 'The applied RSS configuration is not unique.'}
 $settings=Read-Settings $actual[0]
@@ -96,4 +118,5 @@ if((@(Read-Addresses $adapter)-join '|') -ne (@($saved.addresses)-join '|') -or
     queues=$settings.Queues;maxProcessors=$settings.MaxProcessors
     activeProcessorArrayCount=@($actual[0].RssProcessorArray).Count
     originalQueues=$saved.settings.Queues;originalMaxProcessors=$saved.settings.MaxProcessors
+    carriesDefaultRoute=@($saved.defaults|Where-Object{$_ -like "$($adapter.ifIndex)/*"}).Count -gt 0
     originalAddressesAndDefaultsPreserved=$true}|ConvertTo-Json|Set-Content -LiteralPath $ReportFile
