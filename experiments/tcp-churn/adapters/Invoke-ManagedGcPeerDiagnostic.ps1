@@ -31,6 +31,7 @@ param(
     [string]$DataInterfaceGuid
 )
 $ErrorActionPreference='Stop'
+$focusedCpuCapture=$ExchangesPerConnection -eq 64 -or $Connections -gt 1024
 if($RetireDuringGc -and -not $CacheInterfaceAlias){throw 'GC-active retirement requires the owned unused-interface control.'}
 if($KeepCacheValid -and -not $CacheInterfaceAlias){throw 'Surviving cache population requires the owned unused-interface control.'}
 if($Connections -gt 1024 -and ($GcProcessRole -ne 'server' -or $ReceiveBudgetBytes -ne 16384)){
@@ -317,10 +318,10 @@ try {
         $wprProfile=Join-Path $diagnostics 'gc-probes.wprp'
         $profileArguments=@{TcpStateFile=$tcpState;ClrStateFile=$clrState;Output=$wprProfile}
         $cpuProfile='CPU'
-        if($SpinLocks -or $ExchangesPerConnection -eq 64){
+        if($SpinLocks -or $focusedCpuCapture){
             $kernelProfile=Join-Path $diagnostics $(if($SpinLocks){'cpu-spinlocks.wprp'}else{'cpu-sampled-only.wprp'})
             $profileArguments.KernelOutput=$kernelProfile;$cpuProfile=$kernelProfile+'!CPU'
-            if($ExchangesPerConnection -eq 64){
+            if($focusedCpuCapture){
                 $profileArguments.KernelMode=if($SpinLocks){'SpinWithoutScheduling'}else{'SampledOnly'}
             }
         }
@@ -462,7 +463,7 @@ try {
         configuredMaximumInFlightPerProducer=$Connections
         maximumPerConnectionReadBufferBytes=$r.maximumPerConnectionReadBufferBytes
         kernelSchedulingEventsRequested=($ExchangesPerConnection -ne 64)
-        kernelProfileCoverage=$(if($ExchangesPerConnection -eq 64){'focused-sampled-cpu-lifetime-images'}else{'installed-cpu-profile'})
+        kernelProfileCoverage=$(if($focusedCpuCapture){'focused-sampled-cpu-lifetime-images'}else{'installed-cpu-profile'})
         tcpProbeCoverage=$(if($ExchangesPerConnection -eq 64){'lifecycle-only'}else{'bounded-diagnosis-send-connect-tcb'})
         omittedTcpProbeTasks=$omittedTcpTasks
         dataInterfaceMtuBytes=$mtu
@@ -574,7 +575,7 @@ finally {
         finally{try{Stop-TcpChurnCollector $entry.child}catch{$cleanupErrors.Add($_.Exception)}}
     }
     if($profileOwned) {
-        if($WprProbes -and $ExchangesPerConnection -eq 64){
+        if($WprProbes -and $focusedCpuCapture){
             try{
                 $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @('--session-health',(Join-Path $PublishDirectory 'collector-health.json')) `
                     -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'collector-health') -TimeoutSeconds 20
@@ -695,9 +696,10 @@ try {
     if($CacheRetirePaths){
         $phase='verify-cache-retirement'
         $cacheReport=Get-Content (Join-Path $diagnostics ($cacheStem+'.json')) -Raw|ConvertFrom-Json
+        $snapshotPaths=if($KeepCacheValid){$cacheReport.measuredHeldPathsAtSnapshot}else{$cacheReport.measuredReleasedPaths}
         if($cacheReport.outcome -ne 'completed' -or -not $cacheReport.retired -or -not $cacheReport.restored -or
             -not $cacheReport.dataAndManagementAddressesPreserved -or -not $cacheReport.defaultRoutesPreserved -or
-            $cacheReport.measuredReleasedPaths -lt $CacheRetirePaths -or $cacheReport.establishedAtSnapshot -lt 8 -or
+            $snapshotPaths -lt $CacheRetirePaths -or $cacheReport.establishedAtSnapshot -lt 8 -or
             ([datetime]$cacheReport.removeApiStartUtc).ToUniversalTime() -lt ([datetime]$start).ToUniversalTime() -or
             ([datetime]$cacheReport.removeApiEndUtc).ToUniversalTime() -gt ([datetime]$end).ToUniversalTime()){
             throw 'The bounded source-retirement population, live cohort, timing or restoration did not verify.'
@@ -711,7 +713,9 @@ try {
             $gcComplete=([datetime]$r.managedGc.collectionEndUtc).ToUniversalTime()
             $snapshotComplete=([datetime]$cacheReport.snapshotCompletedUtc).ToUniversalTime()
             $retirementBegin=([datetime]$cacheReport.removeApiStartUtc).ToUniversalTime()
-            $expectedPhase=if($RetireDuringGc){'gc-active-pre-released-cache'}else{'gc-complete-pre-released-cache'}
+            $expectedPhase=if($KeepCacheValid -and $RetireDuringGc){'gc-active-held-valid-cache'}
+                elseif($KeepCacheValid){'gc-complete-held-valid-cache'}
+                elseif($RetireDuringGc){'gc-active-pre-released-cache'}else{'gc-complete-pre-released-cache'}
             $retirementPhaseValid=if($RetireDuringGc){$retirementBegin -ge $gcBegin -and $retirementBegin -lt $gcComplete}
                 else{$retirementBegin -ge $gcComplete}
             if($cacheReport.triggerPhase -ne $expectedPhase -or $snapshotComplete -lt $gcBegin -or

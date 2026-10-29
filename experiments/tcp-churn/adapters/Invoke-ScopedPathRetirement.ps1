@@ -246,7 +246,9 @@ if((Read-PrefixPathCount) -ne 0){throw 'Existing cached paths conflict with the 
 $sockets=[Collections.Generic.List[Net.Sockets.UdpClient]]::new()
 $failure=$null;$restoreFailure=$null
 $report=[ordered]@{schema=1;scenario=$(if($detachInterface){'owned-unused-interface-ipv4-detach'}else{'owned-secondary-source-address-retirement'});scope='owned-benchmark-state-only'
-    triggerPhase=$(if($RetireDuringGc){'gc-active-pre-released-cache'}elseif($EndFile){'gc-complete-pre-released-cache'}else{'gc-start-then-socket-release'})
+    triggerPhase=$(if($PopulationInterfaceAlias -and $RetireDuringGc){'gc-active-held-valid-cache'}
+        elseif($PopulationInterfaceAlias){'gc-complete-held-valid-cache'}
+        elseif($RetireDuringGc){'gc-active-pre-released-cache'}elseif($EndFile){'gc-complete-pre-released-cache'}else{'gc-start-then-socket-release'})
     requestedPaths=$PathCount;sourceCount=$sources.Count;measuredHeldPaths=0;measuredReleasedPaths=0;payloadsSent=0
     populationPlacement=$(if($PopulationInterfaceAlias){'surviving-data-interface'}elseif($detachInterface){'retired-interface'}else{'retired-source'})
     retired=$false;restored=$false;dataAndManagementAddressesPreserved=$false;defaultRoutesPreserved=$false}
@@ -273,11 +275,15 @@ try {
         [IO.File]::WriteAllText($ReadyFile,'ready')
         Wait-ControlSignal $BeginFile 25
     }
-    $release=[Diagnostics.Stopwatch]::StartNew()
-    [ArrivalTcp]::ReleaseIdlePathSockets($sockets)
-    $report.socketReleaseMilliseconds=$release.Elapsed.TotalMilliseconds
     $report.socketReleaseParallelism=[Environment]::ProcessorCount
-    $sockets.Clear()
+    if($PopulationInterfaceAlias){$report.socketReleasePhase='after-workload'}
+    else{
+        $release=[Diagnostics.Stopwatch]::StartNew()
+        [ArrivalTcp]::ReleaseIdlePathSockets($sockets)
+        $report.socketReleaseMilliseconds=$release.Elapsed.TotalMilliseconds
+        $report.socketReleasePhase='before-maintenance'
+        $sockets.Clear()
+    }
     if($EndFile){
         if((Read-PathCount) -lt $PathCount){throw 'Released cached paths did not persist before traffic.'}
         [IO.File]::WriteAllText($ReadyFile,'ready')
@@ -285,11 +291,13 @@ try {
     }
     $report.snapshotStartedUtc=[DateTime]::UtcNow.ToString('o')
     $snapshotClock=[Diagnostics.Stopwatch]::StartNew()
-    $report.measuredReleasedPaths=Read-PathCount
+    $snapshotPaths=Read-PathCount
+    if($PopulationInterfaceAlias){$report.measuredHeldPathsAtSnapshot=$snapshotPaths}
+    else{$report.measuredReleasedPaths=$snapshotPaths}
     $report.triggerPathSnapshotMilliseconds=$snapshotClock.Elapsed.TotalMilliseconds
     $report.triggerPathNativeQueryMilliseconds=$pathTiming.QueryMilliseconds
     $report.triggerPathRowScanMilliseconds=$pathTiming.RowScanMilliseconds
-    if($report.measuredReleasedPaths -lt $PathCount){throw 'Released cached paths did not persist until retirement.'}
+    if($snapshotPaths -lt $PathCount){throw 'The measured cached paths did not persist until retirement.'}
     $snapshotClock.Restart()
     $report.establishedAtSnapshot=[ArrivalTcp]::CountEstablishedConnections($ReceiverProcessId,20300)
     $report.triggerTcpSnapshotMilliseconds=$snapshotClock.Elapsed.TotalMilliseconds
@@ -336,7 +344,11 @@ try {
     }
 }catch{$failure=$_}
 finally {
-    [ArrivalTcp]::ReleaseIdlePathSockets($sockets)
+    if($PopulationInterfaceAlias){
+        $release=[Diagnostics.Stopwatch]::StartNew()
+        [ArrivalTcp]::ReleaseIdlePathSockets($sockets)
+        $report.socketReleaseMilliseconds=$release.Elapsed.TotalMilliseconds
+    }else{[ArrivalTcp]::ReleaseIdlePathSockets($sockets)}
     try {
         Restore-Control
         $report.restored=$true;$report.dataAndManagementAddressesPreserved=$true;$report.defaultRoutesPreserved=$true

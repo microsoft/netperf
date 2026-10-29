@@ -832,9 +832,15 @@ unused interface. It does not detach or restart the data adapter. The owned
 cache prefix, source identities, data/default routing and both original address
 sets are guarded and restored. A post-maintenance native snapshot must confirm
 that the requested idle path population survived before its sources are
-removed during cleanup. This distinguishes a surviving-source cache population
+removed during cleanup. Its connected UDP sockets remain idle but open until
+that snapshot, so the survival check is not based solely on retaining unreferenced
+cache entries; they never send payloads or release TCP work. This distinguishes a surviving-source cache population
 from paths whose source is removed by the maintenance event; it does not assert
 the identity of any customer writer.
+High-concurrency cohorts use the same focused CPU capture as persistent mode,
+omitting scheduling/power/memory and auxiliary CPU-event collectors while
+retaining sampled stacks, explicit buffers and strict zero-loss gates. Ordinary
+single-exchange TCP event coverage remains unchanged.
 
 The explicit `managed_gc_unused_interface=true` variant creates one
 disposable synthetic NIC on the owned generation-2 VM. It is first added

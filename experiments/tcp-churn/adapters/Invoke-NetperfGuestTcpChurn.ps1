@@ -132,6 +132,7 @@ try {
             $loggerRows=@(& "$env:SystemRoot\System32\logman.exe" query -ets)
             if($LASTEXITCODE -ne 0){throw 'The read-only ETW session query failed.'}
             $exactLoggers=@($loggerRows|Where-Object{$_ -match '^\s*TcpChurnExact-[0-9a-fA-F]{32}\s'}).Count
+            $activeWprLoggers=@($loggerRows|Where-Object{$_ -match '^\s*WPR_initiated_'}).Count
             $clientAliases=@(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop|Where-Object{$_.IPAddress -match '^198\.19\.240\.[1-6]$' -or $_.IPAddress -in @('198.19.0.1','198.19.0.2')}).Count
             $clientPathInterfaces=@(Get-NetAdapter -ErrorAction Stop|Where-Object Name -match '^NetperfPath-[0-9a-f]{12}$').Count
             $clientDataInterfaces=@(Get-NetAdapter -ErrorAction Stop|Where-Object Name -match '^NetperfData-[0-9a-f]{12}$').Count
@@ -174,6 +175,7 @@ try {
                     clientWprStatusExitCode=$wprExit;clientWprRecordingNotRunning=[bool]$wprNotRunning
                     clientWprCpuProfileReported=[bool]$wprCpu
                     clientExactProbeLoggerCount=$exactLoggers
+                    clientActiveWprLoggerCount=$activeWprLoggers
                     clientOwnedPathInterfaces=$clientPathInterfaces
                     clientOwnedDataInterfaces=$clientDataInterfaces
                     clientDataRssEnabled=[bool]$rss[0].Enabled
@@ -189,7 +191,7 @@ try {
         $peerResult|Select-Object schema,peerConnected,profiledVmGeneration,profiledVmConnectedAdapters,clientLogicalProcessors,peerLogicalProcessors,clientOwnedAliases,peerOwnedAliases,
             clientOwnedRules,peerOwnedRules,clientOwnedStaticPeers,peerOwnedStaticPeers,clientOwnedControlRoutes,peerOwnedControlRoutes,
             clientWprStatusExitCode,clientWprRecordingNotRunning,clientWprCpuProfileReported,
-            clientExactProbeLoggerCount,
+            clientExactProbeLoggerCount,clientActiveWprLoggerCount,
             clientOwnedPathInterfaces,
             clientOwnedDataInterfaces,
             clientDataRssEnabled,clientDataRssQueues,clientDataRssMaxProcessors,clientDataRssProcessorArrayCount,

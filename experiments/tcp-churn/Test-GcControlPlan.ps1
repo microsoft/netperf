@@ -118,22 +118,55 @@ $phaseValidation=@($ast.FindAll({
         $node.Extent.Text.Contains('$retirementPhaseValid=')
 },$true))
 if($phaseValidation.Count -ne 1){throw 'The actual retirement phase acceptance gate must be identified.'}
-foreach($case in @('during-valid','during-late','after-valid','after-early')){
+foreach($case in @('during-valid','during-late','after-valid','after-early','held-after-valid','held-after-early')){
     & {
         $CacheInterfaceGuid='owned-test-guid';$RetireDuringGc=$case.StartsWith('during-')
+        $KeepCacheValid=$case.StartsWith('held-')
         $origin=[datetime]'2026-01-01T00:00:00Z'
         $r=[pscustomobject]@{managedGc=[pscustomobject]@{collectionStartUtc=$origin;collectionEndUtc=$origin.AddSeconds(1)}}
-        $apiStart=if($case -in @('during-valid','after-early')){$origin.AddMilliseconds(200)}else{$origin.AddMilliseconds(1100)}
-        $cacheReport=[pscustomobject]@{triggerPhase=$(if($RetireDuringGc){'gc-active-pre-released-cache'}else{'gc-complete-pre-released-cache'})
+        $apiStart=if($case -in @('during-valid','after-early','held-after-early')){$origin.AddMilliseconds(200)}else{$origin.AddMilliseconds(1100)}
+        $cacheReport=[pscustomobject]@{triggerPhase=$(if($KeepCacheValid){'gc-complete-held-valid-cache'}elseif($RetireDuringGc){'gc-active-pre-released-cache'}else{'gc-complete-pre-released-cache'})
             snapshotCompletedUtc=$origin.AddMilliseconds(100);removeApiStartUtc=$apiStart;removeApiEndUtc=$origin.AddMilliseconds(1300)}
         $rejected=$false
         try{& ([scriptblock]::Create($phaseValidation[0].Extent.Text))}catch{
-            if($case -in @('during-valid','after-valid') -or $_.Exception.Message -notmatch 'requested GC retirement phase'){throw}
+            if($case -in @('during-valid','after-valid','held-after-valid') -or $_.Exception.Message -notmatch 'requested GC retirement phase'){throw}
             $rejected=$true
         }
-        if($rejected -ne ($case -in @('during-late','after-early'))){throw 'GC-active and post-GC acceptance were conflated.'}
+        if($rejected -ne ($case -in @('during-late','after-early','held-after-early'))){throw 'GC-active and post-GC acceptance were conflated.'}
         if($case -eq 'during-valid' -and $cacheReport.collectionOverlapMilliseconds -ne 800){
             throw 'The actual collection/API overlap was not clipped to collection completion.'
+        }
+        $focus=@($ast.FindAll({
+            param($node)
+            $node -is [Management.Automation.Language.IfStatementAst] -and
+                $node.Clauses[0].Item1.Extent.Text -eq '$SpinLocks -or $focusedCpuCapture'
+        },$true))
+        $selection=@($ast.FindAll({
+            param($node)
+            $node -is [Management.Automation.Language.AssignmentStatementAst] -and
+                $node.Left.Extent.Text -eq '$focusedCpuCapture'
+        },$true))
+        if($focus.Count -ne 1 -or $selection.Count -ne 1){throw 'Actual high-volume CPU capture selection must be unique.'}
+        foreach($exchanges in @(1,64)){
+            foreach($limit in @(1024,4096)){
+                foreach($spin in @($false,$true)){
+                    & {
+                        $ExchangesPerConnection=$exchanges;$Connections=$limit;$SpinLocks=$spin
+                        $diagnostics='unused-owned-diagnostics';$cpuProfile='CPU';$profileArguments=@{}
+                        & ([scriptblock]::Create($selection[0].Extent.Text+"`n"+$focus[0].Extent.Text))
+                        $expectedFocused=$exchanges -eq 64 -or $limit -gt 1024
+                        if($expectedFocused){
+                            $mode=if($spin){'SpinWithoutScheduling'}else{'SampledOnly'}
+                            if($profileArguments.KernelMode -ne $mode -or -not $profileArguments.ContainsKey('KernelOutput')){
+                                throw 'High-volume CPU capture did not select the bounded focused profile.'
+                            }
+                        }elseif($profileArguments.ContainsKey('KernelMode') -or
+                            $profileArguments.ContainsKey('KernelOutput') -ne $spin){
+                            throw 'Default ordinary CPU capture behavior changed.'
+                        }
+                    }
+                }
+            }
         }
     }
 }

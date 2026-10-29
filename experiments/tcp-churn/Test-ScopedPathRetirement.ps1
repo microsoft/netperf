@@ -203,7 +203,8 @@ public static class ArrivalTcp {
     }
 }
 '@
-    foreach($phase in @('start','end','end-too-early','during')){
+    $cleanupRelease=$body[0].Finally.Statements[0]
+    foreach($phase in @('start','end','end-too-early','during','held-end','held-during')){
         & {
             $ReadyFile=Join-Path $directory 'ready';$BeginFile=Join-Path $directory 'begin'
             $EndFile=if($phase -ne 'start'){Join-Path $directory 'end'}else{''}
@@ -212,15 +213,16 @@ public static class ArrivalTcp {
             $sockets=[Collections.ArrayList]::new();$null=$sockets.Add([object]::new())
             $report=[ordered]@{};$fixture=@{Reads=0;Signals=[Collections.Generic.List[string]]::new()}
             $ReceiverProcessId=42
-            $RetireDuringGc=$phase -eq 'during'
+            $RetireDuringGc=$phase -in @('during','held-during')
+            $PopulationInterfaceAlias=if($phase.StartsWith('held-')){'owned-data-interface'}else{''}
             $pathTiming=@{QueryMilliseconds=0;RowScanMilliseconds=0}
             $wait=[Diagnostics.Stopwatch]::StartNew()
             [ArrivalTcp]::ReadyPath=$ReadyFile;[ArrivalTcp]::ExpectedReady=($phase -eq 'start');[ArrivalTcp]::Releases=0
             function Read-PathCount {
                 $fixture.Reads++
                 if($phase -ne 'start' -and $fixture.Reads -eq 2 -and
-                    ($sockets.Count -ne 0 -or (Test-Path -LiteralPath $ReadyFile))){
-                    throw 'Pre-released cached paths must verify before traffic readiness.'
+                    ($sockets.Count -ne $(if($PopulationInterfaceAlias){1}else{0}) -or (Test-Path -LiteralPath $ReadyFile))){
+                    throw 'The requested socket-reference state must verify before traffic readiness.'
                 }
                 $PathCount
             }
@@ -244,13 +246,20 @@ public static class ArrivalTcp {
                 $rejected=$true
             }
             if($rejected -ne ($phase -eq 'end-too-early')){throw 'An unaligned completed-GC snapshot was not rejected.'}
-            if([ArrivalTcp]::Releases -ne 1 -or $sockets.Count -ne 0 -or
-                $report.measuredReleasedPaths -ne $PathCount -or
+            $observed=if($PopulationInterfaceAlias){$report.measuredHeldPathsAtSnapshot}else{$report.measuredReleasedPaths}
+            if([ArrivalTcp]::Releases -ne $(if($PopulationInterfaceAlias){0}else{1}) -or
+                $sockets.Count -ne $(if($PopulationInterfaceAlias){1}else{0}) -or $observed -ne $PathCount -or
                 $fixture.Reads -ne $(if($phase -ne 'start'){3}else{2}) -or
-                $fixture.Signals.Count -ne $(if($phase -eq 'end'){2}else{1}) -or
+                $fixture.Signals.Count -ne $(if($phase -in @('end','held-end')){2}else{1}) -or
                 $fixture.Signals[0] -ne $BeginFile -or
                 -not (Test-Path -LiteralPath $ReadyFile)){
                 throw 'The real retirement lifecycle did not preserve release/readiness/count verification.'
+            }
+            if($PopulationInterfaceAlias){
+                if($report.socketReleasePhase -ne 'after-workload'){throw 'Held cache references reported an early release.'}
+                [ArrivalTcp]::ExpectedReady=$true
+                & ([scriptblock]::Create($cleanupRelease.Extent.Text))
+                if([ArrivalTcp]::Releases -ne 1){throw 'The actual cleanup did not release the bounded idle sockets.'}
             }
         }
         foreach($name in @('ready','begin','end')){
