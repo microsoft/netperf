@@ -7,12 +7,13 @@ param(
     [Parameter(Mandatory)][long[]]$CollectionStartTicks,
     [Parameter(Mandatory)][string]$ReportFile,
     [switch]$Prune,
+    [switch]$AllowInactiveRecorderMetadata,
     [string]$VmName='netperf-windows-2022-client'
 )
 $ErrorActionPreference='Stop'
 if(Test-Path -LiteralPath $ReportFile){throw 'Use a fresh numeric retention report.'}
 $worker={
-    param([long[]]$AllowedTicks,[bool]$RemoveIndexes)
+    param([long[]]$AllowedTicks,[bool]$RemoveIndexes,[bool]$PermitInactiveMetadata)
     $ErrorActionPreference='Stop'
     function Get-OwnedIndexPlan([string]$Parent,[long[]]$Ticks,[Collections.IDictionary]$Details) {
         if(-not $Ticks.Count -or @($Ticks|Sort-Object -Unique).Count -ne $Ticks.Count -or @($Ticks|Where-Object{$_ -le 0}).Count){
@@ -80,8 +81,15 @@ $worker={
     $active=@([Diagnostics.Process]::GetProcesses()|Where-Object{$_.ProcessName -in @('ArrivalTcp','CpuSamples','ctsTraffic','Runner.Worker')})
     if($active.Count){throw 'The guest has an active workload or analyzer.'}
     $status=(& wpr.exe -status 2>&1|Out-String);$statusCode=$LASTEXITCODE
+    $inactiveMetadata=$false
     if($statusCode -ne 0 -or $status -notmatch '(?i)wpr is not recording|recording is not running'){
-        throw 'An idle WPR state is required for derived-index retention.'
+        if(-not $PermitInactiveMetadata -or $statusCode -eq 0){throw 'An idle WPR state is required for derived-index retention.'}
+        $loggerRows=@(& logman.exe query -ets)
+        if($LASTEXITCODE -ne 0){throw 'The independent active-session query failed.'}
+        if(@($loggerRows|Where-Object{$_ -match '^\s*(WPR_initiated_|TcpChurnExact-)'}).Count){
+            throw 'Active recording sessions forbid derived-index retention.'
+        }
+        $inactiveMetadata=$true
     }
     $drive=[IO.Path]::GetPathRoot($env:TEMP).Substring(0,1)
     $before=[long](Get-PSDrive -Name $drive).Free
@@ -101,13 +109,15 @@ $worker={
         pruned=$RemoveIndexes;originalEtlHashesPreserved=$true
         temporaryFreeMiBBefore=[long][Math]::Floor($before/1MB)
         temporaryFreeMiBAfter=[long][Math]::Floor((Get-PSDrive -Name $drive).Free/1MB)
+        inactiveRecorderMetadataObserved=$inactiveMetadata;recorderStatusExitCode=$statusCode
         pathsExported=$false;rawTracesExported=$false}
 }
 try{
     $report=Invoke-Command -VMName $VmName -Credential $Credential -ErrorAction Stop -ScriptBlock $worker `
-        -ArgumentList $CollectionStartTicks,([bool]$Prune)
+        -ArgumentList $CollectionStartTicks,([bool]$Prune),([bool]$AllowInactiveRecorderMetadata)
     $report|Select-Object schema,outcome,matchedCollections,derivedIndexCount,derivedIndexBytes,pruned,
         originalEtlHashesPreserved,temporaryFreeMiBBefore,temporaryFreeMiBAfter,pathsExported,rawTracesExported,
+        inactiveRecorderMetadataObserved,recorderStatusExitCode,
         failureReason,requestedCollectionTicks,nearbyCollectionTicks,examinedCollections|
         ConvertTo-Json|Set-Content -LiteralPath $ReportFile
     if($report.outcome -eq 'failed'){throw 'The exact retention collection match failed; no files were removed.'}
@@ -115,6 +125,7 @@ try{
     $reason=switch -Regex ($_.Exception.Message){
         'active workload or analyzer' {'busy';break}
         'idle WPR state' {'recording-active';break}
+        'Active recording sessions' {'recording-active';break}
         'Not every allowed synthetic collection' {'collection-match';break}
         'matched more than one owned root' {'duplicate-collection';break}
         'changed after planning' {'scope-changed';break}

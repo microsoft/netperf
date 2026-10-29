@@ -1003,6 +1003,11 @@ ordinary `.etlx` files with corresponding nonempty original ETLs, verifying
 original ETL hashes and rejecting changed files or reparse-point directories.
 Raw ETLs, numeric summaries and symbols remain guest-local. No trace path or
 raw capture is published; inspection is the default.
+If the default recorder returns a metadata error, the separate explicit
+`allow_inactive_recorder_metadata` opt-in additionally requires a successful
+independent session query with zero WPR/exact-probe loggers. It never resets
+recorder state, does not permit active sessions, and preserves every existing
+timestamp, file-identity and original-ETL hash guard.
 
 The explicit `managed_gc_route_refresh=true` plus
 `managed_gc_route_variant=destination-flush` alternative tests on-demand

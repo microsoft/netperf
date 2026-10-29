@@ -16,6 +16,36 @@ if($functions.Count -ne 2){throw 'The actual retention planning/removal function
 $directory=Join-Path ([IO.Path]::GetTempPath()) ('trace-index-test-'+[guid]::NewGuid().ToString('N'))
 $null=New-Item -ItemType Directory -Path $directory
 try{
+    $idleGuard=@($ast.FindAll({
+        param($node)
+        $node -is [Management.Automation.Language.IfStatementAst] -and
+            $node.Clauses[0].Item1.Extent.Text.StartsWith('$statusCode -ne 0 -or $status -notmatch')
+    },$true))
+    if($idleGuard.Count -ne 1){throw 'The actual recorder-state guard must be unique.'}
+    foreach($case in @('strict-reject','inactive-allow','wpr-active','exact-active','unknown-success-status','query-failure')){
+        & {
+            $PermitInactiveMetadata=$case -ne 'strict-reject';$status='unclassified control metadata'
+            $statusCode=if($case -eq 'unknown-success-status'){0}else{-1}
+            $inactiveMetadata=$false
+            function logman.exe {
+                param($Query,[switch]$Ets)
+                $global:LASTEXITCODE=if($case -eq 'query-failure'){1}else{0}
+                if($case -eq 'wpr-active'){'WPR_initiated_synthetic running'}
+                elseif($case -eq 'exact-active'){'TcpChurnExact-synthetic running'}
+                else{'unrelated logger row'}
+            }
+            $rejected=$false
+            try{. ([scriptblock]::Create($idleGuard[0].Extent.Text))}catch{
+                if($_.Exception.Message -notmatch 'idle WPR state|Active recording sessions|independent active-session query failed'){throw}
+                $rejected=$true
+            }
+            if($rejected -eq ($case -eq 'inactive-allow') -or
+                $inactiveMetadata -ne ($case -eq 'inactive-allow')){
+                throw 'Inactive metadata opt-in weakened the active-session or query-error guard.'
+            }
+        }
+    }
+    $global:LASTEXITCODE=0
     foreach($case in @('inspect','prune','wrong-collection','changed-index','changed-raw','changed-marker')){
         $root=Join-Path $directory ('netperf-churn-'+[guid]::NewGuid().ToString('N'))
         $diagnostics=Join-Path $root 'managed-gc-diagnostics'
@@ -60,9 +90,10 @@ try{
             $reportFile=Join-Path $directory $(if($prune){'host-prune.json'}else{'host-inspect.json'})
             function Invoke-Command {
                 [CmdletBinding()]param($VMName,$Credential,$ScriptBlock,$ArgumentList)
-                if($VMName -ne 'netperf-windows-2022-client' -or $ArgumentList.Count -ne 2 -or
+                if($VMName -ne 'netperf-windows-2022-client' -or $ArgumentList.Count -ne 3 -or
                     @($ArgumentList[0]).Count -ne 2 -or $ArgumentList[0][0] -ne 1001 -or
-                    $ArgumentList[0][1] -ne 1002 -or $ArgumentList[1] -isnot [bool] -or $ArgumentList[1] -ne $expectedPruneMode){
+                    $ArgumentList[0][1] -ne 1002 -or $ArgumentList[1] -isnot [bool] -or $ArgumentList[1] -ne $expectedPruneMode -or
+                    $ArgumentList[2] -isnot [bool] -or -not $ArgumentList[2]){
                     throw 'The actual host call flattened collection ticks or lost the explicit prune mode.'
                 }
                 [pscustomobject]@{schema=1;outcome='tested';matchedCollections=2;derivedIndexCount=2
@@ -72,7 +103,7 @@ try{
             }
             $credential=[pscredential]::new('unused-test-only',(ConvertTo-SecureString 'unused-test-only' -AsPlainText -Force))
             & (Join-Path $PSScriptRoot 'adapters\Invoke-GuestTraceIndexRetention.ps1') `
-                -Credential $credential -CollectionStartTicks @(1001,1002) -ReportFile $reportFile -Prune:$prune
+                -Credential $credential -CollectionStartTicks @(1001,1002) -ReportFile $reportFile -Prune:$prune -AllowInactiveRecorderMetadata
             $text=Get-Content -LiteralPath $reportFile -Raw
             $report=$text|ConvertFrom-Json
             if($text -match 'unpublishable' -or $report.pruned -ne $prune -or $report.matchedCollections -ne 2){
