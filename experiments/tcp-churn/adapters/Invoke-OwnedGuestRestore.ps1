@@ -13,12 +13,14 @@ param(
     [Parameter(Mandatory)][pscredential]$Credential,
     [Parameter(Mandatory)][string]$ReportFile,
     [switch]$Restore,
+    # Discards top-level WPR temporary .etl files left by owned recordings that were cancelled or whose stop failed.
+    [datetime]$DiscardRecorderTempSinceUtc=[datetime]::MinValue,
     [string]$VmName='netperf-windows-2022-client'
 )
 $ErrorActionPreference='Stop'
 if(Test-Path -LiteralPath $ReportFile){throw 'Use a fresh numeric restore report.'}
 $worker={
-    param([pscredential]$PeerCredential,[bool]$Apply)
+    param([pscredential]$PeerCredential,[bool]$Apply,[long]$DiscardSinceTicks)
     $ErrorActionPreference='Stop'
     $pwsh=(Get-Command pwsh -CommandType Application -ErrorAction Stop|Select-Object -First 1).Source
     $inventory={
@@ -64,7 +66,7 @@ $worker={
     })
     $windowsTempEtlMiB=[long][Math]::Floor(([long](@(Get-ChildItem -LiteralPath "$env:SystemRoot\Temp" -Recurse -File -Force -Filter '*.etl' -ErrorAction SilentlyContinue)|Measure-Object Length -Sum).Sum)/1MB)
     $report=[ordered]@{schema=1;restoreRequested=$Apply;clientBefore=$clientBefore;clientTempFreeMiB=[long][Math]::Floor((Get-PSDrive -Name $drive).Free/1MB);clientRunRoots=$rootSizes;clientTempOtherLarge=$tempOther;clientWindowsTempEtlMiB=$windowsTempEtlMiB;clientDriveSizeMiB=[long][Math]::Floor(((Get-PSDrive -Name $drive).Used+(Get-PSDrive -Name $drive).Free)/1MB);clientProcessesStopped=0;clientRecorderSessionsStopped=0;clientRecorderNames=@();clientRecorderExitCodes=@()
-        clientRootsRestored=0;clientDialRoutesRemoved=0;clientRulesRemoved=0;peerBefore=$null;peerProcessesStopped=0
+        clientRootsRestored=0;clientDialRoutesRemoved=0;clientRulesRemoved=0;clientRecorderTempFilesDiscarded=0;clientRecorderTempMiBDiscarded=0;peerBefore=$null;peerProcessesStopped=0
         peerRootsRestored=0;peerRulesRemoved=0;clientAfter=$null;peerAfter=$null;stage='client';failureStage=$null;failureType=$null}
     try {
     if($Apply){
@@ -123,6 +125,20 @@ $worker={
         foreach($route in @(Get-NetRoute -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|Where-Object DestinationPrefix -eq '198.19.248.0/24')){
             Remove-NetRoute -InterfaceIndex $route.InterfaceIndex -DestinationPrefix '198.19.248.0/24' -PolicyStore ActiveStore -Confirm:$false -ErrorAction Stop
             $report.clientDialRoutesRemoved++
+        }
+        if($DiscardSinceTicks -gt 0){
+            $report.stage='client-recorder-temp'
+            if(@(& logman.exe query -ets|Where-Object{$_ -match '^\s*(WPR_initiated_|TcpChurnExact-)'}).Count){throw 'An active recording forbids discarding recorder temporary files.'}
+            foreach($item in @(Get-ChildItem -LiteralPath $env:TEMP -File -Force -Filter '*.etl')){
+                if($item.Name -notmatch '(?i)wpr' -or $item.LastWriteTimeUtc.Ticks -lt $DiscardSinceTicks -or
+                    ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)){continue}
+                $stream=$null
+                try{$stream=[IO.File]::Open($item.FullName,'Open','Read','None')}catch{continue}
+                finally{if($null -ne $stream){$stream.Dispose()}}
+                $mib=[long][Math]::Floor($item.Length/1MB)
+                Remove-Item -LiteralPath $item.FullName -Force -ErrorAction Stop
+                $report.clientRecorderTempFilesDiscarded++;$report.clientRecorderTempMiBDiscarded+=$mib
+            }
         }
         $report.stage='client-rules'
         foreach($rule in @(Get-NetFirewallRule -PolicyStore ActiveStore -ErrorAction Stop|Where-Object{$_.Name -like 'ManagedGcReceiver-*' -or $_.Name -like 'ManagedGcPeer-*'})){
@@ -183,14 +199,14 @@ $worker={
     [pscustomobject]$report
 }
 try{
-    $report=Invoke-Command -VMName $VmName -Credential $Credential -ErrorAction Stop -ScriptBlock $worker -ArgumentList $Credential,([bool]$Restore)
+    $report=Invoke-Command -VMName $VmName -Credential $Credential -ErrorAction Stop -ScriptBlock $worker -ArgumentList $Credential,([bool]$Restore),$(if($Restore -and $DiscardRecorderTempSinceUtc -gt [datetime]::MinValue){$DiscardRecorderTempSinceUtc.ToUniversalTime().Ticks}else{[long]0})
     $clean=$null -eq $report.failureStage
     foreach($side in @($report.clientAfter,$report.peerAfter)){
         if($null -eq $side){$clean=$false;continue}
         foreach($name in 'aliases','rules','staticNeighbors','routes','recorderLoggers','ownedAdapters'){if($side.$name -ne 0){$clean=$false}}
     }
     $report|Select-Object schema,restoreRequested,clientBefore,clientProcessesStopped,clientRecorderSessionsStopped,clientRecorderNames,clientRecorderExitCodes,clientRootsRestored,
-        clientDialRoutesRemoved,clientRulesRemoved,clientAfter,peerBefore,peerProcessesStopped,peerRootsRestored,peerRulesRemoved,peerAfter,failureStage,failureType,
+        clientDialRoutesRemoved,clientRulesRemoved,clientRecorderTempFilesDiscarded,clientRecorderTempMiBDiscarded,clientAfter,peerBefore,peerProcessesStopped,peerRootsRestored,peerRulesRemoved,peerAfter,failureStage,failureType,
         clientTempFreeMiB,clientDriveSizeMiB,clientRunRoots,clientTempOtherLarge,clientWindowsTempEtlMiB,@{n='ownedResourcesClear';e={$clean}},@{n='pathsExported';e={$false}},@{n='rawTracesExported';e={$false}}|
         Select-Object * -ExcludeProperty PSComputerName,RunspaceId,PSShowComputerName|
         ConvertTo-Json -Depth 4|Set-Content -LiteralPath $ReportFile
