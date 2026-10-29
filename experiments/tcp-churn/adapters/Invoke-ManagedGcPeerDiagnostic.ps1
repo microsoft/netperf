@@ -649,15 +649,17 @@ try {
         $cacheReport=Get-Content (Join-Path $diagnostics ($cacheStem+'.json')) -Raw|ConvertFrom-Json
         if($cacheReport.outcome -ne 'completed' -or -not $cacheReport.retired -or -not $cacheReport.restored -or
             -not $cacheReport.dataAndManagementAddressesPreserved -or -not $cacheReport.defaultRoutesPreserved -or
-            $cacheReport.measuredReleasedPaths -lt $CacheRetirePaths -or $cacheReport.establishedAtTrigger -lt 8 -or
+            $cacheReport.measuredReleasedPaths -lt $CacheRetirePaths -or $cacheReport.establishedAtSnapshot -lt 8 -or
             ([datetime]$cacheReport.removeApiStartUtc).ToUniversalTime() -lt ([datetime]$start).ToUniversalTime() -or
             ([datetime]$cacheReport.removeApiEndUtc).ToUniversalTime() -gt ([datetime]$end).ToUniversalTime()){
             throw 'The bounded source-retirement population, live cohort, timing or restoration did not verify.'
         }
         if($CacheInterfaceGuid -and
             ($cacheReport.triggerPhase -ne 'gc-complete-pre-released-cache' -or
+                ([datetime]$cacheReport.snapshotCompletedUtc).ToUniversalTime() -lt ([datetime]$r.managedGc.collectionStartUtc).ToUniversalTime() -or
+                ([datetime]$cacheReport.snapshotCompletedUtc).ToUniversalTime() -gt ([datetime]$r.managedGc.collectionEndUtc).ToUniversalTime() -or
                 ([datetime]$cacheReport.removeApiStartUtc).ToUniversalTime() -lt ([datetime]$r.managedGc.collectionEndUtc).ToUniversalTime())){
-            throw 'The unused-interface writer did not begin after the actual GC completed.'
+            throw 'The unused-interface snapshot did not complete during GC or the writer began before GC completed.'
         }
         $result.cacheRetirementControl=$cacheReport
     }

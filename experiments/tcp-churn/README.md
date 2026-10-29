@@ -779,8 +779,12 @@ disposable synthetic NIC on the owned generation-2 VM. It is first added
 disconnected, configured without DHCP, and only then attached to the VM's
 existing data switch, matched by the guest's peer-route source MAC. The idle cache uses this NIC; productive TCP and management
 continue on the original NIC. This variant releases its idle UDP sockets before
-traffic readiness, verifies the cached population again at the actual receiver
-GC-completion signal, and only then detaches the disposable NIC's IPv4 binding.
+traffic readiness and verifies the cached population and TCP cohort after GC
+begins. Those snapshots must finish during the actual collection. It then waits
+for GC completion and detaches the disposable NIC's IPv4 binding without another
+expensive table query in that critical window. Snapshot timestamps and the
+`establishedAtSnapshot` count describe the measured state, not an instantaneous
+count at the later detach call.
 This keeps cache-size comparisons from also shifting the maintenance trigger
 by their different socket-close costs. The source-address-only control retains
 its GC-start-then-release timing; the result records the trigger phase.

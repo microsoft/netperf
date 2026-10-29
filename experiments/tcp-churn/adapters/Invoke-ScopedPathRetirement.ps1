@@ -134,6 +134,15 @@ function Read-PrefixPathCount {
     }).Count
 }
 $pathTiming=@{QueryMilliseconds=0;RowScanMilliseconds=0}
+function Wait-ControlSignal([string]$File,[int]$PollMilliseconds=5) {
+    $deadline=[Diagnostics.Stopwatch]::StartNew()
+    if(Test-Path -LiteralPath $StopFile){throw 'Traffic stopped before the retirement signal.'}
+    while(-not(Test-Path -LiteralPath $File)){
+        if(Test-Path -LiteralPath $StopFile){throw 'Traffic stopped before the retirement signal.'}
+        if($deadline.Elapsed.TotalSeconds -gt 60){throw 'The required real-GC signal did not reach the retirement control.'}
+        Start-Sleep -Milliseconds $PollMilliseconds
+    }
+}
 function Read-PathCount {
     [double]$query=0;[double]$scan=0
     $count=[ArrivalTcp]::CountIpv4Paths($adapter[0].ifIndex,$source,[ref]$query,[ref]$scan)
@@ -201,12 +210,7 @@ try {
     if($report.measuredHeldPaths -lt $PathCount){throw 'The requested cached-path population did not verify.'}
     if(-not $EndFile){
         [IO.File]::WriteAllText($ReadyFile,'ready')
-        $wait.Restart()
-        while(-not(Test-Path -LiteralPath $BeginFile)){
-            if(Test-Path -LiteralPath $StopFile){throw 'Traffic stopped before the retirement control.'}
-            if($wait.Elapsed.TotalSeconds -gt 60){throw 'No real-GC signal reached the bounded retirement control.'}
-            Start-Sleep -Milliseconds 25
-        }
+        Wait-ControlSignal $BeginFile 25
     }
     $release=[Diagnostics.Stopwatch]::StartNew()
     [ArrivalTcp]::ReleaseIdlePathSockets($sockets)
@@ -216,14 +220,9 @@ try {
     if($EndFile){
         if((Read-PathCount) -lt $PathCount){throw 'Released cached paths did not persist before traffic.'}
         [IO.File]::WriteAllText($ReadyFile,'ready')
-        $wait.Restart()
-        while(-not(Test-Path -LiteralPath $EndFile)){
-            if(Test-Path -LiteralPath $StopFile){throw 'Traffic stopped before the GC-completion retirement control.'}
-            if($wait.Elapsed.TotalSeconds -gt 60){throw 'No real-GC completion reached the bounded retirement control.'}
-            Start-Sleep -Milliseconds 5
-        }
-        $report.gcCompletionObservedUtc=[DateTime]::UtcNow.ToString('o')
+        Wait-ControlSignal $BeginFile
     }
+    $report.snapshotStartedUtc=[DateTime]::UtcNow.ToString('o')
     $snapshotClock=[Diagnostics.Stopwatch]::StartNew()
     $report.measuredReleasedPaths=Read-PathCount
     $report.triggerPathSnapshotMilliseconds=$snapshotClock.Elapsed.TotalMilliseconds
@@ -231,10 +230,17 @@ try {
     $report.triggerPathRowScanMilliseconds=$pathTiming.RowScanMilliseconds
     if($report.measuredReleasedPaths -lt $PathCount){throw 'Released cached paths did not persist until retirement.'}
     $snapshotClock.Restart()
-    $report.establishedAtTrigger=[ArrivalTcp]::CountEstablishedConnections($ReceiverProcessId,20300)
+    $report.establishedAtSnapshot=[ArrivalTcp]::CountEstablishedConnections($ReceiverProcessId,20300)
     $report.triggerTcpSnapshotMilliseconds=$snapshotClock.Elapsed.TotalMilliseconds
+    $report.snapshotCompletedUtc=[DateTime]::UtcNow.ToString('o')
+    if($report.establishedAtSnapshot -lt 8){throw 'No verified live TCP cohort remains at the retirement snapshot.'}
+    if($EndFile){
+        if(Test-Path -LiteralPath $EndFile){throw 'GC completed before cache and cohort verification; no aligned retirement was attempted.'}
+        Wait-ControlSignal $EndFile
+        $report.gcCompletionObservedUtc=[DateTime]::UtcNow.ToString('o')
+    }
     $report.controlStoppedBeforeRetirement=Test-Path -LiteralPath $StopFile
-    if($report.establishedAtTrigger -lt 8 -or $report.controlStoppedBeforeRetirement){
+    if($report.controlStoppedBeforeRetirement){
         throw 'No verified live TCP cohort remains for the source-retirement control.'
     }
     $report.applyStartUtc=[DateTime]::UtcNow.ToString('o')

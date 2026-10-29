@@ -103,7 +103,7 @@ try {
     if($body.Count -ne 1){throw 'The actual cache-population lifecycle must be unique.'}
     $statements=@($body[0].Body.Statements)
     $first=@($statements|Where-Object{$_.Extent.Text -eq '$report.measuredHeldPaths=Read-PathCount'})
-    $last=@($statements|Where-Object{$_.Extent.Text.StartsWith('$report.establishedAtTrigger=')})
+    $last=@($statements|Where-Object{$_.Extent.Text.StartsWith('$report.applyStartUtc=')})
     if($first.Count -ne 1 -or $last.Count -ne 1){throw 'The actual socket-release lifecycle boundaries must be unique.'}
     $lifecycle=($statements|Where-Object{
         $_.Extent.StartOffset -ge $first[0].Extent.StartOffset -and $_.Extent.StartOffset -lt $last[0].Extent.StartOffset
@@ -116,6 +116,7 @@ public static class ArrivalTcp {
     public static string ReadyPath;
     public static bool ExpectedReady;
     public static int Releases;
+    public static int CountEstablishedConnections(int processId, int port) { return 16; }
     public static void ReleaseIdlePathSockets(IList sockets) {
         if (File.Exists(ReadyPath) != ExpectedReady || sockets.Count != 1)
             throw new InvalidOperationException("The real lifecycle released sockets in the wrong phase.");
@@ -123,30 +124,51 @@ public static class ArrivalTcp {
     }
 }
 '@
-    foreach($phase in @('start','end')){
+    foreach($phase in @('start','end','end-too-early')){
         & {
             $ReadyFile=Join-Path $directory 'ready';$BeginFile=Join-Path $directory 'begin'
-            $EndFile=if($phase -eq 'end'){Join-Path $directory 'end'}else{''}
+            $EndFile=if($phase -ne 'start'){Join-Path $directory 'end'}else{''}
             $StopFile=Join-Path $directory 'stop';$PathCount=1024
             [IO.File]::WriteAllText($BeginFile,'pre-collection-call')
-            if($EndFile){[IO.File]::WriteAllText($EndFile,'actual-completed-gc')}
             $sockets=[Collections.ArrayList]::new();$null=$sockets.Add([object]::new())
-            $report=[ordered]@{};$fixture=@{Reads=0}
+            $report=[ordered]@{};$fixture=@{Reads=0;Signals=[Collections.Generic.List[string]]::new()}
+            $ReceiverProcessId=42
             $pathTiming=@{QueryMilliseconds=0;RowScanMilliseconds=0}
             $wait=[Diagnostics.Stopwatch]::StartNew()
             [ArrivalTcp]::ReadyPath=$ReadyFile;[ArrivalTcp]::ExpectedReady=($phase -eq 'start');[ArrivalTcp]::Releases=0
             function Read-PathCount {
                 $fixture.Reads++
-                if($phase -eq 'end' -and $fixture.Reads -eq 2 -and
+                if($phase -ne 'start' -and $fixture.Reads -eq 2 -and
                     ($sockets.Count -ne 0 -or (Test-Path -LiteralPath $ReadyFile))){
                     throw 'Pre-released cached paths must verify before traffic readiness.'
                 }
                 $PathCount
             }
-            & ([scriptblock]::Create($lifecycle))
+            function Wait-ControlSignal {
+                param($File,$PollMilliseconds=5)
+                $fixture.Signals.Add($File)
+                if(-not(Test-Path -LiteralPath $ReadyFile)){throw 'Signals must never be awaited before traffic readiness.'}
+                if($phase -eq 'end-too-early' -and $File -eq $BeginFile){
+                    [IO.File]::WriteAllText($EndFile,'gc-completed-before-validation')
+                }
+                if($File -eq $EndFile){
+                    if($report.establishedAtSnapshot -ne 16 -or -not $report.snapshotCompletedUtc){
+                        throw 'Cache and cohort verification must finish before the GC-completion wait.'
+                    }
+                    [IO.File]::WriteAllText($EndFile,'actual-completed-gc')
+                }
+            }
+            $rejected=$false
+            try{& ([scriptblock]::Create($lifecycle))}catch{
+                if($phase -ne 'end-too-early' -or $_.Exception.Message -notmatch 'GC completed before cache and cohort verification'){throw}
+                $rejected=$true
+            }
+            if($rejected -ne ($phase -eq 'end-too-early')){throw 'An unaligned completed-GC snapshot was not rejected.'}
             if([ArrivalTcp]::Releases -ne 1 -or $sockets.Count -ne 0 -or
                 $report.measuredReleasedPaths -ne $PathCount -or
-                $fixture.Reads -ne $(if($phase -eq 'end'){3}else{2}) -or
+                $fixture.Reads -ne $(if($phase -ne 'start'){3}else{2}) -or
+                $fixture.Signals.Count -ne $(if($phase -eq 'end'){2}else{1}) -or
+                $fixture.Signals[0] -ne $BeginFile -or
                 -not (Test-Path -LiteralPath $ReadyFile)){
                 throw 'The real retirement lifecycle did not preserve release/readiness/count verification.'
             }
