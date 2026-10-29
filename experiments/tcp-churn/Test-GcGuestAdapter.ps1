@@ -177,6 +177,16 @@ try {
     }
     if(-not $rejected -or (Test-Path -LiteralPath $directory)){throw 'Unbounded high-concurrency mode mutated state or was accepted.'}
     $checks++
+    $rejected=$false
+    try{
+        & (Join-Path $PSScriptRoot 'adapters\Invoke-NetperfGuestTcpChurn.ps1') `
+            -VmName 'unused-test-only' -Credential $credential -PublishDirectory $directory -ManagedGcKeepCacheValid
+    }catch{
+        if($_.Exception.Message -notmatch 'Surviving cache population requires the owned unused-interface control'){throw}
+        $rejected=$true
+    }
+    if(-not $rejected -or (Test-Path -LiteralPath $directory)){throw 'Unowned surviving-cache mode mutated state or was accepted.'}
+    $checks++
     foreach($extra in @(@{ManagedGcCacheRetirePaths=1024},@{ManagedGcPeerPressure=$true})){
         $rejected=$false
         try{
@@ -267,6 +277,7 @@ try {
         $ManagedGcProcessRole='client'
         $ManagedGcExchanges=64
         $ManagedGcRetireDuringGc=[switch]::new($true)
+        $ManagedGcKeepCacheValid=[switch]::new($true)
         $ManagedGcHeapLayout='graph'
         $ManagedGcRouteRefresh=[switch]::new($true)
         $ManagedGcRouteVariant='peer-gateway'
@@ -281,7 +292,8 @@ try {
         $dataGuid='66666666-7777-8888-9999-000000000000'
         & ([scriptblock]::Create($launch[0].Extent.Text))
     }
-    if($actual.Count -ne 27 -or $actual[2] -ne 4096 -or $actual[26] -isnot [bool] -or -not $actual[26] -or
+    if($actual.Count -ne 28 -or $actual[27] -isnot [bool] -or -not $actual[27] -or
+        $actual[2] -ne 4096 -or $actual[26] -isnot [bool] -or -not $actual[26] -or
         $actual[25] -isnot [int] -or $actual[25] -ne 64 -or
         $actual[22] -ne 'NetperfData-abcdef123456' -or
         $actual[23] -ne '66666666-7777-8888-9999-000000000000' -or

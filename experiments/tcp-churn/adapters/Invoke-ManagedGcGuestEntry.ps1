@@ -11,6 +11,7 @@ param(
     [int]$PayloadBytes=65536,
     [ValidateSet(1,64)][int]$ExchangesPerConnection=1,
     [switch]$RetireDuringGc,
+    [switch]$KeepCacheValid,
     [switch]$PeerRecovery,
     [switch]$IsolatedData,
     [int]$RecoveryMilliseconds=8000,

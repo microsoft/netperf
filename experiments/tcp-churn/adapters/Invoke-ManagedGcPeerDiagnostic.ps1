@@ -19,6 +19,7 @@ param(
     [ValidateSet('onlink','peer-gateway','destination-flush','onlink-after-gc')][string]$RouteVariant='onlink',
     [ValidateSet(1,64)][int]$ExchangesPerConnection=1,
     [switch]$RetireDuringGc,
+    [switch]$KeepCacheValid,
     [ValidateSet(0,16384)][int]$ReceiveBudgetBytes=0,
     [ValidateSet(0,1,1024,8192,24576,49152)][int]$CacheRetirePaths=0,
     [switch]$WprProbes,
@@ -31,6 +32,7 @@ param(
 )
 $ErrorActionPreference='Stop'
 if($RetireDuringGc -and -not $CacheInterfaceAlias){throw 'GC-active retirement requires the owned unused-interface control.'}
+if($KeepCacheValid -and -not $CacheInterfaceAlias){throw 'Surviving cache population requires the owned unused-interface control.'}
 if($Connections -gt 1024 -and ($GcProcessRole -ne 'server' -or $ReceiveBudgetBytes -ne 16384)){
     throw 'High concurrency requires receiver-GC mode and the verified 16384-byte receive budget.'
 }
@@ -361,6 +363,7 @@ try {
                 if($CacheInterfaceGuid){
                     $arguments+=@('-UnusedInterfaceGuid',$CacheInterfaceGuid,'-EndFile',($localOutput+'.gc.json'))
                     if($RetireDuringGc){$arguments+='-RetireDuringGc'}
+                    if($KeepCacheValid){$arguments+=@('-PopulationInterfaceAlias',$alias)}
                 }
             }
             elseif($RouteVariant -eq 'destination-flush'){
@@ -698,6 +701,10 @@ try {
             ([datetime]$cacheReport.removeApiStartUtc).ToUniversalTime() -lt ([datetime]$start).ToUniversalTime() -or
             ([datetime]$cacheReport.removeApiEndUtc).ToUniversalTime() -gt ([datetime]$end).ToUniversalTime()){
             throw 'The bounded source-retirement population, live cohort, timing or restoration did not verify.'
+        }
+        if($KeepCacheValid -and ($cacheReport.populationPlacement -ne 'surviving-data-interface' -or
+            -not $cacheReport.populationSurvivedMaintenance -or $cacheReport.measuredSurvivingPaths -lt $CacheRetirePaths)){
+            throw 'The requested valid-source data-interface cache population did not survive maintenance.'
         }
         if($CacheInterfaceGuid){
             $gcBegin=([datetime]$r.managedGc.collectionStartUtc).ToUniversalTime()

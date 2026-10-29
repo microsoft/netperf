@@ -86,7 +86,7 @@ on:
       managed_gc_unused_interface:
         description: Create/retire/remove one disposable VM NIC; never detach the data or management NIC
         type: choice
-        options: ['false', 'true', 'during-gc']
+        options: ['false', 'true', 'during-gc', 'valid-paths']
         default: 'false'
       managed_gc_spinlocks:
         description: Add kernel spinlock events to the explicitly selected WPR capture
@@ -251,7 +251,8 @@ jobs:
           $publish = Join-Path $env:RUNNER_TEMP "tcp-churn-guest-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           $persistentRequested = $env:MANAGED_GC_MIXED -eq 'persistent64'
           $duringGcRequested = $env:MANAGED_GC_UNUSED_INTERFACE -eq 'during-gc'
-          if ($duringGcRequested) { $env:MANAGED_GC_UNUSED_INTERFACE = 'true' }
+          $validCacheRequested = $env:MANAGED_GC_UNUSED_INTERFACE -eq 'valid-paths'
+          if ($duringGcRequested -or $validCacheRequested) { $env:MANAGED_GC_UNUSED_INTERFACE = 'true' }
           if ($persistentRequested) {
             if ($env:MANAGED_GC_PROCESS_ROLE -ne 'server' -or $env:MANAGED_GC_PAYLOAD_BYTES -ne '1460') {
               throw 'Persistent exchanges require receiver-GC mode and 1460-byte request/response payloads.'
@@ -311,6 +312,7 @@ jobs:
             if ($env:MANAGED_GC_UNUSED_INTERFACE -eq 'true') {
               $extra.ManagedGcUnusedInterface = $true
               if ($duringGcRequested) { $extra.ManagedGcRetireDuringGc = $true }
+              if ($validCacheRequested) { $extra.ManagedGcKeepCacheValid = $true }
             }
             if ($env:MANAGED_GC_SPINLOCKS -eq 'true') { $extra.ManagedGcSpinLocks = $true }
             if ($env:MANAGED_GC_RSS_PROCESSORS -ne '0') { $extra.ManagedGcRssProcessors = [int]$env:MANAGED_GC_RSS_PROCESSORS }

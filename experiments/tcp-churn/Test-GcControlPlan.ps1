@@ -12,16 +12,17 @@ $plan=@($ast.FindAll({
         $node.Clauses[0].Item1.Extent.Text -eq '$RouteRefresh -or $CacheRetirePaths'
 },$true))
 if($plan.Count -ne 1){throw 'The actual path-control launch plan must be uniquely identified.'}
-foreach($case in @('route','cache','both','unused-cache','during-gc-cache','flush','after-gc-route')){
+foreach($case in @('route','cache','both','unused-cache','during-gc-cache','valid-cache','flush','after-gc-route')){
     & {
         $RouteRefresh=$case -ne 'cache';$CacheRetirePaths=if($case -ne 'route'){24576}else{0}
         if($case -eq 'unused-cache'){$RouteRefresh=$false;$CacheRetirePaths=49152}
-        if($case -eq 'during-gc-cache'){$RouteRefresh=$false}
+        if($case -in @('during-gc-cache','valid-cache')){$RouteRefresh=$false}
         $RetireDuringGc=$case -eq 'during-gc-cache'
+        $KeepCacheValid=$case -eq 'valid-cache'
         if($case -eq 'cache'){$CacheRetirePaths=1}
         if($case -in @('flush','after-gc-route')){$CacheRetirePaths=0}
-        $CacheInterfaceGuid=if($case -in @('unused-cache','during-gc-cache')){'owned-guid'}else{''}
-        $CacheInterfaceAlias=if($case -in @('unused-cache','during-gc-cache')){'NetperfPath-123456abcdef'}else{''}
+        $CacheInterfaceGuid=if($case -in @('unused-cache','during-gc-cache','valid-cache')){'owned-guid'}else{''}
+        $CacheInterfaceAlias=if($case -in @('unused-cache','during-gc-cache','valid-cache')){'NetperfPath-123456abcdef'}else{''}
         $cacheStem=if($RouteRefresh -and $CacheRetirePaths){'cache-control'}else{'route-control'}
         $RouteVariant=if($case -eq 'flush'){'destination-flush'}elseif($case -eq 'after-gc-route'){'onlink-after-gc'}else{'peer-gateway'}
         $alias='synthetic-owned-interface';$peerMac='02-00-00-00-00-02'
@@ -61,7 +62,7 @@ foreach($case in @('route','cache','both','unused-cache','during-gc-cache','flus
                 throw 'Each launched control must retain its own restoration arguments.'
             }
             $endIndex=[Array]::IndexOf($control.Arguments,'-EndFile')
-            if($case -in @('unused-cache','during-gc-cache','flush')){
+            if($case -in @('unused-cache','during-gc-cache','valid-cache','flush')){
                 if($endIndex -lt 0 -or $control.Arguments[$endIndex+1] -ne ($localOutput+'.gc.json')){
                     throw 'Unused-interface retirement must use the actual receiver GC-completion observation.'
                 }
@@ -69,10 +70,39 @@ foreach($case in @('route','cache','both','unused-cache','during-gc-cache','flus
             if(('-RetireDuringGc' -in $control.Arguments) -ne ($case -eq 'during-gc-cache')){
                 throw 'The actual control plan lost or leaked GC-active retirement selection.'
             }
+            $populationIndex=[Array]::IndexOf($control.Arguments,'-PopulationInterfaceAlias')
+            if($KeepCacheValid){
+                if($populationIndex -lt 0 -or $control.Arguments[$populationIndex+1] -ne $alias -or
+                    $control.Arguments[5] -ne $CacheInterfaceAlias){
+                    throw 'Surviving paths must use the data interface while maintenance targets only the owned unused interface.'
+                }
+            }elseif($populationIndex -ge 0){throw 'Separate cache population leaked into a different control.'}
             if($case -eq 'flush' -and
                 ((Split-Path $control.Arguments[3] -Leaf) -ne 'Invoke-ScopedDestinationCacheFlush.ps1' -or
                     '-NextHop' -in $control.Arguments -or '-ReceiverProcessId' -notin $control.Arguments)){
                 throw 'The atomic destination-flush plan used a route mutation or lost receiver ownership.'
+            }
+            $populationGate=@($ast.FindAll({
+                param($node)
+                $node -is [Management.Automation.Language.IfStatementAst] -and
+                    $node.Clauses[0].Item1.Extent.Text.StartsWith('$KeepCacheValid -and ($cacheReport.populationPlacement')
+            },$true))
+            if($populationGate.Count -ne 1){throw 'The actual surviving-population acceptance gate must be unique.'}
+            foreach($case in @('valid','wrong-placement','missing-paths','not-survived')){
+                & {
+                    $KeepCacheValid=$true;$CacheRetirePaths=24576
+                    $cacheReport=[pscustomobject]@{populationPlacement='surviving-data-interface'
+                        populationSurvivedMaintenance=$true;measuredSurvivingPaths=24576}
+                    if($case -eq 'wrong-placement'){$cacheReport.populationPlacement='retired-interface'}
+                    if($case -eq 'missing-paths'){$cacheReport.measuredSurvivingPaths=1}
+                    if($case -eq 'not-survived'){$cacheReport.populationSurvivedMaintenance=$false}
+                    $rejected=$false
+                    try{& ([scriptblock]::Create($populationGate[0].Extent.Text))}catch{
+                        if($_.Exception.Message -notmatch 'valid-source data-interface cache population'){throw}
+                        $rejected=$true
+                    }
+                    if($rejected -eq ($case -eq 'valid')){throw 'Surviving-cache evidence was accepted or rejected incorrectly.'}
+                }
             }
             $countIndex=[Array]::IndexOf($control.Arguments,'-PathCount')
             if($countIndex -ge 0 -and $control.Arguments[$countIndex+1] -ne [string]$CacheRetirePaths){

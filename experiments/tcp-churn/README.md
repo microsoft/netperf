@@ -826,6 +826,16 @@ completion, reporting which observation claimed it. This preserves the
 completed-plus-in-flight requirement when all requests are accepted before
 the first large transfer finishes; it does not hold or release TCP traffic.
 
+The `managed_gc_unused_interface=valid-paths` contrast keeps the idle-cache
+sources on the verified data interface while retiring the separate disposable
+unused interface. It does not detach or restart the data adapter. The owned
+cache prefix, source identities, data/default routing and both original address
+sets are guarded and restored. A post-maintenance native snapshot must confirm
+that the requested idle path population survived before its sources are
+removed during cleanup. This distinguishes a surviving-source cache population
+from paths whose source is removed by the maintenance event; it does not assert
+the identity of any customer writer.
+
 The explicit `managed_gc_unused_interface=true` variant creates one
 disposable synthetic NIC on the owned generation-2 VM. It is first added
 disconnected, configured without DHCP, and only then attached to the VM's
