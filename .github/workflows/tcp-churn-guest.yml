@@ -73,7 +73,7 @@ on:
       managed_gc_cache_retire_paths:
         description: Optional owned secondary-source retirement control; 0 disables it
         type: choice
-        options: ['0', '1', '1024', '8192', '24576', '49152', '98304', '196608', '294912', 'tcp-1024', 'tcp-49152', 'tcp-98304', 'tcp-196608', 'tcp-294912']
+        options: ['0', '1', '1024', '8192', '24576', '49152', '98304', '196608', '294912', 'tcp-1024', 'tcp-4096', 'tcp-8192', 'tcp-49152', 'tcp-98304', 'tcp-196608', 'tcp-294912']
         default: '0'
       managed_gc_wpr_probes:
         description: Exact WPR probes; clr-only explicitly omits TCP events for collector isolation
@@ -263,7 +263,7 @@ jobs:
         run: |
           $publish = Join-Path $env:RUNNER_TEMP "tcp-churn-guest-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           $referencedTcpPaths = 0
-          if ($env:MANAGED_GC_CACHE_RETIRE_PATHS -match '^tcp-(1024|49152|98304|196608|294912)$') {
+          if ($env:MANAGED_GC_CACHE_RETIRE_PATHS -match '^tcp-(1024|4096|8192|49152|98304|196608|294912)$') {
             $referencedTcpPaths = [int]$Matches[1]
             $env:MANAGED_GC_CACHE_RETIRE_PATHS = '1'
           }

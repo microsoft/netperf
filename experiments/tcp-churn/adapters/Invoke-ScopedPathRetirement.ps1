@@ -8,7 +8,7 @@ param(
     [Parameter(Mandatory)][string]$StateFile,
     [Parameter(Mandatory)][string]$ReportFile,
     [ValidateSet(1,1024,8192,24576,49152,98304,196608,294912)][int]$PathCount=8192,
-    [ValidateSet(0,1024,49152,98304,196608,294912)][int]$ReferencedTcpPaths=0,
+    [ValidateSet(0,1024,4096,8192,49152,98304,196608,294912)][int]$ReferencedTcpPaths=0,
     [string]$ReceiverExecutable,[int]$ReceiverProcessId,
     [string]$UnusedInterfaceGuid,
     [string]$PopulationInterfaceAlias,

@@ -760,7 +760,7 @@ Holding UDP socket objects is not treated as proof that IP retains every
 corresponding cached path: the actual native census remains mandatory, and
 capacity/eviction may reject larger fixtures. No cache limit is changed.
 
-The separate `tcp-1024|tcp-49152|tcp-98304|tcp-196608|tcp-294912` cache choices
+The separate `tcp-1024|tcp-4096|tcp-8192|tcp-49152|tcp-98304|tcp-196608|tcp-294912` cache choices
 require steady-state pipelined traffic. They hold established TCP pairs using
 only loopback addresses: a loopback-only listener and distinct client sources
 inside 127.64.0.0/10. No fixture application payloads or shared data release

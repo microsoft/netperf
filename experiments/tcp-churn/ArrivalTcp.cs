@@ -210,7 +210,7 @@ public static class ArrivalTcp
         }
         public static ReferencedTcpPathFixture Create(int count)
         {
-            if(count!=1 && count!=128 && count!=1024 && count!=49152 && count!=98304 && count!=196608 && count!=294912)
+            if(count!=1 && count!=128 && count!=1024 && count!=4096 && count!=8192 && count!=49152 && count!=98304 && count!=196608 && count!=294912)
                 throw new ArgumentException("Only bounded referenced loopback TCP fixtures are supported.");
             var memory=new MemoryStatus{Length=(uint)Marshal.SizeOf(typeof(MemoryStatus))};
             if(!GlobalMemoryStatusEx(ref memory))throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());

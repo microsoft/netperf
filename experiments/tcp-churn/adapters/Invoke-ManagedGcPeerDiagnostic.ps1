@@ -27,7 +27,7 @@ param(
     [switch]$ServiceWait,
     [switch]$PipelinedServiceWait,
     [switch]$SteadyStateFixture,
-    [ValidateSet(0,1024,49152,98304,196608,294912)][int]$ReferencedTcpPaths=0,
+    [ValidateSet(0,1024,4096,8192,49152,98304,196608,294912)][int]$ReferencedTcpPaths=0,
     [ValidateSet(0,16384)][int]$ReceiveBudgetBytes=0,
     [ValidateSet(0,1,1024,8192,24576,49152,98304,196608,294912)][int]$CacheRetirePaths=0,
     [switch]$WprProbes,
