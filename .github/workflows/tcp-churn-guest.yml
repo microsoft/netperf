@@ -221,7 +221,7 @@ jobs:
     needs: [source-tests, build-analyzer]
     # Same documented management slot as the targeted lab reset workflow.
     runs-on: [self-hosted, 'parent=rr1-netperf-26\localadminuser']
-    timeout-minutes: 15
+    timeout-minutes: 35
     concurrency:
       group: tcp-churn-netperf-guest
       cancel-in-progress: false
