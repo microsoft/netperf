@@ -302,9 +302,12 @@ try {
         $wprProfile=Join-Path $diagnostics 'gc-probes.wprp'
         $profileArguments=@{TcpStateFile=$tcpState;ClrStateFile=$clrState;Output=$wprProfile}
         $cpuProfile='CPU'
-        if($SpinLocks){
-            $kernelProfile=Join-Path $diagnostics 'cpu-spinlocks.wprp'
+        if($SpinLocks -or $ExchangesPerConnection -eq 64){
+            $kernelProfile=Join-Path $diagnostics $(if($SpinLocks){'cpu-spinlocks.wprp'}else{'cpu-sampled-only.wprp'})
             $profileArguments.KernelOutput=$kernelProfile;$cpuProfile=$kernelProfile+'!CPU'
+            if($ExchangesPerConnection -eq 64){
+                $profileArguments.KernelMode=if($SpinLocks){'SpinWithoutScheduling'}else{'SampledOnly'}
+            }
         }
         & (Join-Path $PSScriptRoot 'New-GcProbeWprProfile.ps1') @profileArguments
         $null=Invoke-TcpChurnTool -Program $wpr -Arguments @('-start',$cpuProfile,'-start',($wprProfile+'!GcProbeEvents'),'-filemode') `
@@ -437,6 +440,7 @@ try {
     $result=[ordered]@{schema=1;workload='managed-gc-mixed';outcome='collected';connections=$r.connections
         bytesSent=$r.bytesSent;bytesReceived=$r.bytesReceived;payloadBytesPerDirection=$payloadBytes
         exchangesPerConnection=$ExchangesPerConnection
+        kernelSchedulingEventsRequested=($ExchangesPerConnection -ne 64)
         dataInterfaceMtuBytes=$mtu
         targets=$r.targets;managedGc=$r.managedGc
         arrivalRate=$r.arrivalRate;maxLaunchLagMilliseconds=$r.maxLaunchLagMilliseconds

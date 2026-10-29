@@ -753,6 +753,12 @@ the applied exchange count and exact total bytes; connection lifetime accounting
 remains separate from message count. The ordinary `true` mode still performs one
 exchange. Persistent mode is restricted to receiver GC and1460-byte payloads,
 and bounds TCP ownership-event analysis separately for the larger ACK workload.
+Persistent captures export the installed CPU profile with 256 MiB of system
+buffers and omit high-volume context-switch/ready-thread tracing, retaining
+sampled CPU stacks, process/thread lifetime and image metadata. Optional
+spinlock events remain a separate explicit choice. The report states that
+scheduling events were omitted; these captures must not be used to infer
+off-CPU owner intervals. TCP/CLR filters and zero-loss acceptance are unchanged.
 
 The idle-cache mechanism control
 requires isolated receiver GC and excludes neighbor pulses.

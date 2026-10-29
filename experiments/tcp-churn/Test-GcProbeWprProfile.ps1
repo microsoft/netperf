@@ -33,6 +33,22 @@ try{
         & "$env:SystemRoot\System32\wpr.exe" -profiles $kernelProfile
         if($LASTEXITCODE){throw 'The installed WPR rejected the owned spinlock profile.'}
     }
+    $sampledKernel=Join-Path $directory 'sampled-kernel.wprp'
+    & $program -TcpStateFile $tcp -ClrStateFile $clr -Output (Join-Path $directory 'sampled-probes.wprp') `
+        -KernelOutput $sampledKernel -KernelMode SampledOnly
+    [xml]$sampled=Get-Content -LiteralPath $sampledKernel -Raw
+    if(@($sampled.SelectNodes("//SystemProvider/Keywords/Keyword[@Value='CSwitch' or @Value='ReadyThread' or @Value='SpinLock']")).Count -or
+        @($sampled.SelectNodes("//SystemProvider/Stacks/Stack[@Value='CSwitch' or @Value='ReadyThread']")).Count -or
+        @($sampled.SelectNodes("//SystemProvider/Keywords/Keyword[@Value='SampledProfile']")).Count -ne 1 -or
+        @($sampled.SelectNodes("//SystemProvider/Stacks/Stack[@Value='SampledProfile']")).Count -ne 1 -or
+        @($sampled.SelectNodes("//SystemProvider/Keywords/Keyword[@Value='Loader']")).Count -ne 1 -or
+        @($sampled.SelectNodes("//SystemProvider/Keywords/Keyword[@Value='ProcessThread']")).Count -ne 1 -or
+        @($sampled.SelectNodes("//SystemCollector/BufferSize[@Value='1024']")).Count -lt 1 -or
+        @($sampled.SelectNodes("//SystemCollector/Buffers[@Value='256']")).Count -lt 1){
+        throw 'Focused sampling must retain CPU stacks/module lifetime and bounded buffers, without scheduling or spin event volume.'
+    }
+    & "$env:SystemRoot\System32\wpr.exe" -profiles $sampledKernel
+    if($LASTEXITCODE){throw 'The installed WPR rejected the focused sampling profile.'}
     if($CaptureSmoke){
         $wpr="$env:SystemRoot\System32\wpr.exe"
         $status=@(& $wpr -status)
@@ -40,7 +56,7 @@ try{
             throw 'The dedicated capture-smoke runner already has a recording; refusing interference.'
         }
         $exactExit=$null
-        foreach($case in @('tcp-only','clr-only','keyword-only','exact-combined')){
+        foreach($case in @('tcp-only','clr-only','keyword-only','exact-combined','sampled-combined')){
             [xml]$variant=$xml.OuterXml
             if($case -in @('tcp-only','clr-only')){
                 $removeId=if($case -eq 'tcp-only'){'Clr'}else{'Tcp'}
@@ -58,12 +74,14 @@ try{
             try{
                 $attempted=$true
                 $cpuProfile=if($CaptureSpinLocks){$kernelProfile+'!CPU'}else{'CPU'}
-                $arguments=if($case -eq 'exact-combined'){@('-start',$cpuProfile,'-start',($variantPath+'!GcProbeEvents'),'-filemode')}
+                if($case -eq 'sampled-combined'){$cpuProfile=$sampledKernel+'!CPU'}
+                $arguments=if($case -in @('exact-combined','sampled-combined')){@('-start',$cpuProfile,'-start',($variantPath+'!GcProbeEvents'),'-filemode')}
                     else{@('-start',($variantPath+'!GcProbeEvents'),'-filemode')}
                 & $wpr @arguments
                 $activationExit=$LASTEXITCODE
                 Write-Output ("WPR activation case={0} exit=0x{1:X8}" -f $case,$activationExit)
                 if($case -eq 'exact-combined'){$exactExit=$activationExit}
+                if($case -eq 'sampled-combined' -and $activationExit -ne 0){throw 'Dedicated-runner focused CPU/event activation failed.'}
                 if($activationExit -eq 0){
                     Start-Sleep -Milliseconds 250
                     & $wpr -stop (Join-Path $directory ($case+'.etl')) -skipPdbGen
@@ -93,7 +111,8 @@ try{
 }finally{
     foreach($name in @('tcp.json','clr.json','probes.wprp','smoke.etl','kernel.wprp',
         'tcp-only.wprp','tcp-only.etl','clr-only.wprp','clr-only.etl',
-        'keyword-only.wprp','keyword-only.etl','exact-combined.wprp','exact-combined.etl')){
+        'keyword-only.wprp','keyword-only.etl','exact-combined.wprp','exact-combined.etl',
+        'sampled-kernel.wprp','sampled-probes.wprp','sampled-combined.wprp','sampled-combined.etl')){
         $file=Join-Path $directory $name
         if(Test-Path -LiteralPath $file){Remove-Item -LiteralPath $file}
     }
