@@ -841,12 +841,13 @@ public static class ArrivalTcp
         serviceWait=false;
         serviceRequestPipelining=false;
         if(args.Length>=14){
-            if(args[13]=="servicehot512:pipelined"){
-                // One MSS-sized response per exchange keeps a ~1 GbE path at a high exchange rate.
+            if(args[13]=="servicehot384:pipelined"){
+                // One MSS-sized response per exchange keeps a ~1 GbE path at a high exchange rate; pacing stays
+                // below link capacity because single-segment flights recover losses only by retransmission timeout.
                 if(size!=512 || responseSize!=1460 || role=="local")
                     throw new ArgumentException("Hot service mode requires 512-byte requests and 1460-byte pipelined responses.");
-                serviceWait=true;serviceRequestPipelining=true;exchangesPerConnection=512;
-                serviceDelayMinimumMilliseconds=20;serviceDelaySpanMilliseconds=41;
+                serviceWait=true;serviceRequestPipelining=true;exchangesPerConnection=384;
+                serviceDelayMinimumMilliseconds=50;serviceDelaySpanMilliseconds=81;
                 if(!noDelay)throw new ArgumentException("Pipelined service requests require explicit nodelay pacing.");
             }else if(args[13]=="servicewait64" || args[13]=="servicewait64:pipelined"){
                 if(size!=512 || (responseSize!=512 && responseSize!=16384) || role=="local" ||
@@ -1031,7 +1032,7 @@ public static class ArrivalTcp
         try {
             if((args.Length==8 || args.Length==9) && args[0]=="--route-epoch-dial")return RunRouteEpochDial(args);
             if(args.Length<7 || args.Length>15) {
-                Console.Error.WriteLine("Usage: ArrivalTcp sources peer port count rate request-bytes output.json [role [response-bytes [seed [maximum-in-flight [nodelay|nagle [gc:heap-MiB:minimum-launched|dispatch:pool [exchanges:64[:framed]|idlekeepalive|servicewait64[:pipelined]|servicehot512:pipelined [fixture-ready-file]]]]]]]]");
+                Console.Error.WriteLine("Usage: ArrivalTcp sources peer port count rate request-bytes output.json [role [response-bytes [seed [maximum-in-flight [nodelay|nagle [gc:heap-MiB:minimum-launched|dispatch:pool [exchanges:64[:framed]|idlekeepalive|servicewait64[:pipelined]|servicehot384:pipelined [fixture-ready-file]]]]]]]]");
                 return 2;
             }
             if(!Run(args).Wait(TimeSpan.FromSeconds(150))){
