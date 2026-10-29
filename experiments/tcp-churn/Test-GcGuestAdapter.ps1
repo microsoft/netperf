@@ -2,6 +2,12 @@
 # SPDX-License-Identifier: MIT
 #Requires -Version 7.2
 $ErrorActionPreference='Stop'
+$workflowText=Get-Content -LiteralPath (Join-Path $PSScriptRoot '..\..\.github\workflows\tcp-churn-guest.yml') -Raw
+foreach($name in @('cpu-cache-snapshot.json','cpu-cache-maintenance.json')){
+    if(@([regex]::Matches($workflowText,('(?m)^\s+\$\{\{ runner\.temp \}\}/tcp-churn-guest-.*?/'+[regex]::Escape($name)+'\s*$'))).Count -ne 1){
+        throw 'A generated cache CPU phase is missing or duplicated in the actual artifact upload allowlist.'
+    }
+}
 $directory=Join-Path ([IO.Path]::GetTempPath()) ('gc-adapter-'+[guid]::NewGuid().ToString('N'))
 $credential=[pscredential]::new('unused-test-account',(ConvertTo-SecureString 'unused-test-value' -AsPlainText -Force))
 $checks=0
