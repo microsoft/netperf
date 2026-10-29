@@ -35,12 +35,12 @@ on:
       managed_gc_mixed:
         description: Managed-GC mode; persistent64 performs64 ordinary exchanges per TCP connection
         type: choice
-        options: ['false', 'true', 'persistent64', 'persistent64-framed-nagle', 'coreclr', 'coreclr-keepalive']
+        options: ['false', 'true', 'persistent64', 'persistent64-framed-nagle', 'coreclr', 'coreclr-keepalive', 'coreclr-servicewait']
         default: 'false'
       managed_gc_payload_bytes:
         description: Request and response bytes for the managed-GC diagnostic only
         type: choice
-        options: ['1460', '2048', '65536', '1048576']
+        options: ['512', '1460', '2048', '65536', '1048576']
         default: '65536'
       managed_gc_peer_recovery:
         description: Add a bounded owned-peer neighbor outage after established traffic (managed-GC mode only)
@@ -152,6 +152,8 @@ jobs:
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-ServerGcArrivalTcp.ps1 -HeapLayout graph -ReceiveBudgetBytes 16384 -CoreClr -IdleKeepalive
       - shell: pwsh
+        run: ./experiments/tcp-churn/Test-ServerGcArrivalTcp.ps1 -HeapLayout graph -ReceiveBudgetBytes 16384 -CoreClr -ExchangesPerConnection 64 -ServiceWait -MaximumInFlight 256
+      - shell: pwsh
         run: ./experiments/tcp-churn/Test-ServerGcArrivalTcp.ps1 -HeapLayout graph -ReceiveBudgetBytes 16384 -ExchangesPerConnection 64
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-ServerGcArrivalTcp.ps1 -HeapLayout graph -ReceiveBudgetBytes 16384 -ExchangesPerConnection 64 -FramedNagle
@@ -258,8 +260,9 @@ jobs:
           $publish = Join-Path $env:RUNNER_TEMP "tcp-churn-guest-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           $persistentRequested = $env:MANAGED_GC_MIXED -in @('persistent64', 'persistent64-framed-nagle')
           $framedNagleRequested = $env:MANAGED_GC_MIXED -eq 'persistent64-framed-nagle'
-          $coreClrRequested = $env:MANAGED_GC_MIXED -in @('coreclr', 'coreclr-keepalive')
+          $coreClrRequested = $env:MANAGED_GC_MIXED -in @('coreclr', 'coreclr-keepalive', 'coreclr-servicewait')
           $idleKeepaliveRequested = $env:MANAGED_GC_MIXED -eq 'coreclr-keepalive'
+          $serviceWaitRequested = $env:MANAGED_GC_MIXED -eq 'coreclr-servicewait'
           if ($coreClrRequested) { $env:MANAGED_GC_MIXED = 'true' }
           $duringGcRequested = $env:MANAGED_GC_UNUSED_INTERFACE -in @('during-gc', 'valid-paths-during-gc')
           $validCacheRequested = $env:MANAGED_GC_UNUSED_INTERFACE -in @('valid-paths', 'valid-paths-during-gc')
@@ -318,6 +321,7 @@ jobs:
             if ($framedNagleRequested) { $extra.ManagedGcFramedNagle = $true }
             if ($coreClrRequested) { $extra.ManagedGcCoreClr = $true }
             if ($idleKeepaliveRequested) { $extra.ManagedGcIdleKeepalive = $true }
+            if ($serviceWaitRequested) { $extra.ManagedGcServiceWait = $true; $extra.ManagedGcExchanges = 64 }
             $extra.ManagedGcPayloadBytes = [int]$env:MANAGED_GC_PAYLOAD_BYTES
             $extra.ManagedGcProcessRole = $env:MANAGED_GC_PROCESS_ROLE
             $extra.ManagedGcHeapLayout = $env:MANAGED_GC_HEAP_LAYOUT

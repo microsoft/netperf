@@ -233,6 +233,16 @@ try {
     }
     if(-not $rejected -or (Test-Path -LiteralPath $directory)){throw 'Invalid idle-pool mode mutated state or was accepted.'}
     $checks++
+    $rejected=$false
+    try{
+        & (Join-Path $PSScriptRoot 'adapters\Invoke-NetperfGuestTcpChurn.ps1') `
+            -VmName 'unused-test-only' -Credential $credential -PublishDirectory $directory -ManagedGcServiceWait
+    }catch{
+        if($_.Exception.Message -notmatch 'Service-wait comparison requires'){throw}
+        $rejected=$true
+    }
+    if(-not $rejected -or (Test-Path -LiteralPath $directory)){throw 'Invalid service-wait mode mutated state or was accepted.'}
+    $checks++
     foreach($extra in @(@{ManagedGcCacheRetirePaths=1024},@{ManagedGcPeerPressure=$true})){
         $rejected=$false
         try{
@@ -328,6 +338,7 @@ try {
         $ManagedGcFramedNagle=[switch]::new($true)
         $ManagedGcCoreClr=[switch]::new($true)
         $ManagedGcIdleKeepalive=[switch]::new($true)
+        $ManagedGcServiceWait=[switch]::new($true)
         $ManagedGcHeapLayout='graph'
         $ManagedGcRouteRefresh=[switch]::new($true)
         $ManagedGcRouteVariant='peer-gateway'
@@ -342,7 +353,8 @@ try {
         $dataGuid='66666666-7777-8888-9999-000000000000'
         & ([scriptblock]::Create($launch[0].Extent.Text))
     }
-    if($actual.Count -ne 32 -or $actual[31] -isnot [bool] -or -not $actual[31] -or
+    if($actual.Count -ne 33 -or $actual[32] -isnot [bool] -or -not $actual[32] -or
+        $actual[31] -isnot [bool] -or -not $actual[31] -or
         $actual[30] -isnot [bool] -or -not $actual[30] -or
         $actual[29] -isnot [bool] -or -not $actual[29] -or
         $actual[28] -isnot [bool] -or -not $actual[28] -or

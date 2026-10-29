@@ -8,7 +8,8 @@ param([ValidateSet('arrays','graph')][string]$HeapLayout='arrays',
     [switch]$LargeStreaming,
     [switch]$FramedNagle,
     [switch]$CoreClr,
-    [switch]$IdleKeepalive)
+    [switch]$IdleKeepalive,
+    [switch]$ServiceWait)
 $ErrorActionPreference='Stop'
 $directory=Join-Path ([IO.Path]::GetTempPath()) ('server-gc-arrival-'+[guid]::NewGuid().ToString('N'))
 $null=New-Item -ItemType Directory -Path $directory
@@ -46,10 +47,14 @@ try {
     if($LargeStreaming -and $ExchangesPerConnection -ne 1){throw 'Large streaming is separate from small-message persistent mode.'}
     if($FramedNagle -and $ExchangesPerConnection -ne 64){throw 'Framed Nagle mode requires persistent64 exchanges.'}
     if($IdleKeepalive -and ($ExchangesPerConnection -ne 1 -or $LargeStreaming)){throw 'Idle keepalive mode requires one bounded small exchange.'}
-    $requestBytes=if($LargeStreaming){1048576}elseif($ExchangesPerConnection -eq 64 -or $IdleKeepalive){1460}else{65536}
-    $responseBytes=if($LargeStreaming){1048576}elseif($ExchangesPerConnection -eq 64 -or $IdleKeepalive){1460}else{262144}
+    if($ServiceWait -and ($ExchangesPerConnection -ne 64 -or $IdleKeepalive -or $FramedNagle -or $LargeStreaming)){
+        throw 'Service wait test requires only64 small exchanges.'
+    }
+    $requestBytes=if($ServiceWait){512}elseif($LargeStreaming){1048576}elseif($ExchangesPerConnection -eq 64 -or $IdleKeepalive){1460}else{65536}
+    $responseBytes=if($ServiceWait){512}elseif($LargeStreaming){1048576}elseif($ExchangesPerConnection -eq 64 -or $IdleKeepalive){1460}else{262144}
     $repeatOption=if($ExchangesPerConnection -eq 64){@($(if($FramedNagle){'exchanges:64:framed'}else{'exchanges:64'}))}else{@()}
     if($IdleKeepalive){$repeatOption=@('idlekeepalive')}
+    if($ServiceWait){$repeatOption=@('servicewait64')}
     $pacing=if($FramedNagle){'nagle'}else{'nodelay'}
     $server=Start-Child (@('127.0.0.1','127.0.0.2',[string]$port,'128','4000',[string]$requestBytes,
         $serverOutput,'server',[string]$responseBytes,'14529',[string]$MaximumInFlight,$pacing,$descriptor)+$repeatOption)
@@ -63,7 +68,7 @@ try {
     $second=Start-Child (@('127.0.0.4','127.0.0.2',[string]$port,'64','2000',[string]$requestBytes,
         (Join-Path $directory 'second.json'),'client',[string]$responseBytes,'23521',[string]$MaximumInFlight,$pacing,'dispatch:pool')+$repeatOption)
     foreach($child in @($first,$second,$server)) {
-        if(-not $child.process.WaitForExit($(if($FramedNagle -or $IdleKeepalive){120000}else{30000}))){throw 'An independent server-GC endpoint exceeded its deadline.'}
+        if(-not $child.process.WaitForExit($(if($FramedNagle -or $IdleKeepalive -or $ServiceWait){120000}else{30000}))){throw 'An independent server-GC endpoint exceeded its deadline.'}
         if($child.process.ExitCode -ne 0){throw "An independent server-GC endpoint failed: $($child.error.GetAwaiter().GetResult())"}
     }
     $r=Get-Content $serverOutput -Raw|ConvertFrom-Json
@@ -78,6 +83,7 @@ try {
             $client.framedWrites -ne [bool]$FramedNagle -or $client.noDelay -ne (-not [bool]$FramedNagle) -or
             $client.managedCoreLibrary -ne $(if($CoreClr){'System.Private.CoreLib'}else{'mscorlib'}) -or
             $client.idleKeepalive -ne [bool]$IdleKeepalive -or $client.keepaliveConfiguredSockets -ne $(if($IdleKeepalive){64}else{0}) -or
+            $client.serviceWait -ne [bool]$ServiceWait -or $client.serviceWaitsCompleted -ne 0 -or
             $client.maximumPerConnectionReadBufferBytes -ne [Math]::Min($responseBytes,65536) -or
             $client.bytesSent -ne 64*$requestBytes*$ExchangesPerConnection -or
             $client.bytesReceived -ne 64*$responseBytes*$ExchangesPerConnection -or
@@ -89,6 +95,7 @@ try {
         $r.framedWrites -ne [bool]$FramedNagle -or $r.noDelay -ne (-not [bool]$FramedNagle) -or
         $r.managedCoreLibrary -ne $(if($CoreClr){'System.Private.CoreLib'}else{'mscorlib'}) -or
         $r.idleKeepalive -ne [bool]$IdleKeepalive -or $r.keepaliveConfiguredSockets -ne $(if($IdleKeepalive){128}else{0}) -or
+        $r.serviceWait -ne [bool]$ServiceWait -or $r.serviceWaitsCompleted -ne $(if($ServiceWait){128*$ExchangesPerConnection}else{0}) -or
         $r.bytesReceived -ne $a.bytesSent+$b.bytesSent -or
         $r.bytesSent -ne $a.bytesReceived+$b.bytesReceived -or $r.requestDispatch -ne 'thread-pool' -or
         $r.maximumPerConnectionReadBufferBytes -ne [Math]::Min($requestBytes,65536) -or
@@ -96,7 +103,7 @@ try {
         throw 'Receiver dispatch, capacity, or endpoint byte accounting failed.'
     }
     $gc=$r.managedGc
-    if($gc.completedUnit -ne $(if($IdleKeepalive){'application-responses'}else{'connections'})){
+    if($gc.completedUnit -ne $(if($IdleKeepalive -or $ServiceWait){'application-responses'}else{'connections'})){
         throw 'GC completion units must distinguish serviced requests from idle connection teardown.'
     }
     if($gc.configuredReceiveBudgetBytes -ne $ReceiveBudgetBytes -or $gc.maximumPostedReadBytes -ne $ReceiveBudgetBytes -or

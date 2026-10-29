@@ -29,6 +29,7 @@ param(
     [switch]$ManagedGcFramedNagle,
     [switch]$ManagedGcCoreClr,
     [switch]$ManagedGcIdleKeepalive,
+    [switch]$ManagedGcServiceWait,
     [ValidateSet(0,16384)][int]$ManagedGcReceiveBudgetBytes=0,
     [ValidateSet(0,1,1024,8192,24576,49152,98304)][int]$ManagedGcCacheRetirePaths=0,
     [switch]$ManagedGcWprProbes,
@@ -68,7 +69,8 @@ if($ManagedGcProcessRole -eq 'server' -and (-not $ManagedGc -or -not $ManagedGcI
     throw 'Receiver GC requires managed-GC mode, isolated data and no neighbor pulse.'
 }
 if($ManagedGcHeapLayout -ne 'arrays' -and -not $ManagedGc){throw 'GC heap layout selection requires managed-GC diagnostic mode.'}
-if($ManagedGcExchanges -ne 1 -and (-not $ManagedGc -or $ManagedGcProcessRole -ne 'server' -or $ManagedGcPayloadBytes -ne 1460)){
+if($ManagedGcExchanges -ne 1 -and (-not $ManagedGc -or $ManagedGcProcessRole -ne 'server' -or
+    (-not($ManagedGcServiceWait -and $ManagedGcPayloadBytes -eq 512) -and $ManagedGcPayloadBytes -ne 1460))){
     throw 'Persistent exchanges require receiver-GC mode and 1460-byte request/response payloads.'
 }
 if($ManagedGcRetireDuringGc -and -not $ManagedGcUnusedInterface){throw 'GC-active retirement requires the owned unused-interface control.'}
@@ -82,6 +84,9 @@ if($ManagedGcFramedNagle -and (-not $ManagedGc -or $ManagedGcProcessRole -ne 'se
 if($ManagedGcCoreClr -and (-not $ManagedGc -or $ManagedGcProcessRole -ne 'server')){throw 'CoreCLR comparison requires managed receiver GC.'}
 if($ManagedGcIdleKeepalive -and (-not $ManagedGc -or $ManagedGcProcessRole -ne 'server' -or $ManagedGcExchanges -ne 1 -or $ManagedGcPayloadBytes -ne 1460)){
     throw 'Idle keepalive pooling requires bounded receiver-GC single1460-byte exchanges.'
+}
+if($ManagedGcServiceWait -and (-not $ManagedGc -or $ManagedGcProcessRole -ne 'server' -or $ManagedGcExchanges -ne 64 -or $ManagedGcPayloadBytes -ne 512 -or $ManagedGcIdleKeepalive -or $ManagedGcFramedNagle)){
+    throw 'Service-wait comparison requires receiver-GC64 exchanges of512 bytes without other protocol variants.'
 }
 if($Connections -gt 1024 -and (-not $ManagedGc -or $ManagedGcProcessRole -ne 'server' -or $ManagedGcReceiveBudgetBytes -ne 16384)){
     throw 'High concurrency requires receiver-GC mode and the verified 16384-byte receive budget.'
@@ -273,7 +278,7 @@ try {
     }
     $phase='guest-traffic'
     $exit=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
-        param($root,$seconds,$connections,$profile,$synDrop,$peerMeasurement,$managedGc,$managedGcPayloadBytes,$peerRecovery,$isolatedData,$recoveryMilliseconds,$gcProcessRole,$heapLayout,$routeRefresh,$routeVariant,$receiveBudgetBytes,$cacheRetirePaths,$wprProbes,$peerPressure,$fixtureAlias,$fixtureGuid,$spinLocks,$dataAlias,$dataGuid,$credential,$exchanges,$retireDuringGc,$keepCacheValid,$noTcpProbes,$framedNagle,$coreClr,$idleKeepalive)
+        param($root,$seconds,$connections,$profile,$synDrop,$peerMeasurement,$managedGc,$managedGcPayloadBytes,$peerRecovery,$isolatedData,$recoveryMilliseconds,$gcProcessRole,$heapLayout,$routeRefresh,$routeVariant,$receiveBudgetBytes,$cacheRetirePaths,$wprProbes,$peerPressure,$fixtureAlias,$fixtureGuid,$spinLocks,$dataAlias,$dataGuid,$credential,$exchanges,$retireDuringGc,$keepCacheValid,$noTcpProbes,$framedNagle,$coreClr,$idleKeepalive,$serviceWait)
         if (@(Get-Process -Name 'Runner.Worker','ctsTraffic' -ErrorAction Ignore).Count) {
             throw 'Guest became busy before traffic setup.'
         }
@@ -300,6 +305,7 @@ try {
             if($framedNagle){$extra+='-FramedNagle'}
             if($coreClr){$extra+='-CoreClr'}
             if($idleKeepalive){$extra+='-IdleKeepalive'}
+            if($serviceWait){$extra+='-ServiceWait'}
             if($receiveBudgetBytes){$extra+=@('-ReceiveBudgetBytes',[string]$receiveBudgetBytes)}
             if($cacheRetirePaths){$extra+=@('-CacheRetirePaths',[string]$cacheRetirePaths)}
             if($wprProbes){$extra+='-WprProbes'}
@@ -330,7 +336,7 @@ try {
             $launch|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $root 'child-startup.json')
             if($credentialFile -and (Test-Path -LiteralPath $credentialFile)){Remove-Item -LiteralPath $credentialFile -ErrorAction Stop}
         }
-    } -ArgumentList $guestRoot,$Seconds,$Connections,([bool]$ProfileCpu),([bool]$SynDrop),([bool]$PeerMeasurement),([bool]$ManagedGc),$ManagedGcPayloadBytes,([bool]$ManagedGcPeerRecovery),([bool]$ManagedGcIsolatedData),$ManagedGcRecoveryMilliseconds,$ManagedGcProcessRole,$ManagedGcHeapLayout,([bool]$ManagedGcRouteRefresh),$ManagedGcRouteVariant,$ManagedGcReceiveBudgetBytes,$ManagedGcCacheRetirePaths,([bool]$ManagedGcWprProbes),([bool]$ManagedGcPeerPressure),$fixtureAlias,$fixtureGuid,([bool]$ManagedGcSpinLocks),$dataAlias,$dataGuid,$Credential,$ManagedGcExchanges,([bool]$ManagedGcRetireDuringGc),([bool]$ManagedGcKeepCacheValid),([bool]$ManagedGcNoTcpProbes),([bool]$ManagedGcFramedNagle),([bool]$ManagedGcCoreClr),([bool]$ManagedGcIdleKeepalive)
+    } -ArgumentList $guestRoot,$Seconds,$Connections,([bool]$ProfileCpu),([bool]$SynDrop),([bool]$PeerMeasurement),([bool]$ManagedGc),$ManagedGcPayloadBytes,([bool]$ManagedGcPeerRecovery),([bool]$ManagedGcIsolatedData),$ManagedGcRecoveryMilliseconds,$ManagedGcProcessRole,$ManagedGcHeapLayout,([bool]$ManagedGcRouteRefresh),$ManagedGcRouteVariant,$ManagedGcReceiveBudgetBytes,$ManagedGcCacheRetirePaths,([bool]$ManagedGcWprProbes),([bool]$ManagedGcPeerPressure),$fixtureAlias,$fixtureGuid,([bool]$ManagedGcSpinLocks),$dataAlias,$dataGuid,$Credential,$ManagedGcExchanges,([bool]$ManagedGcRetireDuringGc),([bool]$ManagedGcKeepCacheValid),([bool]$ManagedGcNoTcpProbes),([bool]$ManagedGcFramedNagle),([bool]$ManagedGcCoreClr),([bool]$ManagedGcIdleKeepalive),([bool]$ManagedGcServiceWait)
     $startup=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
         param($root)
         Get-Content -LiteralPath (Join-Path $root 'child-startup.json') -Raw|ConvertFrom-Json|

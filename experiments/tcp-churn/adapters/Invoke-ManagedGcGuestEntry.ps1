@@ -16,6 +16,7 @@ param(
     [switch]$FramedNagle,
     [switch]$CoreClr,
     [switch]$IdleKeepalive,
+    [switch]$ServiceWait,
     [switch]$PeerRecovery,
     [switch]$IsolatedData,
     [int]$RecoveryMilliseconds=8000,

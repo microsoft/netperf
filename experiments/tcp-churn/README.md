@@ -746,6 +746,14 @@ barrier. See the [Winsock listen contract](https://learn.microsoft.com/windows/w
 
 The separate `managed_gc_cache_retire_paths=1|1024|8192|24576|49152|98304` mechanism control
 requires the ordinary receiver setup described above.
+The opt-in `managed_gc_mixed=coreclr-servicewait` model uses 64 ordinary
+512-byte request/reply exchanges per connection. Each validated server request
+independently awaits 250-750 ms of synthetic asynchronous downstream latency
+before its reply, with deterministic staggering and no CPU burner. First data
+is immediate, no global release event exists, and all bytes/EOFs plus the exact
+completed response-wait count are verified. This is a declared service-time
+model to test delayed header output, not a measured customer latency claim.
+
 The opt-in `managed_gc_mixed=coreclr-keepalive` test sends one ordinary 1460-byte
 request immediately on each independent connection and validates the reply.
 It then keeps connections idle for individually staggered 8-30 second lifetimes
