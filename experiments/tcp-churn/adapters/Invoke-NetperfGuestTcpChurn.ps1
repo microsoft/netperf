@@ -339,7 +339,7 @@ try {
                     $path=Join-Path $root 'rss-prepared.json'
                     if(Test-Path -LiteralPath $path){Get-Content -LiteralPath $path -Raw|ConvertFrom-Json}
                 } -ArgumentList $guestRoot|Select-Object schema,action,verified,phase,failureType,failureCode,sourceLine,
-                    requestedProcessors,actualQueues,actualMaxProcessors,actualProcessorArrayCount,diagnosticFailureType
+                    requestedProcessors,actualQueues,actualMaxProcessors,actualProcessorArrayCount,actualSettings,requestedSettings,diagnosticFailureType
             }
             $rssRestored=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
                 param($root)
@@ -394,7 +394,7 @@ try {
                         $path=Join-Path $root 'data-rss-prepared.json'
                         if(Test-Path -LiteralPath $path){Get-Content -LiteralPath $path -Raw|ConvertFrom-Json}
                     } -ArgumentList $guestRoot|Select-Object schema,action,verified,phase,failureType,failureCode,sourceLine,
-                        requestedProcessors,actualQueues,actualMaxProcessors,actualProcessorArrayCount
+                        requestedProcessors,actualQueues,actualMaxProcessors,actualProcessorArrayCount,actualSettings,requestedSettings,diagnosticFailureType
                     if($null -ne $dataRssFailure){$published|Add-Member NoteProperty ownedDataRss $dataRssFailure -Force}
                 }
                 $published|ConvertTo-Json -Depth 10|Set-Content -LiteralPath $resultFile

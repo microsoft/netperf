@@ -177,6 +177,25 @@ try {
         $launch[0].Extent.Text.Contains('$rssAttempted')){
         throw 'RSS rollback must remain in the owning host scope, not the remote child startup finally.'
     }
+    $rssSelectors=@($guestAst.FindAll({
+        param($node)
+        $node -is [Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Select-Object' -and
+            $node.Extent.Text.Contains('actualProcessorArrayCount')
+    },$true))
+    if($rssSelectors.Count -ne 2){throw 'Both existing and disposable RSS failure serializers must be exercised.'}
+    foreach($selector in $rssSelectors){
+        & {
+            $fixture=[pscustomobject]@{schema=1;actualProcessorArrayCount=40
+                actualSettings=@{MaxNumber=38;MaxGroup=1};requestedSettings=@{MaxNumber=39;MaxGroup=1}
+                PSComputerName='unpublishable-test-host';RunspaceId='unpublishable-test-identity'}
+            $selected=& ([scriptblock]::Create('$fixture | '+$selector.Extent.Text))
+            if($selected.actualSettings.MaxNumber -ne 38 -or $selected.requestedSettings.MaxNumber -ne 39 -or
+                'PSComputerName' -in $selected.PSObject.Properties.Name -or 'RunspaceId' -in $selected.PSObject.Properties.Name){
+                throw 'The actual RSS serializer dropped setting diagnostics or retained remoting identity.'
+            }
+        }
+        $checks++
+    }
     $actual=& {
         function Invoke-Command {
             [CmdletBinding()]
