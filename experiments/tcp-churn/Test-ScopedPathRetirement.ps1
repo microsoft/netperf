@@ -8,7 +8,8 @@ $program=Join-Path $PSScriptRoot 'adapters\Invoke-ScopedPathRetirement.ps1'
 $checks=0
 try {
     foreach($case in @('restore','already-absent','bad-data','changed-owner','changed-prefix','changed-default','remove-failure','overlap-route','overlap-address','restore-two','restore-partial-two','changed-second-owner',
-        'data-restore','data-restore-disabled','data-restore-two','data-restore-partial-two','data-changed-interface','data-changed-source-owner')){
+        'data-restore','data-restore-disabled','data-restore-two','data-restore-partial-two','data-changed-interface','data-changed-source-owner',
+        'restore-four','data-restore-four','data-changed-fourth-owner')){
         $dataFile=Join-Path $directory 'data.clixml';$stateFile=Join-Path $directory 'state.clixml';$reportFile=Join-Path $directory 'report.json'
         $data=@{interfaceGuid='test-interface';originalDhcpDisabled=$true
             addresses=@('198.19.240.1','198.19.240.2','198.19.240.3','198.19.240.4')
@@ -16,12 +17,14 @@ try {
         if($case -eq 'bad-data'){$data.interfaceGuid='unowned-interface'}
         $data|Export-Clixml -LiteralPath $dataFile
         $twoSources=$case -in @('restore-two','restore-partial-two','changed-second-owner','data-restore-two','data-restore-partial-two')
+        $fourSources=$case -in @('restore-four','data-restore-four','data-changed-fourth-owner')
         $separateData=$case.StartsWith('data-')
         $unusedGuid='11111111-2222-3333-4444-555555555555'
         $fixture=@{removes=0;policyWrites=0;bindingEnabled=($case -ne 'data-restore-disabled');enables=0
             allowedSources=@('198.19.0.1');addresses=[Collections.Generic.List[object]]::new()
             routes=[Collections.Generic.List[object]]::new()}
         if($twoSources){$fixture.allowedSources+='198.19.0.2'}
+        if($fourSources){$fixture.allowedSources+=@('198.19.0.2','198.19.0.3','198.19.0.4')}
         $fixture.addresses.Add([pscustomobject]@{IPAddress='198.19.240.1';PrefixLength=29;SkipAsSource=$true;InterfaceIndex=5})
         if($separateData){$fixture.addresses.Add([pscustomobject]@{IPAddress='198.19.255.254';PrefixLength=32;SkipAsSource=$true;InterfaceIndex=9})}
         $fixture.routes.Add([pscustomobject]@{DestinationPrefix='0.0.0.0/0';NextHop='192.0.2.254';RouteMetric=10;InterfaceIndex=5})
@@ -30,7 +33,7 @@ try {
         if($restore){
             $saved=@{interfaceGuid='test-interface';source='198.19.0.1';prefix='198.19.0.0/17';originalAbsent=$true
                 originalAddresses=@('198.19.240.1/29/True')}
-            if($twoSources){$saved.sources=$fixture.allowedSources}
+            if($twoSources -or $fourSources){$saved.sources=$fixture.allowedSources}
             if($separateData){
                 $saved.interfaceGuid=$unusedGuid;$saved.detachInterface=$true
                 $saved.originalAddresses=@('198.19.255.254/32/True')
@@ -39,7 +42,7 @@ try {
             }
             $saved|Export-Clixml -LiteralPath $stateFile
         }
-        if($separateData -or $case -in @('restore','changed-owner','changed-prefix','remove-failure','overlap-address','restore-two','restore-partial-two','changed-second-owner')){
+        if($separateData -or $case -in @('restore','changed-owner','changed-prefix','remove-failure','overlap-address','restore-two','restore-partial-two','changed-second-owner','restore-four')){
             $index=if($case -in @('changed-owner','data-changed-source-owner')){6}else{5}
             $bits=if($case -eq 'changed-prefix'){24}else{17}
             $fixture.addresses.Add([pscustomobject]@{IPAddress='198.19.0.1';PrefixLength=$bits;SkipAsSource=$true;InterfaceIndex=$index})
@@ -48,6 +51,12 @@ try {
         if($case -in @('restore-two','changed-second-owner','data-restore-two')){
             $fixture.addresses.Add([pscustomobject]@{IPAddress='198.19.0.2';PrefixLength=17;SkipAsSource=$true
                 InterfaceIndex=$(if($case -eq 'changed-second-owner'){6}else{5})})
+        }
+        if($fourSources){
+            foreach($address in @('198.19.0.2','198.19.0.3','198.19.0.4')){
+                $fixture.addresses.Add([pscustomobject]@{IPAddress=$address;PrefixLength=17;SkipAsSource=$true
+                    InterfaceIndex=$(if($case -eq 'data-changed-fourth-owner' -and $address -eq '198.19.0.4'){6}else{5})})
+            }
         }
         if($case -eq 'overlap-address'){$fixture.routes.RemoveAt(1)}
         if($case -eq 'overlap-route'){
@@ -117,6 +126,7 @@ try {
                 function New-NetIPAddress {throw 'Preflight tests must never mutate addresses.'}
                 $extra=if($restore){@{RestoreOnly=$true}}else{@{ReadyFile='unused';BeginFile='unused';StopFile='unused'}}
                 if($twoSources){$extra.PathCount=49152}
+                if($fourSources){$extra.PathCount=98304}
                 if($separateData){$extra.UnusedInterfaceGuid=$unusedGuid;$extra.PopulationInterfaceAlias='test-data-interface'}
                 $alias=if($separateData){'NetperfPath-abcdef123456'}else{'test-only-interface'}
                 & $program -InterfaceAlias $alias -DataStateFile $dataFile -StateFile $stateFile -ReportFile $reportFile @extra
@@ -128,6 +138,7 @@ try {
                 changed-second-owner {'changed ownership'}
                 data-changed-interface {'must remain on the verified data interface'}
                 data-changed-source-owner {'changed ownership'}
+                data-changed-fourth-owner {'changed ownership'}
                 changed-prefix {'changed ownership'}
                 changed-default {'unchanged default routes'}
                 remove-failure {'Synthetic removal failure'}
@@ -138,8 +149,8 @@ try {
             if($_.Exception.Message -notmatch $pattern){throw}
             $failed=$true
         }
-        if($failed -ne ($case -notin @('restore','already-absent','restore-two','restore-partial-two','data-restore','data-restore-disabled','data-restore-two','data-restore-partial-two'))){throw "Unexpected retirement verdict: $case"}
-        if($case -in @('bad-data','changed-owner','changed-prefix','overlap-route','overlap-address','changed-second-owner','data-changed-interface','data-changed-source-owner') -and
+        if($failed -ne ($case -notin @('restore','already-absent','restore-two','restore-partial-two','data-restore','data-restore-disabled','data-restore-two','data-restore-partial-two','restore-four','data-restore-four'))){throw "Unexpected retirement verdict: $case"}
+        if($case -in @('bad-data','changed-owner','changed-prefix','overlap-route','overlap-address','changed-second-owner','data-changed-interface','data-changed-source-owner','data-changed-fourth-owner') -and
             ($fixture.removes -or $fixture.policyWrites -or $fixture.enables)){
             throw 'Rejected ownership or overlap mutated state.'
         }
@@ -147,8 +158,11 @@ try {
             ($fixture.removes -ne $(if($case -eq 'restore-two'){2}else{1}) -or $fixture.addresses.Count -ne 1)){
             throw 'The owned source was not exclusively retired.'
         }
-        if($case -in @('data-restore','data-restore-disabled','data-restore-two','data-restore-partial-two') -and
-            ($fixture.removes -ne $(if($case -eq 'data-restore-two'){2}else{1}) -or
+        if($case -eq 'restore-four' -and ($fixture.removes -ne 4 -or $fixture.addresses.Count -ne 1)){
+            throw 'Four-source cleanup changed original addresses or missed owned sources.'
+        }
+        if($case -in @('data-restore','data-restore-disabled','data-restore-two','data-restore-partial-two','data-restore-four') -and
+            ($fixture.removes -ne $(if($case -eq 'data-restore-four'){4}elseif($case -eq 'data-restore-two'){2}else{1}) -or
                 $fixture.addresses.Count -ne 2 -or $fixture.policyWrites -ne 1 -or
                 $fixture.enables -ne $(if($case -eq 'data-restore-disabled'){1}else{0}))){
             throw 'Separate cache cleanup changed data/bootstrap ownership or policy.'
@@ -167,7 +181,7 @@ try {
     if($body.Count -ne 1){throw 'The actual cache-population lifecycle must be unique.'}
     $statements=@($body[0].Body.Statements)
     & {
-        $sources=@('198.19.0.1','198.19.0.2')
+        $sources=@('198.19.0.1','198.19.0.2','198.19.0.3','198.19.0.4')
         $populationAdapter=@([pscustomobject]@{ifIndex=5})
         $adapter=@([pscustomobject]@{ifIndex=9})
         $writes=[Collections.Generic.List[string]]::new()
@@ -178,7 +192,7 @@ try {
             $writes.Add($IPAddress)
         }
         & ([scriptblock]::Create($statements[0].Extent.Text))
-        if($writes.Count -ne 2){throw 'The actual population lifecycle did not create both owned data sources.'}
+        if($writes.Count -ne 4){throw 'The actual population lifecycle did not create all four owned data sources.'}
     }
     $checks++
     $first=@($statements|Where-Object{$_.Extent.Text -eq '$report.measuredHeldPaths=Read-PathCount'})

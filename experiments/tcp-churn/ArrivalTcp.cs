@@ -92,7 +92,8 @@ public static class ArrivalTcp
     }
     public static UdpClient[] CreateIdlePathSockets(string sourceAddress,int count,int[] occupiedPorts)
     {
-        if((sourceAddress!="198.19.0.1" && sourceAddress!="198.19.0.2") ||
+        if((sourceAddress!="198.19.0.1" && sourceAddress!="198.19.0.2" &&
+            sourceAddress!="198.19.0.3" && sourceAddress!="198.19.0.4") ||
             (count!=1 && count!=1024 && count!=8192 && count!=24576) || occupiedPorts==null)
             throw new ArgumentException("Only a bounded owned path-retirement fixture is supported.");
         var source=IPAddress.Parse(sourceAddress);

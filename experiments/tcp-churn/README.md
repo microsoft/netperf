@@ -744,7 +744,7 @@ The requested hint is recorded; Windows provides no query for the actual
 backlog. This is ordinary accept-queue capacity, not a preconnected/data-release
 barrier. See the [Winsock listen contract](https://learn.microsoft.com/windows/win32/api/winsock2/nf-winsock2-listen).
 
-The separate `managed_gc_cache_retire_paths=1|1024|8192|24576|49152` mechanism control
+The separate `managed_gc_cache_retire_paths=1|1024|8192|24576|49152|98304` mechanism control
 requires the ordinary receiver setup described above.
 The opt-in `managed_gc_mixed=persistent64-framed-nagle` contrast preserves the
 same 64 exchanges, 1460-byte message patterns, total byte budget and independent
@@ -916,10 +916,10 @@ interpreter overhead and, in the unused-interface variant, finishing before traf
 Its maximum parallelism is the process's available CPU count, reported in
 the control result; only the separately owned idle UDP fixture is released.
 No productive TCP connection is preconnected or released by this operation.
-The 49,152-path scale variant uses two owned sources, `198.19.0.1` and
-`198.19.0.2`, within the same exclusive `/17`, with 24,576 destinations per
+The 49,152-path scale variant uses two owned sources; 98,304 uses four.
+They use only `198.19.0.1` through `198.19.0.4` within the same exclusive `/17`, with 24,576 destinations per
 source. It counts their union in one native snapshot and reports the source
-count. All source identities are checked before removing either address,
+count. All source identities are checked before removing any address,
 including rollback after partial setup. This varies both total paths and
 source count; it is not presented as a pure single-source cardinality control.
 
