@@ -149,6 +149,8 @@ jobs:
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-ServerGcArrivalTcp.ps1 -HeapLayout graph -ReceiveBudgetBytes 16384 -ExchangesPerConnection 64
       - shell: pwsh
+        run: ./experiments/tcp-churn/Test-ServerGcArrivalTcp.ps1 -HeapLayout graph -ReceiveBudgetBytes 16384 -MaximumInFlight 4096 -LargeStreaming
+      - shell: pwsh
         run: ./experiments/tcp-churn/Test-GcGuestAdapter.ps1
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-ScopedNeighborPulse.ps1

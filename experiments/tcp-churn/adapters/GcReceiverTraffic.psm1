@@ -105,6 +105,7 @@ function Invoke-GcReceiverTraffic {
     $State.Stage='verify-endpoints'
     foreach($endpoint in @($local,$remote,$server)) {
         if($endpoint.outcome -ne 'collected' -or $endpoint.exchangesPerConnection -ne $State.ExchangesPerConnection -or
+            $endpoint.maximumPerConnectionReadBufferBytes -ne [Math]::Min($State.Payload,65536) -or
             $endpoint.networkErrors -ne 0 -or $endpoint.protocolErrors -ne 0 -or $endpoint.barrier){
             throw 'A receiver-GC endpoint failed protocol verification.'
         }
@@ -129,6 +130,7 @@ function Invoke-GcReceiverTraffic {
     [pscustomobject]@{
         connections=$server.connections;bytesSent=$server.bytesSent;bytesReceived=$server.bytesReceived;managedGc=$server.managedGc
         exchangesPerConnection=$server.exchangesPerConnection
+        maximumPerConnectionReadBufferBytes=$server.maximumPerConnectionReadBufferBytes
         peerGcPressure=$remoteBundle.Pressure
         arrivalRate=(2*[Math]::Ceiling($State.Rate/2.0));arrivalDispatch='independent-client-processes';peakInFlight=$server.peakInFlight
         maxLaunchLagMilliseconds=[Math]::Max($local.maxLaunchLagMilliseconds,$remote.maxLaunchLagMilliseconds)

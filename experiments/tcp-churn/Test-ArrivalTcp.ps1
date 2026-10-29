@@ -76,6 +76,49 @@ try {
     $checks++
     if($probeMethod.Invoke($null,@([int]$server.Id,[int]$port))){throw 'An exited listener was reported ready.'}
     $checks++
+    $flags=[Reflection.BindingFlags]'Static,NonPublic'
+    $bufferMethod=$probeMethod.DeclaringType.GetMethod('CreateValidationBuffer',$flags)
+    foreach($length in @(1,1460,65535,65536,65537,1048576)){
+        $buffer=$bufferMethod.Invoke($null,@([int]$length))
+        if($buffer.Length -ne [Math]::Min($length,65536)){throw 'Read buffer exceeded the bounded streaming capacity.'}
+        $checks++
+    }
+    $readMethod=$probeMethod.DeclaringType.GetMethod('ReadPattern',$flags)
+    foreach($case in @('request-valid','request-corrupt','request-eof','reply-valid','reply-corrupt','reply-eof')){
+        $listener=$null;$sender=$null;$receiver=$null
+        try{
+            $data=[byte[]]::new(65537)
+            $patternOffset=if($case.StartsWith('reply')){53}else{0}
+            for($i=0;$i -lt $data.Length;$i++){$data[$i]=[byte](($i+$patternOffset)%251)}
+            $expected=if($case.StartsWith('reply')){,$data.Clone()}else{$null}
+            if($case.EndsWith('corrupt')){$data[65536]=$data[65536] -bxor 1}
+            $listener=[Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback,0)
+            $listener.Start()
+            $sender=[Net.Sockets.TcpClient]::new()
+            $sender.Connect([Net.IPAddress]::Loopback,$listener.LocalEndpoint.Port)
+            $receiver=$listener.AcceptTcpClient()
+            $read=$readMethod.Invoke($null,@($receiver.GetStream(),[byte[]]::new(65536),[int]$data.Length,$expected))
+            $sent=if($case.EndsWith('eof')){65536}else{$data.Length}
+            $sender.GetStream().Write($data,0,$sent)
+            $sender.Client.Shutdown([Net.Sockets.SocketShutdown]::Send)
+            $failure=$null
+            try{
+                if(-not $read.Wait(5000)){throw 'Streaming validation exceeded its deadline.'}
+            }catch{$failure=$_.Exception.GetBaseException()}
+            if($case.EndsWith('valid')){
+                if($null -ne $failure){throw $failure}
+            }elseif($failure -isnot [IO.IOException] -or
+                ($case.EndsWith('corrupt') -and $failure.Message -notmatch '^(Data|Reply) mismatch\.$') -or
+                ($case.EndsWith('eof') -and $failure.Message -ne 'Unexpected EOF.')){
+                throw "Streaming validation did not reject the exact malformed payload: $case."
+            }
+            $checks++
+        }finally{
+            if($null -ne $sender){$sender.Dispose()}
+            if($null -ne $receiver){$receiver.Dispose()}
+            if($null -ne $listener){$listener.Stop()}
+        }
+    }
 } finally {
     if($null -ne $child) {
         if(-not $child.HasExited){Stop-Process -Id $child.Id -Force -ErrorAction Stop}

@@ -31,8 +31,8 @@ param(
 )
 $ErrorActionPreference='Stop'
 if($RetireDuringGc -and -not $CacheInterfaceAlias){throw 'GC-active retirement requires the owned unused-interface control.'}
-if($Connections -gt 1024 -and ($GcProcessRole -ne 'server' -or $PayloadBytes -ne 1460 -or $ReceiveBudgetBytes -ne 16384)){
-    throw 'High concurrency requires receiver-GC mode, 1460-byte payloads and the verified 16384-byte receive budget.'
+if($Connections -gt 1024 -and ($GcProcessRole -ne 'server' -or $ReceiveBudgetBytes -ne 16384)){
+    throw 'High concurrency requires receiver-GC mode and the verified 16384-byte receive budget.'
 }
 if($ExchangesPerConnection -ne 1 -and ($GcProcessRole -ne 'server' -or $PayloadBytes -ne 1460)){
     throw 'Persistent exchanges require receiver-GC mode and 1460-byte request/response payloads.'
@@ -457,6 +457,7 @@ try {
         bytesSent=$r.bytesSent;bytesReceived=$r.bytesReceived;payloadBytesPerDirection=$payloadBytes
         exchangesPerConnection=$ExchangesPerConnection
         configuredMaximumInFlightPerProducer=$Connections
+        maximumPerConnectionReadBufferBytes=$r.maximumPerConnectionReadBufferBytes
         kernelSchedulingEventsRequested=($ExchangesPerConnection -ne 64)
         kernelProfileCoverage=$(if($ExchangesPerConnection -eq 64){'focused-sampled-cpu-lifetime-images'}else{'installed-cpu-profile'})
         tcpProbeCoverage=$(if($ExchangesPerConnection -eq 64){'lifecycle-only'}else{'bounded-diagnosis-send-connect-tcb'})

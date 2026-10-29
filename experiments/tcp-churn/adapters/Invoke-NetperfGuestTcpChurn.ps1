@@ -67,9 +67,8 @@ if($ManagedGcExchanges -ne 1 -and (-not $ManagedGc -or $ManagedGcProcessRole -ne
     throw 'Persistent exchanges require receiver-GC mode and 1460-byte request/response payloads.'
 }
 if($ManagedGcRetireDuringGc -and -not $ManagedGcUnusedInterface){throw 'GC-active retirement requires the owned unused-interface control.'}
-if($Connections -gt 1024 -and (-not $ManagedGc -or $ManagedGcProcessRole -ne 'server' -or
-    $ManagedGcPayloadBytes -ne 1460 -or $ManagedGcReceiveBudgetBytes -ne 16384)){
-    throw 'High concurrency requires receiver-GC mode, 1460-byte payloads and the verified 16384-byte receive budget.'
+if($Connections -gt 1024 -and (-not $ManagedGc -or $ManagedGcProcessRole -ne 'server' -or $ManagedGcReceiveBudgetBytes -ne 16384)){
+    throw 'High concurrency requires receiver-GC mode and the verified 16384-byte receive budget.'
 }
 if($ManagedGcReceiveBudgetBytes -and (-not $ManagedGc -or $ManagedGcProcessRole -ne 'server')){
     throw 'A bounded receive budget requires receiver-GC diagnostic mode.'
