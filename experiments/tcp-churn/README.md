@@ -800,6 +800,8 @@ callbacks or unrelated rundown/control operations.
 The kernel TCP provider explicitly requests nonpaged event buffers; the
 dedicated hosted activation test checks TCP and CLR individually as well as
 the combined CPU/event recording.
+The WPR alternative skips dynamic managed-PDB generation, which is not used
+by the public TCP/kernel symbol analysis or CLR event correlation.
 It also reports numeric free-space admission information for the guest temporary
 drives; busy or residual-resource failures retain fixed failure categories rather
 than exporting process names, paths or exception messages.

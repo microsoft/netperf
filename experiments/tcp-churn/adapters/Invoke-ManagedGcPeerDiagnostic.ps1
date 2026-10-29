@@ -459,7 +459,9 @@ finally {
         finally{try{Stop-TcpChurnCollector $entry.child}catch{$cleanupErrors.Add($_.Exception)}}
     }
     if($profileOwned) {
-        try {$null=Invoke-TcpChurnTool -Program $wpr -Arguments @('-stop',(Join-Path $diagnostics 'cpu.etl')) `
+        $stopArguments=@('-stop',(Join-Path $diagnostics 'cpu.etl'))
+        if($WprProbes){$stopArguments+='-skipPdbGen'}
+        try {$null=Invoke-TcpChurnTool -Program $wpr -Arguments $stopArguments `
             -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'wpr-stop') -TimeoutSeconds 120}
         catch{$cleanupErrors.Add($_.Exception)}
     }

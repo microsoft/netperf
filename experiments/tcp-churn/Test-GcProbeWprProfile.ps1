@@ -55,7 +55,7 @@ try{
                 if($case -eq 'exact-combined'){$exactExit=$activationExit}
                 if($activationExit -eq 0){
                     Start-Sleep -Milliseconds 250
-                    & $wpr -stop (Join-Path $directory ($case+'.etl'))
+                    & $wpr -stop (Join-Path $directory ($case+'.etl')) -skipPdbGen
                     if($LASTEXITCODE){throw 'Dedicated-runner recording could not stop.'}
                     $attempted=$false
                 }
