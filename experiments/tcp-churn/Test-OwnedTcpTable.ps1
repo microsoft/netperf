@@ -45,6 +45,17 @@ try {
         $query -lt 0 -or $scan -lt 0 -or [double]::IsNaN($query) -or [double]::IsNaN($scan)){
         throw 'Timed native path enumeration did not preserve the path count and nonnegative query/scan measurements.'
     }
+    if([ArrivalTcp]::CountIpv4PathsForSources($loopback[0].GetIPProperties().GetIPv4Properties().Index,
+        [string[]]@('127.0.0.1','127.0.0.2'),[ref]$query,[ref]$scan) -lt 1){
+        throw 'The single-snapshot source-set counter lost an ordinary loopback path.'
+    }
+    $duplicateRejected=$false
+    try{$null=[ArrivalTcp]::CountIpv4PathsForSources($loopback[0].GetIPProperties().GetIPv4Properties().Index,
+        [string[]]@('127.0.0.1','127.0.0.1'),[ref]$query,[ref]$scan)}catch{
+        if($_.Exception.InnerException -isnot [ArgumentException]){throw}
+        $duplicateRejected=$true
+    }
+    if(-not $duplicateRejected){throw 'Duplicate source inputs must not silently distort path-count evidence.'}
     Write-Host 'Passed owned TCP-table and native IP-path enumeration checks with ordinary loopback connections.'
 }finally{
     foreach($socket in $sockets){$socket.Dispose()}

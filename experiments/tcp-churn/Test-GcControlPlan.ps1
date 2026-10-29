@@ -15,7 +15,7 @@ if($plan.Count -ne 1){throw 'The actual path-control launch plan must be uniquel
 foreach($case in @('route','cache','both','unused-cache')){
     & {
         $RouteRefresh=$case -ne 'cache';$CacheRetirePaths=if($case -ne 'route'){24576}else{0}
-        if($case -eq 'unused-cache'){$RouteRefresh=$false}
+        if($case -eq 'unused-cache'){$RouteRefresh=$false;$CacheRetirePaths=49152}
         if($case -eq 'cache'){$CacheRetirePaths=1}
         $CacheInterfaceGuid=if($case -eq 'unused-cache'){'owned-guid'}else{''}
         $CacheInterfaceAlias=if($case -eq 'unused-cache'){'NetperfPath-123456abcdef'}else{''}

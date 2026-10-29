@@ -49,10 +49,20 @@ public static class ArrivalTcp
     }
     public static int CountIpv4Paths(int interfaceIndex,string sourceAddress,out double queryMilliseconds,out double scanMilliseconds)
     {
+        return CountIpv4PathsForSources(interfaceIndex,new[]{sourceAddress},out queryMilliseconds,out scanMilliseconds);
+    }
+    public static int CountIpv4PathsForSources(int interfaceIndex,string[] sourceAddresses,out double queryMilliseconds,out double scanMilliseconds)
+    {
         queryMilliseconds=0;scanMilliseconds=0;
-        IPAddress source;
-        if(interfaceIndex<1 || !IPAddress.TryParse(sourceAddress,out source) ||
-            source.AddressFamily!=AddressFamily.InterNetwork)throw new ArgumentException("An IPv4 source and interface index are required.");
+        if(interfaceIndex<1 || sourceAddresses==null || sourceAddresses.Length==0)
+            throw new ArgumentException("IPv4 sources and an interface index are required.");
+        var sourceValues=new HashSet<uint>();
+        foreach(string address in sourceAddresses){
+            IPAddress source;
+            if(!IPAddress.TryParse(address,out source) || source.AddressFamily!=AddressFamily.InterNetwork ||
+                !sourceValues.Add(BitConverter.ToUInt32(source.GetAddressBytes(),0)))
+                throw new ArgumentException("Distinct IPv4 source addresses are required.");
+        }
         IntPtr table;
         var clock=Stopwatch.StartNew();
         uint status=GetIpPathTable(2,out table);
@@ -69,13 +79,12 @@ public static class ArrivalTcp
             int destinationOffset=Marshal.OffsetOf(typeof(IpPathRow),"Destination").ToInt32();
             int indexOffset=Marshal.OffsetOf(typeof(IpPathRow),"InterfaceIndex").ToInt32();
             int addressOffset=Marshal.OffsetOf(typeof(SockaddrInet),"Ipv4").ToInt32();
-            uint sourceValue=BitConverter.ToUInt32(source.GetAddressBytes(),0);
             int matched=0;
             for(int i=0;i<count;i++){
                 IntPtr row=IntPtr.Add(table,offset+i*stride);
                 if(Marshal.ReadInt16(row)!=2 || Marshal.ReadInt16(row,destinationOffset)!=2)
                     throw new InvalidOperationException("Unexpected address family in the IPv4 path table.");
-                if(Marshal.ReadInt32(row,indexOffset)==interfaceIndex && (uint)Marshal.ReadInt32(row,addressOffset)==sourceValue)matched++;
+                if(Marshal.ReadInt32(row,indexOffset)==interfaceIndex && sourceValues.Contains((uint)Marshal.ReadInt32(row,addressOffset)))matched++;
             }
             scanMilliseconds=clock.Elapsed.TotalMilliseconds;
             return matched;
@@ -83,7 +92,8 @@ public static class ArrivalTcp
     }
     public static UdpClient[] CreateIdlePathSockets(string sourceAddress,int count,int[] occupiedPorts)
     {
-        if(sourceAddress!="198.19.0.1" || (count!=1 && count!=1024 && count!=8192 && count!=24576) || occupiedPorts==null)
+        if((sourceAddress!="198.19.0.1" && sourceAddress!="198.19.0.2") ||
+            (count!=1 && count!=1024 && count!=8192 && count!=24576) || occupiedPorts==null)
             throw new ArgumentException("Only a bounded owned path-retirement fixture is supported.");
         var source=IPAddress.Parse(sourceAddress);
         var occupied=new HashSet<int>(occupiedPorts);

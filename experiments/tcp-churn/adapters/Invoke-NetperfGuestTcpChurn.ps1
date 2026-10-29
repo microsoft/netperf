@@ -23,7 +23,7 @@ param(
     [switch]$ManagedGcRouteRefresh,
     [ValidateSet('onlink','peer-gateway')][string]$ManagedGcRouteVariant='onlink',
     [ValidateSet(0,16384)][int]$ManagedGcReceiveBudgetBytes=0,
-    [ValidateSet(0,1,1024,8192,24576)][int]$ManagedGcCacheRetirePaths=0,
+    [ValidateSet(0,1,1024,8192,24576,49152)][int]$ManagedGcCacheRetirePaths=0,
     [switch]$ManagedGcWprProbes,
     [switch]$ManagedGcPeerPressure,
     [switch]$ManagedGcUnusedInterface,
