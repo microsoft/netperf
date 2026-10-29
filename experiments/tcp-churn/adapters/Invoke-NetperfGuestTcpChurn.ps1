@@ -251,13 +251,18 @@ try {
     }
     $phase='guest-idle-check'
     $guestRoot=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
+        param([long]$MinimumFreeMiB)
         if (@(Get-Process -Name 'Runner.Worker','ctsTraffic','ArrivalTcp','CpuSamples' -ErrorAction Ignore).Count) {
             throw 'Guest has an active Actions worker or CTS process.'
+        }
+        # Captures stop only after the workload; a full scratch disk makes WPR stop fail and orphans its temporary file.
+        if([IO.DriveInfo]::new([IO.Path]::GetPathRoot($env:TEMP)).AvailableFreeSpace/1MB -lt $MinimumFreeMiB){
+            throw 'Guest scratch space is below the profiled-capture minimum; prune derived indexes first.'
         }
         $root=Join-Path $env:TEMP ('netperf-churn-'+[guid]::NewGuid().ToString('N'))
         New-Item -ItemType Directory -Path $root -ErrorAction Stop | Out-Null
         $root
-    }
+    } -ArgumentList $(if($ProfileCpu){[long]8192}else{[long]0})
     if($ManagedGcUnusedInterface){
         $phase='owned-vm-path-interface'
         Import-Module (Join-Path $PSScriptRoot 'VmPathFixture.psm1') -Force
