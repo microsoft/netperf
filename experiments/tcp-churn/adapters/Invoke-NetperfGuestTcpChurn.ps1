@@ -125,7 +125,7 @@ try {
             $loggerRows=@(& "$env:SystemRoot\System32\logman.exe" query -ets)
             if($LASTEXITCODE -ne 0){throw 'The read-only ETW session query failed.'}
             $exactLoggers=@($loggerRows|Where-Object{$_ -match '^\s*TcpChurnExact-[0-9a-fA-F]{32}\s'}).Count
-            $clientAliases=@(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop|Where-Object{$_.IPAddress -match '^198\.19\.240\.[1-6]$' -or $_.IPAddress -eq '198.19.0.1'}).Count
+            $clientAliases=@(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop|Where-Object{$_.IPAddress -match '^198\.19\.240\.[1-6]$' -or $_.IPAddress -in @('198.19.0.1','198.19.0.2')}).Count
             $clientPathInterfaces=@(Get-NetAdapter -ErrorAction Stop|Where-Object Name -match '^NetperfPath-[0-9a-f]{12}$').Count
             $clientDataInterfaces=@(Get-NetAdapter -ErrorAction Stop|Where-Object Name -match '^NetperfData-[0-9a-f]{12}$').Count
             $clientRules=@(Get-NetFirewallRule -PolicyStore ActiveStore -ErrorAction Stop|Where-Object{$_.Name -like 'ManagedGcPeer-*' -or $_.Name -like 'ManagedGcReceiver-*'}).Count
@@ -134,6 +134,7 @@ try {
             $clientRoutes=@(Get-NetRoute -AddressFamily IPv4 -PolicyStore ActiveStore -ErrorAction Stop|Where-Object DestinationPrefix -in @('198.19.240.6/32','198.19.0.0/17')).Count
             if($clientAliases -or $clientRules -or $clientStatic -or $clientRoutes -or $clientPathInterfaces -or $clientDataInterfaces){throw 'Owned client GC resources require restoration before further tests.'}
             $clientCpus=(Get-CimInstance Win32_Processor|Measure-Object NumberOfLogicalProcessors -Sum).Sum
+            $clientOs=Get-CimInstance Win32_OperatingSystem -ErrorAction Stop
             $peerIp=@([Net.Dns]::GetHostAddresses('netperf-peer')|Where-Object AddressFamily -eq InterNetwork)[0].ToString()
             $dataRoute=@(Find-NetRoute -RemoteIPAddress $peerIp -ErrorAction Stop|Where-Object{$_.PSObject.Properties['IPAddress']})
             if($dataRoute.Count -ne 1){throw 'The read-only RSS probe requires one source route.'}
@@ -158,6 +159,8 @@ try {
                 $peerCpus=$peerState.cpus
                 if($peerCpus -lt 1){throw 'The peer processor inventory did not return a positive count.'}
                 [pscustomobject]@{schema=1;peerConnected=$true;clientLogicalProcessors=[int]$clientCpus;peerLogicalProcessors=[int]$peerCpus
+                    clientOsBuild=[int]$clientOs.BuildNumber;clientOsProductType=[int]$clientOs.ProductType
+                    clientLastBootUtcTicks=([datetime]$clientOs.LastBootUpTime).ToUniversalTime().Ticks
                     clientOwnedAliases=$clientAliases;peerOwnedAliases=$peerState.aliases;clientOwnedRules=$clientRules;peerOwnedRules=$peerState.rules
                     clientOwnedStaticPeers=$clientStatic;peerOwnedStaticPeers=$peerState.static
                     clientTempFreeMiB=$clientFree;peerTempFreeMiB=$peerState.tempFreeMiB
@@ -175,6 +178,7 @@ try {
         } -ArgumentList $Credential
         $peerResult|Add-Member NoteProperty profiledVmGeneration ([int]$vmInfo.Generation)
         $peerResult|Add-Member NoteProperty profiledVmConnectedAdapters (@(Get-VMNetworkAdapter -VMName $VmName -ErrorAction Stop|Where-Object SwitchName).Count)
+        $peerResult|Add-Member NoteProperty profiledVmUptimeSeconds ([long][Math]::Floor($vmInfo.Uptime.TotalSeconds))
         $peerResult|Select-Object schema,peerConnected,profiledVmGeneration,profiledVmConnectedAdapters,clientLogicalProcessors,peerLogicalProcessors,clientOwnedAliases,peerOwnedAliases,
             clientOwnedRules,peerOwnedRules,clientOwnedStaticPeers,peerOwnedStaticPeers,clientOwnedControlRoutes,peerOwnedControlRoutes,
             clientWprStatusExitCode,clientWprRecordingNotRunning,clientWprCpuProfileReported,
@@ -182,6 +186,7 @@ try {
             clientOwnedPathInterfaces,
             clientOwnedDataInterfaces,
             clientDataRssEnabled,clientDataRssQueues,clientDataRssMaxProcessors,clientDataRssProcessorArrayCount,
+            clientOsBuild,clientOsProductType,clientLastBootUtcTicks,profiledVmUptimeSeconds,
             clientTempFreeMiB,peerTempFreeMiB,conclusion|ConvertTo-Json |
             Set-Content -LiteralPath (Join-Path $PublishDirectory 'peer-check.json') -Encoding utf8
         return
