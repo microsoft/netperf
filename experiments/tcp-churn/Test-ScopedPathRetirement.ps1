@@ -137,7 +137,7 @@ public static class ArrivalTcp {
     }
 }
 '@
-    foreach($phase in @('start','end','end-too-early')){
+    foreach($phase in @('start','end','end-too-early','during')){
         & {
             $ReadyFile=Join-Path $directory 'ready';$BeginFile=Join-Path $directory 'begin'
             $EndFile=if($phase -ne 'start'){Join-Path $directory 'end'}else{''}
@@ -146,6 +146,7 @@ public static class ArrivalTcp {
             $sockets=[Collections.ArrayList]::new();$null=$sockets.Add([object]::new())
             $report=[ordered]@{};$fixture=@{Reads=0;Signals=[Collections.Generic.List[string]]::new()}
             $ReceiverProcessId=42
+            $RetireDuringGc=$phase -eq 'during'
             $pathTiming=@{QueryMilliseconds=0;RowScanMilliseconds=0}
             $wait=[Diagnostics.Stopwatch]::StartNew()
             [ArrivalTcp]::ReadyPath=$ReadyFile;[ArrivalTcp]::ExpectedReady=($phase -eq 'start');[ArrivalTcp]::Releases=0

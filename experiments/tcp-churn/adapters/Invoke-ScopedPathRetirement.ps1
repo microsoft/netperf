@@ -11,6 +11,7 @@ param(
     [string]$ReceiverExecutable,[int]$ReceiverProcessId,
     [string]$UnusedInterfaceGuid,
     [string]$ReadyFile,[string]$BeginFile,[string]$EndFile,[string]$StopFile,
+    [switch]$RetireDuringGc,
     [switch]$RestoreOnly
 )
 $ErrorActionPreference='Stop'
@@ -34,6 +35,7 @@ $adapter=@(Get-NetAdapter -Name $InterfaceAlias -ErrorAction Stop)
 if($adapter.Count -ne 1){throw 'The owned data adapter must be unique.'}
 $data=Import-Clixml -LiteralPath $DataStateFile -ErrorAction Stop
 $detachInterface=-not [string]::IsNullOrWhiteSpace($UnusedInterfaceGuid)
+if($RetireDuringGc -and (-not $detachInterface -or -not $EndFile)){throw 'GC-active retirement requires the owned unused interface and completion signal.'}
 if($EndFile -and -not $detachInterface){throw 'GC-completion retirement requires the owned unused interface.'}
 $ownedInterface=if($detachInterface){
     $InterfaceAlias -match '^NetperfPath-[0-9a-f]{12}$' -and
@@ -198,7 +200,7 @@ if((Read-PrefixPathCount) -ne 0){throw 'Existing cached paths conflict with the 
 $sockets=[Collections.Generic.List[Net.Sockets.UdpClient]]::new()
 $failure=$null;$restoreFailure=$null
 $report=[ordered]@{schema=1;scenario=$(if($detachInterface){'owned-unused-interface-ipv4-detach'}else{'owned-secondary-source-address-retirement'});scope='owned-benchmark-state-only'
-    triggerPhase=$(if($EndFile){'gc-complete-pre-released-cache'}else{'gc-start-then-socket-release'})
+    triggerPhase=$(if($RetireDuringGc){'gc-active-pre-released-cache'}elseif($EndFile){'gc-complete-pre-released-cache'}else{'gc-start-then-socket-release'})
     requestedPaths=$PathCount;sourceCount=$sources.Count;measuredHeldPaths=0;measuredReleasedPaths=0;payloadsSent=0
     retired=$false;restored=$false;dataAndManagementAddressesPreserved=$false;defaultRoutesPreserved=$false}
 try {
@@ -248,8 +250,10 @@ try {
     if($report.establishedAtSnapshot -lt 8){throw 'No verified live TCP cohort remains at the retirement snapshot.'}
     if($EndFile){
         if(Test-Path -LiteralPath $EndFile){throw 'GC completed before cache and cohort verification; no aligned retirement was attempted.'}
-        Wait-ControlSignal $EndFile
-        $report.gcCompletionObservedUtc=[DateTime]::UtcNow.ToString('o')
+        if(-not $RetireDuringGc){
+            Wait-ControlSignal $EndFile
+            $report.gcCompletionObservedUtc=[DateTime]::UtcNow.ToString('o')
+        }
     }
     $report.controlStoppedBeforeRetirement=Test-Path -LiteralPath $StopFile
     if($report.controlStoppedBeforeRetirement){

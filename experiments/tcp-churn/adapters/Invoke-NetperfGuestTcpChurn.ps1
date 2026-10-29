@@ -23,6 +23,7 @@ param(
     [switch]$ManagedGcRouteRefresh,
     [ValidateSet('onlink','peer-gateway','destination-flush','onlink-after-gc')][string]$ManagedGcRouteVariant='onlink',
     [ValidateSet(1,64)][int]$ManagedGcExchanges=1,
+    [switch]$ManagedGcRetireDuringGc,
     [ValidateSet(0,16384)][int]$ManagedGcReceiveBudgetBytes=0,
     [ValidateSet(0,1,1024,8192,24576,49152)][int]$ManagedGcCacheRetirePaths=0,
     [switch]$ManagedGcWprProbes,
@@ -65,6 +66,7 @@ if($ManagedGcHeapLayout -ne 'arrays' -and -not $ManagedGc){throw 'GC heap layout
 if($ManagedGcExchanges -ne 1 -and (-not $ManagedGc -or $ManagedGcProcessRole -ne 'server' -or $ManagedGcPayloadBytes -ne 1460)){
     throw 'Persistent exchanges require receiver-GC mode and 1460-byte request/response payloads.'
 }
+if($ManagedGcRetireDuringGc -and -not $ManagedGcUnusedInterface){throw 'GC-active retirement requires the owned unused-interface control.'}
 if($ManagedGcReceiveBudgetBytes -and (-not $ManagedGc -or $ManagedGcProcessRole -ne 'server')){
     throw 'A bounded receive budget requires receiver-GC diagnostic mode.'
 }
@@ -250,7 +252,7 @@ try {
     }
     $phase='guest-traffic'
     $exit=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
-        param($root,$seconds,$connections,$profile,$synDrop,$peerMeasurement,$managedGc,$managedGcPayloadBytes,$peerRecovery,$isolatedData,$recoveryMilliseconds,$gcProcessRole,$heapLayout,$routeRefresh,$routeVariant,$receiveBudgetBytes,$cacheRetirePaths,$wprProbes,$peerPressure,$fixtureAlias,$fixtureGuid,$spinLocks,$dataAlias,$dataGuid,$credential,$exchanges)
+        param($root,$seconds,$connections,$profile,$synDrop,$peerMeasurement,$managedGc,$managedGcPayloadBytes,$peerRecovery,$isolatedData,$recoveryMilliseconds,$gcProcessRole,$heapLayout,$routeRefresh,$routeVariant,$receiveBudgetBytes,$cacheRetirePaths,$wprProbes,$peerPressure,$fixtureAlias,$fixtureGuid,$spinLocks,$dataAlias,$dataGuid,$credential,$exchanges,$retireDuringGc)
         if (@(Get-Process -Name 'Runner.Worker','ctsTraffic' -ErrorAction Ignore).Count) {
             throw 'Guest became busy before traffic setup.'
         }
@@ -271,6 +273,7 @@ try {
             if($managedGc){$extra+=@('-GcProcessRole',$gcProcessRole)}
             if($managedGc){$extra+=@('-HeapLayout',$heapLayout)}
             if($managedGc){$extra+=@('-ExchangesPerConnection',[string]$exchanges)}
+            if($retireDuringGc){$extra+='-RetireDuringGc'}
             if($receiveBudgetBytes){$extra+=@('-ReceiveBudgetBytes',[string]$receiveBudgetBytes)}
             if($cacheRetirePaths){$extra+=@('-CacheRetirePaths',[string]$cacheRetirePaths)}
             if($wprProbes){$extra+='-WprProbes'}
@@ -301,7 +304,7 @@ try {
             $launch|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $root 'child-startup.json')
             if($credentialFile -and (Test-Path -LiteralPath $credentialFile)){Remove-Item -LiteralPath $credentialFile -ErrorAction Stop}
         }
-    } -ArgumentList $guestRoot,$Seconds,$Connections,([bool]$ProfileCpu),([bool]$SynDrop),([bool]$PeerMeasurement),([bool]$ManagedGc),$ManagedGcPayloadBytes,([bool]$ManagedGcPeerRecovery),([bool]$ManagedGcIsolatedData),$ManagedGcRecoveryMilliseconds,$ManagedGcProcessRole,$ManagedGcHeapLayout,([bool]$ManagedGcRouteRefresh),$ManagedGcRouteVariant,$ManagedGcReceiveBudgetBytes,$ManagedGcCacheRetirePaths,([bool]$ManagedGcWprProbes),([bool]$ManagedGcPeerPressure),$fixtureAlias,$fixtureGuid,([bool]$ManagedGcSpinLocks),$dataAlias,$dataGuid,$Credential,$ManagedGcExchanges
+    } -ArgumentList $guestRoot,$Seconds,$Connections,([bool]$ProfileCpu),([bool]$SynDrop),([bool]$PeerMeasurement),([bool]$ManagedGc),$ManagedGcPayloadBytes,([bool]$ManagedGcPeerRecovery),([bool]$ManagedGcIsolatedData),$ManagedGcRecoveryMilliseconds,$ManagedGcProcessRole,$ManagedGcHeapLayout,([bool]$ManagedGcRouteRefresh),$ManagedGcRouteVariant,$ManagedGcReceiveBudgetBytes,$ManagedGcCacheRetirePaths,([bool]$ManagedGcWprProbes),([bool]$ManagedGcPeerPressure),$fixtureAlias,$fixtureGuid,([bool]$ManagedGcSpinLocks),$dataAlias,$dataGuid,$Credential,$ManagedGcExchanges,([bool]$ManagedGcRetireDuringGc)
     $startup=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
         param($root)
         Get-Content -LiteralPath (Join-Path $root 'child-startup.json') -Raw|ConvertFrom-Json|

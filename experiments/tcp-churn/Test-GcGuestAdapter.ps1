@@ -256,6 +256,7 @@ try {
         $ManagedGcIsolatedData=[switch]::new($true);$ManagedGcRecoveryMilliseconds=3000
         $ManagedGcProcessRole='client'
         $ManagedGcExchanges=64
+        $ManagedGcRetireDuringGc=[switch]::new($true)
         $ManagedGcHeapLayout='graph'
         $ManagedGcRouteRefresh=[switch]::new($true)
         $ManagedGcRouteVariant='peer-gateway'
@@ -270,7 +271,8 @@ try {
         $dataGuid='66666666-7777-8888-9999-000000000000'
         & ([scriptblock]::Create($launch[0].Extent.Text))
     }
-    if($actual.Count -ne 26 -or $actual[25] -isnot [int] -or $actual[25] -ne 64 -or
+    if($actual.Count -ne 27 -or $actual[26] -isnot [bool] -or -not $actual[26] -or
+        $actual[25] -isnot [int] -or $actual[25] -ne 64 -or
         $actual[22] -ne 'NetperfData-abcdef123456' -or
         $actual[23] -ne '66666666-7777-8888-9999-000000000000' -or
         $actual[21] -isnot [bool] -or -not $actual[21] -or

@@ -806,6 +806,14 @@ With the disposable-interface variant, the companion's ordinary accepted-flow
 threshold is later (1,536 rather than 1,024), and its measured collection must
 instead overlap the interface-cleanup API. This targets lock-holder scheduling
 during maintenance, not merely two collections that end before maintenance.
+The `managed_gc_unused_interface=during-gc` contrast reuses the same owned
+interface and pre-released cache, but starts retirement immediately after
+the cache/cohort snapshot completes while actual GC is still active.
+Acceptance verifies the API starts before collection ends and reports measured
+collection/API overlap, including operations that return after collection.
+It does not pause TCP, alter scheduling policy or insert a data-release barrier.
+The ordinary `true` mode retains GC-completion timing.
+
 The explicit `managed_gc_unused_interface=true` variant creates one
 disposable synthetic NIC on the owned generation-2 VM. It is first added
 disconnected, configured without DHCP, and only then attached to the VM's

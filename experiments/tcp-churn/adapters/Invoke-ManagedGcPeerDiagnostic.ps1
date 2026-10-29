@@ -18,6 +18,7 @@ param(
     [switch]$RouteRefresh,
     [ValidateSet('onlink','peer-gateway','destination-flush','onlink-after-gc')][string]$RouteVariant='onlink',
     [ValidateSet(1,64)][int]$ExchangesPerConnection=1,
+    [switch]$RetireDuringGc,
     [ValidateSet(0,16384)][int]$ReceiveBudgetBytes=0,
     [ValidateSet(0,1,1024,8192,24576,49152)][int]$CacheRetirePaths=0,
     [switch]$WprProbes,
@@ -29,6 +30,7 @@ param(
     [string]$DataInterfaceGuid
 )
 $ErrorActionPreference='Stop'
+if($RetireDuringGc -and -not $CacheInterfaceAlias){throw 'GC-active retirement requires the owned unused-interface control.'}
 if($ExchangesPerConnection -ne 1 -and ($GcProcessRole -ne 'server' -or $PayloadBytes -ne 1460)){
     throw 'Persistent exchanges require receiver-GC mode and 1460-byte request/response payloads.'
 }
@@ -353,7 +355,10 @@ try {
                 '-StateFile',(Join-Path $diagnostics ($stem+'-original.clixml')))
             if($type -eq 'cache'){$arguments+=@('-PathCount',[string]$CacheRetirePaths,
                 '-ReceiverExecutable',$exe,'-ReceiverProcessId',[string]$localServer.Process.Id)
-                if($CacheInterfaceGuid){$arguments+=@('-UnusedInterfaceGuid',$CacheInterfaceGuid,'-EndFile',($localOutput+'.gc.json'))}
+                if($CacheInterfaceGuid){
+                    $arguments+=@('-UnusedInterfaceGuid',$CacheInterfaceGuid,'-EndFile',($localOutput+'.gc.json'))
+                    if($RetireDuringGc){$arguments+='-RetireDuringGc'}
+                }
             }
             elseif($RouteVariant -eq 'destination-flush'){
                 $arguments+=@('-EndFile',($localOutput+'.gc.json'),'-ReceiverExecutable',$exe,
@@ -689,12 +694,23 @@ try {
             ([datetime]$cacheReport.removeApiEndUtc).ToUniversalTime() -gt ([datetime]$end).ToUniversalTime()){
             throw 'The bounded source-retirement population, live cohort, timing or restoration did not verify.'
         }
-        if($CacheInterfaceGuid -and
-            ($cacheReport.triggerPhase -ne 'gc-complete-pre-released-cache' -or
-                ([datetime]$cacheReport.snapshotCompletedUtc).ToUniversalTime() -lt ([datetime]$r.managedGc.collectionStartUtc).ToUniversalTime() -or
-                ([datetime]$cacheReport.snapshotCompletedUtc).ToUniversalTime() -gt ([datetime]$r.managedGc.collectionEndUtc).ToUniversalTime() -or
-                ([datetime]$cacheReport.removeApiStartUtc).ToUniversalTime() -lt ([datetime]$r.managedGc.collectionEndUtc).ToUniversalTime())){
-            throw 'The unused-interface snapshot did not complete during GC or the writer began before GC completed.'
+        if($CacheInterfaceGuid){
+            $gcBegin=([datetime]$r.managedGc.collectionStartUtc).ToUniversalTime()
+            $gcComplete=([datetime]$r.managedGc.collectionEndUtc).ToUniversalTime()
+            $snapshotComplete=([datetime]$cacheReport.snapshotCompletedUtc).ToUniversalTime()
+            $retirementBegin=([datetime]$cacheReport.removeApiStartUtc).ToUniversalTime()
+            $expectedPhase=if($RetireDuringGc){'gc-active-pre-released-cache'}else{'gc-complete-pre-released-cache'}
+            $retirementPhaseValid=if($RetireDuringGc){$retirementBegin -ge $gcBegin -and $retirementBegin -lt $gcComplete}
+                else{$retirementBegin -ge $gcComplete}
+            if($cacheReport.triggerPhase -ne $expectedPhase -or $snapshotComplete -lt $gcBegin -or
+                $snapshotComplete -gt $gcComplete -or -not $retirementPhaseValid){
+                throw 'The unused-interface snapshot or requested GC retirement phase did not verify.'
+            }
+            if($RetireDuringGc){
+                $overlapEnd=([datetime]$cacheReport.removeApiEndUtc).ToUniversalTime()
+                if($overlapEnd -gt $gcComplete){$overlapEnd=$gcComplete}
+                $cacheReport|Add-Member NoteProperty collectionOverlapMilliseconds ($overlapEnd-$retirementBegin).TotalMilliseconds
+            }
         }
         $result.cacheRetirementControl=$cacheReport
     }
