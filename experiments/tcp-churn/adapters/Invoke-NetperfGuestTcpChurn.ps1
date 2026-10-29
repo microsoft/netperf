@@ -176,6 +176,10 @@ try {
             if($clientAliases -or $clientRules -or $clientStatic -or $clientRoutes -or $clientPathInterfaces -or $clientDataInterfaces){throw 'Owned client GC resources require restoration before further tests.'}
             $clientCpus=(Get-CimInstance Win32_Processor|Measure-Object NumberOfLogicalProcessors -Sum).Sum
             $clientOs=Get-CimInstance Win32_OperatingSystem -ErrorAction Stop
+            $ipv4Protocol=@(Get-NetIPv4Protocol -ErrorAction Stop)
+            if($ipv4Protocol.Count -ne 1 -or $null -eq $ipv4Protocol[0].RouteCacheLimit){
+                throw 'The read-only IPv4 cache-limit snapshot did not return one configured value.'
+            }
             $peerIp=@([Net.Dns]::GetHostAddresses('netperf-peer')|Where-Object AddressFamily -eq InterNetwork)[0].ToString()
             $dataRoute=@(Find-NetRoute -RemoteIPAddress $peerIp -ErrorAction Stop|Where-Object{$_.PSObject.Properties['IPAddress']})
             if($dataRoute.Count -ne 1){throw 'The read-only RSS probe requires one source route.'}
@@ -201,6 +205,7 @@ try {
                 if($peerCpus -lt 1){throw 'The peer processor inventory did not return a positive count.'}
                 [pscustomobject]@{schema=1;peerConnected=$true;clientLogicalProcessors=[int]$clientCpus;peerLogicalProcessors=[int]$peerCpus
                     clientOsBuild=[int]$clientOs.BuildNumber;clientOsProductType=[int]$clientOs.ProductType
+                    clientConfiguredIpv4RouteCacheLimitEntries=[long]$ipv4Protocol[0].RouteCacheLimit
                     clientLastBootUtcTicks=([datetime]$clientOs.LastBootUpTime).ToUniversalTime().Ticks
                     clientOwnedAliases=$clientAliases;peerOwnedAliases=$peerState.aliases;clientOwnedRules=$clientRules;peerOwnedRules=$peerState.rules
                     clientOwnedStaticPeers=$clientStatic;peerOwnedStaticPeers=$peerState.static
@@ -229,6 +234,7 @@ try {
             clientOwnedDataInterfaces,
             clientDataRssEnabled,clientDataRssQueues,clientDataRssMaxProcessors,clientDataRssProcessorArrayCount,
             clientOsBuild,clientOsProductType,clientLastBootUtcTicks,profiledVmUptimeSeconds,
+            clientConfiguredIpv4RouteCacheLimitEntries,
             clientTempFreeMiB,peerTempFreeMiB,conclusion|ConvertTo-Json |
             Set-Content -LiteralPath (Join-Path $PublishDirectory 'peer-check.json') -Encoding utf8
         return

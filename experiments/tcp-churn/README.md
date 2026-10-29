@@ -755,6 +755,10 @@ budgets validate before creation; partial failures release every completed
 group and preserve cleanup errors. Population timing and parallelism are
 reported separately from maintenance, and construction CPU cannot qualify the
 steady-state maintenance signature.
+The documented IPv4 `RouteCacheLimitEntries` setting is recorded read-only.
+Holding UDP socket objects is not treated as proof that IP retains every
+corresponding cached path: the actual native census remains mandatory, and
+capacity/eviction may reject larger fixtures. No cache limit is changed.
 The 294,912-path option requires `managed_gc_heap_layout=graph-2g`, an isolated CoreCLR receiver-only
 variant with a nominal 2-GiB graph budget to allow the real during-GC path census
 to finish. Both controller admission and the receiver immediately before graph

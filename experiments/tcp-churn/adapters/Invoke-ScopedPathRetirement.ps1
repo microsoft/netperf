@@ -265,6 +265,11 @@ try {
     }
     $occupied=[Collections.Generic.HashSet[int]]::new()
     foreach($endpoint in Get-NetUDPEndpoint -ErrorAction Stop){$null=$occupied.Add([int]$endpoint.LocalPort)}
+    $ipv4Protocol=@(Get-NetIPv4Protocol -ErrorAction Stop)
+    if($ipv4Protocol.Count -ne 1 -or $null -eq $ipv4Protocol[0].RouteCacheLimit){
+        throw 'The IPv4 cache-limit snapshot did not return one configured value.'
+    }
+    $report.configuredIpv4RouteCacheLimitEntries=[long]$ipv4Protocol[0].RouteCacheLimit
     $population=[Diagnostics.Stopwatch]::StartNew()
     $report.populationStartedUtc=[DateTime]::UtcNow.ToString('o')
     $report.populationMaximumParallelism=[Math]::Min($sources.Count,[Environment]::ProcessorCount)
