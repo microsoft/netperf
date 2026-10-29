@@ -69,6 +69,13 @@ try{
                 $prepareFailed=$true
             }
             if($prepareFailed -ne ($case -eq 'partial-readback')){throw 'Unexpected RSS preparation verdict.'}
+            if($prepareFailed){
+                $diagnostic=Get-Content -LiteralPath $reportFile -Raw|ConvertFrom-Json
+                if($diagnostic.requestedSettings.MaxProcessors -ne 32 -or
+                    $diagnostic.actualSettings.MaxGroup -ne 1 -or $diagnostic.actualSettings.MaxNumber -ne 39){
+                    throw 'RSS rejection must retain complete non-identifying requested and actual setting diagnostics.'
+                }
+            }
             if($fixture.Restarts -ne $(if($case -eq 'owned-data-cycle'){1}else{0})){throw 'RSS restart scope did not match disposable ownership.'}
             if($fixture.Settings.MaxGroup -ne 1 -or $fixture.Settings.MaxNumber -ne 39){
                 throw 'RSS must expose the full active 40/40 processor range, not restrict it to the requested RSS count.'

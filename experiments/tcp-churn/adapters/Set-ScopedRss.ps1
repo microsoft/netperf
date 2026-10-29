@@ -11,7 +11,7 @@ param(
     [ValidateRange(1,128)][int]$Processors=64
 )
 $ErrorActionPreference='Stop'
-$adapter=$null;$rssPhase='input';$restartOwned=$false
+$adapter=$null;$target=$null;$rssPhase='input';$restartOwned=$false
 trap {
     if($Action -eq 'prepare'){
         $failure=[ordered]@{schema=1;action='prepare';verified=$false;phase=$rssPhase
@@ -24,6 +24,8 @@ trap {
                     $failure.actualQueues=[int]$current[0].NumberOfReceiveQueues
                     $failure.actualMaxProcessors=[int]$current[0].MaxProcessors
                     $failure.actualProcessorArrayCount=@($current[0].RssProcessorArray).Count
+                    $failure.actualSettings=Read-Settings $current[0]
+                    if($null -ne $target){$failure.requestedSettings=$target}
                 }
             }catch{$failure.diagnosticFailureType=$_.Exception.GetType().FullName}
         }
