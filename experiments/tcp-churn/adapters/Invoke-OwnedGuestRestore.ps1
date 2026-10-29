@@ -56,8 +56,10 @@ $worker={
             if($row -notmatch '^\s*((WPR_initiated_|TcpChurnExact-)\S+)'){continue}
             $logger=$Matches[1]
             $report.clientRecorderNames+=$(if($logger -match '(NetperfGc-[0-9a-f]{32}|TcpChurnExact-[0-9a-f]{32})'){$Matches[1]}else{'other'})
+            $ErrorActionPreference='Continue'
             if($logger -match '(NetperfGc-[0-9a-f]{32})'){& $wpr -cancel -instancename $Matches[1] *> $null}
             else{& logman.exe stop $logger -ets *> $null}
+            $ErrorActionPreference='Stop'
             $report.clientRecorderExitCodes+=$LASTEXITCODE
             if($LASTEXITCODE -eq 0){$report.clientRecorderSessionsStopped++}
         }
