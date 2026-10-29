@@ -763,6 +763,13 @@ information stale while the separate owned-source retirement exercises
 cache maintenance. Each agent has its own lifecycle, snapshot and report,
 and both restorations must pass. Selecting either control alone retains its
 original behavior.
+The optional `managed_gc_peer_pressure=true` contrast adds an independent
+managed loopback service to the owned peer. It uses the same bounded real
+graph-GC workload, ordinary Poisson requests and verified bytes, not a CPU
+burner or data-release barrier. Both heaps must fit admission limits, both
+loopback endpoints must finish, and their measured generation-2 collection
+must overlap the profiled collection. This tests concurrent managed-service
+CPU pressure without changing VM processor allocation or host scheduling.
 Path-population snapshots use the documented IP Helper path table, filtered
 by the owned interface and source, rather than launching a command-line
 enumerator in the GC-triggered interval. The native structure layout and

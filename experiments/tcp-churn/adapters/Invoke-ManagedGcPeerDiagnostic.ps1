@@ -19,7 +19,8 @@ param(
     [ValidateSet('onlink','peer-gateway')][string]$RouteVariant='onlink',
     [ValidateSet(0,16384)][int]$ReceiveBudgetBytes=0,
     [ValidateSet(0,1024,8192,24576)][int]$CacheRetirePaths=0,
-    [switch]$WprProbes
+    [switch]$WprProbes,
+    [switch]$PeerGcPressure
 )
 $ErrorActionPreference='Stop'
 if($GcProcessRole -eq 'server' -and (-not $IsolatedData -or $PeerRecovery)){
@@ -30,6 +31,9 @@ if($RouteRefresh -and ($GcProcessRole -ne 'server' -or -not $IsolatedData -or $P
 }
 if($RouteVariant -ne 'onlink' -and -not $RouteRefresh){throw 'Logical gateway selection requires the owned route-refresh control.'}
 if($ReceiveBudgetBytes -and $GcProcessRole -ne 'server'){throw 'A bounded receive budget requires receiver-GC mode.'}
+if($PeerGcPressure -and ($GcProcessRole -ne 'server' -or -not $IsolatedData -or $PeerRecovery)){
+    throw 'Peer GC pressure requires isolated receiver GC without a neighbor fault.'
+}
 if($CacheRetirePaths -and ($GcProcessRole -ne 'server' -or -not $IsolatedData -or $PeerRecovery)){
     throw 'Cache retirement requires isolated receiver GC without a neighbor fault.'
 }
@@ -174,15 +178,32 @@ try {
     $peerOwned=$true
     $phase='start-remote-peer'
     Invoke-Command -Session $peer -ScriptBlock {
-        param($root,$listen,$client,$port,$count,$rate,$payloadBytes,$gcRole)
+        param($root,$listen,$client,$port,$count,$rate,$payloadBytes,$gcRole,$peerPressure)
         if(@(Get-NetIPAddress -AddressFamily IPv4|Where-Object IPAddress -eq $listen).Count -ne 1){throw 'The peer does not uniquely own the declared listen address.'}
         Import-Module (Join-Path $root 'WindowsCts.psm1') -Force
-        $global:OwnedManagedGcPeer=@{Process=$null;Rule=$null;Root=$root}
+        $global:OwnedManagedGcPeer=@{Process=$null;Rule=$null;Root=$root;PressureServer=$null;PressureClient=$null}
         $compiler="$env:SystemRoot\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
         $exe=Join-Path $root 'ArrivalTcp.exe'
         $null=Invoke-TcpChurnTool -Program $compiler -Arguments @('/nologo','/target:exe','/platform:x64',"/out:$exe",(Join-Path $root 'ArrivalTcp.cs')) `
             -Directory $root -LogPrefix (Join-Path $root 'compile')
         Copy-Item -LiteralPath (Join-Path $root 'ArrivalTcp.ServerGc.config') -Destination ($exe+'.config')
+        if($peerPressure){
+            if((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory*1024 -lt 4096MB){
+                throw 'Insufficient free peer memory for the bounded companion GC workload.'
+            }
+            $pressureOutput=Join-Path $root 'pressure-server.json'
+            $global:OwnedManagedGcPeer.PressureServer=Start-TcpChurnCollector -Program $exe -Arguments @(
+                '127.0.0.1','127.0.0.2','20301','4096','819','1048576',$pressureOutput,
+                'server','1048576','34711','256','nodelay','gc:1024:1024:graph'
+            ) -Directory $root -LogPrefix (Join-Path $root 'pressure-server')
+            $ready=[Diagnostics.Stopwatch]::StartNew()
+            while(-not(Test-Path -LiteralPath ($pressureOutput+'.ready'))){
+                if($global:OwnedManagedGcPeer.PressureServer.Process.HasExited -or $ready.Elapsed.TotalSeconds -gt 60){
+                    throw 'The bounded companion GC receiver did not become ready.'
+                }
+                Start-Sleep -Milliseconds 50
+            }
+        }
         if($gcRole -eq 'server'){return}
         $rule='ManagedGcPeer-'+[guid]::NewGuid().ToString('N')
         $null=New-NetFirewallRule -Name $rule -DisplayName $rule -Direction Inbound -Action Allow `
@@ -197,7 +218,7 @@ try {
             if($global:OwnedManagedGcPeer.Process.Process.HasExited -or $clock.Elapsed.TotalSeconds -gt 20){throw 'Peer listener did not become ready.'}
             Start-Sleep -Milliseconds 50
         }
-    } -ArgumentList $remote,$peerAddress,$cohortSources,$port,($count/2),$rate,$payloadBytes,$GcProcessRole
+    } -ArgumentList $remote,$peerAddress,$cohortSources,$port,($count/2),$rate,$payloadBytes,$GcProcessRole,([bool]$PeerGcPressure)
     if($GcProcessRole -eq 'server') {
         $phase='start-profiled-receiver'
         Import-Module (Join-Path $PSScriptRoot 'GcReceiverTraffic.psm1') -Force
@@ -205,6 +226,7 @@ try {
         $receiverState=@{Peer=$peer;PeerRoot=$remote;Directory=$diagnostics;Executable=$exe
             ServerAddress=$clientAddress;PeerAddress=$peerAddress;Port=$port;Count=$count;Rate=$rate;Payload=$payloadBytes
             Connections=$Connections;HeapMiB=$heapMiB;HeapLayout=$HeapLayout;ReceiveBudgetBytes=$ReceiveBudgetBytes
+            PeerGcPressure=([bool]$PeerGcPressure)
             ServerOutput=$localOutput;Rule=$null;Receiver=$null;LocalClient=$null}
         Start-GcReceiver -State $receiverState
         $localServer=$receiverState.Receiver
@@ -381,6 +403,14 @@ try {
         targetSeverity='not-evaluated';conclusion='diagnostic-not-customer-severity-proof'}
     $result.isolatedDataAddresses=[bool]$IsolatedData
     $result.profiledProcessRole=$GcProcessRole
+    if($PeerGcPressure){
+        $pressure=$r.peerGcPressure
+        if(([datetime]$pressure.managedGc.collectionEndUtc).ToUniversalTime() -lt ([datetime]$r.managedGc.collectionStartUtc).ToUniversalTime() -or
+            ([datetime]$pressure.managedGc.collectionStartUtc).ToUniversalTime() -gt ([datetime]$r.managedGc.collectionEndUtc).ToUniversalTime()){
+            throw 'The independent companion collection did not overlap the profiled real GC.'
+        }
+        $result.peerGcPressure=$pressure
+    }
     $result.probeCollectorBackend=$(if($WprProbes){'wpr-exact-events'}else{'traceevent-exact-events'})
     if($GcProcessRole -eq 'server'){$result.launchSpanScope='maximum-independent-producer-span';$result.workloadScope='both-independent-producers-plus-profiled-receiver'}
     if($PeerRecovery){$result.peerRecovery=$pulseResult;$result.peerDataInterfaceDhcpEnabled=$peerDhcpEnabled}
@@ -477,8 +507,16 @@ finally {
     }
     if($peerOwned -and $null -ne $peer) {
         try {Invoke-Command -Session $peer -ScriptBlock {
-            try {if($null -ne $global:OwnedManagedGcPeer.Process){Stop-TcpChurnCollector $global:OwnedManagedGcPeer.Process}}
-            finally {if($global:OwnedManagedGcPeer.Rule){Remove-NetFirewallRule -Name $global:OwnedManagedGcPeer.Rule -ErrorAction Stop}}
+            $errors=[Collections.Generic.List[Exception]]::new()
+            foreach($child in @($global:OwnedManagedGcPeer.Process,$global:OwnedManagedGcPeer.PressureClient,$global:OwnedManagedGcPeer.PressureServer)){
+                if($null -ne $child){
+                    try{Stop-TcpChurnCollector $child}catch{$errors.Add($_.Exception)}
+                }
+            }
+            if($global:OwnedManagedGcPeer.Rule){
+                try{Remove-NetFirewallRule -Name $global:OwnedManagedGcPeer.Rule -ErrorAction Stop}catch{$errors.Add($_.Exception)}
+            }
+            if($errors.Count){throw [AggregateException]::new('Owned peer workload cleanup failed.',$errors)}
         }}catch{$cleanupErrors.Add($_.Exception)}
     }
     if($remoteDataStarted -and $null -ne $peer) {

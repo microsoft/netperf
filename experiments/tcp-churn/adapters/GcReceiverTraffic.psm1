@@ -26,13 +26,19 @@ function Invoke-GcReceiverTraffic {
     $clock=[Diagnostics.Stopwatch]::StartNew()
     $State.Stage='start-remote-producer'
     Invoke-Command -Session $State.Peer -ScriptBlock {
-        param($root,$source,$target,$port,$count,$rate,$payload,$concurrency)
+        param($root,$source,$target,$port,$count,$rate,$payload,$concurrency,$peerPressure)
         $output=Join-Path $root 'client.json'
         $global:OwnedManagedGcPeer.Process=Start-TcpChurnCollector -Program (Join-Path $root 'ArrivalTcp.exe') -Arguments @(
             $source,$target,[string]$port,[string]$count,[string]$rate,[string]$payload,
             $output,'client',[string]$payload,'23521',[string]$concurrency,'nodelay','dispatch:pool'
         ) -Directory $root -LogPrefix (Join-Path $root 'receiver-remote-client')
-    } -ArgumentList $State.PeerRoot,$State.PeerAddress,$State.ServerAddress,$State.Port,($State.Count/2),([int][Math]::Ceiling($State.Rate/2.0)),$State.Payload,$State.Connections
+        if($peerPressure){
+            $global:OwnedManagedGcPeer.PressureClient=Start-TcpChurnCollector -Program (Join-Path $root 'ArrivalTcp.exe') -Arguments @(
+                '127.0.0.1','127.0.0.2','20301','4096','819','1048576',(Join-Path $root 'pressure-client.json'),
+                'client','1048576','34711','256','nodelay','dispatch:pool'
+            ) -Directory $root -LogPrefix (Join-Path $root 'pressure-client')
+        }
+    } -ArgumentList $State.PeerRoot,$State.PeerAddress,$State.ServerAddress,$State.Port,($State.Count/2),([int][Math]::Ceiling($State.Rate/2.0)),$State.Payload,$State.Connections,([bool]$State.PeerGcPressure)
     $localOutput=Join-Path $State.Directory 'receiver-local-client.json'
     $State.Stage='start-local-producer'
     $State.LocalClient=Start-TcpChurnCollector -Program $State.Executable -Arguments @(
@@ -45,13 +51,39 @@ function Invoke-GcReceiverTraffic {
         throw 'The independent local producer did not complete successfully.'
     }
     $State.Stage='wait-remote-producer'
-    $remote=Invoke-Command -Session $State.Peer -ScriptBlock {
+    $remoteBundle=Invoke-Command -Session $State.Peer -ScriptBlock {
+        param($peerPressure)
         $child=$global:OwnedManagedGcPeer.Process
         if(-not $child.Process.WaitForExit(180000) -or $child.Process.ExitCode -ne 0){
             throw 'The independent remote producer did not complete successfully.'
         }
-        Get-Content (Join-Path $global:OwnedManagedGcPeer.Root 'client.json') -Raw|ConvertFrom-Json
-    }
+        $data=Get-Content (Join-Path $global:OwnedManagedGcPeer.Root 'client.json') -Raw|ConvertFrom-Json
+        $pressure=$null
+        if($peerPressure){
+            foreach($child in @($global:OwnedManagedGcPeer.PressureClient,$global:OwnedManagedGcPeer.PressureServer)){
+                if(-not $child.Process.WaitForExit(30000) -or $child.Process.ExitCode -ne 0){
+                    throw 'The independent companion GC workload did not complete successfully.'
+                }
+            }
+            $sender=Get-Content (Join-Path $global:OwnedManagedGcPeer.Root 'pressure-client.json') -Raw|ConvertFrom-Json
+            $receiver=Get-Content (Join-Path $global:OwnedManagedGcPeer.Root 'pressure-server.json') -Raw|ConvertFrom-Json
+            foreach($endpoint in @($sender,$receiver)){
+                if($endpoint.outcome -ne 'collected' -or $endpoint.connections -ne 4096 -or
+                    $endpoint.networkErrors -ne 0 -or $endpoint.protocolErrors -ne 0 -or $endpoint.barrier -ne $false -or
+                    $endpoint.bytesSent -ne 4294967296 -or $endpoint.bytesReceived -ne 4294967296){
+                    throw 'The companion loopback GC workload failed byte or barrier verification.'
+                }
+            }
+            if(-not $receiver.managedGc.enabled -or
+                $receiver.managedGc.gen2CollectionsAfter -le $receiver.managedGc.gen2CollectionsBefore){
+                throw 'The companion process did not perform a real generation-2 collection.'
+            }
+            $pressure=[pscustomobject]@{connections=4096;bytesPerDirection=4294967296;networkScope='peer-loopback-only'
+                managedGc=$receiver.managedGc;barrier=$false}
+        }
+        [pscustomobject]@{Data=$data;Pressure=$pressure}
+    } -ArgumentList ([bool]$State.PeerGcPressure)
+    $remote=$remoteBundle.Data
     $State.Stage='wait-receiver'
     if(-not $State.Receiver.Process.WaitForExit(15000) -or $State.Receiver.Process.ExitCode -ne 0){
         throw 'The profiled GC receiver did not complete successfully.'
@@ -82,6 +114,7 @@ function Invoke-GcReceiverTraffic {
     $State.Stage='verified'
     [pscustomobject]@{
         connections=$server.connections;bytesSent=$server.bytesSent;bytesReceived=$server.bytesReceived;managedGc=$server.managedGc
+        peerGcPressure=$remoteBundle.Pressure
         arrivalRate=(2*[Math]::Ceiling($State.Rate/2.0));arrivalDispatch='independent-client-processes';peakInFlight=$server.peakInFlight
         maxLaunchLagMilliseconds=[Math]::Max($local.maxLaunchLagMilliseconds,$remote.maxLaunchLagMilliseconds)
         meanDispatchQueueMilliseconds=($local.meanDispatchQueueMilliseconds+$remote.meanDispatchQueueMilliseconds)/2

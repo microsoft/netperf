@@ -124,6 +124,18 @@ try {
         if(-not $rejected -or (Test-Path $directory)){throw 'Invalid cache-retirement mode mutated state or was accepted.'}
         $checks++
     }
+    foreach($extra in @(@{ManagedGcPeerPressure=$true},@{ManagedGc=$true;ProfileCpu=$true;ManagedGcPeerPressure=$true})){
+        $rejected=$false
+        try {
+            & (Join-Path $PSScriptRoot 'adapters\Invoke-NetperfGuestTcpChurn.ps1') `
+                -VmName 'unused-test-only' -Credential $credential -PublishDirectory $directory @extra
+        }catch{
+            if($_.Exception.Message -notmatch 'Peer GC pressure requires isolated receiver-GC'){throw}
+            $rejected=$true
+        }
+        if(-not $rejected -or (Test-Path $directory)){throw 'Invalid companion-GC mode mutated state or was accepted.'}
+        $checks++
+    }
     foreach($file in @('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1','Invoke-NetperfGuestTcpChurn.ps1','Invoke-ScopedNeighborPulse.ps1','Set-ScopedDataAddresses.ps1','GcReceiverTraffic.psm1','Invoke-ScopedPathRefresh.ps1','Invoke-ScopedPathRetirement.ps1','New-GcProbeWprProfile.ps1')) {
         $tokens=$null;$errors=$null
         $parsed=[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot "adapters\$file"),[ref]$tokens,[ref]$errors)
@@ -158,9 +170,11 @@ try {
         $ManagedGcReceiveBudgetBytes=16384
         $ManagedGcCacheRetirePaths=8192
         $ManagedGcWprProbes=[switch]::new($true)
+        $ManagedGcPeerPressure=[switch]::new($true)
         & ([scriptblock]::Create($launch[0].Extent.Text))
     }
-    if($actual.Count -ne 19 -or $actual[17] -isnot [bool] -or -not $actual[17] -or
+    if($actual.Count -ne 20 -or $actual[18] -isnot [bool] -or -not $actual[18] -or
+        $actual[17] -isnot [bool] -or -not $actual[17] -or
         $actual[16] -isnot [int] -or $actual[16] -ne 8192 -or
         $actual[15] -isnot [int] -or $actual[15] -ne 16384 -or
         $actual[14] -ne 'peer-gateway' -or $actual[13] -isnot [bool] -or -not $actual[13] -or

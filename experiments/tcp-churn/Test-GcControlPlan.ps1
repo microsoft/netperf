@@ -48,4 +48,33 @@ foreach($case in @('route','cache','both')){
         }
     }
 }
-Write-Output 'Passed route-only, cache-only and combined production control-plan checks; no network operations were performed.'
+$cleanup=@($ast.FindAll({
+    param($node)
+    $node -is [Management.Automation.Language.ScriptBlockExpressionAst] -and
+        $node.Extent.Text.Contains('$errors=[Collections.Generic.List[Exception]]::new()') -and
+        $node.Extent.Text.Contains('$global:OwnedManagedGcPeer.PressureServer')
+},$true))
+if($cleanup.Count -ne 1){throw 'The actual owned peer cleanup must be uniquely identified.'}
+try{
+    $global:OwnedManagedGcPeer=@{Process='data';PressureClient='pressure-client';PressureServer='pressure-server';Rule='owned-test-rule'}
+    $stopped=[Collections.Generic.List[string]]::new();$ruleRemoved=$false
+    function Stop-TcpChurnCollector {
+        param($Child)
+        $stopped.Add($Child)
+        if($Child -eq 'data'){throw 'Synthetic first-child stop failure.'}
+    }
+    function Remove-NetFirewallRule {
+        [CmdletBinding()]param($Name)
+        if($Name -ne 'owned-test-rule'){throw 'An unowned rule was removed.'}
+        $script:ruleRemoved=$true
+    }
+    $rejected=$false
+    try{& $cleanup[0].ScriptBlock.GetScriptBlock()}catch{
+        if($_.Exception.Message -notmatch 'Owned peer workload cleanup failed'){throw}
+        $rejected=$true
+    }
+    if(-not $rejected -or $stopped.Count -ne 3 -or -not $ruleRemoved){
+        throw 'A peer stop error prevented another owned child or rule from being cleaned.'
+    }
+}finally{Remove-Variable -Name OwnedManagedGcPeer -Scope Global}
+Write-Output 'Passed standalone/combined path plans and failure-safe companion cleanup; no network operations were performed.'

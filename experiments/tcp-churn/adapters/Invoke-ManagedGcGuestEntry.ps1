@@ -18,7 +18,8 @@ param(
     [ValidateSet('onlink','peer-gateway')][string]$RouteVariant='onlink',
     [ValidateSet(0,16384)][int]$ReceiveBudgetBytes=0,
     [ValidateSet(0,1024,8192,24576)][int]$CacheRetirePaths=0,
-    [switch]$WprProbes
+    [switch]$WprProbes,
+    [switch]$PeerGcPressure
 )
 $ErrorActionPreference='Stop'
 if($PublishDirectory -ne (Join-Path $ScratchParent 'publish')) {

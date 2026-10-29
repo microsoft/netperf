@@ -24,10 +24,15 @@ param(
     [ValidateSet('onlink','peer-gateway')][string]$ManagedGcRouteVariant='onlink',
     [ValidateSet(0,16384)][int]$ManagedGcReceiveBudgetBytes=0,
     [ValidateSet(0,1024,8192,24576)][int]$ManagedGcCacheRetirePaths=0,
-    [switch]$ManagedGcWprProbes
+    [switch]$ManagedGcWprProbes,
+    [switch]$ManagedGcPeerPressure
 )
 $ErrorActionPreference='Stop'
 if($ManagedGcWprProbes -and -not $ManagedGc){throw 'Exact WPR probes require managed-GC diagnostic mode.'}
+if($ManagedGcPeerPressure -and (-not $ManagedGc -or $ManagedGcProcessRole -ne 'server' -or
+    -not $ManagedGcIsolatedData -or $ManagedGcPeerRecovery)){
+    throw 'Peer GC pressure requires isolated receiver-GC mode without a neighbor fault.'
+}
 if($ManagedGc -and (-not $ProfileCpu -or $SynDrop -or $ProbePeer -or $PeerMeasurement)){
     throw 'Managed-GC diagnostics require CPU profiling and are separate from peer probes and fault campaigns.'
 }
@@ -166,7 +171,7 @@ try {
     }
     $phase='guest-traffic'
     $exit=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
-        param($root,$seconds,$connections,$profile,$synDrop,$peerMeasurement,$managedGc,$managedGcPayloadBytes,$peerRecovery,$isolatedData,$recoveryMilliseconds,$gcProcessRole,$heapLayout,$routeRefresh,$routeVariant,$receiveBudgetBytes,$cacheRetirePaths,$wprProbes,$credential)
+        param($root,$seconds,$connections,$profile,$synDrop,$peerMeasurement,$managedGc,$managedGcPayloadBytes,$peerRecovery,$isolatedData,$recoveryMilliseconds,$gcProcessRole,$heapLayout,$routeRefresh,$routeVariant,$receiveBudgetBytes,$cacheRetirePaths,$wprProbes,$peerPressure,$credential)
         if (@(Get-Process -Name 'Runner.Worker','ctsTraffic' -ErrorAction Ignore).Count) {
             throw 'Guest became busy before traffic setup.'
         }
@@ -189,6 +194,7 @@ try {
             if($receiveBudgetBytes){$extra+=@('-ReceiveBudgetBytes',[string]$receiveBudgetBytes)}
             if($cacheRetirePaths){$extra+=@('-CacheRetirePaths',[string]$cacheRetirePaths)}
             if($wprProbes){$extra+='-WprProbes'}
+            if($peerPressure){$extra+='-PeerGcPressure'}
             if($routeRefresh){$extra+='-RouteRefresh'}
             if($routeRefresh){$extra+=@('-RouteVariant',$routeVariant)}
         } else {
@@ -212,7 +218,7 @@ try {
             $launch|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $root 'child-startup.json')
             if($credentialFile -and (Test-Path -LiteralPath $credentialFile)){Remove-Item -LiteralPath $credentialFile -ErrorAction Stop}
         }
-    } -ArgumentList $guestRoot,$Seconds,$Connections,([bool]$ProfileCpu),([bool]$SynDrop),([bool]$PeerMeasurement),([bool]$ManagedGc),$ManagedGcPayloadBytes,([bool]$ManagedGcPeerRecovery),([bool]$ManagedGcIsolatedData),$ManagedGcRecoveryMilliseconds,$ManagedGcProcessRole,$ManagedGcHeapLayout,([bool]$ManagedGcRouteRefresh),$ManagedGcRouteVariant,$ManagedGcReceiveBudgetBytes,$ManagedGcCacheRetirePaths,([bool]$ManagedGcWprProbes),$Credential
+    } -ArgumentList $guestRoot,$Seconds,$Connections,([bool]$ProfileCpu),([bool]$SynDrop),([bool]$PeerMeasurement),([bool]$ManagedGc),$ManagedGcPayloadBytes,([bool]$ManagedGcPeerRecovery),([bool]$ManagedGcIsolatedData),$ManagedGcRecoveryMilliseconds,$ManagedGcProcessRole,$ManagedGcHeapLayout,([bool]$ManagedGcRouteRefresh),$ManagedGcRouteVariant,$ManagedGcReceiveBudgetBytes,$ManagedGcCacheRetirePaths,([bool]$ManagedGcWprProbes),([bool]$ManagedGcPeerPressure),$Credential
     $startup=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
         param($root)
         Get-Content -LiteralPath (Join-Path $root 'child-startup.json') -Raw|ConvertFrom-Json|
