@@ -932,6 +932,11 @@ owned interface specified. Management destinations and whole-cache flushes
 are excluded. Both operations, original addresses/default routes/static IPv4
 policy, peer identity and timing must verify. This mode rejects cache
 retirement and companion-pressure combinations.
+The `onlink-after-gc` variant instead uses the original equivalent on-link
+host-route worker, changing only its trigger from the pre-call signal to the
+actual GC-completion file. It still adds/removes exactly one owned peer route,
+keeps interface and next hop unchanged, and verifies that the route API starts
+after collection. It rejects the same mixed maintenance/pressure modes.
 
 The `onlink` and `peer-gateway` route-refresh variants require isolated
 receiver GC and no neighbor pulse. An independent agent observes a pre-call GC

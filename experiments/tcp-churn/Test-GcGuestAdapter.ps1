@@ -164,7 +164,7 @@ try {
                 -ManagedGc -ProfileCpu -ManagedGcIsolatedData -ManagedGcProcessRole server `
                 -ManagedGcRouteRefresh -ManagedGcRouteVariant destination-flush @extra
         }catch{
-            if($_.Exception.Message -notmatch 'Destination-cache flush requires an isolated control'){throw}
+            if($_.Exception.Message -notmatch 'GC-completion path refresh requires an isolated control'){throw}
             $rejected=$true
         }
         if(-not $rejected -or (Test-Path -LiteralPath $directory)){throw 'A confounded destination flush mutated state or was accepted.'}

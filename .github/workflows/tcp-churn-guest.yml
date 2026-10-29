@@ -104,9 +104,9 @@ on:
         type: boolean
         default: false
       managed_gc_route_variant:
-        description: Owned path-refresh control; destination-flush resets only both verified data destinations after GC
+        description: Owned path refresh; onlink-after-gc changes the route epoch after GC, destination-flush resets only data destinations
         type: choice
-        options: ['onlink', 'peer-gateway', 'destination-flush']
+        options: ['onlink', 'peer-gateway', 'destination-flush', 'onlink-after-gc']
         default: 'onlink'
   push:
     branches: [main, 'user/mtfriesen/tcp-churn-public']

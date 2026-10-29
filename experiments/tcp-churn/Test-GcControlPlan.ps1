@@ -12,16 +12,16 @@ $plan=@($ast.FindAll({
         $node.Clauses[0].Item1.Extent.Text -eq '$RouteRefresh -or $CacheRetirePaths'
 },$true))
 if($plan.Count -ne 1){throw 'The actual path-control launch plan must be uniquely identified.'}
-foreach($case in @('route','cache','both','unused-cache','flush')){
+foreach($case in @('route','cache','both','unused-cache','flush','after-gc-route')){
     & {
         $RouteRefresh=$case -ne 'cache';$CacheRetirePaths=if($case -ne 'route'){24576}else{0}
         if($case -eq 'unused-cache'){$RouteRefresh=$false;$CacheRetirePaths=49152}
         if($case -eq 'cache'){$CacheRetirePaths=1}
-        if($case -eq 'flush'){$CacheRetirePaths=0}
+        if($case -in @('flush','after-gc-route')){$CacheRetirePaths=0}
         $CacheInterfaceGuid=if($case -eq 'unused-cache'){'owned-guid'}else{''}
         $CacheInterfaceAlias=if($case -eq 'unused-cache'){'NetperfPath-123456abcdef'}else{''}
         $cacheStem=if($RouteRefresh -and $CacheRetirePaths){'cache-control'}else{'route-control'}
-        $RouteVariant=if($case -eq 'flush'){'destination-flush'}else{'peer-gateway'}
+        $RouteVariant=if($case -eq 'flush'){'destination-flush'}elseif($case -eq 'after-gc-route'){'onlink-after-gc'}else{'peer-gateway'}
         $alias='synthetic-owned-interface';$peerMac='02-00-00-00-00-02'
         $diagnostics=Join-Path ([IO.Path]::GetTempPath()) 'unused-control-plan'
         $localOutput=Join-Path $diagnostics 'server.json';$exe=Join-Path $diagnostics 'ArrivalTcp.exe'
@@ -45,6 +45,13 @@ foreach($case in @('route','cache','both','unused-cache','flush')){
         }
         if($case -ne 'both' -and $pathControls[0].Stem -ne 'route-control'){
             throw 'A standalone control changed its established lifecycle layout.'
+        }
+        if($case -eq 'after-gc-route'){
+            $beginIndex=[Array]::IndexOf($launches[0].Arguments,'-BeginFile')
+            if($beginIndex -lt 0 -or $launches[0].Arguments[$beginIndex+1] -ne ($localOutput+'.gc.json') -or
+                (Split-Path $pathControls[0].Arguments[3] -Leaf) -ne 'Invoke-ScopedPathRefresh.ps1'){
+                throw 'The timing-only route contrast must use the existing route worker and actual GC-completion file.'
+            }
         }
         foreach($control in $pathControls){
             if($null -eq $control.Child -or

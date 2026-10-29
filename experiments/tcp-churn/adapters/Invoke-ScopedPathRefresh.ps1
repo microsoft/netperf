@@ -95,7 +95,7 @@ try {
     $wait=[Diagnostics.Stopwatch]::StartNew()
     while(-not(Test-Path -LiteralPath $BeginFile)) {
         if(Test-Path -LiteralPath $StopFile){throw 'The workload stopped before the route-refresh control.'}
-        if($wait.Elapsed.TotalSeconds -gt 60){throw 'No real-GC pre-call signal reached the bounded route control.'}
+        if($wait.Elapsed.TotalSeconds -gt 60){throw 'No selected real-GC signal reached the bounded route control.'}
         Start-Sleep -Milliseconds 25
     }
     if(Test-Path -LiteralPath $StopFile){throw 'The workload stopped before the owned route addition.'}

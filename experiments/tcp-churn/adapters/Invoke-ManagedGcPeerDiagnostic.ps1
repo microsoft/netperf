@@ -16,7 +16,7 @@ param(
     [ValidateSet('client','server')][string]$GcProcessRole='client',
     [ValidateSet('arrays','graph')][string]$HeapLayout='arrays',
     [switch]$RouteRefresh,
-    [ValidateSet('onlink','peer-gateway','destination-flush')][string]$RouteVariant='onlink',
+    [ValidateSet('onlink','peer-gateway','destination-flush','onlink-after-gc')][string]$RouteVariant='onlink',
     [ValidateSet(0,16384)][int]$ReceiveBudgetBytes=0,
     [ValidateSet(0,1,1024,8192,24576,49152)][int]$CacheRetirePaths=0,
     [switch]$WprProbes,
@@ -35,8 +35,8 @@ if($RouteRefresh -and ($GcProcessRole -ne 'server' -or -not $IsolatedData -or $P
     throw 'Route refresh requires isolated receiver-GC mode without a neighbor pulse.'
 }
 if($RouteVariant -ne 'onlink' -and -not $RouteRefresh){throw 'Logical gateway selection requires the owned route-refresh control.'}
-if($RouteVariant -eq 'destination-flush' -and ($CacheRetirePaths -or $CacheInterfaceAlias -or $PeerGcPressure)){
-    throw 'Destination-cache flush requires an isolated control without cache retirement or companion pressure.'
+if($RouteVariant -in @('destination-flush','onlink-after-gc') -and ($CacheRetirePaths -or $CacheInterfaceAlias -or $PeerGcPressure)){
+    throw 'GC-completion path refresh requires an isolated control without cache retirement or companion pressure.'
 }
 if($ReceiveBudgetBytes -and $GcProcessRole -ne 'server'){throw 'A bounded receive budget requires receiver-GC mode.'}
 if($SpinLocks -and -not $WprProbes){throw 'Owned spinlock capture requires the exact-event WPR controller.'}
@@ -349,7 +349,8 @@ try {
             $pathControls.Add($control)
             $control.Child=Start-TcpChurnCollector -Program $program -Arguments ($arguments+@(
                 '-ReportFile',(Join-Path $diagnostics ($stem+'.json')),'-ReadyFile',(Join-Path $diagnostics ($stem+'.ready')),
-                '-BeginFile',($localOutput+'.gc.json.begin'),'-StopFile',(Join-Path $diagnostics ($stem+'.stop'))
+                '-BeginFile',$(if($type -eq 'route' -and $RouteVariant -eq 'onlink-after-gc'){$localOutput+'.gc.json'}else{$localOutput+'.gc.json.begin'}),
+                '-StopFile',(Join-Path $diagnostics ($stem+'.stop'))
             )) -Directory $diagnostics -LogPrefix (Join-Path $diagnostics ($stem+'-agent'))
             Wait-Ready $control.Child (Join-Path $diagnostics ($stem+'.ready')) $(if($type -eq 'cache'){180}else{20})
         }
@@ -686,11 +687,15 @@ try {
             }
         }elseif($routeReport.outcome -ne 'completed' -or -not $routeReport.added -or -not $routeReport.removed -or
             -not $routeReport.sameInterface -or -not $routeReport.defaultRoutesPreserved -or
-            ($RouteVariant -eq 'onlink' -and -not $routeReport.sameInterfaceAndNextHop) -or
+            ($RouteVariant -in @('onlink','onlink-after-gc') -and -not $routeReport.sameInterfaceAndNextHop) -or
             ($RouteVariant -eq 'peer-gateway' -and (-not $routeReport.peerMacVerified -or $routeReport.nextHopKind -ne 'owned-peer-gateway')) -or
             ([datetime]$routeReport.addedUtc).ToUniversalTime() -lt ([datetime]$start).ToUniversalTime() -or
             ([datetime]$routeReport.addedUtc).ToUniversalTime() -gt ([datetime]$end).ToUniversalTime()){
             throw 'The owned route control did not apply within the workload and restore unchanged default routing.'
+        }
+        if($RouteVariant -eq 'onlink-after-gc' -and
+            ([datetime]$routeReport.applyStartUtc).ToUniversalTime() -lt ([datetime]$r.managedGc.collectionEndUtc).ToUniversalTime()){
+            throw 'The GC-completion route control started before the actual collection completed.'
         }
         $result.routeRefreshControl=$routeReport
     }
