@@ -95,8 +95,11 @@ foreach($pressureEnabled in @($false,$true)){
             $peerChildren.Add([pscustomobject]@{Arguments=$Arguments})
             [pscustomobject]@{Process=$null}
         }
-        & $peerLaunch[0].ScriptBlock.GetScriptBlock() 'unused-owned-root' '192.0.2.1' '192.0.2.2' 20300 4096 4096 1460 1024 $pressureEnabled
+        & $peerLaunch[0].ScriptBlock.GetScriptBlock() 'unused-owned-root' '192.0.2.1' '192.0.2.2' 20300 4096 4096 1460 1024 $pressureEnabled 64
         if($peerChildren.Count -ne $(if($pressureEnabled){2}else{1})){throw 'Optional pressure changed the ordinary peer launch count.'}
+        if($peerChildren[0].Arguments.Count -ne 14 -or $peerChildren[0].Arguments[13] -ne 'exchanges:64'){
+            throw 'The actual persistent producer lost its exchange-count protocol argument.'
+        }
         if($pressureEnabled -and
             ($peerChildren[1].Arguments[3] -ne '4096' -or $peerChildren[1].Arguments[4] -ne '2048' -or
                 $peerChildren[1].Arguments[5] -ne '1048576' -or $peerChildren[1].Arguments[10] -ne '256' -or

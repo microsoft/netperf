@@ -33,9 +33,10 @@ on:
         type: boolean
         default: false
       managed_gc_mixed:
-        description: Run bounded managed-GC/mixed TCP diagnostic on existing idle guests (requires CPU profiling)
-        type: boolean
-        default: false
+        description: Managed-GC mode; persistent64 performs64 ordinary exchanges per TCP connection
+        type: choice
+        options: ['false', 'true', 'persistent64']
+        default: 'false'
       managed_gc_payload_bytes:
         description: Request and response bytes for the managed-GC diagnostic only
         type: choice
@@ -145,6 +146,8 @@ jobs:
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-ServerGcArrivalTcp.ps1 -HeapLayout graph -ReceiveBudgetBytes 16384
       - shell: pwsh
+        run: ./experiments/tcp-churn/Test-ServerGcArrivalTcp.ps1 -HeapLayout graph -ReceiveBudgetBytes 16384 -ExchangesPerConnection 64
+      - shell: pwsh
         run: ./experiments/tcp-churn/Test-GcGuestAdapter.ps1
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-ScopedNeighborPulse.ps1
@@ -243,6 +246,13 @@ jobs:
           MANAGED_GC_ROUTE_VARIANT: ${{ inputs.managed_gc_route_variant }}
         run: |
           $publish = Join-Path $env:RUNNER_TEMP "tcp-churn-guest-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $persistentRequested = $env:MANAGED_GC_MIXED -eq 'persistent64'
+          if ($persistentRequested) {
+            if ($env:MANAGED_GC_PROCESS_ROLE -ne 'server' -or $env:MANAGED_GC_PAYLOAD_BYTES -ne '1460') {
+              throw 'Persistent exchanges require receiver-GC mode and 1460-byte request/response payloads.'
+            }
+            $env:MANAGED_GC_MIXED = 'true'
+          }
           if ($env:PROBE_128_TOPOLOGY -eq 'true') {
             if ($env:MANAGED_GC_OWNED_DATA_INTERFACE -eq 'true') { throw 'Disposable data transport is separate from topology probing.' }
             if ($env:MANAGED_GC_RSS_PROCESSORS -ne '0') { throw 'Scoped RSS is separate from topology probing.' }
@@ -285,6 +295,7 @@ jobs:
               throw 'Managed-GC diagnostics require CPU profiling and are separate from other campaigns.'
             }
             $extra.ManagedGc = $true
+            if ($persistentRequested) { $extra.ManagedGcExchanges = 64 }
             $extra.ManagedGcPayloadBytes = [int]$env:MANAGED_GC_PAYLOAD_BYTES
             $extra.ManagedGcProcessRole = $env:MANAGED_GC_PROCESS_ROLE
             $extra.ManagedGcHeapLayout = $env:MANAGED_GC_HEAP_LAYOUT

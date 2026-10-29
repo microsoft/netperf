@@ -58,6 +58,7 @@ function Read-TcpRecoveryEvidence {
     param(
         [Parameter(Mandatory)]$Provider,
         [Parameter(Mandatory)][string]$TracePath,
+        [ValidateRange(1,2000000)][int]$MaximumRecords=200000,
         [Parameter(Mandatory)][datetime]$StartUtc,
         [Parameter(Mandatory)][datetime]$EndUtc,
         [Parameter(Mandatory)][ValidateRange(1,2147483647)][int]$OwnerProcessId,
@@ -84,7 +85,7 @@ function Read-TcpRecoveryEvidence {
     Get-WinEvent -FilterHashtable @{Path=$TracePath;ProviderName='Microsoft-Windows-TCPIP'} -Oldest|ForEach-Object{
         $key=[string]$_.Id+':'+$_.Version
         if($_.TimeCreated.ToUniversalTime() -ge $start -and $_.TimeCreated.ToUniversalTime() -le $end -and $layouts.ContainsKey($key)){
-            if($rows.Count -ge 200000){throw 'TCP owner/lifetime evidence exceeded its bound.'}
+            if($rows.Count -ge $MaximumRecords){throw 'TCP owner/lifetime evidence exceeded its bound.'}
             $layout=$layouts[$key]
             $owner=if($layout.pid -ge 0){[uint32]$_.Properties[$layout.pid].Value}else{0}
             $status=if($layout.status -ge 0){[uint32]$_.Properties[$layout.status].Value}else{0}

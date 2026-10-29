@@ -17,6 +17,7 @@ param(
     [ValidateSet('arrays','graph')][string]$HeapLayout='arrays',
     [switch]$RouteRefresh,
     [ValidateSet('onlink','peer-gateway','destination-flush','onlink-after-gc')][string]$RouteVariant='onlink',
+    [ValidateSet(1,64)][int]$ExchangesPerConnection=1,
     [ValidateSet(0,16384)][int]$ReceiveBudgetBytes=0,
     [ValidateSet(0,1,1024,8192,24576,49152)][int]$CacheRetirePaths=0,
     [switch]$WprProbes,
@@ -28,6 +29,9 @@ param(
     [string]$DataInterfaceGuid
 )
 $ErrorActionPreference='Stop'
+if($ExchangesPerConnection -ne 1 -and ($GcProcessRole -ne 'server' -or $PayloadBytes -ne 1460)){
+    throw 'Persistent exchanges require receiver-GC mode and 1460-byte request/response payloads.'
+}
 if($GcProcessRole -eq 'server' -and (-not $IsolatedData -or $PeerRecovery)){
     throw 'Receiver GC requires isolated data and no neighbor pulse.'
 }
@@ -251,7 +255,7 @@ try {
         $receiverState=@{Peer=$peer;PeerRoot=$remote;Directory=$diagnostics;Executable=$exe
             ServerAddress=$clientAddress;PeerAddress=$peerAddress;Port=$port;Count=$count;Rate=$rate;Payload=$payloadBytes
             Connections=$Connections;HeapMiB=$heapMiB;HeapLayout=$HeapLayout;ReceiveBudgetBytes=$ReceiveBudgetBytes
-            PeerGcPressure=([bool]$PeerGcPressure)
+            PeerGcPressure=([bool]$PeerGcPressure);ExchangesPerConnection=$ExchangesPerConnection
             ServerOutput=$localOutput;Rule=$null;Receiver=$null;LocalClient=$null}
         Start-GcReceiver -State $receiverState
         $localServer=$receiverState.Receiver
@@ -432,6 +436,7 @@ try {
         $after.ReceivedBytes-$before.ReceivedBytes -lt ($remoteTargets|Measure-Object responseBytes -Sum).Sum){throw 'The non-loopback NIC did not account for the remote payload.'}
     $result=[ordered]@{schema=1;workload='managed-gc-mixed';outcome='collected';connections=$r.connections
         bytesSent=$r.bytesSent;bytesReceived=$r.bytesReceived;payloadBytesPerDirection=$payloadBytes
+        exchangesPerConnection=$ExchangesPerConnection
         dataInterfaceMtuBytes=$mtu
         targets=$r.targets;managedGc=$r.managedGc
         arrivalRate=$r.arrivalRate;maxLaunchLagMilliseconds=$r.maxLaunchLagMilliseconds
@@ -730,7 +735,8 @@ try {
         Import-Module (Join-Path $PSScriptRoot 'TcpRecoveryEvidence.psm1') -Force
         $ownerEvent=if($GcProcessRole -eq 'server'){'TcpAcceptListenerComplete'}else{'TcpConnectTcbComplete'}
         $ownedCounts=Read-TcpRecoveryEvidence -Provider $provider -TracePath $tcpTrace `
-            -StartUtc ([datetime]$start) -EndUtc ([datetime]$tcpCoverageEnd) -OwnerProcessId $clientPid -ExpectedConnections $count -OwnerEventKind $ownerEvent
+            -StartUtc ([datetime]$start) -EndUtc ([datetime]$tcpCoverageEnd) -OwnerProcessId $clientPid -ExpectedConnections $count -OwnerEventKind $ownerEvent `
+            -MaximumRecords $(if($ExchangesPerConnection -eq 64){2000000}else{200000})
         $result.tcpRecovery=$ownedCounts
     }
     if($PeerRecovery) {

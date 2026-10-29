@@ -745,6 +745,16 @@ backlog. This is ordinary accept-queue capacity, not a preconnected/data-release
 barrier. See the [Winsock listen contract](https://learn.microsoft.com/windows/win32/api/winsock2/nf-winsock2-listen).
 
 The separate `managed_gc_cache_retire_paths=1|1024|8192|24576|49152` mechanism control
+requires the ordinary receiver setup described above.
+The explicit `managed_gc_mixed=persistent64` variant keeps each independently
+arriving TCP connection for64 validated1460-byte request/response exchanges.
+There is no preconnection phase or data-release barrier. Both endpoints report
+the applied exchange count and exact total bytes; connection lifetime accounting
+remains separate from message count. The ordinary `true` mode still performs one
+exchange. Persistent mode is restricted to receiver GC and1460-byte payloads,
+and bounds TCP ownership-event analysis separately for the larger ACK workload.
+
+The idle-cache mechanism control
 requires isolated receiver GC and excludes neighbor pulses.
 It populates measured idle UDP paths using only the extra source
 `198.19.0.1/17`, sends no UDP payloads, and retires that secondary address after

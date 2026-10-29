@@ -158,6 +158,7 @@ public static class ArrivalTcp
     private static long dispatchTicks,maximumDispatchTicks;
     private static bool noDelay;
     private static int receiveBudgetBytes;
+    private static int exchangesPerConnection=1;
     private static int observedMaximumPostedReadBytes;
     private static int inFlight,peakInFlight,completed,started,connectedCount,acceptedCount;
     private static int serverInFlight,serverPeakInFlight,serverCompleted,serverStarted;
@@ -285,9 +286,11 @@ public static class ArrivalTcp
             }
             using(var stream=new NetworkStream(socket,false)) {
             byte[] data=new byte[size];
-            await ReadAll(stream,data).ConfigureAwait(false);
-            for(int i=0;i<data.Length;i++)if(data[i]!=(byte)(i%251))throw new IOException("Data mismatch.");
-            await stream.WriteAsync(response,0,response.Length).ConfigureAwait(false);
+            for(int exchange=0;exchange<exchangesPerConnection;exchange++){
+                await ReadAll(stream,data).ConfigureAwait(false);
+                for(int i=0;i<data.Length;i++)if(data[i]!=(byte)(i%251))throw new IOException("Data mismatch.");
+                await stream.WriteAsync(response,0,response.Length).ConfigureAwait(false);
+            }
             socket.Shutdown(SocketShutdown.Send);
             if(await stream.ReadAsync(new byte[1],0,1).ConfigureAwait(false)!=0)
                 throw new IOException("Unexpected request data after completion.");
@@ -314,10 +317,12 @@ public static class ArrivalTcp
             await socket.ConnectAsync(peer,port).ConfigureAwait(false);
             Interlocked.Increment(ref connectedCount);
             long connected=Stopwatch.GetTimestamp();Interlocked.Add(ref connectTicks,connected-bound);
-            await socket.GetStream().WriteAsync(data,0,data.Length).ConfigureAwait(false);
             var reply=new byte[expectedResponse.Length];
-            await ReadAll(socket.GetStream(),reply).ConfigureAwait(false);
-            for(int i=0;i<reply.Length;i++)if(reply[i]!=expectedResponse[i])throw new IOException("Reply mismatch.");
+            for(int exchange=0;exchange<exchangesPerConnection;exchange++){
+                await socket.GetStream().WriteAsync(data,0,data.Length).ConfigureAwait(false);
+                await ReadAll(socket.GetStream(),reply).ConfigureAwait(false);
+                for(int i=0;i<reply.Length;i++)if(reply[i]!=expectedResponse[i])throw new IOException("Reply mismatch.");
+            }
             long received=Stopwatch.GetTimestamp();Interlocked.Add(ref responseTicks,received-connected);
             if(await socket.GetStream().ReadAsync(new byte[1],0,1).ConfigureAwait(false)!=0)
                 throw new IOException("Unexpected response data after completion.");
@@ -345,7 +350,7 @@ public static class ArrivalTcp
             sources.Length<1||sources.Length>8||(double)count/rate>120||concurrency<1||concurrency>1024)
             throw new ArgumentException("Invalid bounded arrival workload.");
         int gcHeapMiB=0,gcMinimumLaunch=0;bool poolDispatch=false;string heapLayout="arrays";
-        if(args.Length==13) {
+        if(args.Length>=13) {
             string[] gc=args[12].Split(':');
             if(args[12]=="dispatch:pool" && role=="client")poolDispatch=true;
             else if((gc.Length!=3 && gc.Length!=4 && gc.Length!=5) || gc[0]!="gc" || (role!="client" && role!="server") ||
@@ -359,6 +364,14 @@ public static class ArrivalTcp
             if(!poolDispatch && gc.Length==5 &&
                 (role!="server" || !int.TryParse(gc[4],out receiveBudgetBytes) || receiveBudgetBytes!=16384))
                 throw new ArgumentException("The bounded receive budget requires GC server role and an explicit 16384-byte budget.");
+        }
+        exchangesPerConnection=1;
+        if(args.Length==14){
+            string[] exchangeOption=args[13].Split(':');
+            if(exchangeOption.Length!=2 || exchangeOption[0]!="exchanges" ||
+                !int.TryParse(exchangeOption[1],out exchangesPerConnection) || exchangesPerConnection!=64 ||
+                size!=1460 || responseSize!=1460)
+                throw new ArgumentException("Persistent mode requires exchanges:64 and 1460-byte requests and responses.");
         }
         if(File.Exists(args[6]))throw new IOException("Use a new result file.");
         if(gcHeapMiB>0 && File.Exists(args[6]+".gc.json"))throw new IOException("Use a new GC observation file.");
@@ -408,7 +421,8 @@ public static class ArrivalTcp
                 GC.KeepAlive(pressureHeap);
                 gcObservation.Verify();
                 File.WriteAllText(args[6],"{\"schema\":1,\"outcome\":\"collected\",\"role\":\"server\",\"connections\":"+count+
-                    ",\"bytesReceived\":"+((long)count*size)+",\"bytesSent\":"+((long)count*responseSize)+
+                    ",\"bytesReceived\":"+((long)count*size*exchangesPerConnection)+",\"bytesSent\":"+((long)count*responseSize*exchangesPerConnection)+
+                    ",\"exchangesPerConnection\":"+exchangesPerConnection+
                     ",\"networkErrors\":0,\"protocolErrors\":0,\"barrier\":false,\"peakInFlight\":"+serverPeakInFlight+
                     ",\"requestDispatch\":\""+(gcHeapMiB>0?"thread-pool":"inline")+"\",\"managedGc\":"+gcObservation.Json()+"}");
                 return;
@@ -445,12 +459,13 @@ public static class ArrivalTcp
                 int requests=count/peers.Length+(i<count%peers.Length?1:0);
                 bool loopback=IPAddress.IsLoopback(peers[i]) || (sources.Length==1 && peers[i].Equals(IPAddress.Parse(sources[0])));
                 targetJson.Add("{\"index\":"+i+",\"loopback\":"+(loopback?"true":"false")+
-                    ",\"connections\":"+requests+",\"requestBytes\":"+((long)requests*size)+
-                    ",\"responseBytes\":"+((long)requests*responseSize)+"}");
+                    ",\"connections\":"+requests+",\"requestBytes\":"+((long)requests*size*exchangesPerConnection)+
+                    ",\"responseBytes\":"+((long)requests*responseSize*exchangesPerConnection)+"}");
             }
             File.WriteAllText(args[6],"{\"schema\":1,\"outcome\":\"collected\",\"connections\":"+count+
-                ",\"bytesSent\":"+((long)count*size)+",\"networkErrors\":0,\"protocolErrors\":0,\"milliseconds\":"+clock.ElapsedMilliseconds+
-                ",\"bytesReceived\":"+((long)count*responseSize)+
+                ",\"bytesSent\":"+((long)count*size*exchangesPerConnection)+",\"networkErrors\":0,\"protocolErrors\":0,\"milliseconds\":"+clock.ElapsedMilliseconds+
+                ",\"bytesReceived\":"+((long)count*responseSize*exchangesPerConnection)+
+                ",\"exchangesPerConnection\":"+exchangesPerConnection+
                 ",\"arrivalRate\":"+rate+",\"seed\":"+seed+",\"barrier\":false"+
                 ",\"arrivalDispatch\":\""+(gcHeapMiB>0||poolDispatch?"thread-pool":"inline")+"\""+
                 ",\"meanDispatchQueueMilliseconds\":"+(1000.0*dispatchTicks/Stopwatch.Frequency/count).ToString("R",CultureInfo.InvariantCulture)+
@@ -486,8 +501,8 @@ public static class ArrivalTcp
     private static int Main(string[] args)
     {
         try {
-            if(args.Length<7 || args.Length>13) {
-                Console.Error.WriteLine("Usage: ArrivalTcp sources peer port count rate request-bytes output.json [role [response-bytes [seed [maximum-in-flight [nodelay|nagle [gc:heap-MiB:minimum-launched|dispatch:pool]]]]]]");
+            if(args.Length<7 || args.Length>14) {
+                Console.Error.WriteLine("Usage: ArrivalTcp sources peer port count rate request-bytes output.json [role [response-bytes [seed [maximum-in-flight [nodelay|nagle [gc:heap-MiB:minimum-launched|dispatch:pool [exchanges:64]]]]]]]");
                 return 2;
             }
             if(!Run(args).Wait(TimeSpan.FromSeconds(150))){

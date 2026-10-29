@@ -156,6 +156,17 @@ try {
     }
     if(-not $rejected -or (Test-Path $directory)){throw 'Invalid spinlock mode mutated state or was accepted.'}
     $checks++
+    $rejected=$false
+    try{
+        & (Join-Path $PSScriptRoot 'adapters\Invoke-NetperfGuestTcpChurn.ps1') `
+            -VmName 'unused-test-only' -Credential $credential -PublishDirectory $directory `
+            -ManagedGc -ProfileCpu -ManagedGcExchanges 64
+    }catch{
+        if($_.Exception.Message -notmatch 'Persistent exchanges require receiver-GC mode'){throw}
+        $rejected=$true
+    }
+    if(-not $rejected -or (Test-Path -LiteralPath $directory)){throw 'Invalid persistent mode mutated state or was accepted.'}
+    $checks++
     foreach($extra in @(@{ManagedGcCacheRetirePaths=1024},@{ManagedGcPeerPressure=$true})){
         $rejected=$false
         try{
@@ -244,6 +255,7 @@ try {
         $ManagedGcPeerRecovery=[switch]::new($true)
         $ManagedGcIsolatedData=[switch]::new($true);$ManagedGcRecoveryMilliseconds=3000
         $ManagedGcProcessRole='client'
+        $ManagedGcExchanges=64
         $ManagedGcHeapLayout='graph'
         $ManagedGcRouteRefresh=[switch]::new($true)
         $ManagedGcRouteVariant='peer-gateway'
@@ -258,7 +270,8 @@ try {
         $dataGuid='66666666-7777-8888-9999-000000000000'
         & ([scriptblock]::Create($launch[0].Extent.Text))
     }
-    if($actual.Count -ne 25 -or $actual[22] -ne 'NetperfData-abcdef123456' -or
+    if($actual.Count -ne 26 -or $actual[25] -isnot [int] -or $actual[25] -ne 64 -or
+        $actual[22] -ne 'NetperfData-abcdef123456' -or
         $actual[23] -ne '66666666-7777-8888-9999-000000000000' -or
         $actual[21] -isnot [bool] -or -not $actual[21] -or
         $actual[19] -ne 'NetperfPath-123456abcdef' -or
