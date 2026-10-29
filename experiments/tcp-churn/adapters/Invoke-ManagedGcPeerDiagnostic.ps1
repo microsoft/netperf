@@ -561,6 +561,12 @@ finally {
         finally{try{Stop-TcpChurnCollector $entry.child}catch{$cleanupErrors.Add($_.Exception)}}
     }
     if($profileOwned) {
+        if($WprProbes -and $ExchangesPerConnection -eq 64){
+            try{
+                $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @('--session-health',(Join-Path $PublishDirectory 'collector-health.json')) `
+                    -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'collector-health') -TimeoutSeconds 20
+            }catch{$cleanupErrors.Add($_.Exception)}
+        }
         $stopArguments=@('-stop',(Join-Path $diagnostics 'cpu.etl'))
         if($WprProbes){$stopArguments+='-skipPdbGen'}
         try {$null=Invoke-TcpChurnTool -Program $wpr -Arguments $stopArguments `

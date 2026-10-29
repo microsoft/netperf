@@ -59,6 +59,8 @@ internal static class Program
 
     private static int Main(string[] args)
     {
+        if (args.Length == 2 && args[0] == "--session-health")
+            return EtwSessionHealth.Run(args[1]);
         if (args.Length == 5 && args[0] == "--spin-summary")
             return SpinLockEvidence.Run(args[1], args[2], args[3], args[4]);
         if (args.Length == 6 && args[0] == "--capture-probes")

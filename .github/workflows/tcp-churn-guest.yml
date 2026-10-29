@@ -380,6 +380,7 @@ jobs:
             ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/tcp-events.json
             ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/peer-check.json
             ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/lock-evidence.json
+            ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/collector-health.json
             ${{ runner.temp }}/tcp-churn-guest-${{ github.run_id }}-${{ github.run_attempt }}/topology-check.json
           if-no-files-found: warn
           retention-days: 14

@@ -768,6 +768,11 @@ The result explicitly lists unrequested BH, retransmission-round,
 zero-window-state and full-size-ACK tasks; omitted coverage is not measured
 absence. Event summaries list requested public tasks. Ordinary single-exchange
 coverage is unchanged.
+Before stopping a persistent WPR capture, the analyzer attaches read-only to
+the active WPR collectors, explicitly disables stop-on-dispose, and reports
+per-collector loss counts without session names. This distinguishes system
+sampling loss from exact TCP/CLR collector loss; aggregate zero-loss validation
+still applies after stop/merge.
 
 The idle-cache mechanism control
 requires isolated receiver GC and excludes neighbor pulses.
