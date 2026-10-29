@@ -852,7 +852,10 @@ only by retransmission timeout, so overload aborts connections with resets. Hot
 mode also caps the remote producer at 3072 in-flight connections so that, with
 the 1024 loopback connections, every connection is accepted by the 4096-slot
 server: hot pipelined requests on connections waiting un-accepted in the listen
-backlog went unacknowledged until the client timed out. Path refresh demand after an invalidation is bounded by
+backlog went unacknowledged until the client timed out.
+`coreclr-cluster-hot-epochdial2-ingc` starts a 3 s, 2 ms dial at the receiver's
+pre-collection signal, so invalidations land while the application is stopped by
+GC and only timer-driven TCP sends (delayed ACKs, probes, retransmissions) run. Path refresh demand after an invalidation is bounded by
 how many connections send before the next one, so the slow-paced profiles cannot
 show dense refresh convoys regardless of invalidation rate. The hot dial starts
 8 s into traffic and runs for 10 s at a 2 ms interval. Of 8,192 pipelined

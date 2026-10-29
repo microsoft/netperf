@@ -27,7 +27,7 @@ param(
     [switch]$ServiceWait,
     [switch]$PipelinedServiceWait,
     [switch]$SteadyStateFixture,
-    [ValidateSet('none','nodes1000','nodes1000-outage','nodes1000-epochdial','nodes1000-epochdial2','nodes1000-epochdial2-aftergc','nodes1000-hot','nodes1000-hot-epochdial2')][string]$ClusterProfile='none',
+    [ValidateSet('none','nodes1000','nodes1000-outage','nodes1000-epochdial','nodes1000-epochdial2','nodes1000-epochdial2-aftergc','nodes1000-hot','nodes1000-hot-epochdial2','nodes1000-hot-epochdial2-ingc')][string]$ClusterProfile='none',
     [ValidateSet(0,1024,4096,8192,49152,98304,196608,294912)][int]$ReferencedTcpPaths=0,
     [ValidateSet(0,16384)][int]$ReceiveBudgetBytes=0,
     [ValidateSet(0,1,1024,8192,24576,49152,98304,196608,294912)][int]$CacheRetirePaths=0,
@@ -299,7 +299,8 @@ try {
             outageAddresses=$(if($ClusterProfile -eq 'nodes1000-outage'){250}else{0})
             outageDelayMilliseconds=$(if($ClusterProfile -eq 'nodes1000-outage'){5000}else{0})
             outageDurationMilliseconds=$(if($ClusterProfile -eq 'nodes1000-outage'){4000}else{0})
-            routeEpochDialIntervalMilliseconds=$(switch($ClusterProfile){'nodes1000-epochdial'{20}'nodes1000-epochdial2'{2}'nodes1000-epochdial2-aftergc'{2}'nodes1000-hot-epochdial2'{2}default{0}})
+            routeEpochDialIntervalMilliseconds=$(switch($ClusterProfile){'nodes1000-epochdial'{20}'nodes1000-epochdial2'{2}'nodes1000-epochdial2-aftergc'{2}'nodes1000-hot-epochdial2'{2}'nodes1000-hot-epochdial2-ingc'{2}default{0}})
+            routeEpochDialStartsAtGcBegin=($ClusterProfile -eq 'nodes1000-hot-epochdial2-ingc')
             hotService=($ClusterProfile -like 'nodes1000-hot*');exchangesPerConnection=$(if($ClusterProfile -like 'nodes1000-hot*'){256}else{64})
             remoteMaximumInFlight=$(if($ClusterProfile -like 'nodes1000-hot*'){3072}else{$Connections})
             serviceDelayMinimumMilliseconds=$(if($ClusterProfile -like 'nodes1000-hot*'){50}else{250})
@@ -523,11 +524,15 @@ try {
             $phase='start-route-epoch-dial'
             $epochDialStarted=$true
             $afterGc=$ClusterProfile -eq 'nodes1000-epochdial2-aftergc'
+            $inGc=$ClusterProfile -eq 'nodes1000-hot-epochdial2-ingc'
             $hot=$ClusterProfile -like 'nodes1000-hot*'
-            # Hot runs start after the ramp and span more of the sustained-load phase.
-            $dialArguments=@('--route-epoch-dial',[string]$dataIndex,$(if($afterGc){'0'}elseif($hot){'8000'}else{'5000'}),$(if($hot){'10000'}else{'4000'}),$(if($ClusterProfile -eq 'nodes1000-epochdial'){'20'}else{'2'}),
+            # Hot runs start after the ramp and span more of the sustained-load phase; the in-GC variant starts at the
+            # receiver's pre-collection signal so invalidations land while the application is stopped.
+            $dialArguments=@('--route-epoch-dial',[string]$dataIndex,$(if($afterGc -or $inGc){'0'}elseif($hot){'8000'}else{'5000'}),
+                $(if($inGc){'3000'}elseif($hot){'10000'}else{'4000'}),$(if($ClusterProfile -eq 'nodes1000-epochdial'){'20'}else{'2'}),
                 (Join-Path $diagnostics 'epoch-dial.ready'),(Join-Path $diagnostics 'epoch-dial.stop'),(Join-Path $diagnostics 'epoch-dial.json'))
             if($afterGc){$dialArguments+=($localOutput+'.gc.json')}
+            if($inGc){$dialArguments+=($localOutput+'.gc.json.begin')}
             $epochDial=Start-TcpChurnCollector -Program $exe -Arguments $dialArguments `
                 -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'epoch-dial')
             Wait-Ready $epochDial (Join-Path $diagnostics 'epoch-dial.ready')
