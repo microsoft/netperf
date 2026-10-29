@@ -749,6 +749,12 @@ requires the ordinary receiver setup described above.
 The larger populations retain 24,576 destinations per source and use eight or
 twelve exclusively owned source aliases inside the same guarded fixture prefix.
 All source identities must verify before any removal, including the final alias.
+Fixture socket creation runs once per source in parallel, bounded by the source
+count and processor count (at most twelve workers). All sources and per-source
+budgets validate before creation; partial failures release every completed
+group and preserve cleanup errors. Population timing and parallelism are
+reported separately from maintenance, and construction CPU cannot qualify the
+steady-state maintenance signature.
 The 294,912-path option requires `managed_gc_heap_layout=graph-2g`, an isolated CoreCLR receiver-only
 variant with a nominal 2-GiB graph budget to allow the real during-GC path census
 to finish. Both controller admission and the receiver immediately before graph

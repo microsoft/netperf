@@ -118,6 +118,19 @@ try {
     $checks++
     $flags=[Reflection.BindingFlags]'Static,NonPublic'
     $type=$probeMethod.DeclaringType
+    $populationMethod=$type.GetMethod('CreateIdlePathSocketPopulation')
+    foreach($case in @(
+        @{Sources=[string[]]@();Count=1},
+        @{Sources=[string[]]@('198.19.0.1','198.19.0.1');Count=2048},
+        @{Sources=[string[]]@('198.19.0.1','198.19.0.13');Count=2048},
+        @{Sources=[string[]]@('198.19.0.1','::1');Count=2048},
+        @{Sources=[string[]]@('198.19.0.1');Count=100}
+    )){
+        $failure=$null
+        try{$null=$populationMethod.Invoke($null,@($case.Sources,[int]$case.Count,[int[]]@()))}catch{$failure=$_.Exception.GetBaseException()}
+        if($failure -isnot [ArgumentException]){throw 'Parallel fixture validation did not reject every source/budget before socket creation.'}
+        $checks++
+    }
     $memoryType=$type.GetNestedType('MemoryStatus',[Reflection.BindingFlags]::NonPublic)
     $memory=[Activator]::CreateInstance($memoryType)
     if([Runtime.InteropServices.Marshal]::SizeOf($memory) -ne 64){throw 'The memory-admission structure does not match the documented Windows layout.'}

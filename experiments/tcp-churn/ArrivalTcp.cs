@@ -98,14 +98,47 @@ public static class ArrivalTcp
             return matched;
         }finally{FreeMibTable(table);}
     }
-    public static UdpClient[] CreateIdlePathSockets(string sourceAddress,int count,int[] occupiedPorts)
+    private static IPAddress ParseIdlePathSource(string sourceAddress)
     {
         IPAddress source;
         if(!IPAddress.TryParse(sourceAddress,out source) || source.AddressFamily!=AddressFamily.InterNetwork)
             throw new ArgumentException("Only a bounded owned IPv4 source is supported.");
         byte[] sourceBytes=source.GetAddressBytes();
-        if(sourceBytes[0]!=198 || sourceBytes[1]!=19 || sourceBytes[2]!=0 || sourceBytes[3]<1 || sourceBytes[3]>12 ||
-            (count!=1 && count!=1024 && count!=8192 && count!=24576) || occupiedPorts==null)
+        if(sourceBytes[0]!=198 || sourceBytes[1]!=19 || sourceBytes[2]!=0 || sourceBytes[3]<1 || sourceBytes[3]>12)
+            throw new ArgumentException("Only a bounded owned path-retirement source is supported.");
+        return source;
+    }
+    public static UdpClient[] CreateIdlePathSocketPopulation(string[] sourceAddresses,int totalCount,int[] occupiedPorts)
+    {
+        if(sourceAddresses==null || sourceAddresses.Length<1 || sourceAddresses.Length>12 ||
+            totalCount<1 || totalCount%sourceAddresses.Length!=0 || occupiedPorts==null)
+            throw new ArgumentException("Distinct bounded sources and an exact path population are required.");
+        int perSource=totalCount/sourceAddresses.Length;
+        if(perSource!=1 && perSource!=1024 && perSource!=8192 && perSource!=24576)
+            throw new ArgumentException("The per-source path population is outside its explicit bounds.");
+        var addresses=new HashSet<IPAddress>();
+        foreach(string source in sourceAddresses)
+            if(!addresses.Add(ParseIdlePathSource(source)))throw new ArgumentException("Idle path sources must be distinct.");
+        var groups=new System.Collections.Concurrent.ConcurrentBag<UdpClient[]>();
+        try {
+            Parallel.ForEach(sourceAddresses,new ParallelOptions{
+                MaxDegreeOfParallelism=Math.Min(sourceAddresses.Length,Environment.ProcessorCount)
+            },source=>groups.Add(CreateIdlePathSockets(source,perSource,occupiedPorts)));
+        }catch(Exception failure){
+            var completed=new List<UdpClient>();
+            foreach(var group in groups)completed.AddRange(group);
+            try {ReleaseIdlePathSockets(completed);}
+            catch(Exception cleanup){throw new AggregateException("Idle path population and required cleanup failed.",failure,cleanup);}
+            throw;
+        }
+        var result=new List<UdpClient>(totalCount);
+        foreach(var group in groups)result.AddRange(group);
+        return result.ToArray();
+    }
+    public static UdpClient[] CreateIdlePathSockets(string sourceAddress,int count,int[] occupiedPorts)
+    {
+        var source=ParseIdlePathSource(sourceAddress);
+        if((count!=1 && count!=1024 && count!=8192 && count!=24576) || occupiedPorts==null)
             throw new ArgumentException("Only a bounded owned path-retirement fixture is supported.");
         var occupied=new HashSet<int>(occupiedPorts);
         var sockets=new List<UdpClient>(count);
@@ -120,8 +153,9 @@ public static class ArrivalTcp
                 socket.Connect(destination,9);
             }
             return sockets.ToArray();
-        }catch{
-            ReleaseIdlePathSockets(sockets);
+        }catch(Exception failure){
+            try {ReleaseIdlePathSockets(sockets);}
+            catch(Exception cleanup){throw new AggregateException("Idle path creation and required cleanup failed.",failure,cleanup);}
             throw;
         }
     }

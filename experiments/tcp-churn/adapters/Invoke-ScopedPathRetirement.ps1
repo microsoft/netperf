@@ -267,9 +267,8 @@ try {
     foreach($endpoint in Get-NetUDPEndpoint -ErrorAction Stop){$null=$occupied.Add([int]$endpoint.LocalPort)}
     $population=[Diagnostics.Stopwatch]::StartNew()
     $report.populationStartedUtc=[DateTime]::UtcNow.ToString('o')
-    foreach($address in $sources){
-        $sockets.AddRange([ArrivalTcp]::CreateIdlePathSockets($address,($PathCount/$sources.Count),[int[]]@($occupied)))
-    }
+    $report.populationMaximumParallelism=[Math]::Min($sources.Count,[Environment]::ProcessorCount)
+    $sockets.AddRange([ArrivalTcp]::CreateIdlePathSocketPopulation([string[]]$sources,$PathCount,[int[]]@($occupied)))
     $report.populationMilliseconds=$population.Elapsed.TotalMilliseconds
     $report.measuredHeldPaths=Read-PathCount
     $report.populationCompletedUtc=[DateTime]::UtcNow.ToString('o')
