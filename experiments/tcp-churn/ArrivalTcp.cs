@@ -163,6 +163,7 @@ public static class ArrivalTcp
     private static bool framedWrites;
     private static bool idleKeepalive;
     private static int keepaliveConfiguredSockets;
+    private static int serverResponsesCompleted;
     private static int observedMaximumPostedReadBytes;
     private static int maximumPerConnectionReadBufferBytes;
     private static int inFlight,peakInFlight,completed,started,connectedCount,acceptedCount;
@@ -179,15 +180,16 @@ public static class ArrivalTcp
         private readonly string observationFile;
         private int claim,launched,started,completed,pending,before,after;
         private double milliseconds;
-        private string start="",end="",trigger="";
+        private string start="",end="",trigger="",completedUnit="connections";
         public GcObservation(int heap,string layout,string output) {heapMiB=heap;heapLayout=layout;observationFile=output;}
         public bool Triggered {get {return Volatile.Read(ref claim)==2;}}
-        public void TryCollect(int minimum,int launchedNow,int startedNow,int completedNow,int pendingNow,string triggerEdge="launch")
+        public void TryCollect(int minimum,int launchedNow,int startedNow,int completedNow,int pendingNow,string triggerEdge="launch",string completionUnit="connections")
         {
             if(heapMiB==0 || launchedNow<minimum || completedNow<1 || pendingNow<1 ||
                 Interlocked.CompareExchange(ref claim,1,0)!=0)return;
             launched=launchedNow;started=startedNow;completed=completedNow;pending=pendingNow;
             trigger=triggerEdge;
+            completedUnit=completionUnit;
             File.WriteAllText(observationFile+".begin","pre-collection-call");
             before=GC.CollectionCount(GC.MaxGeneration);
             start=DateTime.UtcNow.ToString("o",CultureInfo.InvariantCulture);
@@ -214,6 +216,7 @@ public static class ArrivalTcp
                 ",\"completedBeforeCollection\":"+completed+",\"inFlightBeforeCollection\":"+pending+
                 ",\"gen2CollectionsBefore\":"+before+",\"gen2CollectionsAfter\":"+after+
                 ",\"triggerObservation\":\""+trigger+"\""+
+                ",\"completedUnit\":\""+completedUnit+"\""+
                 ",\"blockingCollectionMilliseconds\":"+milliseconds.ToString("R",CultureInfo.InvariantCulture)+
                 ",\"collectionStartUtc\":\""+start+"\",\"collectionEndUtc\":\""+end+
                 "\",\"serverGc\":"+(System.Runtime.GCSettings.IsServerGC?"true":"false")+"}";
@@ -322,7 +325,7 @@ public static class ArrivalTcp
         await stream.WriteAsync(data,0,4).ConfigureAwait(false);
         await stream.WriteAsync(data,4,data.Length-4).ConfigureAwait(false);
     }
-    private static async Task Serve(Socket socket,int size,byte[] response)
+    private static async Task Serve(Socket socket,int size,byte[] response,GcObservation gcObservation=null,int gcMinimumLaunch=0)
     {
         using(socket) {
             socket.NoDelay=noDelay;
@@ -338,6 +341,12 @@ public static class ArrivalTcp
             for(int exchange=0;exchange<exchangesPerConnection;exchange++){
                 await ReadPattern(stream,data,size,null).ConfigureAwait(false);
                 await WriteMessage(stream,response).ConfigureAwait(false);
+                if(idleKeepalive){
+                    Interlocked.Increment(ref serverResponsesCompleted);
+                    if(gcObservation!=null)gcObservation.TryCollect(gcMinimumLaunch,Volatile.Read(ref acceptedCount),
+                        Volatile.Read(ref serverStarted),Volatile.Read(ref serverResponsesCompleted),
+                        Volatile.Read(ref serverInFlight),"response","application-responses");
+                }
             }
             if(!idleKeepalive)socket.Shutdown(SocketShutdown.Send);
             if(await stream.ReadAsync(new byte[1],0,1).ConfigureAwait(false)!=0)
@@ -353,11 +362,12 @@ public static class ArrivalTcp
         do {prior=serverPeakInFlight;if(active<=prior)break;}
             while(Interlocked.CompareExchange(ref serverPeakInFlight,active,prior)!=prior);
         try {
-            await Serve(socket,size,response).ConfigureAwait(false);
+            await Serve(socket,size,response,gcObservation,gcMinimumLaunch).ConfigureAwait(false);
             Interlocked.Increment(ref serverCompleted);
         } finally {Interlocked.Decrement(ref serverInFlight);}
         gcObservation.TryCollect(gcMinimumLaunch,Volatile.Read(ref acceptedCount),Volatile.Read(ref serverStarted),
-            Volatile.Read(ref serverCompleted),Volatile.Read(ref serverInFlight),"completion");
+            idleKeepalive?Volatile.Read(ref serverResponsesCompleted):Volatile.Read(ref serverCompleted),
+            Volatile.Read(ref serverInFlight),"completion",idleKeepalive?"application-responses":"connections");
     }
     private static async Task Send(string source,IPAddress peer,int port,byte[] data,byte[] expectedResponse)
     {
@@ -476,7 +486,8 @@ public static class ArrivalTcp
                                 finally {serverCapacity.Release();}
                             }));
                             gcObservation.TryCollect(gcMinimumLaunch,Volatile.Read(ref acceptedCount),Volatile.Read(ref serverStarted),
-                                Volatile.Read(ref serverCompleted),Volatile.Read(ref serverInFlight),"accept");
+                                idleKeepalive?Volatile.Read(ref serverResponsesCompleted):Volatile.Read(ref serverCompleted),
+                                Volatile.Read(ref serverInFlight),"accept",idleKeepalive?"application-responses":"connections");
                         } else accepted.Add(Serve(connection,size,response));
                     }
                     await Task.WhenAll(accepted).ConfigureAwait(false);

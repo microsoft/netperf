@@ -756,6 +756,10 @@ application payload is sent during the idle period, and all EOFs/bytes/GC/loss
 and restoration gates remain required. This is an explicit aggressive
 health-check hypothesis, not a claim about customer configuration or observed
 probe counts.
+In this idle-pool mode the GC overlap trigger counts completed application
+responses, not eventual idle connection teardown; the observation reports that
+completion unit explicitly. Ordinary mode retains its connection-completion
+condition.
 
 The opt-in `managed_gc_mixed=coreclr` comparison runs the same compiled public
 workload through the already-installed PowerShell Core host on every main

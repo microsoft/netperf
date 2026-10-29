@@ -96,6 +96,9 @@ try {
         throw 'Receiver dispatch, capacity, or endpoint byte accounting failed.'
     }
     $gc=$r.managedGc
+    if($gc.completedUnit -ne $(if($IdleKeepalive){'application-responses'}else{'connections'})){
+        throw 'GC completion units must distinguish serviced requests from idle connection teardown.'
+    }
     if($gc.configuredReceiveBudgetBytes -ne $ReceiveBudgetBytes -or $gc.maximumPostedReadBytes -ne $ReceiveBudgetBytes -or
         $gc.observedMaximumPostedReadBytes -ne [Math]::Min($ReceiveBudgetBytes,$requestBytes)){
         throw 'Receiver socket/read budgets did not verify.'
