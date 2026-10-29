@@ -11,7 +11,7 @@ try{
         @{interfaceGuid=$(if($primary){$guid}else{'original-data-interface'});originalDhcpDisabled=$true
             addresses=@('198.19.240.1');originalDefaultKeys=@('7/192.0.2.254/10')}|Export-Clixml -LiteralPath $dataFile
         @{interfaceGuid=$guid;source='198.19.0.1';prefix='198.19.0.0/17';originalAbsent=$true
-            originalAddresses=@();detachInterface=$true}|Export-Clixml -LiteralPath $stateFile
+            originalAddresses=@('198.19.255.254/32/True');detachInterface=$true}|Export-Clixml -LiteralPath $stateFile
         $fixture=@{binding=$false;address=$true;writes=0}
         $failed=$false
         try{
@@ -36,6 +36,7 @@ try{
                 }
                 function Get-NetIPAddress {
                     [CmdletBinding()]param($InterfaceIndex,$AddressFamily,$PolicyStore)
+                    [pscustomobject]@{InterfaceIndex=9;IPAddress='198.19.255.254';PrefixLength=32;SkipAsSource=$true}
                     if($fixture.address){
                         [pscustomobject]@{InterfaceIndex=9;IPAddress='198.19.0.1';PrefixLength=17;SkipAsSource=$true}
                     }

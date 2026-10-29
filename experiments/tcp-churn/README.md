@@ -779,6 +779,9 @@ NIC's IPv4 binding is detached. Its identity-checked binding/address restore
 and host-side removal must both verify. Original VM NICs and switch
 configuration are never changed. This is an interface-retirement mechanism
 control, not a claim that the trigger happened in a customer workload.
+A unique skip-as-source `/32` bootstrap address is assigned while disconnected
+to prevent automatic link-local configuration; it has no gateway and is
+removed with the disposable interface.
 Path-population snapshots use the documented IP Helper path table, filtered
 by the owned interface and source, rather than launching a command-line
 enumerator in the GC-triggered interval. The native structure layout and

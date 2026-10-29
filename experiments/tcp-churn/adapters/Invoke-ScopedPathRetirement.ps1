@@ -120,8 +120,10 @@ if($RestoreOnly){
 if(Test-Path -LiteralPath $StateFile){throw 'A fresh path-retirement snapshot is required.'}
 if($detachInterface){
     $binding=@(Get-NetAdapterBinding -Name $InterfaceAlias -ComponentID ms_tcpip -ErrorAction Stop)
-    if($binding.Count -ne 1 -or -not $binding[0].Enabled -or @(Read-Addresses).Count){
-        throw 'The disposable unused interface must start IPv4-bound and without IPv4 addresses.'
+    $initial=@(Read-Addresses)
+    if($binding.Count -ne 1 -or -not $binding[0].Enabled -or
+        $initial.Count -ne 1 -or $initial[0] -ne '198.19.255.254/32/True'){
+        throw 'The disposable unused interface must retain only its owned static bootstrap address.'
     }
 }
 $range=Get-Range $prefix

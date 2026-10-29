@@ -69,8 +69,13 @@ function New-TcpChurnVmPathFixture {
             if(@(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop|Where-Object InterfaceIndex -eq $adapter.ifIndex).Count){
                 throw 'The disconnected new interface unexpectedly has an IPv4 configuration.'
             }
+            if(@(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop|Where-Object IPAddress -eq '198.19.255.254').Count){
+                throw 'The disposable static bootstrap address is already in use.'
+            }
             Set-NetIPInterface -InterfaceIndex $adapter.ifIndex -AddressFamily IPv4 -Dhcp Disabled -ErrorAction Stop
             Rename-NetAdapter -Name $adapter.Name -NewName $name -ErrorAction Stop
+            $null=New-NetIPAddress -InterfaceIndex $adapter.ifIndex -IPAddress '198.19.255.254' -PrefixLength 32 `
+                -SkipAsSource $true -PolicyStore ActiveStore -ErrorAction Stop
             [pscustomobject]@{alias=$name;guid=[string]$adapter.InterfaceGuid}
         } -ArgumentList $mac,$name
         Connect-VMNetworkAdapter -VMNetworkAdapter $created -SwitchName $connected[0].SwitchName -ErrorAction Stop

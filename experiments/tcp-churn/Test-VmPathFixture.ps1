@@ -39,7 +39,8 @@ try{
                 [CmdletBinding()]param($Session,$ScriptBlock,$ArgumentList)
                 if($ScriptBlock.ToString().Contains('Find-NetRoute')){return '001122334455'}
                 $new=@($fixture.Adapters|Where-Object Name -match '^NetperfPath-')[0]
-                if($new.SwitchName -or -not $ScriptBlock.ToString().Contains('-Dhcp Disabled')){
+                if($new.SwitchName -or -not $ScriptBlock.ToString().Contains('-Dhcp Disabled') -or
+                    -not $ScriptBlock.ToString().Contains("'198.19.255.254' -PrefixLength 32")){
                     throw 'The new interface was connected before static guest setup.'
                 }
                 if($case -eq 'guest-prepare-failure'){throw 'Synthetic guest preparation failure.'}
