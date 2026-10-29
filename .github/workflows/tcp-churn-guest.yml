@@ -35,7 +35,7 @@ on:
       managed_gc_mixed:
         description: Managed-GC mode; persistent64 performs64 ordinary exchanges per TCP connection
         type: choice
-        options: ['false', 'true', 'persistent64', 'persistent64-framed-nagle']
+        options: ['false', 'true', 'persistent64', 'persistent64-framed-nagle', 'coreclr']
         default: 'false'
       managed_gc_payload_bytes:
         description: Request and response bytes for the managed-GC diagnostic only
@@ -148,6 +148,8 @@ jobs:
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-ServerGcArrivalTcp.ps1 -HeapLayout graph -ReceiveBudgetBytes 16384
       - shell: pwsh
+        run: ./experiments/tcp-churn/Test-ServerGcArrivalTcp.ps1 -HeapLayout graph -ReceiveBudgetBytes 16384 -CoreClr
+      - shell: pwsh
         run: ./experiments/tcp-churn/Test-ServerGcArrivalTcp.ps1 -HeapLayout graph -ReceiveBudgetBytes 16384 -ExchangesPerConnection 64
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-ServerGcArrivalTcp.ps1 -HeapLayout graph -ReceiveBudgetBytes 16384 -ExchangesPerConnection 64 -FramedNagle
@@ -254,6 +256,8 @@ jobs:
           $publish = Join-Path $env:RUNNER_TEMP "tcp-churn-guest-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           $persistentRequested = $env:MANAGED_GC_MIXED -in @('persistent64', 'persistent64-framed-nagle')
           $framedNagleRequested = $env:MANAGED_GC_MIXED -eq 'persistent64-framed-nagle'
+          $coreClrRequested = $env:MANAGED_GC_MIXED -eq 'coreclr'
+          if ($coreClrRequested) { $env:MANAGED_GC_MIXED = 'true' }
           $duringGcRequested = $env:MANAGED_GC_UNUSED_INTERFACE -in @('during-gc', 'valid-paths-during-gc')
           $validCacheRequested = $env:MANAGED_GC_UNUSED_INTERFACE -in @('valid-paths', 'valid-paths-during-gc')
           $noTcpRequested = $env:MANAGED_GC_WPR_PROBES -eq 'clr-only'
@@ -309,6 +313,7 @@ jobs:
             $extra.ManagedGc = $true
             if ($persistentRequested) { $extra.ManagedGcExchanges = 64 }
             if ($framedNagleRequested) { $extra.ManagedGcFramedNagle = $true }
+            if ($coreClrRequested) { $extra.ManagedGcCoreClr = $true }
             $extra.ManagedGcPayloadBytes = [int]$env:MANAGED_GC_PAYLOAD_BYTES
             $extra.ManagedGcProcessRole = $env:MANAGED_GC_PROCESS_ROLE
             $extra.ManagedGcHeapLayout = $env:MANAGED_GC_HEAP_LAYOUT

@@ -4,13 +4,16 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference='Stop'
 
-function Start-ChurnChild($Program, [string[]]$Arguments, $Directory, $LogPrefix) {
+function Start-ChurnChild($Program, [string[]]$Arguments, $Directory, $LogPrefix, [hashtable]$Environment) {
     $settings=[Diagnostics.ProcessStartInfo]::new()
     $settings.FileName=$Program
     $settings.WorkingDirectory=$Directory
     $settings.UseShellExecute=$false
     $settings.RedirectStandardOutput=$true
     $settings.RedirectStandardError=$true
+    if($null -ne $Environment){
+        foreach($key in $Environment.Keys){$settings.EnvironmentVariables[$key]=[string]$Environment[$key]}
+    }
     foreach ($item in $Arguments) { $settings.ArgumentList.Add($item) }
     $child=[Diagnostics.Process]::new()
     $child.StartInfo=$settings
@@ -143,8 +146,17 @@ function New-WindowsCtsAdapter {
 }
 
 function Start-TcpChurnCollector {
-    param($Program,[string[]]$Arguments,$Directory,$LogPrefix)
-    Start-ChurnChild $Program $Arguments $Directory $LogPrefix
+    param($Program,[string[]]$Arguments,$Directory,$LogPrefix,[switch]$CoreClr)
+    $environment=$null
+    if($CoreClr){
+        $launcher=Join-Path (Split-Path $Program) 'Invoke-ArrivalTcpCore.ps1'
+        if(-not(Test-Path -LiteralPath $launcher -PathType Leaf)){throw 'The owned CoreCLR workload launcher is missing.'}
+        $Arguments=@('-NoProfile','-NonInteractive','-File',$launcher,'-ExecutablePath',$Program)+$Arguments
+        $Program=(Get-Command pwsh -CommandType Application -ErrorAction Stop).Source
+        $environment=@{DOTNET_gcServer='1';COMPlus_gcServer='1';DOTNET_GCCpuGroup='1';COMPlus_GCCpuGroup='1'
+            DOTNET_Thread_UseAllCpuGroups='1';COMPlus_Thread_UseAllCpuGroups='1'}
+    }
+    Start-ChurnChild $Program $Arguments $Directory $LogPrefix $environment
 }
 
 function Invoke-WindowsEstablishedTransfer {

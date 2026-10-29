@@ -27,6 +27,7 @@ param(
     [switch]$ManagedGcKeepCacheValid,
     [switch]$ManagedGcNoTcpProbes,
     [switch]$ManagedGcFramedNagle,
+    [switch]$ManagedGcCoreClr,
     [ValidateSet(0,16384)][int]$ManagedGcReceiveBudgetBytes=0,
     [ValidateSet(0,1,1024,8192,24576,49152,98304)][int]$ManagedGcCacheRetirePaths=0,
     [switch]$ManagedGcWprProbes,
@@ -77,6 +78,7 @@ if($ManagedGcNoTcpProbes -and (-not $ManagedGc -or -not $ManagedGcWprProbes -or 
 if($ManagedGcFramedNagle -and (-not $ManagedGc -or $ManagedGcProcessRole -ne 'server' -or $ManagedGcExchanges -ne 64 -or $ManagedGcPayloadBytes -ne 1460)){
     throw 'Framed Nagle exchanges require the bounded receiver-GC persistent64 mode.'
 }
+if($ManagedGcCoreClr -and (-not $ManagedGc -or $ManagedGcProcessRole -ne 'server')){throw 'CoreCLR comparison requires managed receiver GC.'}
 if($Connections -gt 1024 -and (-not $ManagedGc -or $ManagedGcProcessRole -ne 'server' -or $ManagedGcReceiveBudgetBytes -ne 16384)){
     throw 'High concurrency requires receiver-GC mode and the verified 16384-byte receive budget.'
 }
@@ -240,7 +242,7 @@ try {
             -Recurse -ToSession $session -ErrorAction Stop
     }
     $adapterFiles=@('WindowsCts.psm1','Invoke-NetperfTcpChurn.ps1','Invoke-NetperfPeerCpu.ps1')
-    if($ManagedGc){$adapterFiles+=@('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1','Invoke-ScopedNeighborPulse.ps1','TcpRecoveryEvidence.psm1','Set-ScopedDataAddresses.ps1','GcReceiverTraffic.psm1','Invoke-ScopedPathRefresh.ps1','Invoke-ScopedPathRetirement.ps1','New-GcProbeWprProfile.ps1','Set-ScopedRss.ps1','Invoke-ScopedDestinationCacheFlush.ps1')}
+    if($ManagedGc){$adapterFiles+=@('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1','Invoke-ArrivalTcpCore.ps1','Invoke-ScopedNeighborPulse.ps1','TcpRecoveryEvidence.psm1','Set-ScopedDataAddresses.ps1','GcReceiverTraffic.psm1','Invoke-ScopedPathRefresh.ps1','Invoke-ScopedPathRetirement.ps1','New-GcProbeWprProfile.ps1','Set-ScopedRss.ps1','Invoke-ScopedDestinationCacheFlush.ps1')}
     foreach ($file in $adapterFiles) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $file) -Destination (Join-Path $remoteRoot "adapters\$file") -ToSession $session -ErrorAction Stop
     }
@@ -267,7 +269,7 @@ try {
     }
     $phase='guest-traffic'
     $exit=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
-        param($root,$seconds,$connections,$profile,$synDrop,$peerMeasurement,$managedGc,$managedGcPayloadBytes,$peerRecovery,$isolatedData,$recoveryMilliseconds,$gcProcessRole,$heapLayout,$routeRefresh,$routeVariant,$receiveBudgetBytes,$cacheRetirePaths,$wprProbes,$peerPressure,$fixtureAlias,$fixtureGuid,$spinLocks,$dataAlias,$dataGuid,$credential,$exchanges,$retireDuringGc,$keepCacheValid,$noTcpProbes,$framedNagle)
+        param($root,$seconds,$connections,$profile,$synDrop,$peerMeasurement,$managedGc,$managedGcPayloadBytes,$peerRecovery,$isolatedData,$recoveryMilliseconds,$gcProcessRole,$heapLayout,$routeRefresh,$routeVariant,$receiveBudgetBytes,$cacheRetirePaths,$wprProbes,$peerPressure,$fixtureAlias,$fixtureGuid,$spinLocks,$dataAlias,$dataGuid,$credential,$exchanges,$retireDuringGc,$keepCacheValid,$noTcpProbes,$framedNagle,$coreClr)
         if (@(Get-Process -Name 'Runner.Worker','ctsTraffic' -ErrorAction Ignore).Count) {
             throw 'Guest became busy before traffic setup.'
         }
@@ -292,6 +294,7 @@ try {
             if($keepCacheValid){$extra+='-KeepCacheValid'}
             if($noTcpProbes){$extra+='-NoTcpProbes'}
             if($framedNagle){$extra+='-FramedNagle'}
+            if($coreClr){$extra+='-CoreClr'}
             if($receiveBudgetBytes){$extra+=@('-ReceiveBudgetBytes',[string]$receiveBudgetBytes)}
             if($cacheRetirePaths){$extra+=@('-CacheRetirePaths',[string]$cacheRetirePaths)}
             if($wprProbes){$extra+='-WprProbes'}
@@ -322,7 +325,7 @@ try {
             $launch|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $root 'child-startup.json')
             if($credentialFile -and (Test-Path -LiteralPath $credentialFile)){Remove-Item -LiteralPath $credentialFile -ErrorAction Stop}
         }
-    } -ArgumentList $guestRoot,$Seconds,$Connections,([bool]$ProfileCpu),([bool]$SynDrop),([bool]$PeerMeasurement),([bool]$ManagedGc),$ManagedGcPayloadBytes,([bool]$ManagedGcPeerRecovery),([bool]$ManagedGcIsolatedData),$ManagedGcRecoveryMilliseconds,$ManagedGcProcessRole,$ManagedGcHeapLayout,([bool]$ManagedGcRouteRefresh),$ManagedGcRouteVariant,$ManagedGcReceiveBudgetBytes,$ManagedGcCacheRetirePaths,([bool]$ManagedGcWprProbes),([bool]$ManagedGcPeerPressure),$fixtureAlias,$fixtureGuid,([bool]$ManagedGcSpinLocks),$dataAlias,$dataGuid,$Credential,$ManagedGcExchanges,([bool]$ManagedGcRetireDuringGc),([bool]$ManagedGcKeepCacheValid),([bool]$ManagedGcNoTcpProbes),([bool]$ManagedGcFramedNagle)
+    } -ArgumentList $guestRoot,$Seconds,$Connections,([bool]$ProfileCpu),([bool]$SynDrop),([bool]$PeerMeasurement),([bool]$ManagedGc),$ManagedGcPayloadBytes,([bool]$ManagedGcPeerRecovery),([bool]$ManagedGcIsolatedData),$ManagedGcRecoveryMilliseconds,$ManagedGcProcessRole,$ManagedGcHeapLayout,([bool]$ManagedGcRouteRefresh),$ManagedGcRouteVariant,$ManagedGcReceiveBudgetBytes,$ManagedGcCacheRetirePaths,([bool]$ManagedGcWprProbes),([bool]$ManagedGcPeerPressure),$fixtureAlias,$fixtureGuid,([bool]$ManagedGcSpinLocks),$dataAlias,$dataGuid,$Credential,$ManagedGcExchanges,([bool]$ManagedGcRetireDuringGc),([bool]$ManagedGcKeepCacheValid),([bool]$ManagedGcNoTcpProbes),([bool]$ManagedGcFramedNagle),([bool]$ManagedGcCoreClr)
     $startup=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
         param($root)
         Get-Content -LiteralPath (Join-Path $root 'child-startup.json') -Raw|ConvertFrom-Json|

@@ -464,6 +464,7 @@ public static class ArrivalTcp
                     ",\"bytesReceived\":"+((long)count*size*exchangesPerConnection)+",\"bytesSent\":"+((long)count*responseSize*exchangesPerConnection)+
                     ",\"exchangesPerConnection\":"+exchangesPerConnection+
                     ",\"framedWrites\":"+(framedWrites?"true":"false")+",\"noDelay\":"+(noDelay?"true":"false")+
+                    ",\"managedCoreLibrary\":\""+typeof(object).Assembly.GetName().Name+"\",\"managedRuntimeVersion\":\""+Environment.Version+"\""+
                     ",\"maximumPerConnectionReadBufferBytes\":"+maximumPerConnectionReadBufferBytes+
                     ",\"networkErrors\":0,\"protocolErrors\":0,\"barrier\":false,\"peakInFlight\":"+serverPeakInFlight+
                     ",\"requestDispatch\":\""+(gcHeapMiB>0?"thread-pool":"inline")+"\",\"managedGc\":"+gcObservation.Json()+"}");
@@ -509,6 +510,7 @@ public static class ArrivalTcp
                 ",\"bytesReceived\":"+((long)count*responseSize*exchangesPerConnection)+
                 ",\"exchangesPerConnection\":"+exchangesPerConnection+
                 ",\"framedWrites\":"+(framedWrites?"true":"false")+
+                ",\"managedCoreLibrary\":\""+typeof(object).Assembly.GetName().Name+"\",\"managedRuntimeVersion\":\""+Environment.Version+"\""+
                 ",\"maximumPerConnectionReadBufferBytes\":"+maximumPerConnectionReadBufferBytes+
                 ",\"arrivalRate\":"+rate+",\"seed\":"+seed+",\"barrier\":false"+
                 ",\"arrivalDispatch\":\""+(gcHeapMiB>0||poolDispatch?"thread-pool":"inline")+"\""+

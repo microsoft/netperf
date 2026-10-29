@@ -6,13 +6,21 @@ param([ValidateSet('arrays','graph')][string]$HeapLayout='arrays',
     [ValidateSet(1,64)][int]$ExchangesPerConnection=1,
     [ValidateRange(1,4096)][int]$MaximumInFlight=64,
     [switch]$LargeStreaming,
-    [switch]$FramedNagle)
+    [switch]$FramedNagle,
+    [switch]$CoreClr)
 $ErrorActionPreference='Stop'
 $directory=Join-Path ([IO.Path]::GetTempPath()) ('server-gc-arrival-'+[guid]::NewGuid().ToString('N'))
 $null=New-Item -ItemType Directory -Path $directory
 $exe=Join-Path $directory 'ArrivalTcp.exe'
 $children=[Collections.Generic.List[object]]::new()
 function Start-Child([string[]]$Arguments) {
+    if($CoreClr){
+        $owned=Start-TcpChurnCollector -Program $exe -Arguments $Arguments -Directory $directory `
+            -LogPrefix (Join-Path $directory ('core-child-'+$children.Count)) -CoreClr
+        $child=@{process=$owned.Process;error=$owned.Error}
+        $children.Add($child)
+        return $child
+    }
     $info=[Diagnostics.ProcessStartInfo]::new()
     $info.FileName=$exe;$info.UseShellExecute=$false;$info.RedirectStandardError=$true
     foreach($argument in $Arguments){$info.ArgumentList.Add($argument)}
@@ -25,6 +33,10 @@ try {
     & "$env:SystemRoot\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /target:exe /platform:x64 "/out:$exe" (Join-Path $PSScriptRoot 'ArrivalTcp.cs')
     if($LASTEXITCODE){throw 'Server-GC helper compilation failed.'}
     Copy-Item (Join-Path $PSScriptRoot 'ArrivalTcp.ServerGc.config') ($exe+'.config')
+    if($CoreClr){
+        Import-Module (Join-Path $PSScriptRoot 'adapters\WindowsCts.psm1') -Force
+        Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'adapters\Invoke-ArrivalTcpCore.ps1') -Destination $directory
+    }
     $probe=[Net.Sockets.TcpListener]::new([Net.IPAddress]::Parse('127.0.0.2'),0)
     $probe.Start();$port=$probe.LocalEndpoint.Port;$probe.Stop()
     $serverOutput=Join-Path $directory 'server.json'
@@ -58,6 +70,7 @@ try {
         if($client.outcome -ne 'collected' -or $client.connections -ne 64 -or
             $client.exchangesPerConnection -ne $ExchangesPerConnection -or
             $client.framedWrites -ne [bool]$FramedNagle -or $client.noDelay -ne (-not [bool]$FramedNagle) -or
+            $client.managedCoreLibrary -ne $(if($CoreClr){'System.Private.CoreLib'}else{'mscorlib'}) -or
             $client.maximumPerConnectionReadBufferBytes -ne [Math]::Min($responseBytes,65536) -or
             $client.bytesSent -ne 64*$requestBytes*$ExchangesPerConnection -or
             $client.bytesReceived -ne 64*$responseBytes*$ExchangesPerConnection -or
@@ -67,6 +80,7 @@ try {
     }
     if($r.outcome -ne 'collected' -or $r.connections -ne 128 -or $r.exchangesPerConnection -ne $ExchangesPerConnection -or
         $r.framedWrites -ne [bool]$FramedNagle -or $r.noDelay -ne (-not [bool]$FramedNagle) -or
+        $r.managedCoreLibrary -ne $(if($CoreClr){'System.Private.CoreLib'}else{'mscorlib'}) -or
         $r.bytesReceived -ne $a.bytesSent+$b.bytesSent -or
         $r.bytesSent -ne $a.bytesReceived+$b.bytesReceived -or $r.requestDispatch -ne 'thread-pool' -or
         $r.maximumPerConnectionReadBufferBytes -ne [Math]::Min($requestBytes,65536) -or
@@ -98,7 +112,7 @@ try {
         if(-not $child.process.WaitForExit(5000)){throw 'An owned server-GC endpoint remained.'}
         $child.process.Dispose()
     }
-    foreach($file in @('ArrivalTcp.exe','ArrivalTcp.exe.config','server.json','server.json.ready','server.json.gc.json','server.json.gc.json.begin','first.json','second.json')) {
+    foreach($file in @('ArrivalTcp.exe','ArrivalTcp.exe.config','Invoke-ArrivalTcpCore.ps1','server.json','server.json.ready','server.json.gc.json','server.json.gc.json.begin','first.json','second.json')) {
         $path=Join-Path $directory $file
         if(Test-Path $path){Remove-Item -LiteralPath $path -ErrorAction Stop}
     }

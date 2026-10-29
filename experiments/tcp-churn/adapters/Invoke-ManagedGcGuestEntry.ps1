@@ -14,6 +14,7 @@ param(
     [switch]$KeepCacheValid,
     [switch]$NoTcpProbes,
     [switch]$FramedNagle,
+    [switch]$CoreClr,
     [switch]$PeerRecovery,
     [switch]$IsolatedData,
     [int]$RecoveryMilliseconds=8000,

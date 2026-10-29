@@ -746,6 +746,15 @@ barrier. See the [Winsock listen contract](https://learn.microsoft.com/windows/w
 
 The separate `managed_gc_cache_retire_paths=1|1024|8192|24576|49152|98304` mechanism control
 requires the ordinary receiver setup described above.
+The opt-in `managed_gc_mixed=coreclr` comparison runs the same compiled public
+workload through the already-installed PowerShell Core host on every main
+endpoint. It installs no runtime and changes no host policy. Server GC and
+CPU-group options are set only on the owned child process before startup;
+the launcher rejects an unexpected runtime/GC mode. Endpoints verify the selected
+core-library family and report their actual runtime version. The default remains
+the .NET Framework executable; this family comparison does not claim an exact
+customer runtime-version match.
+
 The opt-in `managed_gc_mixed=persistent64-framed-nagle` contrast preserves the
 same 64 exchanges, 1460-byte message patterns, total byte budget and independent
 connection arrivals. Each request and reply uses two immediate ordinary

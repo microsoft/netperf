@@ -22,6 +22,7 @@ param(
     [switch]$KeepCacheValid,
     [switch]$NoTcpProbes,
     [switch]$FramedNagle,
+    [switch]$CoreClr,
     [ValidateSet(0,16384)][int]$ReceiveBudgetBytes=0,
     [ValidateSet(0,1,1024,8192,24576,49152,98304)][int]$CacheRetirePaths=0,
     [switch]$WprProbes,
@@ -42,6 +43,7 @@ if($NoTcpProbes -and (-not $WprProbes -or $PeerRecovery)){
 if($FramedNagle -and ($GcProcessRole -ne 'server' -or $ExchangesPerConnection -ne 64 -or $PayloadBytes -ne 1460)){
     throw 'Framed Nagle exchanges require bounded receiver-GC persistent64 mode.'
 }
+if($CoreClr -and $GcProcessRole -ne 'server'){throw 'CoreCLR comparison requires the owned receiver-GC workflow.'}
 if($Connections -gt 1024 -and ($GcProcessRole -ne 'server' -or $ReceiveBudgetBytes -ne 16384)){
     throw 'High concurrency requires receiver-GC mode and the verified 16384-byte receive budget.'
 }
@@ -179,6 +181,7 @@ try {
         Copy-Item -LiteralPath (Join-Path $sourceRoot $file) -Destination (Join-Path $remote $file) -ToSession $peer
     }
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'WindowsCts.psm1') -Destination (Join-Path $remote 'WindowsCts.psm1') -ToSession $peer
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Invoke-ArrivalTcpCore.ps1') -Destination $remote -ToSession $peer
     $cohortSources=$clientAddress
     $clientSources=@($clientAddress,'127.0.0.1')
     $clientTargets=@($peerAddress,'127.0.0.2')
@@ -230,6 +233,7 @@ try {
     $null=Invoke-TcpChurnTool -Program $compiler -Arguments @('/nologo','/target:exe','/platform:x64',"/out:$exe",(Join-Path $sourceRoot 'ArrivalTcp.cs')) `
         -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'compile')
     Copy-Item -LiteralPath (Join-Path $sourceRoot 'ArrivalTcp.ServerGc.config') -Destination ($exe+'.config')
+    if($CoreClr){Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Invoke-ArrivalTcpCore.ps1') -Destination $diagnostics}
     $peerOwned=$true
     $phase='start-remote-peer'
     Invoke-Command -Session $peer -ScriptBlock {
@@ -281,7 +285,7 @@ try {
         $receiverState=@{Peer=$peer;PeerRoot=$remote;Directory=$diagnostics;Executable=$exe
             ServerAddress=$clientAddress;PeerAddress=$peerAddress;Port=$port;Count=$count;Rate=$rate;Payload=$payloadBytes
             Connections=$Connections;HeapMiB=$heapMiB;HeapLayout=$HeapLayout;ReceiveBudgetBytes=$ReceiveBudgetBytes
-            PeerGcPressure=([bool]$PeerGcPressure);ExchangesPerConnection=$ExchangesPerConnection;FramedNagle=([bool]$FramedNagle)
+            PeerGcPressure=([bool]$PeerGcPressure);ExchangesPerConnection=$ExchangesPerConnection;FramedNagle=([bool]$FramedNagle);CoreClr=([bool]$CoreClr)
             ServerOutput=$localOutput;Rule=$null;Receiver=$null;LocalClient=$null}
         Start-GcReceiver -State $receiverState
         $localServer=$receiverState.Receiver
@@ -512,6 +516,7 @@ try {
     $result.kernelSpinlockEventsRequested=[bool]$SpinLocks
     $result.recorderControlScope='unique-owned-named-instance'
     $result.framedWrites=[bool]$r.framedWrites;$result.noDelay=[bool]$r.noDelay
+    $result.managedCoreLibrary=$r.managedCoreLibrary;$result.managedRuntimeVersion=$r.managedRuntimeVersion
     if($GcProcessRole -eq 'server'){$result.launchSpanScope='maximum-independent-producer-span';$result.workloadScope='both-independent-producers-plus-profiled-receiver'}
     if($PeerRecovery){$result.peerRecovery=$pulseResult;$result.peerDataInterfaceDhcpEnabled=$peerDhcpEnabled}
 }catch{$failure=$_}
