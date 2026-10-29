@@ -827,6 +827,13 @@ It reports the peer-route data adapter's RSS queue/processor bounds separately
 from VM logical-CPU count. CPU summaries also expose timer samples by
 processor; distinct processors over a whole interval are not claimed as
 simultaneous timer execution.
+`managed_gc_rss_processors=40|64|80` is an explicit temporary receive-scaling
+control on the verified guest data adapter. It snapshots all RSS settings,
+requests queues/processors without restarting the adapter, derives the range
+from actual active processor groups, and requires exact setting readback plus
+an active processor array of the requested size. Original RSS fields, active
+array size, data-adapter IPv4 addresses and default routes must restore.
+The host NIC, VM CPU allocation and switch configuration are not changed.
 Failed TCP/CLR collector startup reports a fixed capture stage, exception
 type and numeric error code. Provider discovery, TCP startup and CLR startup
 remain separate adapter phases; private exception messages and raw ETLs are

@@ -61,13 +61,13 @@ try {
     }
     if(-not $rejected -or (Test-Path -LiteralPath $directory)){throw 'Peer recovery outside managed-GC mode mutated state or was accepted.'}
     $checks++
-    foreach($extra in @(@{ManagedGcIsolatedData=$true},@{ManagedGcRecoveryMilliseconds=3000},@{ManagedGcHeapLayout='graph'},@{ManagedGcRouteVariant='peer-gateway'},@{ManagedGcWprProbes=$true})) {
+    foreach($extra in @(@{ManagedGcIsolatedData=$true},@{ManagedGcRecoveryMilliseconds=3000},@{ManagedGcHeapLayout='graph'},@{ManagedGcRouteVariant='peer-gateway'},@{ManagedGcWprProbes=$true},@{ManagedGcRssProcessors=64})) {
         $rejected=$false
         try {
             & (Join-Path $PSScriptRoot 'adapters\Invoke-NetperfGuestTcpChurn.ps1') `
                 -VmName 'unused-test-only' -Credential $credential -PublishDirectory $directory @extra
         }catch {
-            if($_.Exception.Message -notmatch 'Isolated data addresses require|Recovery duration selection requires|GC heap layout selection requires|Logical gateway selection requires|Exact WPR probes require'){throw}
+            if($_.Exception.Message -notmatch 'Isolated data addresses require|Recovery duration selection requires|GC heap layout selection requires|Logical gateway selection requires|Exact WPR probes require|Scoped RSS requires'){throw}
             $rejected=$true
         }
         if(-not $rejected -or (Test-Path -LiteralPath $directory)){throw 'Invalid data-fixture or recovery-duration selection mutated state.'}
@@ -172,6 +172,11 @@ try {
         return $false
     },$true))
     if($launch.Count -ne 1){throw 'The actual guest child launch call site must be uniquely identified.'}
+    $outerTry=@($guestAst.EndBlock.Statements|Where-Object{$_ -is [Management.Automation.Language.TryStatementAst]})
+    if($outerTry.Count -ne 1 -or -not $outerTry[0].Finally.Extent.Text.Contains('$rssAttempted') -or
+        $launch[0].Extent.Text.Contains('$rssAttempted')){
+        throw 'RSS rollback must remain in the owning host scope, not the remote child startup finally.'
+    }
     $actual=& {
         function Invoke-Command {
             [CmdletBinding()]

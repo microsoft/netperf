@@ -27,9 +27,11 @@ param(
     [switch]$ManagedGcWprProbes,
     [switch]$ManagedGcPeerPressure,
     [switch]$ManagedGcUnusedInterface,
-    [switch]$ManagedGcSpinLocks
+    [switch]$ManagedGcSpinLocks,
+    [ValidateSet(0,40,64,80)][int]$ManagedGcRssProcessors=0
 )
 $ErrorActionPreference='Stop'
+if($ManagedGcRssProcessors -and -not $ManagedGc){throw 'Scoped RSS requires managed-GC diagnostic mode.'}
 if($ManagedGcSpinLocks -and (-not $ManagedGc -or -not $ManagedGcWprProbes)){
     throw 'Owned spinlock capture requires managed-GC mode and the exact-event WPR controller.'
 }
@@ -73,6 +75,7 @@ if (Test-Path -LiteralPath $PublishDirectory) { throw 'Use a new publication dir
 New-Item -ItemType Directory -Path $PublishDirectory -ErrorAction Stop | Out-Null
 $session=$null; $guestRoot=$null; $phase='guest-connect'; $success=$false; $startup=$null
 $vmFixture=$null;$fixtureAlias='';$fixtureGuid=''
+$rssAttempted=$false;$rssEvidence=$null
 $vmFixtureState=Join-Path $PublishDirectory 'owned-vm-path-interface.clixml'
 try {
     $vmInfo=Get-VM -Name $VmName -ErrorAction Stop
@@ -198,9 +201,23 @@ try {
             -Recurse -ToSession $session -ErrorAction Stop
     }
     $adapterFiles=@('WindowsCts.psm1','Invoke-NetperfTcpChurn.ps1','Invoke-NetperfPeerCpu.ps1')
-    if($ManagedGc){$adapterFiles+=@('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1','Invoke-ScopedNeighborPulse.ps1','TcpRecoveryEvidence.psm1','Set-ScopedDataAddresses.ps1','GcReceiverTraffic.psm1','Invoke-ScopedPathRefresh.ps1','Invoke-ScopedPathRetirement.ps1','New-GcProbeWprProfile.ps1')}
+    if($ManagedGc){$adapterFiles+=@('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1','Invoke-ScopedNeighborPulse.ps1','TcpRecoveryEvidence.psm1','Set-ScopedDataAddresses.ps1','GcReceiverTraffic.psm1','Invoke-ScopedPathRefresh.ps1','Invoke-ScopedPathRetirement.ps1','New-GcProbeWprProfile.ps1','Set-ScopedRss.ps1')}
     foreach ($file in $adapterFiles) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $file) -Destination (Join-Path $remoteRoot "adapters\$file") -ToSession $session -ErrorAction Stop
+    }
+    if($ManagedGcRssProcessors){
+        $phase='guest-scoped-rss-prepare';$rssAttempted=$true
+        $rssEvidence=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
+            param($root,$processors)
+            $peer=@([Net.Dns]::GetHostAddresses('netperf-peer')|Where-Object AddressFamily -eq InterNetwork)[0].ToString()
+            $route=@(Find-NetRoute -RemoteIPAddress $peer -ErrorAction Stop|Where-Object{$_.PSObject.Properties['IPAddress']})
+            if($route.Count -ne 1){throw 'The RSS control requires one verified peer-route interface.'}
+            & (Join-Path $root 'experiment\adapters\Set-ScopedRss.ps1') -Action prepare -Processors $processors `
+                -InterfaceAlias $route[0].InterfaceAlias `
+                -StateFile (Join-Path $root 'rss-original.clixml') -ReportFile (Join-Path $root 'rss-prepared.json')
+            Get-Content -LiteralPath (Join-Path $root 'rss-prepared.json') -Raw|ConvertFrom-Json
+        } -ArgumentList $guestRoot,$ManagedGcRssProcessors|Select-Object schema,action,verified,adapterRestarted,queues,maxProcessors,
+            activeProcessorArrayCount,originalQueues,originalMaxProcessors,originalAddressesAndDefaultsPreserved
     }
     $phase='guest-traffic'
     $exit=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
@@ -295,6 +312,31 @@ try {
             ConvertTo-Json -Depth 3 | Set-Content -LiteralPath (Join-Path $PublishDirectory 'result.json') -Encoding utf8
     }
 } finally {
+    if($rssAttempted -and $null -ne $session){
+        try{
+            $rssRestored=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
+                param($root)
+                $state=Join-Path $root 'rss-original.clixml'
+                if(Test-Path -LiteralPath $state){
+                    & (Join-Path $root 'experiment\adapters\Set-ScopedRss.ps1') -Action restore `
+                        -StateFile $state -ReportFile (Join-Path $root 'rss-restored.json')
+                    Get-Content -LiteralPath (Join-Path $root 'rss-restored.json') -Raw|ConvertFrom-Json
+                }
+            } -ArgumentList $guestRoot|Select-Object schema,action,verified,adapterRestarted,queues,maxProcessors,
+                activeProcessorArrayCount,originalQueues,originalMaxProcessors,originalAddressesAndDefaultsPreserved
+            $resultFile=Join-Path $PublishDirectory 'result.json'
+            if($null -ne $rssRestored -and (Test-Path -LiteralPath $resultFile)){
+                $published=Get-Content -LiteralPath $resultFile -Raw|ConvertFrom-Json
+                $published|Add-Member NoteProperty scopedRss ([pscustomobject]@{requested=$ManagedGcRssProcessors;prepared=$rssEvidence;restored=$rssRestored}) -Force
+                $published|ConvertTo-Json -Depth 10|Set-Content -LiteralPath $resultFile
+            }
+        }catch{
+            $success=$false
+            @{schema=1;outcome='failed';phase='guest-scoped-rss-restore';cleanupVerified=$false
+                failureType=$_.Exception.GetType().FullName;conclusion='no-accepted-measurement'}|
+                ConvertTo-Json|Set-Content -LiteralPath (Join-Path $PublishDirectory 'result.json')
+        }
+    }
     if($ManagedGcUnusedInterface -and (Test-Path -LiteralPath $vmFixtureState)){
         try{
             Remove-TcpChurnVmPathFixture -StateFile $vmFixtureState
