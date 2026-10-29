@@ -17,6 +17,7 @@ param(
     [switch]$CoreClr,
     [switch]$IdleKeepalive,
     [switch]$ServiceWait,
+    [switch]$PipelinedServiceWait,
     [switch]$PeerRecovery,
     [switch]$IsolatedData,
     [int]$RecoveryMilliseconds=8000,

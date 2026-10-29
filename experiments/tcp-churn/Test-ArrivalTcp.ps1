@@ -40,18 +40,21 @@ try {
         }
         $child.Dispose();$child=$null;$checks++
     }
-    foreach($pacing in @('nodelay','nagle')){
+    foreach($pacing in @('nodelay','nagle','pipelined-nagle')){
         $rejectedOutput=Join-Path $directory 'rejected-framed.json'
         $info.ArgumentList.Clear()
-        $descriptor=if($pacing -eq 'nodelay'){'exchanges:64:framed'}else{'exchanges:64:unknown'}
-        foreach($argument in @('127.0.0.1','127.0.0.2',[string]$port,'16','128','1460',$rejectedOutput,
-            'client','1460','14529','16',$pacing,'dispatch:pool',$descriptor)){$info.ArgumentList.Add($argument)}
+        $descriptor=if($pacing -eq 'pipelined-nagle'){'servicewait64:pipelined'}elseif($pacing -eq 'nodelay'){'exchanges:64:framed'}else{'exchanges:64:unknown'}
+        $payload=if($pacing -eq 'pipelined-nagle'){'512'}else{'1460'}
+        $socketPacing=if($pacing -eq 'pipelined-nagle'){'nagle'}else{$pacing}
+        $expectedError=if($pacing -eq 'pipelined-nagle'){'Pipelined service requests require'}else{'Framed exchanges require'}
+        foreach($argument in @('127.0.0.1','127.0.0.2',[string]$port,'16','128',$payload,$rejectedOutput,
+            'client',$payload,'14529','16',$socketPacing,'dispatch:pool',$descriptor)){$info.ArgumentList.Add($argument)}
         $child=[Diagnostics.Process]::Start($info)
         $errorText=$child.StandardError.ReadToEndAsync()
         if(-not $child.WaitForExit(5000) -or $child.ExitCode -eq 0 -or
-            $errorText.GetAwaiter().GetResult() -notmatch 'Framed exchanges require' -or
+            $errorText.GetAwaiter().GetResult() -notmatch $expectedError -or
             (Test-Path -LiteralPath $rejectedOutput)){
-            throw 'Invalid framed pacing/descriptor was not rejected before network mutation.'
+            throw 'Invalid pacing/descriptor was not rejected before network mutation.'
         }
         $child.Dispose();$child=$null;$checks++
     }
@@ -92,6 +95,44 @@ try {
     if($probeMethod.Invoke($null,@([int]$server.Id,[int]$port))){throw 'An exited listener was reported ready.'}
     $checks++
     $flags=[Reflection.BindingFlags]'Static,NonPublic'
+    $type=$probeMethod.DeclaringType
+    $savedFields=@{}
+    $listener=$null;$receiver=$null
+    try{
+        foreach($setting in @{exchangesPerConnection=3;serviceRequestPipelining=$true;noDelay=$true}.GetEnumerator()){
+            $field=$type.GetField($setting.Key,$flags)
+            $savedFields[$setting.Key]=$field.GetValue($null)
+            $field.SetValue($null,$setting.Value)
+        }
+        $listener=[Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback,0)
+        $listener.Start()
+        $data=[byte[]]::new(512)
+        for($i=0;$i -lt $data.Length;$i++){$data[$i]=[byte]($i%251)}
+        $send=$type.GetMethod('Send',$flags).Invoke($null,@('127.0.0.1',[Net.IPAddress]::Loopback,
+            [int]$listener.LocalEndpoint.Port,$data,$data))
+        $receiver=$listener.AcceptTcpClient()
+        $receiver.ReceiveTimeout=5000
+        $stream=$receiver.GetStream()
+        $requests=[byte[]]::new(1536);$offset=0
+        while($offset -lt $requests.Length){
+            $read=$stream.Read($requests,$offset,$requests.Length-$offset)
+            if($read -eq 0){throw 'Pipelined client ended before all independently paced requests.'}
+            $offset+=$read
+        }
+        for($i=0;$i -lt $requests.Length;$i++){
+            if($requests[$i] -ne $data[$i%512]){throw 'Pipelined request bytes changed.'}
+        }
+        for($i=0;$i -lt 3;$i++){$stream.Write($data,0,$data.Length)}
+        $receiver.Client.Shutdown([Net.Sockets.SocketShutdown]::Send)
+        if(-not $send.Wait(5000) -or $type.GetField('clientPacingWaitsCompleted',$flags).GetValue($null) -ne 2){
+            throw 'The client required a response release or did not complete its exact pacing waits.'
+        }
+        $checks++
+    }finally{
+        if($null -ne $receiver){$receiver.Dispose()}
+        if($null -ne $listener){$listener.Stop()}
+        foreach($setting in $savedFields.GetEnumerator()){$type.GetField($setting.Key,$flags).SetValue($null,$setting.Value)}
+    }
     $bufferMethod=$probeMethod.DeclaringType.GetMethod('CreateValidationBuffer',$flags)
     foreach($length in @(1,1460,65535,65536,65537,1048576)){
         $buffer=$bufferMethod.Invoke($null,@([int]$length))

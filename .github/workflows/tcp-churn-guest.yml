@@ -35,7 +35,7 @@ on:
       managed_gc_mixed:
         description: Managed-GC mode; persistent64 performs64 ordinary exchanges per TCP connection
         type: choice
-        options: ['false', 'true', 'persistent64', 'persistent64-framed-nagle', 'coreclr', 'coreclr-keepalive', 'coreclr-servicewait']
+        options: ['false', 'true', 'persistent64', 'persistent64-framed-nagle', 'coreclr', 'coreclr-keepalive', 'coreclr-servicewait', 'coreclr-servicewait-pipelined']
         default: 'false'
       managed_gc_payload_bytes:
         description: Request and response bytes for the managed-GC diagnostic only
@@ -154,6 +154,8 @@ jobs:
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-ServerGcArrivalTcp.ps1 -HeapLayout graph -ReceiveBudgetBytes 16384 -CoreClr -ExchangesPerConnection 64 -ServiceWait -MaximumInFlight 256
       - shell: pwsh
+        run: ./experiments/tcp-churn/Test-ServerGcArrivalTcp.ps1 -HeapLayout graph -ReceiveBudgetBytes 16384 -CoreClr -ExchangesPerConnection 64 -ServiceWait -PipelinedServiceWait -MaximumInFlight 256
+      - shell: pwsh
         run: ./experiments/tcp-churn/Test-ServerGcArrivalTcp.ps1 -HeapLayout graph -ReceiveBudgetBytes 16384 -ExchangesPerConnection 64
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-ServerGcArrivalTcp.ps1 -HeapLayout graph -ReceiveBudgetBytes 16384 -ExchangesPerConnection 64 -FramedNagle
@@ -260,9 +262,10 @@ jobs:
           $publish = Join-Path $env:RUNNER_TEMP "tcp-churn-guest-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           $persistentRequested = $env:MANAGED_GC_MIXED -in @('persistent64', 'persistent64-framed-nagle')
           $framedNagleRequested = $env:MANAGED_GC_MIXED -eq 'persistent64-framed-nagle'
-          $coreClrRequested = $env:MANAGED_GC_MIXED -in @('coreclr', 'coreclr-keepalive', 'coreclr-servicewait')
+          $coreClrRequested = $env:MANAGED_GC_MIXED -in @('coreclr', 'coreclr-keepalive', 'coreclr-servicewait', 'coreclr-servicewait-pipelined')
           $idleKeepaliveRequested = $env:MANAGED_GC_MIXED -eq 'coreclr-keepalive'
-          $serviceWaitRequested = $env:MANAGED_GC_MIXED -eq 'coreclr-servicewait'
+          $serviceWaitRequested = $env:MANAGED_GC_MIXED -in @('coreclr-servicewait', 'coreclr-servicewait-pipelined')
+          $pipelinedServiceWaitRequested = $env:MANAGED_GC_MIXED -eq 'coreclr-servicewait-pipelined'
           if ($coreClrRequested) { $env:MANAGED_GC_MIXED = 'true' }
           $duringGcRequested = $env:MANAGED_GC_UNUSED_INTERFACE -in @('during-gc', 'valid-paths-during-gc')
           $validCacheRequested = $env:MANAGED_GC_UNUSED_INTERFACE -in @('valid-paths', 'valid-paths-during-gc')
@@ -322,6 +325,7 @@ jobs:
             if ($coreClrRequested) { $extra.ManagedGcCoreClr = $true }
             if ($idleKeepaliveRequested) { $extra.ManagedGcIdleKeepalive = $true }
             if ($serviceWaitRequested) { $extra.ManagedGcServiceWait = $true; $extra.ManagedGcExchanges = 64 }
+            if ($pipelinedServiceWaitRequested) { $extra.ManagedGcPipelinedServiceWait = $true }
             $extra.ManagedGcPayloadBytes = [int]$env:MANAGED_GC_PAYLOAD_BYTES
             $extra.ManagedGcProcessRole = $env:MANAGED_GC_PROCESS_ROLE
             $extra.ManagedGcHeapLayout = $env:MANAGED_GC_HEAP_LAYOUT

@@ -166,6 +166,8 @@ public static class ArrivalTcp
     private static int serverResponsesCompleted;
     private static bool serviceWait;
     private static int serviceRequestOrdinal,serviceWaitsCompleted;
+    private static bool serviceRequestPipelining;
+    private static int clientPacingWaitsCompleted;
     private static int observedMaximumPostedReadBytes;
     private static int maximumPerConnectionReadBufferBytes;
     private static int inFlight,peakInFlight,completed,started,connectedCount,acceptedCount;
@@ -327,6 +329,21 @@ public static class ArrivalTcp
         await stream.WriteAsync(data,0,4).ConfigureAwait(false);
         await stream.WriteAsync(data,4,data.Length-4).ConfigureAwait(false);
     }
+    private static async Task WritePacedServiceRequests(NetworkStream stream,byte[] data,int connectionOrdinal)
+    {
+        for(int exchange=0;exchange<exchangesPerConnection;exchange++){
+            await WriteMessage(stream,data).ConfigureAwait(false);
+            if(exchange+1<exchangesPerConnection){
+                await Task.Delay(250+(int)(((long)connectionOrdinal*1103515245+(long)exchange*104729)%501)).ConfigureAwait(false);
+                Interlocked.Increment(ref clientPacingWaitsCompleted);
+            }
+        }
+    }
+    private static async Task ReadServiceResponses(NetworkStream stream,byte[] reply,byte[] expectedResponse)
+    {
+        for(int exchange=0;exchange<exchangesPerConnection;exchange++)
+            await ReadPattern(stream,reply,expectedResponse.Length,expectedResponse).ConfigureAwait(false);
+    }
     private static async Task Serve(Socket socket,int size,byte[] response,GcObservation gcObservation=null,int gcMinimumLaunch=0)
     {
         using(socket) {
@@ -389,9 +406,14 @@ public static class ArrivalTcp
             long connected=Stopwatch.GetTimestamp();Interlocked.Add(ref connectTicks,connected-bound);
             var stream=socket.GetStream();
             var reply=CreateValidationBuffer(expectedResponse.Length);
-            for(int exchange=0;exchange<exchangesPerConnection;exchange++){
-                await WriteMessage(stream,data).ConfigureAwait(false);
-                await ReadPattern(stream,reply,expectedResponse.Length,expectedResponse).ConfigureAwait(false);
+            if(serviceRequestPipelining){
+                await Task.WhenAll(WritePacedServiceRequests(stream,data,connectionOrdinal),
+                    ReadServiceResponses(stream,reply,expectedResponse)).ConfigureAwait(false);
+            }else{
+                for(int exchange=0;exchange<exchangesPerConnection;exchange++){
+                    await WriteMessage(stream,data).ConfigureAwait(false);
+                    await ReadPattern(stream,reply,expectedResponse.Length,expectedResponse).ConfigureAwait(false);
+                }
             }
             long received=Stopwatch.GetTimestamp();Interlocked.Add(ref responseTicks,received-connected);
             if(idleKeepalive){
@@ -444,11 +466,15 @@ public static class ArrivalTcp
         framedWrites=false;
         idleKeepalive=false;
         serviceWait=false;
+        serviceRequestPipelining=false;
         if(args.Length==14){
-            if(args[13]=="servicewait64"){
+            if(args[13]=="servicewait64" || args[13]=="servicewait64:pipelined"){
                 if(size!=512 || responseSize!=512 || role=="local")
                     throw new ArgumentException("Service wait mode requires bounded client/server 512-byte messages.");
                 serviceWait=true;exchangesPerConnection=64;
+                serviceRequestPipelining=args[13]=="servicewait64:pipelined";
+                if(serviceRequestPipelining && !noDelay)
+                    throw new ArgumentException("Pipelined service requests require explicit nodelay pacing.");
             }else if(args[13]=="idlekeepalive"){
                 if(size!=1460 || responseSize!=1460 || role=="local")
                     throw new ArgumentException("Idle keepalive mode requires bounded client/server 1460-byte messages.");
@@ -519,6 +545,8 @@ public static class ArrivalTcp
                     ",\"managedCoreLibrary\":\""+typeof(object).Assembly.GetName().Name+"\",\"managedRuntimeVersion\":\""+Environment.Version+"\""+
                     ",\"idleKeepalive\":"+(idleKeepalive?"true":"false")+",\"keepaliveConfiguredSockets\":"+keepaliveConfiguredSockets+
                     ",\"serviceWait\":"+(serviceWait?"true":"false")+",\"serviceWaitsCompleted\":"+serviceWaitsCompleted+
+                    ",\"serviceRequestPipelining\":"+(serviceRequestPipelining?"true":"false")+",\"clientPacingWaitsCompleted\":"+clientPacingWaitsCompleted+
+                    ",\"clientPacingMinimumMilliseconds\":"+(serviceRequestPipelining?250:0)+",\"clientPacingMaximumMilliseconds\":"+(serviceRequestPipelining?750:0)+
                     ",\"serviceWaitMinimumMilliseconds\":"+(serviceWait?250:0)+",\"serviceWaitMaximumMilliseconds\":"+(serviceWait?750:0)+
                     ",\"keepaliveIdleMillisecondsRequested\":"+(idleKeepalive?1000:0)+",\"keepaliveIntervalMillisecondsRequested\":"+(idleKeepalive?1000:0)+
                     ",\"maximumPerConnectionReadBufferBytes\":"+maximumPerConnectionReadBufferBytes+
@@ -569,6 +597,8 @@ public static class ArrivalTcp
                 ",\"managedCoreLibrary\":\""+typeof(object).Assembly.GetName().Name+"\",\"managedRuntimeVersion\":\""+Environment.Version+"\""+
                 ",\"idleKeepalive\":"+(idleKeepalive?"true":"false")+",\"keepaliveConfiguredSockets\":"+keepaliveConfiguredSockets+
                 ",\"serviceWait\":"+(serviceWait?"true":"false")+",\"serviceWaitsCompleted\":"+serviceWaitsCompleted+
+                ",\"serviceRequestPipelining\":"+(serviceRequestPipelining?"true":"false")+",\"clientPacingWaitsCompleted\":"+clientPacingWaitsCompleted+
+                ",\"clientPacingMinimumMilliseconds\":"+(serviceRequestPipelining?250:0)+",\"clientPacingMaximumMilliseconds\":"+(serviceRequestPipelining?750:0)+
                 ",\"serviceWaitMinimumMilliseconds\":"+(serviceWait?250:0)+",\"serviceWaitMaximumMilliseconds\":"+(serviceWait?750:0)+
                 ",\"keepaliveIdleMillisecondsRequested\":"+(idleKeepalive?1000:0)+",\"keepaliveIntervalMillisecondsRequested\":"+(idleKeepalive?1000:0)+
                 ",\"idleHoldMinimumMilliseconds\":"+(idleKeepalive?8000:0)+",\"idleHoldMaximumMilliseconds\":"+(idleKeepalive?30000:0)+
@@ -609,7 +639,7 @@ public static class ArrivalTcp
     {
         try {
             if(args.Length<7 || args.Length>14) {
-                Console.Error.WriteLine("Usage: ArrivalTcp sources peer port count rate request-bytes output.json [role [response-bytes [seed [maximum-in-flight [nodelay|nagle [gc:heap-MiB:minimum-launched|dispatch:pool [exchanges:64[:framed]|idlekeepalive|servicewait64]]]]]]]");
+                Console.Error.WriteLine("Usage: ArrivalTcp sources peer port count rate request-bytes output.json [role [response-bytes [seed [maximum-in-flight [nodelay|nagle [gc:heap-MiB:minimum-launched|dispatch:pool [exchanges:64[:framed]|idlekeepalive|servicewait64[:pipelined]]]]]]]");
                 return 2;
             }
             if(!Run(args).Wait(TimeSpan.FromSeconds(150))){

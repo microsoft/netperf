@@ -409,9 +409,10 @@ $peerLaunch=@($traffic.FindAll({
 if($peerLaunch.Count -ne 1){throw 'The actual independent peer launch must be uniquely identified.'}
 foreach($mode in @(@{Pressure=$false;Framed=$false},@{Pressure=$true;Framed=$false},
     @{Pressure=$false;Framed=$true},@{Pressure=$true;Framed=$true},@{Pressure=$false;Framed=$false;Core=$true},
-    @{Pressure=$false;Framed=$false;Core=$true;Idle=$true},@{Pressure=$false;Framed=$false;Core=$true;Service=$true})){
+    @{Pressure=$false;Framed=$false;Core=$true;Idle=$true},@{Pressure=$false;Framed=$false;Core=$true;Service=$true},
+    @{Pressure=$false;Framed=$false;Core=$true;Service=$true;Pipelined=$true})){
     try{
-        $pressureEnabled=$mode.Pressure;$framed=$mode.Framed;$coreMode=[bool]$mode.Core;$idleMode=[bool]$mode.Idle;$serviceMode=[bool]$mode.Service
+        $pressureEnabled=$mode.Pressure;$framed=$mode.Framed;$coreMode=[bool]$mode.Core;$idleMode=[bool]$mode.Idle;$serviceMode=[bool]$mode.Service;$pipelinedMode=[bool]$mode.Pipelined
         $global:OwnedManagedGcPeer=@{}
         $peerChildren=[Collections.Generic.List[object]]::new()
         function Start-TcpChurnCollector {
@@ -419,10 +420,10 @@ foreach($mode in @(@{Pressure=$false;Framed=$false},@{Pressure=$true;Framed=$fal
             $peerChildren.Add([pscustomobject]@{Arguments=$Arguments;CoreClr=[bool]$CoreClr})
             [pscustomobject]@{Process=$null}
         }
-        & $peerLaunch[0].ScriptBlock.GetScriptBlock() 'unused-owned-root' '192.0.2.1' '192.0.2.2' 20300 4096 4096 $(if($serviceMode){512}else{1460}) 1024 $pressureEnabled $(if($idleMode){1}else{64}) $framed $coreMode $idleMode $serviceMode
+        & $peerLaunch[0].ScriptBlock.GetScriptBlock() 'unused-owned-root' '192.0.2.1' '192.0.2.2' 20300 4096 4096 $(if($serviceMode){512}else{1460}) 1024 $pressureEnabled $(if($idleMode){1}else{64}) $framed $coreMode $idleMode $serviceMode $pipelinedMode
         if($peerChildren.Count -ne $(if($pressureEnabled){2}else{1})){throw 'Optional pressure changed the ordinary peer launch count.'}
         if($peerChildren[0].Arguments.Count -ne 14 -or $peerChildren[0].CoreClr -ne $coreMode -or
-            $peerChildren[0].Arguments[13] -ne $(if($serviceMode){'servicewait64'}elseif($idleMode){'idlekeepalive'}elseif($framed){'exchanges:64:framed'}else{'exchanges:64'}) -or
+            $peerChildren[0].Arguments[13] -ne $(if($pipelinedMode){'servicewait64:pipelined'}elseif($serviceMode){'servicewait64'}elseif($idleMode){'idlekeepalive'}elseif($framed){'exchanges:64:framed'}else{'exchanges:64'}) -or
             $peerChildren[0].Arguments[5] -ne $(if($serviceMode){'512'}else{'1460'}) -or
             $peerChildren[0].Arguments[11] -ne $(if($framed){'nagle'}else{'nodelay'})){
             throw 'The actual persistent producer lost its exchange-count protocol argument.'

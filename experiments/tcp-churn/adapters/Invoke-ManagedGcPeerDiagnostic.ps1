@@ -25,6 +25,7 @@ param(
     [switch]$CoreClr,
     [switch]$IdleKeepalive,
     [switch]$ServiceWait,
+    [switch]$PipelinedServiceWait,
     [ValidateSet(0,16384)][int]$ReceiveBudgetBytes=0,
     [ValidateSet(0,1,1024,8192,24576,49152,98304)][int]$CacheRetirePaths=0,
     [switch]$WprProbes,
@@ -52,6 +53,7 @@ if($IdleKeepalive -and ($GcProcessRole -ne 'server' -or $ExchangesPerConnection 
 if($ServiceWait -and ($GcProcessRole -ne 'server' -or $ExchangesPerConnection -ne 64 -or $PayloadBytes -ne 512 -or $IdleKeepalive -or $FramedNagle)){
     throw 'Service-wait comparison requires receiver-GC64 exchanges of512 bytes without other protocol variants.'
 }
+if($PipelinedServiceWait -and -not $ServiceWait){throw 'Pipelined requests require service-wait mode.'}
 if($Connections -gt 1024 -and ($GcProcessRole -ne 'server' -or $ReceiveBudgetBytes -ne 16384)){
     throw 'High concurrency requires receiver-GC mode and the verified 16384-byte receive budget.'
 }
@@ -294,7 +296,7 @@ try {
         $receiverState=@{Peer=$peer;PeerRoot=$remote;Directory=$diagnostics;Executable=$exe
             ServerAddress=$clientAddress;PeerAddress=$peerAddress;Port=$port;Count=$count;Rate=$rate;Payload=$payloadBytes
             Connections=$Connections;HeapMiB=$heapMiB;HeapLayout=$HeapLayout;ReceiveBudgetBytes=$ReceiveBudgetBytes
-            PeerGcPressure=([bool]$PeerGcPressure);ExchangesPerConnection=$ExchangesPerConnection;FramedNagle=([bool]$FramedNagle);CoreClr=([bool]$CoreClr);IdleKeepalive=([bool]$IdleKeepalive);ServiceWait=([bool]$ServiceWait)
+            PeerGcPressure=([bool]$PeerGcPressure);ExchangesPerConnection=$ExchangesPerConnection;FramedNagle=([bool]$FramedNagle);CoreClr=([bool]$CoreClr);IdleKeepalive=([bool]$IdleKeepalive);ServiceWait=([bool]$ServiceWait);PipelinedServiceWait=([bool]$PipelinedServiceWait)
             ServerOutput=$localOutput;Rule=$null;Receiver=$null;LocalClient=$null}
         Start-GcReceiver -State $receiverState
         $localServer=$receiverState.Receiver
@@ -532,6 +534,8 @@ try {
     $result.idleHoldMinimumMilliseconds=$r.idleHoldMinimumMilliseconds;$result.idleHoldMaximumMilliseconds=$r.idleHoldMaximumMilliseconds
     $result.serviceWait=[bool]$r.serviceWait;$result.serviceWaitsCompleted=$r.serviceWaitsCompleted
     $result.serviceWaitMinimumMilliseconds=$r.serviceWaitMinimumMilliseconds;$result.serviceWaitMaximumMilliseconds=$r.serviceWaitMaximumMilliseconds
+    $result.serviceRequestPipelining=[bool]$r.serviceRequestPipelining;$result.clientPacingWaitsCompleted=$r.clientPacingWaitsCompleted
+    $result.clientPacingMinimumMilliseconds=$r.clientPacingMinimumMilliseconds;$result.clientPacingMaximumMilliseconds=$r.clientPacingMaximumMilliseconds
     if($GcProcessRole -eq 'server'){$result.launchSpanScope='maximum-independent-producer-span';$result.workloadScope='both-independent-producers-plus-profiled-receiver'}
     if($PeerRecovery){$result.peerRecovery=$pulseResult;$result.peerDataInterfaceDhcpEnabled=$peerDhcpEnabled}
 }catch{$failure=$_}

@@ -9,7 +9,8 @@ param([ValidateSet('arrays','graph')][string]$HeapLayout='arrays',
     [switch]$FramedNagle,
     [switch]$CoreClr,
     [switch]$IdleKeepalive,
-    [switch]$ServiceWait)
+    [switch]$ServiceWait,
+    [switch]$PipelinedServiceWait)
 $ErrorActionPreference='Stop'
 $directory=Join-Path ([IO.Path]::GetTempPath()) ('server-gc-arrival-'+[guid]::NewGuid().ToString('N'))
 $null=New-Item -ItemType Directory -Path $directory
@@ -50,11 +51,12 @@ try {
     if($ServiceWait -and ($ExchangesPerConnection -ne 64 -or $IdleKeepalive -or $FramedNagle -or $LargeStreaming)){
         throw 'Service wait test requires only64 small exchanges.'
     }
+    if($PipelinedServiceWait -and -not $ServiceWait){throw 'Pipelined requests require service-wait mode.'}
     $requestBytes=if($ServiceWait){512}elseif($LargeStreaming){1048576}elseif($ExchangesPerConnection -eq 64 -or $IdleKeepalive){1460}else{65536}
     $responseBytes=if($ServiceWait){512}elseif($LargeStreaming){1048576}elseif($ExchangesPerConnection -eq 64 -or $IdleKeepalive){1460}else{262144}
     $repeatOption=if($ExchangesPerConnection -eq 64){@($(if($FramedNagle){'exchanges:64:framed'}else{'exchanges:64'}))}else{@()}
     if($IdleKeepalive){$repeatOption=@('idlekeepalive')}
-    if($ServiceWait){$repeatOption=@('servicewait64')}
+    if($ServiceWait){$repeatOption=@($(if($PipelinedServiceWait){'servicewait64:pipelined'}else{'servicewait64'}))}
     $pacing=if($FramedNagle){'nagle'}else{'nodelay'}
     $server=Start-Child (@('127.0.0.1','127.0.0.2',[string]$port,'128','4000',[string]$requestBytes,
         $serverOutput,'server',[string]$responseBytes,'14529',[string]$MaximumInFlight,$pacing,$descriptor)+$repeatOption)
@@ -84,6 +86,10 @@ try {
             $client.managedCoreLibrary -ne $(if($CoreClr){'System.Private.CoreLib'}else{'mscorlib'}) -or
             $client.idleKeepalive -ne [bool]$IdleKeepalive -or $client.keepaliveConfiguredSockets -ne $(if($IdleKeepalive){64}else{0}) -or
             $client.serviceWait -ne [bool]$ServiceWait -or $client.serviceWaitsCompleted -ne 0 -or
+            $client.serviceRequestPipelining -ne [bool]$PipelinedServiceWait -or
+            $client.clientPacingWaitsCompleted -ne $(if($PipelinedServiceWait){64*($ExchangesPerConnection-1)}else{0}) -or
+            $client.clientPacingMinimumMilliseconds -ne $(if($PipelinedServiceWait){250}else{0}) -or
+            $client.clientPacingMaximumMilliseconds -ne $(if($PipelinedServiceWait){750}else{0}) -or
             $client.maximumPerConnectionReadBufferBytes -ne [Math]::Min($responseBytes,65536) -or
             $client.bytesSent -ne 64*$requestBytes*$ExchangesPerConnection -or
             $client.bytesReceived -ne 64*$responseBytes*$ExchangesPerConnection -or
@@ -96,6 +102,7 @@ try {
         $r.managedCoreLibrary -ne $(if($CoreClr){'System.Private.CoreLib'}else{'mscorlib'}) -or
         $r.idleKeepalive -ne [bool]$IdleKeepalive -or $r.keepaliveConfiguredSockets -ne $(if($IdleKeepalive){128}else{0}) -or
         $r.serviceWait -ne [bool]$ServiceWait -or $r.serviceWaitsCompleted -ne $(if($ServiceWait){128*$ExchangesPerConnection}else{0}) -or
+        $r.serviceRequestPipelining -ne [bool]$PipelinedServiceWait -or $r.clientPacingWaitsCompleted -ne 0 -or
         $r.bytesReceived -ne $a.bytesSent+$b.bytesSent -or
         $r.bytesSent -ne $a.bytesReceived+$b.bytesReceived -or $r.requestDispatch -ne 'thread-pool' -or
         $r.maximumPerConnectionReadBufferBytes -ne [Math]::Min($requestBytes,65536) -or

@@ -754,6 +754,18 @@ is immediate, no global release event exists, and all bytes/EOFs plus the exact
 completed response-wait count are verified. This is a declared service-time
 model to test delayed header output, not a measured customer latency claim.
 
+The separate `managed_gc_mixed=coreclr-servicewait-pipelined` contrast retains
+that server latency and all 64 validated 512-byte messages, but sends requests
+on each connection independently of replies. Each client writes first data
+immediately, then waits an independently staggered 250-750 ms between its
+remaining writes while concurrently validating responses. There are at most
+64 requests per connection; no global release or forced loss is introduced.
+The exact 63 completed client pacing waits per connection and the server's
+64 response waits are verified on every endpoint. This tests whether continuing
+small requests during a receiver GC produces delayed ACK work that a
+closed-loop request/reply workload stops offering. The original service-wait
+mode remains closed-loop and unchanged.
+
 The opt-in `managed_gc_mixed=coreclr-keepalive` test sends one ordinary 1460-byte
 request immediately on each independent connection and validates the reply.
 It then keeps connections idle for individually staggered 8-30 second lifetimes
