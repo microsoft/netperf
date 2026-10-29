@@ -33,8 +33,9 @@ function Invoke-GcReceiverTraffic {
             $output,'client',[string]$payload,'23521',[string]$concurrency,'nodelay','dispatch:pool'
         ) -Directory $root -LogPrefix (Join-Path $root 'receiver-remote-client')
         if($peerPressure){
+            $global:OwnedManagedGcPeer.PressureRate=2048
             $global:OwnedManagedGcPeer.PressureClient=Start-TcpChurnCollector -Program (Join-Path $root 'ArrivalTcp.exe') -Arguments @(
-                '127.0.0.1','127.0.0.2','20301','4096','819','1048576',(Join-Path $root 'pressure-client.json'),
+                '127.0.0.1','127.0.0.2','20301','4096',[string]$global:OwnedManagedGcPeer.PressureRate,'1048576',(Join-Path $root 'pressure-client.json'),
                 'client','1048576','34711','256','nodelay','dispatch:pool'
             ) -Directory $root -LogPrefix (Join-Path $root 'pressure-client')
         }
@@ -79,7 +80,7 @@ function Invoke-GcReceiverTraffic {
                 throw 'The companion process did not perform a real generation-2 collection.'
             }
             $pressure=[pscustomobject]@{connections=4096;bytesPerDirection=4294967296;networkScope='peer-loopback-only'
-                managedGc=$receiver.managedGc;barrier=$false}
+                offeredArrivalRate=$global:OwnedManagedGcPeer.PressureRate;managedGc=$receiver.managedGc;barrier=$false}
         }
         [pscustomobject]@{Data=$data;Pressure=$pressure}
     } -ArgumentList ([bool]$State.PeerGcPressure)

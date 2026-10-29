@@ -766,7 +766,9 @@ original behavior.
 The optional `managed_gc_peer_pressure=true` contrast adds an independent
 managed loopback service to the owned peer. It uses the same bounded real
 graph-GC workload, ordinary Poisson requests and verified bytes, not a CPU
-burner or data-release barrier. Both heaps must fit admission limits, both
+burner or data-release barrier. Both heaps must fit admission limits.
+The additional service uses a 4,096-request workload offered at 2,048 requests/s with at most
+256 concurrent requests; the result records the applied offered rate. Both
 loopback endpoints must finish, and their measured generation-2 collection
 must overlap the profiled collection. This tests concurrent managed-service
 CPU pressure without changing VM processor allocation or host scheduling.

@@ -62,6 +62,35 @@ foreach($case in @('route','cache','both','unused-cache')){
         }
     }
 }
+$traffic=[Management.Automation.Language.Parser]::ParseFile(
+    (Join-Path $PSScriptRoot 'adapters\GcReceiverTraffic.psm1'),[ref]$tokens,[ref]$errors)
+if($errors.Count){throw ($errors|Out-String)}
+$peerLaunch=@($traffic.FindAll({
+    param($node)
+    $node -is [Management.Automation.Language.ScriptBlockExpressionAst] -and
+        $node.Extent.Text.Contains('pressure-client.json') -and
+        'root' -in @($node.ScriptBlock.ParamBlock.Parameters.Name.VariablePath.UserPath)
+},$true))
+if($peerLaunch.Count -ne 1){throw 'The actual independent peer launch must be uniquely identified.'}
+foreach($pressureEnabled in @($false,$true)){
+    try{
+        $global:OwnedManagedGcPeer=@{}
+        $peerChildren=[Collections.Generic.List[object]]::new()
+        function Start-TcpChurnCollector {
+            param($Program,$Arguments,$Directory,$LogPrefix)
+            $peerChildren.Add([pscustomobject]@{Arguments=$Arguments})
+            [pscustomobject]@{Process=$null}
+        }
+        & $peerLaunch[0].ScriptBlock.GetScriptBlock() 'unused-owned-root' '192.0.2.1' '192.0.2.2' 20300 4096 4096 1460 1024 $pressureEnabled
+        if($peerChildren.Count -ne $(if($pressureEnabled){2}else{1})){throw 'Optional pressure changed the ordinary peer launch count.'}
+        if($pressureEnabled -and
+            ($peerChildren[1].Arguments[3] -ne '4096' -or $peerChildren[1].Arguments[4] -ne '2048' -or
+                $peerChildren[1].Arguments[5] -ne '1048576' -or $peerChildren[1].Arguments[10] -ne '256' -or
+                $global:OwnedManagedGcPeer.PressureRate -ne 2048)){
+            throw 'The actual independent pressure workload lost its bounded count, rate, payload or concurrency.'
+        }
+    }finally{Remove-Variable -Name OwnedManagedGcPeer -Scope Global}
+}
 $cleanup=@($ast.FindAll({
     param($node)
     $node -is [Management.Automation.Language.ScriptBlockExpressionAst] -and
