@@ -146,6 +146,16 @@ try {
     }
     if(-not $rejected -or (Test-Path $directory)){throw 'Invalid disposable-interface mode mutated state or was accepted.'}
     $checks++
+    $rejected=$false
+    try {
+        & (Join-Path $PSScriptRoot 'adapters\Invoke-NetperfGuestTcpChurn.ps1') `
+            -VmName 'unused-test-only' -Credential $credential -PublishDirectory $directory -ManagedGcSpinLocks
+    }catch{
+        if($_.Exception.Message -notmatch 'Owned spinlock capture requires managed-GC'){throw}
+        $rejected=$true
+    }
+    if(-not $rejected -or (Test-Path $directory)){throw 'Invalid spinlock mode mutated state or was accepted.'}
+    $checks++
     foreach($file in @('Invoke-ManagedGcPeerDiagnostic.ps1','Invoke-ManagedGcGuestEntry.ps1','Invoke-NetperfGuestTcpChurn.ps1','Invoke-ScopedNeighborPulse.ps1','Set-ScopedDataAddresses.ps1','GcReceiverTraffic.psm1','Invoke-ScopedPathRefresh.ps1','Invoke-ScopedPathRetirement.ps1','New-GcProbeWprProfile.ps1')) {
         $tokens=$null;$errors=$null
         $parsed=[Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot "adapters\$file"),[ref]$tokens,[ref]$errors)
@@ -183,9 +193,11 @@ try {
         $ManagedGcPeerPressure=[switch]::new($true)
         $fixtureAlias='NetperfPath-123456abcdef'
         $fixtureGuid='11111111-2222-3333-4444-555555555555'
+        $ManagedGcSpinLocks=[switch]::new($true)
         & ([scriptblock]::Create($launch[0].Extent.Text))
     }
-    if($actual.Count -ne 22 -or $actual[19] -ne 'NetperfPath-123456abcdef' -or
+    if($actual.Count -ne 23 -or $actual[21] -isnot [bool] -or -not $actual[21] -or
+        $actual[19] -ne 'NetperfPath-123456abcdef' -or
         $actual[20] -ne '11111111-2222-3333-4444-555555555555' -or
         $actual[18] -isnot [bool] -or -not $actual[18] -or
         $actual[17] -isnot [bool] -or -not $actual[17] -or

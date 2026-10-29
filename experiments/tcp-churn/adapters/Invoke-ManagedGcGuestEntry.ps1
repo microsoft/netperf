@@ -21,7 +21,8 @@ param(
     [switch]$WprProbes,
     [switch]$PeerGcPressure,
     [string]$CacheInterfaceAlias,
-    [string]$CacheInterfaceGuid
+    [string]$CacheInterfaceGuid,
+    [switch]$SpinLocks
 )
 $ErrorActionPreference='Stop'
 if($PublishDirectory -ne (Join-Path $ScratchParent 'publish')) {

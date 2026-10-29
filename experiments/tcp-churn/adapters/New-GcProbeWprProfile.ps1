@@ -5,10 +5,24 @@
 param(
     [Parameter(Mandatory)][string]$TcpStateFile,
     [Parameter(Mandatory)][string]$ClrStateFile,
-    [Parameter(Mandatory)][string]$Output
+    [Parameter(Mandatory)][string]$Output,
+    [string]$KernelOutput
 )
 $ErrorActionPreference='Stop'
 if(Test-Path -LiteralPath $Output){throw 'Use a fresh WPR profile output.'}
+if($KernelOutput){
+    if(Test-Path -LiteralPath $KernelOutput){throw 'Use a fresh kernel WPR profile output.'}
+    & "$env:SystemRoot\System32\wpr.exe" -exportprofile CPU $KernelOutput -filemode
+    if($LASTEXITCODE){throw 'Cannot export the installed CPU profile for owned spinlock capture.'}
+    [xml]$kernel=Get-Content -LiteralPath $KernelOutput -Raw
+    $systems=@($kernel.WindowsPerformanceRecorder.Profiles.SystemProvider|
+        Where-Object{'SampledProfile' -in @($_.Keywords.Keyword.Value)})
+    if($systems.Count -ne 1){throw 'The installed sampled CPU system provider is not unique.'}
+    $spin=$kernel.CreateElement('Keyword');$spin.SetAttribute('Value','SpinLock');$spin.SetAttribute('Strict','true')
+    $null=$systems[0].Keywords.AppendChild($spin)
+    foreach($collector in @($kernel.WindowsPerformanceRecorder.Profiles.SystemCollector)){$collector.Buffers.SetAttribute('Value','256')}
+    $kernel.Save($KernelOutput)
+}
 $definitions=[Collections.Generic.List[string]]::new()
 foreach($entry in @(@{Id='Tcp';Path=$TcpStateFile},@{Id='Clr';Path=$ClrStateFile})){
     $state=Get-Content -LiteralPath $entry.Path -Raw|ConvertFrom-Json

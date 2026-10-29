@@ -26,9 +26,13 @@ param(
     [ValidateSet(0,1024,8192,24576)][int]$ManagedGcCacheRetirePaths=0,
     [switch]$ManagedGcWprProbes,
     [switch]$ManagedGcPeerPressure,
-    [switch]$ManagedGcUnusedInterface
+    [switch]$ManagedGcUnusedInterface,
+    [switch]$ManagedGcSpinLocks
 )
 $ErrorActionPreference='Stop'
+if($ManagedGcSpinLocks -and (-not $ManagedGc -or -not $ManagedGcWprProbes)){
+    throw 'Owned spinlock capture requires managed-GC mode and the exact-event WPR controller.'
+}
 if($ManagedGcUnusedInterface -and (-not $ManagedGc -or $ManagedGcProcessRole -ne 'server' -or
     -not $ManagedGcIsolatedData -or -not $ManagedGcCacheRetirePaths -or $ManagedGcPeerRecovery)){
     throw 'Unused-interface retirement requires bounded isolated receiver-GC mode.'
@@ -190,7 +194,7 @@ try {
     }
     $phase='guest-traffic'
     $exit=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
-        param($root,$seconds,$connections,$profile,$synDrop,$peerMeasurement,$managedGc,$managedGcPayloadBytes,$peerRecovery,$isolatedData,$recoveryMilliseconds,$gcProcessRole,$heapLayout,$routeRefresh,$routeVariant,$receiveBudgetBytes,$cacheRetirePaths,$wprProbes,$peerPressure,$fixtureAlias,$fixtureGuid,$credential)
+        param($root,$seconds,$connections,$profile,$synDrop,$peerMeasurement,$managedGc,$managedGcPayloadBytes,$peerRecovery,$isolatedData,$recoveryMilliseconds,$gcProcessRole,$heapLayout,$routeRefresh,$routeVariant,$receiveBudgetBytes,$cacheRetirePaths,$wprProbes,$peerPressure,$fixtureAlias,$fixtureGuid,$spinLocks,$credential)
         if (@(Get-Process -Name 'Runner.Worker','ctsTraffic' -ErrorAction Ignore).Count) {
             throw 'Guest became busy before traffic setup.'
         }
@@ -214,6 +218,7 @@ try {
             if($cacheRetirePaths){$extra+=@('-CacheRetirePaths',[string]$cacheRetirePaths)}
             if($wprProbes){$extra+='-WprProbes'}
             if($peerPressure){$extra+='-PeerGcPressure'}
+            if($spinLocks){$extra+='-SpinLocks'}
             if($fixtureAlias){$extra+=@('-CacheInterfaceAlias',$fixtureAlias,'-CacheInterfaceGuid',$fixtureGuid)}
             if($routeRefresh){$extra+='-RouteRefresh'}
             if($routeRefresh){$extra+=@('-RouteVariant',$routeVariant)}
@@ -238,7 +243,7 @@ try {
             $launch|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $root 'child-startup.json')
             if($credentialFile -and (Test-Path -LiteralPath $credentialFile)){Remove-Item -LiteralPath $credentialFile -ErrorAction Stop}
         }
-    } -ArgumentList $guestRoot,$Seconds,$Connections,([bool]$ProfileCpu),([bool]$SynDrop),([bool]$PeerMeasurement),([bool]$ManagedGc),$ManagedGcPayloadBytes,([bool]$ManagedGcPeerRecovery),([bool]$ManagedGcIsolatedData),$ManagedGcRecoveryMilliseconds,$ManagedGcProcessRole,$ManagedGcHeapLayout,([bool]$ManagedGcRouteRefresh),$ManagedGcRouteVariant,$ManagedGcReceiveBudgetBytes,$ManagedGcCacheRetirePaths,([bool]$ManagedGcWprProbes),([bool]$ManagedGcPeerPressure),$fixtureAlias,$fixtureGuid,$Credential
+    } -ArgumentList $guestRoot,$Seconds,$Connections,([bool]$ProfileCpu),([bool]$SynDrop),([bool]$PeerMeasurement),([bool]$ManagedGc),$ManagedGcPayloadBytes,([bool]$ManagedGcPeerRecovery),([bool]$ManagedGcIsolatedData),$ManagedGcRecoveryMilliseconds,$ManagedGcProcessRole,$ManagedGcHeapLayout,([bool]$ManagedGcRouteRefresh),$ManagedGcRouteVariant,$ManagedGcReceiveBudgetBytes,$ManagedGcCacheRetirePaths,([bool]$ManagedGcWprProbes),([bool]$ManagedGcPeerPressure),$fixtureAlias,$fixtureGuid,([bool]$ManagedGcSpinLocks),$Credential
     $startup=Invoke-Command -Session $session -ErrorAction Stop -ScriptBlock {
         param($root)
         Get-Content -LiteralPath (Join-Path $root 'child-startup.json') -Raw|ConvertFrom-Json|

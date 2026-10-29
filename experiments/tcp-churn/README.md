@@ -771,7 +771,7 @@ loopback endpoints must finish, and their measured generation-2 collection
 must overlap the profiled collection. This tests concurrent managed-service
 CPU pressure without changing VM processor allocation or host scheduling.
 With the disposable-interface variant, the companion's ordinary accepted-flow
-threshold is later (2,048 rather than 1,024), and its measured collection must
+threshold is later (1,536 rather than 1,024), and its measured collection must
 instead overlap the interface-cleanup API. This targets lock-holder scheduling
 during maintenance, not merely two collections that end before maintenance.
 The explicit `managed_gc_unused_interface=true` variant creates one
@@ -842,6 +842,11 @@ CLR correlation uses the same provider-GUID-aware ETW reader as event counting,
 with an explicit profiled-process and time-interval filter. It does not depend
 on a registry-backed event-log query being able to select CLR records from a
 merged kernel/user ETL.
+`managed_gc_spinlocks=true` additionally exports the installed CPU profile,
+adds its strict kernel spinlock keyword, and increases the owned system
+collector's buffers. It requires the explicit WPR backend. Raw addresses and
+ETLs remain guest-local; the public sampled CPU densities are still not
+presented as same-lock simultaneous-waiter proof.
 It also reports numeric free-space admission information for the guest temporary
 drives; busy or residual-resource failures retain fixed failure categories rather
 than exporting process names, paths or exception messages.

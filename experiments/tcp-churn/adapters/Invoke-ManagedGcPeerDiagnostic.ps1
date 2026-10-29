@@ -22,7 +22,8 @@ param(
     [switch]$WprProbes,
     [switch]$PeerGcPressure,
     [string]$CacheInterfaceAlias,
-    [string]$CacheInterfaceGuid
+    [string]$CacheInterfaceGuid,
+    [switch]$SpinLocks
 )
 $ErrorActionPreference='Stop'
 if($GcProcessRole -eq 'server' -and (-not $IsolatedData -or $PeerRecovery)){
@@ -33,6 +34,7 @@ if($RouteRefresh -and ($GcProcessRole -ne 'server' -or -not $IsolatedData -or $P
 }
 if($RouteVariant -ne 'onlink' -and -not $RouteRefresh){throw 'Logical gateway selection requires the owned route-refresh control.'}
 if($ReceiveBudgetBytes -and $GcProcessRole -ne 'server'){throw 'A bounded receive budget requires receiver-GC mode.'}
+if($SpinLocks -and -not $WprProbes){throw 'Owned spinlock capture requires the exact-event WPR controller.'}
 if($PeerGcPressure -and ($GcProcessRole -ne 'server' -or -not $IsolatedData -or $PeerRecovery)){
     throw 'Peer GC pressure requires isolated receiver GC without a neighbor fault.'
 }
@@ -224,7 +226,7 @@ try {
             if($global:OwnedManagedGcPeer.Process.Process.HasExited -or $clock.Elapsed.TotalSeconds -gt 20){throw 'Peer listener did not become ready.'}
             Start-Sleep -Milliseconds 50
         }
-    } -ArgumentList $remote,$peerAddress,$cohortSources,$port,($count/2),$rate,$payloadBytes,$GcProcessRole,([bool]$PeerGcPressure),$(if($CacheInterfaceAlias){2048}else{1024})
+    } -ArgumentList $remote,$peerAddress,$cohortSources,$port,($count/2),$rate,$payloadBytes,$GcProcessRole,([bool]$PeerGcPressure),$(if($CacheInterfaceAlias){1536}else{1024})
     if($GcProcessRole -eq 'server') {
         $phase='start-profiled-receiver'
         Import-Module (Join-Path $PSScriptRoot 'GcReceiverTraffic.psm1') -Force
@@ -277,8 +279,14 @@ try {
     if($WprProbes){
         $phase='wpr-exact-probe-start'
         $wprProfile=Join-Path $diagnostics 'gc-probes.wprp'
-        & (Join-Path $PSScriptRoot 'New-GcProbeWprProfile.ps1') -TcpStateFile $tcpState -ClrStateFile $clrState -Output $wprProfile
-        $null=Invoke-TcpChurnTool -Program $wpr -Arguments @('-start','CPU','-start',($wprProfile+'!GcProbeEvents'),'-filemode') `
+        $profileArguments=@{TcpStateFile=$tcpState;ClrStateFile=$clrState;Output=$wprProfile}
+        $cpuProfile='CPU'
+        if($SpinLocks){
+            $kernelProfile=Join-Path $diagnostics 'cpu-spinlocks.wprp'
+            $profileArguments.KernelOutput=$kernelProfile;$cpuProfile=$kernelProfile+'!CPU'
+        }
+        & (Join-Path $PSScriptRoot 'New-GcProbeWprProfile.ps1') @profileArguments
+        $null=Invoke-TcpChurnTool -Program $wpr -Arguments @('-start',$cpuProfile,'-start',($wprProfile+'!GcProbeEvents'),'-filemode') `
             -Directory $diagnostics -LogPrefix (Join-Path $diagnostics 'wpr-start')
         $profileOwned=$true
     }else{
@@ -422,6 +430,7 @@ try {
         $result.peerGcPressure=$pressure
     }
     $result.probeCollectorBackend=$(if($WprProbes){'wpr-exact-events'}else{'traceevent-exact-events'})
+    $result.kernelSpinlockEventsRequested=[bool]$SpinLocks
     if($GcProcessRole -eq 'server'){$result.launchSpanScope='maximum-independent-producer-span';$result.workloadScope='both-independent-producers-plus-profiled-receiver'}
     if($PeerRecovery){$result.peerRecovery=$pulseResult;$result.peerDataInterfaceDhcpEnabled=$peerDhcpEnabled}
 }catch{$failure=$_}
@@ -632,14 +641,6 @@ try {
             throw 'The bounded source-retirement population, live cohort, timing or restoration did not verify.'
         }
         $result.cacheRetirementControl=$cacheReport
-        if($PeerGcPressure -and $CacheInterfaceAlias){
-            $pressure=$r.peerGcPressure
-            if(([datetime]$pressure.managedGc.collectionEndUtc).ToUniversalTime() -lt ([datetime]$cacheReport.removeApiStartUtc).ToUniversalTime() -or
-                ([datetime]$pressure.managedGc.collectionStartUtc).ToUniversalTime() -gt ([datetime]$cacheReport.removeApiEndUtc).ToUniversalTime()){
-                throw 'The independent companion collection did not overlap the unused-interface cleanup API.'
-            }
-            $result.peerGcPressure|Add-Member NoteProperty overlapTarget 'unused-interface-cleanup-api' -Force
-        }
     }
     if($RouteRefresh) {
         $phase='verify-route-control'
@@ -720,6 +721,15 @@ try {
         $phase='verify-recovery-coverage'
         throw 'The recovery experiment did not verify data retransmission and actual BH entry.'
     }
+    if($PeerGcPressure -and $CacheInterfaceAlias){
+        $phase='verify-maintenance-pressure-overlap'
+        $pressure=$r.peerGcPressure
+        if(([datetime]$pressure.managedGc.collectionEndUtc).ToUniversalTime() -lt ([datetime]$cacheReport.removeApiStartUtc).ToUniversalTime() -or
+            ([datetime]$pressure.managedGc.collectionStartUtc).ToUniversalTime() -gt ([datetime]$cacheReport.removeApiEndUtc).ToUniversalTime()){
+            throw 'The independent companion collection did not overlap the unused-interface cleanup API.'
+        }
+        $result.peerGcPressure|Add-Member NoteProperty overlapTarget 'unused-interface-cleanup-api' -Force
+    }
     $result.cleanupVerified=$true
     $result|ConvertTo-Json -Depth 6|Set-Content (Join-Path $PublishDirectory 'result.json')
 }catch {
@@ -729,7 +739,7 @@ try {
         peerRecovery=$pulseResult;tcpRecovery=$ownedCounts;peerDataInterfaceDhcpEnabled=$peerDhcpEnabled
         routeRefreshControl=$(if($RouteRefresh){$routeReport}else{$null})
         cacheRetirementControl=$cacheReport
-        managedGc=$r.managedGc;connections=$r.connections
+        managedGc=$r.managedGc;peerGcPressure=$r.peerGcPressure;connections=$r.connections
         conclusion='analysis-not-accepted'}|
         ConvertTo-Json -Depth 6|Set-Content (Join-Path $PublishDirectory 'result.json')
     throw

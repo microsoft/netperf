@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # SPDX-License-Identifier: MIT
 #Requires -Version 7.2
-param([switch]$CaptureSmoke)
+param([switch]$CaptureSmoke,[switch]$CaptureSpinLocks)
 $ErrorActionPreference='Stop'
 $directory=Join-Path ([IO.Path]::GetTempPath()) ('gc-wpr-profile-'+[guid]::NewGuid().ToString('N'))
 $null=New-Item -ItemType Directory -Path $directory
@@ -12,7 +12,10 @@ try{
     @{publicProviderGuid='e13c0d23-ccbc-4e12-931b-d9cc2eee27e4';publicProviderKeywords='0x1';publicProviderEvents=@(@{Id=1},@{Id=2},@{Id=9})}|
         ConvertTo-Json -Depth 4|Set-Content -LiteralPath $clr
     $program=Join-Path $PSScriptRoot 'adapters\New-GcProbeWprProfile.ps1'
-    & $program -TcpStateFile $tcp -ClrStateFile $clr -Output $profile
+    $profileArguments=@{TcpStateFile=$tcp;ClrStateFile=$clr;Output=$profile}
+    $kernelProfile=Join-Path $directory 'kernel.wprp'
+    if($CaptureSpinLocks){$profileArguments.KernelOutput=$kernelProfile}
+    & $program @profileArguments
     [xml]$xml=Get-Content -LiteralPath $profile -Raw
     $providers=@($xml.WindowsPerformanceRecorder.Profiles.EventProvider)
     if($providers.Count -ne 2 -or $providers[0].Strict -ne 'true' -or $providers[0].NonPagedMemory -ne 'true' -or
@@ -23,6 +26,13 @@ try{
     }
     & "$env:SystemRoot\System32\wpr.exe" -profiles $profile
     if($LASTEXITCODE){throw 'The installed WPR rejected the generated schema.'}
+    if($CaptureSpinLocks){
+        [xml]$kernel=Get-Content -LiteralPath $kernelProfile -Raw
+        $spin=@($kernel.SelectNodes("//SystemProvider/Keywords/Keyword[@Value='SpinLock' and @Strict='true']"))
+        if($spin.Count -ne 1){throw 'The exported CPU profile lost its required spinlock keyword.'}
+        & "$env:SystemRoot\System32\wpr.exe" -profiles $kernelProfile
+        if($LASTEXITCODE){throw 'The installed WPR rejected the owned spinlock profile.'}
+    }
     if($CaptureSmoke){
         $wpr="$env:SystemRoot\System32\wpr.exe"
         $status=@(& $wpr -status)
@@ -47,7 +57,8 @@ try{
             $attempted=$false
             try{
                 $attempted=$true
-                $arguments=if($case -eq 'exact-combined'){@('-start','CPU','-start',($variantPath+'!GcProbeEvents'),'-filemode')}
+                $cpuProfile=if($CaptureSpinLocks){$kernelProfile+'!CPU'}else{'CPU'}
+                $arguments=if($case -eq 'exact-combined'){@('-start',$cpuProfile,'-start',($variantPath+'!GcProbeEvents'),'-filemode')}
                     else{@('-start',($variantPath+'!GcProbeEvents'),'-filemode')}
                 & $wpr @arguments
                 $activationExit=$LASTEXITCODE
@@ -80,7 +91,7 @@ try{
     Write-Output $(if($CaptureSmoke){'Passed exact-event WPR activation, shutdown, schema and invalid-ID checks.'}
         else{'Passed exact-event WPR schema and invalid-ID checks; no recording was started.'})
 }finally{
-    foreach($name in @('tcp.json','clr.json','probes.wprp','smoke.etl',
+    foreach($name in @('tcp.json','clr.json','probes.wprp','smoke.etl','kernel.wprp',
         'tcp-only.wprp','tcp-only.etl','clr-only.wprp','clr-only.etl',
         'keyword-only.wprp','keyword-only.etl','exact-combined.wprp','exact-combined.etl')){
         $file=Join-Path $directory $name
