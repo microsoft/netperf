@@ -93,7 +93,7 @@ if($Action -eq 'prepare'){
         settings=(Read-Settings $rss[0]);activeArrayCount=@($rss[0].RssProcessorArray).Count
         addresses=@(Read-Addresses $adapter);defaults=@(Read-Defaults)}
     $saved|Export-Clixml -LiteralPath $StateFile -NoClobber
-    $range=Read-ProcessorRange $Processors
+    $range=Read-ProcessorRange $logical
     $target=@{Enabled=$true;Profile=$saved.settings.Profile;Queues=$Processors;MaxProcessors=$Processors
         BaseGroup=0;BaseNumber=0;MaxGroup=$range.Group;MaxNumber=$range.Number}
 }else{

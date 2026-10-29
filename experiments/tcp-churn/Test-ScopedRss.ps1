@@ -11,7 +11,7 @@ public static class NetperfRssNative {
 $directory=Join-Path ([IO.Path]::GetTempPath()) ('scoped-rss-'+[guid]::NewGuid().ToString('N'))
 $null=New-Item -ItemType Directory -Path $directory
 try{
-    foreach($case in @('cycle','partial-readback','changed-identity','owned-data-cycle')){
+    foreach($case in @('cycle','partial-readback','changed-identity','owned-data-cycle','smt-range')){
         $fixture=@{Guid=$(if($case -eq 'owned-data-cycle'){'44444444-4444-4444-4444-444444444444'}else{'owned-interface'});Writes=0;Restarts=0;ArrayCount=20
             Settings=@{Enabled=$true;Profile='NUMAStatic';Queues=20;MaxProcessors=20;BaseGroup=0;BaseNumber=0;MaxGroup=0;MaxNumber=19}}
         $stateFile=Join-Path $directory 'state.clixml';$reportFile=Join-Path $directory 'report.json'
@@ -35,6 +35,12 @@ try{
                 $fixture.Settings=@{Enabled=$Enabled;Profile=$Profile;Queues=$NumberOfReceiveQueues;MaxProcessors=$MaxProcessors
                     BaseGroup=$BaseProcessorGroup;BaseNumber=$BaseProcessorNumber;MaxGroup=$MaxProcessorGroup;MaxNumber=$MaxProcessorNumber}
                 $fixture.ArrayCount=if($case -in @('partial-readback','owned-data-cycle') -and $fixture.Writes -eq 1){20}else{$MaxProcessors}
+                if($case -eq 'smt-range' -and $fixture.Writes -eq 1){
+                    $eligible=[int][Math]::Floor(($MaxProcessorGroup*40+$MaxProcessorNumber+1)/2)
+                    $fixture.ArrayCount=[Math]::Min($MaxProcessors,$eligible)
+                    $fixture.Settings.MaxProcessors=$fixture.ArrayCount
+                    $fixture.Settings.Queues=[Math]::Min($NumberOfReceiveQueues,$eligible)
+                }
             }
             function Restart-NetAdapter {
                 [CmdletBinding(SupportsShouldProcess=$true)]param($Name)
@@ -58,14 +64,14 @@ try{
             $targetAlias=if($case -eq 'owned-data-cycle'){'NetperfData-123456abcdef'}else{'owned-data'}
             $extra=if($case -eq 'owned-data-cycle'){@{DisposableInterfaceGuid=$fixture.Guid}}else{@{}}
             $prepareFailed=$false
-            try{& $program -Action prepare -InterfaceAlias $targetAlias -Processors 64 -StateFile $stateFile -ReportFile $reportFile @extra}catch{
+            try{& $program -Action prepare -InterfaceAlias $targetAlias -Processors 32 -StateFile $stateFile -ReportFile $reportFile @extra}catch{
                 if($case -ne 'partial-readback' -or $_.Exception.Message -notmatch 'active RSS processor array'){throw}
                 $prepareFailed=$true
             }
             if($prepareFailed -ne ($case -eq 'partial-readback')){throw 'Unexpected RSS preparation verdict.'}
             if($fixture.Restarts -ne $(if($case -eq 'owned-data-cycle'){1}else{0})){throw 'RSS restart scope did not match disposable ownership.'}
-            if($fixture.Settings.MaxGroup -ne 1 -or $fixture.Settings.MaxNumber -ne 23){
-                throw 'RSS assumed 64 active processors per group instead of the observed 40/40 layout.'
+            if($fixture.Settings.MaxGroup -ne 1 -or $fixture.Settings.MaxNumber -ne 39){
+                throw 'RSS must expose the full active 40/40 processor range, not restrict it to the requested RSS count.'
             }
             if($case -eq 'changed-identity'){$fixture.Guid='unowned-replacement'}
             $restoreFailed=$false

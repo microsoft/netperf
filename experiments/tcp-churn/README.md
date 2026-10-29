@@ -829,8 +829,9 @@ processor; distinct processors over a whole interval are not claimed as
 simultaneous timer execution.
 `managed_gc_rss_processors=32|40|64|80` is an explicit temporary receive-scaling
 control on the verified guest data adapter. It snapshots all RSS settings,
-requests queues/processors without restarting the adapter, derives the range
-from actual active processor groups, and requires exact setting readback plus
+requests queues/processors without restarting the adapter, exposes the full
+range of actual active processor groups so SMT exclusion does not halve a
+range truncated to the requested RSS count, and requires exact setting readback plus
 an active processor array of the requested size. Original RSS fields, active
 array size, data-adapter IPv4 addresses and default routes must restore.
 The host NIC, VM CPU allocation and switch configuration are not changed.
