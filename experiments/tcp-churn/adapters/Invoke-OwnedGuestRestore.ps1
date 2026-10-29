@@ -45,15 +45,19 @@ $worker={
     $clientBefore=& $inventory
     $report=[ordered]@{schema=1;restoreRequested=$Apply;clientBefore=$clientBefore;clientProcessesStopped=0;clientRecorderSessionsStopped=0
         clientRootsRestored=0;clientDialRoutesRemoved=0;clientRulesRemoved=0;peerBefore=$null;peerProcessesStopped=0
-        peerRootsRestored=0;peerRulesRemoved=0;clientAfter=$null;peerAfter=$null}
+        peerRootsRestored=0;peerRulesRemoved=0;clientAfter=$null;peerAfter=$null;stage='client';failureStage=$null;failureType=$null}
+    try {
     if($Apply){
+        $report.stage='client-processes'
         $report.clientProcessesStopped=Stop-OwnedProcess '\\netperf-churn-[0-9a-f]{32}\\'
+        $report.stage='client-recorders'
         foreach($row in @(& logman.exe query -ets)){
             if($row -match '^\s*((WPR_initiated_|TcpChurnExact-)\S+)'){
                 & logman.exe stop $Matches[1] -ets *> $null
                 if($LASTEXITCODE -eq 0){$report.clientRecorderSessionsStopped++}
             }
         }
+        $report.stage='client-roots'
         $roots=@(Get-ChildItem -LiteralPath $env:TEMP -Directory -Filter 'netperf-churn-*'|
             Where-Object{$_.Name -match '^netperf-churn-[0-9a-f]{32}$' -and -not($_.Attributes -band [IO.FileAttributes]::ReparsePoint)}|
             Sort-Object CreationTimeUtc -Descending)
@@ -94,11 +98,14 @@ $worker={
             Remove-NetRoute -InterfaceIndex $route.InterfaceIndex -DestinationPrefix '198.19.248.0/24' -PolicyStore ActiveStore -Confirm:$false -ErrorAction Stop
             $report.clientDialRoutesRemoved++
         }
+        $report.stage='client-rules'
         foreach($rule in @(Get-NetFirewallRule -PolicyStore ActiveStore -ErrorAction Stop|Where-Object{$_.Name -like 'ManagedGcReceiver-*' -or $_.Name -like 'ManagedGcPeer-*'})){
             Remove-NetFirewallRule -Name $rule.Name -PolicyStore ActiveStore -ErrorAction Stop;$report.clientRulesRemoved++
         }
     }
+    $report.stage='peer-session'
     $peer=New-PSSession -ComputerName netperf-peer -Credential $PeerCredential -ConfigurationName PowerShell.7 -ErrorAction Stop
+    $report.stage='peer'
     try {
         $peerResult=Invoke-Command -Session $peer -ErrorAction Stop -ScriptBlock {
             param($inventoryText,[bool]$Apply)
@@ -144,21 +151,24 @@ $worker={
     } finally {Remove-PSSession $peer}
     $report.peerBefore=$peerResult.before;$report.peerProcessesStopped=$peerResult.processesStopped
     $report.peerRootsRestored=$peerResult.rootsRestored;$report.peerRulesRemoved=$peerResult.rulesRemoved;$report.peerAfter=$peerResult.after
-    $report.clientAfter=& $inventory
+    $report.stage='complete'
+    }catch{$report.failureStage=$report.stage;$report.failureType=$_.Exception.GetType().FullName}
+    try{$report.clientAfter=& $inventory}catch{}
     [pscustomobject]$report
 }
 try{
     $report=Invoke-Command -VMName $VmName -Credential $Credential -ErrorAction Stop -ScriptBlock $worker -ArgumentList $Credential,([bool]$Restore)
-    $clean=$true
+    $clean=$null -eq $report.failureStage
     foreach($side in @($report.clientAfter,$report.peerAfter)){
+        if($null -eq $side){$clean=$false;continue}
         foreach($name in 'aliases','rules','staticNeighbors','routes','recorderLoggers','ownedAdapters'){if($side.$name -ne 0){$clean=$false}}
     }
     $report|Select-Object schema,restoreRequested,clientBefore,clientProcessesStopped,clientRecorderSessionsStopped,clientRootsRestored,
-        clientDialRoutesRemoved,clientRulesRemoved,clientAfter,peerBefore,peerProcessesStopped,peerRootsRestored,peerRulesRemoved,peerAfter,
+        clientDialRoutesRemoved,clientRulesRemoved,clientAfter,peerBefore,peerProcessesStopped,peerRootsRestored,peerRulesRemoved,peerAfter,failureStage,failureType,
         @{n='ownedResourcesClear';e={$clean}},@{n='pathsExported';e={$false}},@{n='rawTracesExported';e={$false}}|
         Select-Object * -ExcludeProperty PSComputerName,RunspaceId,PSShowComputerName|
         ConvertTo-Json -Depth 4|Set-Content -LiteralPath $ReportFile
-    if($Restore -and -not $clean){throw 'Owned resources remain after snapshot-based restoration.'}
+    if(($Restore -and -not $clean) -or $null -ne $report.failureStage){throw 'Owned resources remain after snapshot-based restoration.'}
 }catch{
     if(-not(Test-Path -LiteralPath $ReportFile)){
         $message=$_.Exception.Message
