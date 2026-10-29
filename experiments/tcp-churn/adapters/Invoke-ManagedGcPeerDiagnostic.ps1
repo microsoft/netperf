@@ -27,6 +27,7 @@ param(
     [switch]$ServiceWait,
     [switch]$PipelinedServiceWait,
     [switch]$SteadyStateFixture,
+    [ValidateSet('none','nodes1000','nodes1000-outage')][string]$ClusterProfile='none',
     [ValidateSet(0,1024,4096,8192,49152,98304,196608,294912)][int]$ReferencedTcpPaths=0,
     [ValidateSet(0,16384)][int]$ReceiveBudgetBytes=0,
     [ValidateSet(0,1,1024,8192,24576,49152,98304,196608,294912)][int]$CacheRetirePaths=0,
@@ -66,6 +67,10 @@ if($ServiceWait -and ($GcProcessRole -ne 'server' -or $ExchangesPerConnection -n
     throw 'Service-wait comparison requires receiver-GC64 exchanges of512 bytes without other protocol variants.'
 }
 if($PipelinedServiceWait -and -not $ServiceWait){throw 'Pipelined requests require service-wait mode.'}
+if($ClusterProfile -ne 'none' -and ($GcProcessRole -ne 'server' -or -not $IsolatedData -or -not $PipelinedServiceWait -or
+    $PeerRecovery -or $RouteRefresh -or $CacheRetirePaths -or $PeerGcPressure -or $CacheInterfaceAlias)){
+    throw 'The cluster topology requires isolated pipelined receiver traffic without other network controls.'
+}
 if($SteadyStateFixture -and (-not $PipelinedServiceWait -or -not $KeepCacheValid -or -not $RetireDuringGc -or
     -not $CacheRetirePaths -or -not $CacheInterfaceGuid -or $RouteRefresh)){
     throw 'Steady-state fixture setup requires pipelined receiver traffic and only the owned GC-active valid-cache control.'
@@ -113,7 +118,8 @@ $peer=$null;$peerOwned=$false;$profileOwned=$false
 $client=$null;$localServer=$null;$tcpProbe=$null;$clrProbe=$null
 $neighborPulse=$null;$neighborArguments=@();$pulseResult=$null;$ownedCounts=$null;$peerDhcpEnabled=$null;$clientFailure=$null
 $localDataStarted=$false;$remoteDataStarted=$false
-$peerAddressPlan=if($RouteVariant -eq 'peer-gateway'){'198.19.240.5,198.19.240.6'}else{'198.19.240.6'}
+$peerAddressPlan=if($RouteVariant -eq 'peer-gateway' -or $ClusterProfile -ne 'none'){'198.19.240.5,198.19.240.6'}else{'198.19.240.6'}
+$clusterAddressesStarted=$false;$clusterRoutesStarted=$false;$clusterReport=$null;$clusterSources=$null
 $receiverState=$null;$receiverEvidence=$null
 $receiverTrafficStarted=$false
 $pathControls=[Collections.Generic.List[object]]::new()
@@ -241,7 +247,7 @@ try {
         $clientTargets=@($peerAddress,$peerAddress,$peerAddress,$peerAddress,'127.0.0.2','127.0.0.2','127.0.0.2','127.0.0.2')
         $phase='resolve-data-neighbor'
         $neighborTargets=@($peerAddress)
-        if($RouteVariant -eq 'peer-gateway'){$neighborTargets+='198.19.240.5'}
+        if($RouteVariant -eq 'peer-gateway' -or $ClusterProfile -ne 'none'){$neighborTargets+='198.19.240.5'}
         $neighborNumber=0
         foreach($neighborTarget in $neighborTargets) {
         try {
@@ -259,6 +265,39 @@ try {
         }
         $neighborNumber++
         }
+    }
+    if($ClusterProfile -ne 'none'){
+        $phase='prepare-peer-cluster'
+        foreach($file in @('Set-ScopedClusterAddresses.ps1','Invoke-ScopedPeerOutage.ps1')){
+            Copy-Item -LiteralPath (Join-Path $PSScriptRoot $file) -Destination (Join-Path $remote $file) -ToSession $peer
+        }
+        $clusterAddressesStarted=$true
+        $peerClusterReport=Invoke-Command -Session $peer -ScriptBlock {
+            param($root,$alias)
+            & (Join-Path $root 'Set-ScopedClusterAddresses.ps1') -Action add -InterfaceAlias $alias -Count 1000 `
+                -StateFile (Join-Path $root 'cluster-original.clixml') -ReportFile (Join-Path $root 'cluster-prepare.json')
+            Get-Content -LiteralPath (Join-Path $root 'cluster-prepare.json') -Raw|ConvertFrom-Json
+        } -ArgumentList $remote,$peerData.alias
+        $phase='prepare-client-cluster-routes'
+        $clusterRoutesStarted=$true
+        & (Join-Path $PSScriptRoot 'Set-ScopedClusterRoutes.ps1') -Action add -InterfaceAlias $alias `
+            -StateFile (Join-Path $diagnostics 'cluster-routes-original.clixml') -ReportFile (Join-Path $diagnostics 'cluster-routes.json')
+        $clusterSources=@(1..1000|ForEach-Object{"198.19.$(64+[Math]::Floor(($_-1)/250)).$(1+(($_-1)%250))"})
+        $phase='verify-cluster-reachability'
+        $probeTargets=@($clusterSources[0],$clusterSources[999])
+        foreach($probeTarget in $probeTargets){
+            $routePick=@(Find-NetRoute -RemoteIPAddress $probeTarget -ErrorAction Stop|Where-Object{$_.PSObject.Properties['NextHop']})
+            if($routePick.Count -ne 1 -or $routePick[0].NextHop -ne '198.19.240.5' -or $routePick[0].DestinationPrefix -ne '198.19.64.0/22'){
+                throw 'The cluster prefix did not select the owned primary gateway route.'
+            }
+        }
+        $clusterReport=[ordered]@{remoteNodeAddresses=1000;prefix='198.19.64.0/22';gatewayRoutes=2
+            peerPreparationMilliseconds=$peerClusterReport.preparationMilliseconds
+            deadGatewayDetectionSetting=[int](Get-NetIPv4Protocol -ErrorAction Stop).DeadGatewayDetection
+            remoteConnections=7168;loopbackConnections=1024;responseBytes=16384
+            outageAddresses=$(if($ClusterProfile -eq 'nodes1000-outage'){250}else{0})
+            outageDelayMilliseconds=$(if($ClusterProfile -eq 'nodes1000-outage'){5000}else{0})
+            outageDurationMilliseconds=$(if($ClusterProfile -eq 'nodes1000-outage'){4000}else{0})}
     }
     $phase='compile-client'
     $null=Invoke-TcpChurnTool -Program $compiler -Arguments @('/nologo','/target:exe','/platform:x64',"/out:$exe",(Join-Path $sourceRoot 'ArrivalTcp.cs')) `
@@ -319,6 +358,15 @@ try {
             PeerGcPressure=([bool]$PeerGcPressure);ExchangesPerConnection=$ExchangesPerConnection;FramedNagle=([bool]$FramedNagle);CoreClr=([bool]$CoreClr);IdleKeepalive=([bool]$IdleKeepalive);ServiceWait=([bool]$ServiceWait);PipelinedServiceWait=([bool]$PipelinedServiceWait)
             GcReadinessFile=$(if($SteadyStateFixture){Join-Path $diagnostics ($cacheStem+'.ready')}else{$null})
             ServerOutput=$localOutput;Rule=$null;Receiver=$null;LocalClient=$null}
+        if($ClusterProfile -ne 'none'){
+            $receiverState.ResponseBytes=16384;$receiverState.RemoteCount=7168
+            $receiverState.RemoteSources=$clusterSources -join ',';$receiverState.ClusterPrefix='198.19.64.0/22'
+            if($ClusterProfile -eq 'nodes1000-outage'){
+                # Every fourth remote node (25%) silently drops inbound traffic for a bounded window.
+                $receiverState.Outage=@{Addresses=(@(for($i=0;$i -lt 1000;$i+=4){$clusterSources[$i]}) -join ',')
+                    DelayMilliseconds=5000;DurationMilliseconds=4000}
+            }
+        }
         Start-GcReceiver -State $receiverState
         $localServer=$receiverState.Receiver
     } else {
@@ -521,6 +569,8 @@ try {
     if($after.SentBytes-$before.SentBytes -lt ($remoteTargets|Measure-Object requestBytes -Sum).Sum -or
         $after.ReceivedBytes-$before.ReceivedBytes -lt ($remoteTargets|Measure-Object responseBytes -Sum).Sum){throw 'The non-loopback NIC did not account for the remote payload.'}
     $result=[ordered]@{schema=1;workload='managed-gc-mixed';outcome='collected';connections=$r.connections
+        clusterProfile=$ClusterProfile;cluster=$clusterReport;partialOutage=$(if($r.PSObject.Properties['partialOutage']){$r.partialOutage}else{$null})
+        responseBytesPerExchange=$(if($r.PSObject.Properties['responseBytesPerExchange']){$r.responseBytesPerExchange}else{$null})
         fixtureOrdering=$(if($SteadyStateFixture){'during-ongoing-pipelined-traffic'}else{'before-traffic'})
         requestedReferencedTcpPaths=$ReferencedTcpPaths
         bytesSent=$r.bytesSent;bytesReceived=$r.bytesReceived;payloadBytesPerDirection=$payloadBytes
@@ -680,6 +730,18 @@ finally {
     if($peerOwned -and $null -ne $peer) {
         try {Invoke-Command -Session $peer -ScriptBlock {
             $errors=[Collections.Generic.List[Exception]]::new()
+            if($global:OwnedManagedGcPeer.ContainsKey('Outage') -and $null -ne $global:OwnedManagedGcPeer.Outage){
+                try{
+                    [IO.File]::WriteAllText($global:OwnedManagedGcPeer.OutageStop,'stop')
+                    $null=$global:OwnedManagedGcPeer.Outage.Process.WaitForExit(15000)
+                }catch{$errors.Add($_.Exception)}
+                try{Stop-TcpChurnCollector $global:OwnedManagedGcPeer.Outage}catch{$errors.Add($_.Exception)}
+                try{
+                    if(@(Get-NetFirewallRule -Name $global:OwnedManagedGcPeer.OutageRule -PolicyStore ActiveStore -ErrorAction SilentlyContinue).Count){
+                        Remove-NetFirewallRule -Name $global:OwnedManagedGcPeer.OutageRule -PolicyStore ActiveStore -ErrorAction Stop
+                    }
+                }catch{$errors.Add($_.Exception)}
+            }
             foreach($child in @($global:OwnedManagedGcPeer.Process,$global:OwnedManagedGcPeer.PressureClient,$global:OwnedManagedGcPeer.PressureServer)){
                 if($null -ne $child){
                     try{Stop-TcpChurnCollector $child}catch{$errors.Add($_.Exception)}
@@ -690,6 +752,21 @@ finally {
             }
             if($errors.Count){throw [AggregateException]::new('Owned peer workload cleanup failed.',$errors)}
         }}catch{$cleanupErrors.Add($_.Exception)}
+    }
+    if($clusterRoutesStarted -and (Test-Path -LiteralPath (Join-Path $diagnostics 'cluster-routes-original.clixml'))){
+        try{
+            & (Join-Path $PSScriptRoot 'Set-ScopedClusterRoutes.ps1') -Action remove -InterfaceAlias $alias `
+                -StateFile (Join-Path $diagnostics 'cluster-routes-original.clixml') -ReportFile (Join-Path $diagnostics 'cluster-routes-restored.json')
+        }catch{$_.Exception.Data['CleanupPhase']='cluster-routes';$cleanupErrors.Add($_.Exception)}
+    }
+    if($clusterAddressesStarted -and $null -ne $peer){
+        try{Invoke-Command -Session $peer -ScriptBlock {
+            param($root,$alias)
+            if(Test-Path -LiteralPath (Join-Path $root 'cluster-original.clixml')){
+                & (Join-Path $root 'Set-ScopedClusterAddresses.ps1') -Action remove -InterfaceAlias $alias -Count 1000 `
+                    -StateFile (Join-Path $root 'cluster-original.clixml') -ReportFile (Join-Path $root 'cluster-restored.json')
+            }
+        } -ArgumentList $remote,$peerData.alias}catch{$_.Exception.Data['CleanupPhase']='cluster-addresses';$cleanupErrors.Add($_.Exception)}
     }
     if($remoteDataStarted -and $null -ne $peer) {
         try {Invoke-Command -Session $peer -ScriptBlock {
@@ -795,6 +872,7 @@ if($null -ne $failure -or $cleanupErrors.Count) {
             peerRecovery=$pulseResult;peerDataInterfaceDhcpEnabled=$peerDhcpEnabled;clientFailure=$clientFailure
             receiverEvidence=$receiverEvidence
             fixtureOrdering=$(if($SteadyStateFixture){'during-ongoing-pipelined-traffic'}else{'before-traffic'})
+            clusterProfile=$ClusterProfile;cluster=$clusterReport
             routeRefreshControl=$(if($RouteRefresh){$routeReport}else{$null})
             cacheRetirementControl=$cacheReport
             tcpRecovery=$ownedCounts

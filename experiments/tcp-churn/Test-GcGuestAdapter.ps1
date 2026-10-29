@@ -266,6 +266,16 @@ try {
     $rejected=$false
     try{
         & (Join-Path $PSScriptRoot 'adapters\Invoke-NetperfGuestTcpChurn.ps1') `
+            -VmName 'unused-test-only' -Credential $credential -PublishDirectory $directory -ManagedGcClusterProfile nodes1000
+    }catch{
+        if($_.Exception.Message -notmatch 'cluster topology requires'){throw}
+        $rejected=$true
+    }
+    if(-not $rejected -or (Test-Path -LiteralPath $directory)){throw 'Invalid cluster mode mutated state or was accepted.'}
+    $checks++
+    $rejected=$false
+    try{
+        & (Join-Path $PSScriptRoot 'adapters\Invoke-NetperfGuestTcpChurn.ps1') `
             -VmName 'unused-test-only' -Credential $credential -PublishDirectory $directory -ManagedGcReferencedTcpPaths 1024
     }catch{
         if($_.Exception.Message -notmatch 'Referenced loopback paths require'){throw}
@@ -384,6 +394,7 @@ try {
         $ManagedGcPipelinedServiceWait=[switch]::new($true)
         $ManagedGcSteadyStateFixture=[switch]::new($true)
         $ManagedGcReferencedTcpPaths=49152
+        $ManagedGcClusterProfile='nodes1000-outage'
         $ManagedGcHeapLayout='graph-2g'
         $ManagedGcRouteRefresh=[switch]::new($true)
         $ManagedGcRouteVariant='peer-gateway'
@@ -398,7 +409,8 @@ try {
         $dataGuid='66666666-7777-8888-9999-000000000000'
         & ([scriptblock]::Create($launch[0].Extent.Text))
     }
-    if($actual.Count -ne 36 -or $actual[35] -isnot [int] -or $actual[35] -ne 49152 -or
+    if($actual.Count -ne 37 -or $actual[36] -ne 'nodes1000-outage' -or
+        $actual[35] -isnot [int] -or $actual[35] -ne 49152 -or
         $actual[34] -isnot [bool] -or -not $actual[34] -or
         $actual[33] -isnot [bool] -or -not $actual[33] -or
         $actual[32] -isnot [bool] -or -not $actual[32] -or

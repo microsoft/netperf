@@ -438,7 +438,7 @@ foreach($mode in @(@{Pressure=$false;Framed=$false},@{Pressure=$true;Framed=$fal
             $peerChildren.Add([pscustomobject]@{Arguments=$Arguments;CoreClr=[bool]$CoreClr})
             [pscustomobject]@{Process=$null}
         }
-        & $peerLaunch[0].ScriptBlock.GetScriptBlock() 'unused-owned-root' '192.0.2.1' '192.0.2.2' 20300 4096 4096 $(if($serviceMode){512}else{1460}) 1024 $pressureEnabled $(if($idleMode){1}else{64}) $framed $coreMode $idleMode $serviceMode $pipelinedMode
+        & $peerLaunch[0].ScriptBlock.GetScriptBlock() 'unused-owned-root' '192.0.2.1' '192.0.2.2' 20300 4096 4096 $(if($serviceMode){512}else{1460}) $(if($serviceMode){512}else{1460}) 1024 $pressureEnabled $(if($idleMode){1}else{64}) $framed $coreMode $idleMode $serviceMode $pipelinedMode
         if($peerChildren.Count -ne $(if($pressureEnabled){2}else{1})){throw 'Optional pressure changed the ordinary peer launch count.'}
         if($peerChildren[0].Arguments.Count -ne 14 -or $peerChildren[0].CoreClr -ne $coreMode -or
             $peerChildren[0].Arguments[13] -ne $(if($pipelinedMode){'servicewait64:pipelined'}elseif($serviceMode){'servicewait64'}elseif($idleMode){'idlekeepalive'}elseif($framed){'exchanges:64:framed'}else{'exchanges:64'}) -or

@@ -816,6 +816,22 @@ is immediate, no global release event exists, and all bytes/EOFs plus the exact
 completed response-wait count are verified. This is a declared service-time
 model to test delayed header output, not a measured customer latency claim.
 
+The `managed_gc_mixed=coreclr-cluster` and `coreclr-cluster-outage` modes model
+a large database node serving many adjacent nodes and clients inside one
+datacenter network. The peer owns 1,000 /32 addresses in 198.19.64.0/22; the
+profiled node reaches that prefix only through two gateway routes (via
+198.19.240.5 at metric 10, and via 198.19.240.6 at metric 20), both owned by the
+peer, so dead-gateway detection has an alternate route. Of 8,192 pipelined
+connections, 7,168 arrive from those remote addresses and 1,024 use loopback.
+Requests are 512 bytes; responses are 16 KiB, so healthy traffic sends full-size
+segments and exercises black-hole confirmation in the TCP delay queue. The
+outage mode silently drops inbound TCP to every fourth remote address (250) on
+the peer for a bounded 4 s window starting 5 s into the workload, below TCP's
+data-retransmission limit, then restores it; bytes must still verify exactly.
+Addresses, routes and the uniquely named outage rule are ownership-checked,
+restored on failure, and verified before the run is accepted. The DGD setting is
+recorded read-only. This is a declared topology model, not customer topology.
+
 The separate `managed_gc_mixed=coreclr-servicewait-pipelined` contrast retains
 that server latency and all 64 validated 512-byte messages, but sends requests
 on each connection independently of replies. Each client writes first data

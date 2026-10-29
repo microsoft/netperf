@@ -690,8 +690,23 @@ public static class ArrivalTcp
         int concurrency=args.Length>=11?int.Parse(args[10]):256;
         if(args.Length>=12 && args[11]!="nodelay" && args[11]!="nagle")throw new ArgumentException("Unknown socket pacing.");
         noDelay=args.Length>=12 && args[11]=="nodelay";
+        bool clusterSources=sources.Length>8;
+        if(clusterSources){
+            // Many sources are permitted only from the owned 198.19.64.0/22 cluster fixture.
+            var distinct=new HashSet<string>(StringComparer.Ordinal);
+            foreach(string source in sources){
+                IPAddress parsed;
+                if(!IPAddress.TryParse(source,out parsed) || parsed.AddressFamily!=AddressFamily.InterNetwork ||
+                    !distinct.Add(source))throw new ArgumentException("Cluster sources must be distinct IPv4 addresses.");
+                byte[] bytes=parsed.GetAddressBytes();
+                if(bytes[0]!=198 || bytes[1]!=19 || bytes[2]<64 || bytes[2]>67)
+                    throw new ArgumentException("Cluster sources must stay inside the owned 198.19.64.0/22 fixture.");
+            }
+            if(role!="client" || peers.Length!=1 || sources.Length>1024)
+                throw new ArgumentException("Cluster sources require one target peer, client role and at most 1024 addresses.");
+        }
         if(count<1||count>8192||rate<1||rate>10000||size<1||size>1048576||responseSize<1||responseSize>1048576||port<1024||port>65535||
-            sources.Length<1||sources.Length>8||(double)count/rate>120||concurrency<1||concurrency>4096)
+            sources.Length<1||(!clusterSources && sources.Length>8)||(double)count/rate>120||concurrency<1||concurrency>4096)
             throw new ArgumentException("Invalid bounded arrival workload.");
         int gcHeapMiB=0,gcMinimumLaunch=0;bool poolDispatch=false;string heapLayout="arrays";
         if(args.Length>=13) {
@@ -718,8 +733,9 @@ public static class ArrivalTcp
         serviceRequestPipelining=false;
         if(args.Length>=14){
             if(args[13]=="servicewait64" || args[13]=="servicewait64:pipelined"){
-                if(size!=512 || responseSize!=512 || role=="local")
-                    throw new ArgumentException("Service wait mode requires bounded client/server 512-byte messages.");
+                if(size!=512 || (responseSize!=512 && responseSize!=16384) || role=="local" ||
+                    (responseSize==16384 && args[13]!="servicewait64:pipelined"))
+                    throw new ArgumentException("Service wait mode requires 512-byte requests and 512-byte responses, or 16384-byte pipelined responses.");
                 serviceWait=true;exchangesPerConnection=64;
                 serviceRequestPipelining=args[13]=="servicewait64:pipelined";
                 if(serviceRequestPipelining && !noDelay)

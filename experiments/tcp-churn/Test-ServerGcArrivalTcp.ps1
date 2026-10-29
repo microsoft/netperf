@@ -11,7 +11,8 @@ param([ValidateSet('arrays','graph')][string]$HeapLayout='arrays',
     [switch]$IdleKeepalive,
     [switch]$ServiceWait,
     [switch]$PipelinedServiceWait,
-    [switch]$SteadyStateFixture)
+    [switch]$SteadyStateFixture,
+    [switch]$FullSizeResponses)
 $ErrorActionPreference='Stop'
 $directory=Join-Path ([IO.Path]::GetTempPath()) ('server-gc-arrival-'+[guid]::NewGuid().ToString('N'))
 $null=New-Item -ItemType Directory -Path $directory
@@ -54,8 +55,9 @@ try {
     }
     if($PipelinedServiceWait -and -not $ServiceWait){throw 'Pipelined requests require service-wait mode.'}
     if($SteadyStateFixture -and -not $PipelinedServiceWait){throw 'Steady-state fixture tests require pipelined traffic.'}
+    if($FullSizeResponses -and -not $PipelinedServiceWait){throw 'Full-size responses require pipelined service traffic.'}
     $requestBytes=if($ServiceWait){512}elseif($LargeStreaming){1048576}elseif($ExchangesPerConnection -eq 64 -or $IdleKeepalive){1460}else{65536}
-    $responseBytes=if($ServiceWait){512}elseif($LargeStreaming){1048576}elseif($ExchangesPerConnection -eq 64 -or $IdleKeepalive){1460}else{262144}
+    $responseBytes=if($FullSizeResponses){16384}elseif($ServiceWait){512}elseif($LargeStreaming){1048576}elseif($ExchangesPerConnection -eq 64 -or $IdleKeepalive){1460}else{262144}
     $repeatOption=if($ExchangesPerConnection -eq 64){@($(if($FramedNagle){'exchanges:64:framed'}else{'exchanges:64'}))}else{@()}
     if($IdleKeepalive){$repeatOption=@('idlekeepalive')}
     if($ServiceWait){$repeatOption=@($(if($PipelinedServiceWait){'servicewait64:pipelined'}else{'servicewait64'}))}

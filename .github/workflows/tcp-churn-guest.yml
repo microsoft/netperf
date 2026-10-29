@@ -35,7 +35,7 @@ on:
       managed_gc_mixed:
         description: Managed-GC mode; persistent64 performs64 ordinary exchanges per TCP connection
         type: choice
-        options: ['false', 'true', 'persistent64', 'persistent64-framed-nagle', 'coreclr', 'coreclr-keepalive', 'coreclr-servicewait', 'coreclr-servicewait-pipelined']
+        options: ['false', 'true', 'persistent64', 'persistent64-framed-nagle', 'coreclr', 'coreclr-keepalive', 'coreclr-servicewait', 'coreclr-servicewait-pipelined', 'coreclr-cluster', 'coreclr-cluster-outage']
         default: 'false'
       managed_gc_payload_bytes:
         description: Request and response bytes for the managed-GC diagnostic only
@@ -158,6 +158,8 @@ jobs:
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-ServerGcArrivalTcp.ps1 -HeapLayout graph -ReceiveBudgetBytes 16384 -CoreClr -ExchangesPerConnection 64 -ServiceWait -PipelinedServiceWait -SteadyStateFixture -MaximumInFlight 256
       - shell: pwsh
+        run: ./experiments/tcp-churn/Test-ServerGcArrivalTcp.ps1 -HeapLayout graph -ReceiveBudgetBytes 16384 -CoreClr -ExchangesPerConnection 64 -ServiceWait -PipelinedServiceWait -FullSizeResponses -MaximumInFlight 256
+      - shell: pwsh
         run: ./experiments/tcp-churn/Test-ServerGcArrivalTcp.ps1 -HeapLayout graph -ReceiveBudgetBytes 16384 -ExchangesPerConnection 64
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-ServerGcArrivalTcp.ps1 -HeapLayout graph -ReceiveBudgetBytes 16384 -ExchangesPerConnection 64 -FramedNagle
@@ -175,6 +177,8 @@ jobs:
         run: ./experiments/tcp-churn/Test-ScopedDestinationCacheFlush.ps1
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-ScopedPathRetirement.ps1
+      - shell: pwsh
+        run: ./experiments/tcp-churn/Test-ScopedCluster.ps1
       - shell: pwsh
         run: ./experiments/tcp-churn/Test-GcControlPlan.ps1
       - shell: pwsh
@@ -269,10 +273,11 @@ jobs:
           }
           $persistentRequested = $env:MANAGED_GC_MIXED -in @('persistent64', 'persistent64-framed-nagle')
           $framedNagleRequested = $env:MANAGED_GC_MIXED -eq 'persistent64-framed-nagle'
-          $coreClrRequested = $env:MANAGED_GC_MIXED -in @('coreclr', 'coreclr-keepalive', 'coreclr-servicewait', 'coreclr-servicewait-pipelined')
+          $clusterProfile = switch ($env:MANAGED_GC_MIXED) { 'coreclr-cluster' { 'nodes1000' } 'coreclr-cluster-outage' { 'nodes1000-outage' } default { 'none' } }
+          $coreClrRequested = $env:MANAGED_GC_MIXED -in @('coreclr', 'coreclr-keepalive', 'coreclr-servicewait', 'coreclr-servicewait-pipelined', 'coreclr-cluster', 'coreclr-cluster-outage')
           $idleKeepaliveRequested = $env:MANAGED_GC_MIXED -eq 'coreclr-keepalive'
-          $serviceWaitRequested = $env:MANAGED_GC_MIXED -in @('coreclr-servicewait', 'coreclr-servicewait-pipelined')
-          $pipelinedServiceWaitRequested = $env:MANAGED_GC_MIXED -eq 'coreclr-servicewait-pipelined'
+          $serviceWaitRequested = $env:MANAGED_GC_MIXED -in @('coreclr-servicewait', 'coreclr-servicewait-pipelined', 'coreclr-cluster', 'coreclr-cluster-outage')
+          $pipelinedServiceWaitRequested = $env:MANAGED_GC_MIXED -in @('coreclr-servicewait-pipelined', 'coreclr-cluster', 'coreclr-cluster-outage')
           if ($coreClrRequested) { $env:MANAGED_GC_MIXED = 'true' }
           $steadyFixtureRequested = $env:MANAGED_GC_UNUSED_INTERFACE -eq 'valid-paths-steady-during-gc'
           $duringGcRequested = $env:MANAGED_GC_UNUSED_INTERFACE -in @('during-gc', 'valid-paths-during-gc', 'valid-paths-steady-during-gc')
@@ -340,6 +345,7 @@ jobs:
             $extra.ManagedGcReceiveBudgetBytes = [int]$env:MANAGED_GC_RECEIVE_BUDGET_BYTES
             $extra.ManagedGcCacheRetirePaths = [int]$env:MANAGED_GC_CACHE_RETIRE_PATHS
             if ($referencedTcpPaths) { $extra.ManagedGcReferencedTcpPaths = $referencedTcpPaths }
+            if ($clusterProfile -ne 'none') { $extra.ManagedGcClusterProfile = $clusterProfile }
             if ($env:MANAGED_GC_WPR_PROBES -eq 'true') { $extra.ManagedGcWprProbes = $true }
             if ($noTcpRequested) { $extra.ManagedGcNoTcpProbes = $true }
             if ($env:MANAGED_GC_PEER_PRESSURE -eq 'true') { $extra.ManagedGcPeerPressure = $true }

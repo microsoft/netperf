@@ -8,9 +8,18 @@ function Start-GcReceiver {
     [CmdletBinding()]
     param([Parameter(Mandatory)][hashtable]$State)
     $State.Stage='start-receiver'
+    if(-not $State.ContainsKey('ResponseBytes')){$State.ResponseBytes=$State.Payload}
+    if(-not $State.ContainsKey('RemoteCount')){$State.RemoteCount=$State.Count/2}
+    if(-not $State.ContainsKey('RemoteSources')){$State.RemoteSources=$State.PeerAddress}
+    if(-not $State.ContainsKey('ClusterPrefix')){$State.ClusterPrefix=$null}
+    if(-not $State.ContainsKey('Outage')){$State.Outage=$null}
+    if($State.RemoteCount -lt 1 -or $State.RemoteCount -ge $State.Count){throw 'Both remote and local producers require connections.'}
+    $State.LocalCount=$State.Count-$State.RemoteCount
+    $remoteAddresses=@($State.PeerAddress,$State.ServerAddress)
+    if($State.ClusterPrefix){$remoteAddresses+=$State.ClusterPrefix}
     $rule='ManagedGcReceiver-'+[guid]::NewGuid().ToString('N')
     $null=New-NetFirewallRule -Name $rule -DisplayName $rule -Direction Inbound -Action Allow `
-        -Protocol TCP -LocalPort $State.Port -LocalAddress $State.ServerAddress -RemoteAddress $State.PeerAddress,$State.ServerAddress
+        -Protocol TCP -LocalPort $State.Port -LocalAddress $State.ServerAddress -RemoteAddress $remoteAddresses
     $State.Rule=$rule
     $gcDescriptor="gc:{0}:2048:{1}" -f $State.HeapMiB,$State.HeapLayout
     if($State.ReceiveBudgetBytes){$gcDescriptor+=':'+$State.ReceiveBudgetBytes}
@@ -24,7 +33,7 @@ function Start-GcReceiver {
     $pacing=if($State.FramedNagle){'nagle'}else{'nodelay'}
     $arguments=@(
         $State.PeerAddress,$State.ServerAddress,[string]$State.Port,[string]$State.Count,[string]$State.Rate,
-        [string]$State.Payload,$State.ServerOutput,'server',[string]$State.Payload,'14529',
+        [string]$State.Payload,$State.ServerOutput,'server',[string]$State.ResponseBytes,'14529',
         [string]$State.Connections,$pacing,$gcDescriptor
     )
     if($State.ServiceWait){$arguments+=$(if($State.PipelinedServiceWait){'servicewait64:pipelined'}else{'servicewait64'})}
@@ -38,13 +47,35 @@ function Start-GcReceiverTraffic {
     [CmdletBinding()]
     param([Parameter(Mandatory)][hashtable]$State)
     $clock=[Diagnostics.Stopwatch]::StartNew()
+    if($State.Outage){
+        $State.Stage='start-peer-outage'
+        Invoke-Command -Session $State.Peer -ScriptBlock {
+            param($root,$addresses,$delay,$duration)
+            $global:OwnedManagedGcPeer.OutageStop=Join-Path $root 'outage.stop'
+            $global:OwnedManagedGcPeer.OutageReport=Join-Path $root 'outage.json'
+            $global:OwnedManagedGcPeer.OutageRule='NetperfClusterOutage-'+[guid]::NewGuid().ToString('N')
+            $global:OwnedManagedGcPeer.Outage=Start-TcpChurnCollector -Program (Get-Command pwsh -CommandType Application -ErrorAction Stop).Source `
+                -Arguments @('-NoProfile','-NonInteractive','-File',(Join-Path $root 'Invoke-ScopedPeerOutage.ps1'),
+                    '-Addresses',$addresses,'-DelayMilliseconds',[string]$delay,'-DurationMilliseconds',[string]$duration,
+                    '-ReadyFile',(Join-Path $root 'outage.ready'),'-StopFile',$global:OwnedManagedGcPeer.OutageStop,
+                    '-ReportFile',$global:OwnedManagedGcPeer.OutageReport,'-RuleName',$global:OwnedManagedGcPeer.OutageRule) `
+                -Directory $root -LogPrefix (Join-Path $root 'outage-agent')
+            $ready=[Diagnostics.Stopwatch]::StartNew()
+            while(-not(Test-Path -LiteralPath (Join-Path $root 'outage.ready'))){
+                if($global:OwnedManagedGcPeer.Outage.Process.HasExited -or $ready.Elapsed.TotalSeconds -gt 30){
+                    throw 'The bounded peer outage agent did not become ready.'
+                }
+                Start-Sleep -Milliseconds 20
+            }
+        } -ArgumentList $State.PeerRoot,$State.Outage.Addresses,$State.Outage.DelayMilliseconds,$State.Outage.DurationMilliseconds
+    }
     $State.Stage='start-remote-producer'
     Invoke-Command -Session $State.Peer -ScriptBlock {
-        param($root,$source,$target,$port,$count,$rate,$payload,$concurrency,$peerPressure,$exchanges,$framedNagle,$coreClr,$idleKeepalive,$serviceWait,$pipelinedServiceWait)
+        param($root,$source,$target,$port,$count,$rate,$payload,$responseBytes,$concurrency,$peerPressure,$exchanges,$framedNagle,$coreClr,$idleKeepalive,$serviceWait,$pipelinedServiceWait)
         $output=Join-Path $root 'client.json'
         $arguments=@(
             $source,$target,[string]$port,[string]$count,[string]$rate,[string]$payload,
-            $output,'client',[string]$payload,'23521',[string]$concurrency,$(if($framedNagle){'nagle'}else{'nodelay'}),'dispatch:pool'
+            $output,'client',[string]$responseBytes,'23521',[string]$concurrency,$(if($framedNagle){'nagle'}else{'nodelay'}),'dispatch:pool'
         )
         if($serviceWait){$arguments+=$(if($pipelinedServiceWait){'servicewait64:pipelined'}else{'servicewait64'})}
         elseif($exchanges -eq 64){$arguments+=$(if($framedNagle){'exchanges:64:framed'}else{'exchanges:64'})}
@@ -58,13 +89,13 @@ function Start-GcReceiverTraffic {
                 'client','1048576','34711','256','nodelay','dispatch:pool'
             ) -Directory $root -LogPrefix (Join-Path $root 'pressure-client')
         }
-    } -ArgumentList $State.PeerRoot,$State.PeerAddress,$State.ServerAddress,$State.Port,($State.Count/2),([int][Math]::Ceiling($State.Rate/2.0)),$State.Payload,$State.Connections,([bool]$State.PeerGcPressure),$State.ExchangesPerConnection,([bool]$State.FramedNagle),([bool]$State.CoreClr),([bool]$State.IdleKeepalive),([bool]$State.ServiceWait),([bool]$State.PipelinedServiceWait)
+    } -ArgumentList $State.PeerRoot,$State.RemoteSources,$State.ServerAddress,$State.Port,$State.RemoteCount,([int][Math]::Ceiling($State.Rate*$State.RemoteCount/$State.Count)),$State.Payload,$State.ResponseBytes,$State.Connections,([bool]$State.PeerGcPressure),$State.ExchangesPerConnection,([bool]$State.FramedNagle),([bool]$State.CoreClr),([bool]$State.IdleKeepalive),([bool]$State.ServiceWait),([bool]$State.PipelinedServiceWait)
     $localOutput=Join-Path $State.Directory 'receiver-local-client.json'
     $State.Stage='start-local-producer'
     $arguments=@(
-        $State.ServerAddress,$State.ServerAddress,[string]$State.Port,[string]($State.Count/2),
-        [string]([int][Math]::Ceiling($State.Rate/2.0)),[string]$State.Payload,$localOutput,
-        'client',[string]$State.Payload,'14529',[string]$State.Connections,$(if($State.FramedNagle){'nagle'}else{'nodelay'}),'dispatch:pool'
+        $State.ServerAddress,$State.ServerAddress,[string]$State.Port,[string]$State.LocalCount,
+        [string]([int][Math]::Ceiling($State.Rate*$State.LocalCount/$State.Count)),[string]$State.Payload,$localOutput,
+        'client',[string]$State.ResponseBytes,'14529',[string]$State.Connections,$(if($State.FramedNagle){'nagle'}else{'nodelay'}),'dispatch:pool'
     )
     if($State.ServiceWait){$arguments+=$(if($State.PipelinedServiceWait){'servicewait64:pipelined'}else{'servicewait64'})}
     elseif($State.ExchangesPerConnection -eq 64){$arguments+=$(if($State.FramedNagle){'exchanges:64:framed'}else{'exchanges:64'})}
@@ -91,6 +122,15 @@ function Complete-GcReceiverTraffic {
             throw 'The independent remote producer did not complete successfully.'
         }
         $data=Get-Content (Join-Path $global:OwnedManagedGcPeer.Root 'client.json') -Raw|ConvertFrom-Json
+        $outage=$null
+        if($global:OwnedManagedGcPeer.ContainsKey('Outage') -and $null -ne $global:OwnedManagedGcPeer.Outage){
+            [IO.File]::WriteAllText($global:OwnedManagedGcPeer.OutageStop,'stop')
+            if(-not $global:OwnedManagedGcPeer.Outage.Process.WaitForExit(60000) -or
+                $global:OwnedManagedGcPeer.Outage.Process.ExitCode -ne 0){
+                throw 'The bounded peer outage agent did not complete and restore its rule.'
+            }
+            $outage=Get-Content -LiteralPath $global:OwnedManagedGcPeer.OutageReport -Raw|ConvertFrom-Json
+        }
         $pressure=$null
         if($peerPressure){
             foreach($child in @($global:OwnedManagedGcPeer.PressureClient,$global:OwnedManagedGcPeer.PressureServer)){
@@ -114,9 +154,15 @@ function Complete-GcReceiverTraffic {
             $pressure=[pscustomobject]@{connections=4096;bytesPerDirection=4294967296;networkScope='peer-loopback-only'
                 offeredArrivalRate=$global:OwnedManagedGcPeer.PressureRate;managedGc=$receiver.managedGc;barrier=$false}
         }
-        [pscustomobject]@{Data=$data;Pressure=$pressure}
+        [pscustomobject]@{Data=$data;Pressure=$pressure;Outage=$outage}
     } -ArgumentList ([bool]$State.PeerGcPressure)
     $remote=$remoteBundle.Data
+    if($State.Outage -and ($null -eq $remoteBundle.Outage -or $remoteBundle.Outage.outcome -ne 'completed' -or
+        -not $remoteBundle.Outage.applied -or -not $remoteBundle.Outage.removed -or
+        $remoteBundle.Outage.affectedAddresses -ne @($State.Outage.Addresses.Split(',')).Count)){
+        throw 'The requested partial outage did not apply within the workload and restore.'
+    }
+    $State.OutageReport=$remoteBundle.Outage
     $State.Stage='wait-receiver'
     if(-not $State.Receiver.Process.WaitForExit(15000) -or $State.Receiver.Process.ExitCode -ne 0){
         throw 'The profiled GC receiver did not complete successfully.'
@@ -138,15 +184,15 @@ function Complete-GcReceiverTraffic {
             $endpoint.clientPacingWaitsCompleted -ne $(if($State.PipelinedServiceWait -and $endpoint.role -eq 'client'){[long]$endpoint.connections*($State.ExchangesPerConnection-1)}else{0}) -or
             $endpoint.clientPacingMinimumMilliseconds -ne $(if($State.PipelinedServiceWait){250}else{0}) -or
             $endpoint.clientPacingMaximumMilliseconds -ne $(if($State.PipelinedServiceWait){750}else{0}) -or
-            $endpoint.maximumPerConnectionReadBufferBytes -ne [Math]::Min($State.Payload,65536) -or
+            $endpoint.maximumPerConnectionReadBufferBytes -ne [Math]::Min($(if($endpoint.role -eq 'server'){$State.Payload}else{$State.ResponseBytes}),65536) -or
             $endpoint.networkErrors -ne 0 -or $endpoint.protocolErrors -ne 0 -or $endpoint.barrier){
             throw 'A receiver-GC endpoint failed protocol verification.'
         }
     }
     $State.Stage='verify-receiver-coverage'
-    if($local.connections -ne $State.Count/2 -or $remote.connections -ne $State.Count/2 -or
+    if($local.connections -ne $State.LocalCount -or $remote.connections -ne $State.RemoteCount -or
         $server.connections -ne $State.Count -or $server.bytesReceived -ne ([long]$State.Count*$State.Payload*$State.ExchangesPerConnection) -or
-        $server.bytesSent -ne ([long]$State.Count*$State.Payload*$State.ExchangesPerConnection) -or
+        $server.bytesSent -ne ([long]$State.Count*$State.ResponseBytes*$State.ExchangesPerConnection) -or
         $server.bytesReceived -ne $local.bytesSent+$remote.bytesSent -or
         $server.bytesSent -ne $local.bytesReceived+$remote.bytesReceived -or
         -not $server.managedGc.enabled -or $server.managedGc.gen2CollectionsAfter -le $server.managedGc.gen2CollectionsBefore -or
@@ -184,6 +230,9 @@ function Complete-GcReceiverTraffic {
         clientPacingMinimumMilliseconds=$server.clientPacingMinimumMilliseconds;clientPacingMaximumMilliseconds=$server.clientPacingMaximumMilliseconds
         maximumPerConnectionReadBufferBytes=$server.maximumPerConnectionReadBufferBytes
         peerGcPressure=$remoteBundle.Pressure
+        responseBytesPerExchange=$State.ResponseBytes
+        remoteSourceAddresses=@($State.RemoteSources.Split(',')).Count
+        partialOutage=$remoteBundle.Outage
         arrivalRate=(2*[Math]::Ceiling($State.Rate/2.0));arrivalDispatch='independent-client-processes';peakInFlight=$server.peakInFlight
         maxLaunchLagMilliseconds=[Math]::Max($local.maxLaunchLagMilliseconds,$remote.maxLaunchLagMilliseconds)
         meanDispatchQueueMilliseconds=($local.meanDispatchQueueMilliseconds+$remote.meanDispatchQueueMilliseconds)/2
