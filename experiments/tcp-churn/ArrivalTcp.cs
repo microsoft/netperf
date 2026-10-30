@@ -831,24 +831,24 @@ public static class ArrivalTcp
             if(sources.Length%47==0 || sources.Length%617==0)throw new ArgumentException("The cluster source count must be coprime to the explicit port span.");
         }
         if(clusterSources){
-            // Many sources are permitted only from the owned 198.19.64.0/20 cluster fixture.
+            // Many sources are permitted only from the owned 198.19.64.0/19 cluster fixture.
             var distinct=new HashSet<string>(StringComparer.Ordinal);
             foreach(string source in sources){
                 IPAddress parsed;
                 if(!IPAddress.TryParse(source,out parsed) || parsed.AddressFamily!=AddressFamily.InterNetwork ||
                     !distinct.Add(source))throw new ArgumentException("Cluster sources must be distinct IPv4 addresses.");
                 byte[] bytes=parsed.GetAddressBytes();
-                if(bytes[0]!=198 || bytes[1]!=19 || bytes[2]<64 || bytes[2]>79)
-                    throw new ArgumentException("Cluster sources must stay inside the owned 198.19.64.0/20 fixture.");
+                if(bytes[0]!=198 || bytes[1]!=19 || bytes[2]<64 || bytes[2]>95)
+                    throw new ArgumentException("Cluster sources must stay inside the owned 198.19.64.0/19 fixture.");
             }
-            if(role!="client" || peers.Length!=1 || sources.Length>4096)
-                throw new ArgumentException("Cluster sources require one target peer, client role and at most 4096 addresses.");
+            if(role!="client" || peers.Length!=1 || sources.Length>8192)
+                throw new ArgumentException("Cluster sources require one target peer, client role and at most 8192 addresses.");
         }
         // Hot service mode models a large node and may carry up to eight times the ordinary connection bounds.
         bool hotScale=args.Length>=14 && args[13].StartsWith("servicehot256",StringComparison.Ordinal);
         // Held mode keeps a large, mostly idle population of long-lived connections established at once.
         bool heldPopulation=args.Length>=14 && args[13]=="servicehold40:pipelined";
-        int countLimit=heldPopulation?131072:hotScale?65536:8192,concurrencyLimit=heldPopulation?131072:hotScale?32768:4096;
+        int countLimit=heldPopulation?262144:hotScale?65536:8192,concurrencyLimit=heldPopulation?262144:hotScale?32768:4096;
         if(count<1||count>countLimit||rate<1||rate>10000||size<1||size>1048576||responseSize<1||responseSize>1048576||port<1024||port>65535||
             sources.Length<1||(!clusterSources && sources.Length>8)||(double)count/rate>120||concurrency<1||concurrency>concurrencyLimit)
             throw new ArgumentException("Invalid bounded arrival workload.");
