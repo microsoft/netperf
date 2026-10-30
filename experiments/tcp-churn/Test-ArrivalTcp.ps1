@@ -58,16 +58,16 @@ try {
         }
         $child.Dispose();$child=$null;$checks++
     }
-    foreach($case in @('hot-nagle','hot-wrong-response','hot-large-request')){
+    foreach($case in @('hot-nagle','hot-wrong-response','hot-large-request','hold-nagle')){
         $rejectedOutput=Join-Path $directory 'rejected-hot.json'
         $info.ArgumentList.Clear()
         foreach($argument in @('127.0.0.1','127.0.0.2',[string]$port,'16','128',$(if($case -eq 'hot-large-request'){'1460'}else{'512'}),$rejectedOutput,
-            'client',$(if($case -eq 'hot-wrong-response'){'512'}else{'1460'}),'14529','16',$(if($case -eq 'hot-nagle'){'nagle'}else{'nodelay'}),
-            'dispatch:pool','servicehot256:pipelined')){$info.ArgumentList.Add($argument)}
+            'client',$(if($case -eq 'hot-wrong-response'){'512'}else{'1460'}),'14529','16',$(if($case -in 'hot-nagle','hold-nagle'){'nagle'}else{'nodelay'}),
+            'dispatch:pool',$(if($case -eq 'hold-nagle'){'servicehold40:pipelined'}else{'servicehot256:pipelined'}))){$info.ArgumentList.Add($argument)}
         $child=[Diagnostics.Process]::Start($info)
         $errorText=$child.StandardError.ReadToEndAsync()
         if(-not $child.WaitForExit(5000) -or $child.ExitCode -eq 0 -or
-            $errorText.GetAwaiter().GetResult() -notmatch $(if($case -eq 'hot-nagle'){'Pipelined service requests require'}else{'Hot service mode requires'}) -or
+            $errorText.GetAwaiter().GetResult() -notmatch $(if($case -in 'hot-nagle','hold-nagle'){'Pipelined service requests require'}else{'Hot service mode requires'}) -or
             (Test-Path -LiteralPath $rejectedOutput)){
             throw 'Invalid hot service pacing was not rejected before network use.'
         }

@@ -841,7 +841,9 @@ public static class ArrivalTcp
         }
         // Hot service mode models a large node and may carry up to eight times the ordinary connection bounds.
         bool hotScale=args.Length>=14 && args[13].StartsWith("servicehot256",StringComparison.Ordinal);
-        int countLimit=hotScale?65536:8192,concurrencyLimit=hotScale?32768:4096;
+        // Held mode keeps a large, mostly idle population of long-lived connections established at once.
+        bool heldPopulation=args.Length>=14 && args[13]=="servicehold40:pipelined";
+        int countLimit=heldPopulation?131072:hotScale?65536:8192,concurrencyLimit=heldPopulation?131072:hotScale?32768:4096;
         if(count<1||count>countLimit||rate<1||rate>10000||size<1||size>1048576||responseSize<1||responseSize>1048576||port<1024||port>65535||
             sources.Length<1||(!clusterSources && sources.Length>8)||(double)count/rate>120||concurrency<1||concurrency>concurrencyLimit)
             throw new ArgumentException("Invalid bounded arrival workload.");
@@ -869,7 +871,14 @@ public static class ArrivalTcp
         serviceWait=false;
         serviceRequestPipelining=false;
         if(args.Length>=14){
-            if(args[13]=="servicehot256:pipelined"){
+            if(args[13]=="servicehold40:pipelined"){
+                // Long-lived pooled connections: one small request per 1-2 s for about a minute each.
+                if(size!=512 || (responseSize!=1460 && responseSize!=16384) || role=="local")
+                    throw new ArgumentException("Held service mode requires 512-byte requests and 1460- or 16384-byte pipelined responses.");
+                serviceWait=true;serviceRequestPipelining=true;exchangesPerConnection=40;
+                serviceDelayMinimumMilliseconds=1000;serviceDelaySpanMilliseconds=1001;
+                if(!noDelay)throw new ArgumentException("Pipelined service requests require explicit nodelay pacing.");
+            }else if(args[13]=="servicehot256:pipelined"){
                 // One MSS-sized response keeps the guest data path at a high exchange rate; 16 KiB responses suit hosts with
                 // high-bandwidth private links.
                 if(size!=512 || (responseSize!=1460 && responseSize!=16384) || role=="local")
@@ -1060,11 +1069,11 @@ public static class ArrivalTcp
         try {
             if((args.Length==8 || args.Length==9) && args[0]=="--route-epoch-dial")return RunRouteEpochDial(args);
             if(args.Length<7 || args.Length>15) {
-                Console.Error.WriteLine("Usage: ArrivalTcp sources peer port count rate request-bytes output.json [role [response-bytes [seed [maximum-in-flight [nodelay|nagle [gc:heap-MiB:minimum-launched|dispatch:pool [exchanges:64[:framed]|idlekeepalive|servicewait64[:pipelined]|servicehot256:pipelined [fixture-ready-file]]]]]]]]");
+                Console.Error.WriteLine("Usage: ArrivalTcp sources peer port count rate request-bytes output.json [role [response-bytes [seed [maximum-in-flight [nodelay|nagle [gc:heap-MiB:minimum-launched|dispatch:pool [exchanges:64[:framed]|idlekeepalive|servicewait64[:pipelined]|servicehot256:pipelined|servicehold40:pipelined [fixture-ready-file]]]]]]]]");
                 return 2;
             }
             // Hot-scale nodes carry up to 8x the connections, so they get a longer bounded deadline.
-            bool hotService=args.Length>=14 && args[13].StartsWith("servicehot256",StringComparison.Ordinal);
+            bool hotService=args.Length>=14 && (args[13].StartsWith("servicehot256",StringComparison.Ordinal) || args[13]=="servicehold40:pipelined");
             if(!Run(args).Wait(TimeSpan.FromSeconds(hotService?330:150))){
                 WriteFailure(args,new TimeoutException("Arrival workload deadline exceeded."));
                 Console.Error.WriteLine("Arrival workload deadline exceeded.");return 3;
