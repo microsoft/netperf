@@ -814,8 +814,11 @@ public static class ArrivalTcp
             if(role!="client" || peers.Length!=1 || sources.Length>1024)
                 throw new ArgumentException("Cluster sources require one target peer, client role and at most 1024 addresses.");
         }
-        if(count<1||count>8192||rate<1||rate>10000||size<1||size>1048576||responseSize<1||responseSize>1048576||port<1024||port>65535||
-            sources.Length<1||(!clusterSources && sources.Length>8)||(double)count/rate>120||concurrency<1||concurrency>4096)
+        // Hot service mode models a large node and may carry up to four times the ordinary connection bounds.
+        bool hotScale=args.Length>=14 && args[13].StartsWith("servicehot256",StringComparison.Ordinal);
+        int countLimit=hotScale?32768:8192,concurrencyLimit=hotScale?16384:4096;
+        if(count<1||count>countLimit||rate<1||rate>10000||size<1||size>1048576||responseSize<1||responseSize>1048576||port<1024||port>65535||
+            sources.Length<1||(!clusterSources && sources.Length>8)||(double)count/rate>120||concurrency<1||concurrency>concurrencyLimit)
             throw new ArgumentException("Invalid bounded arrival workload.");
         int gcHeapMiB=0,gcMinimumLaunch=0;bool poolDispatch=false;string heapLayout="arrays";
         if(args.Length>=13) {
@@ -901,7 +904,7 @@ public static class ArrivalTcp
                 }
                 listener.Bind(new IPEndPoint(peer,port));
                 // Winsock SOMAXCONN_HINT(N) is -N; a positive backlog may be silently capped.
-                listener.Listen(receiveBudgetBytes>0?-8192:8192);
+                listener.Listen(receiveBudgetBytes>0?-Math.Max(8192,concurrency):8192);
                 receiver=Task.Run(async delegate {
                     var accepted=new List<Task>();
                     using(var serverCapacity=new SemaphoreSlim(concurrency)) {
