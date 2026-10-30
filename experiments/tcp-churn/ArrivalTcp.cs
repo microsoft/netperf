@@ -84,7 +84,7 @@ public static class ArrivalTcp
             if(startAfterFile!=null){
                 var trigger=Stopwatch.StartNew();
                 while(!File.Exists(startAfterFile) && !File.Exists(args[6])){
-                    if(trigger.Elapsed.TotalSeconds>120)throw new TimeoutException("The dial start trigger did not appear.");
+                    if(trigger.Elapsed.TotalSeconds>600)throw new TimeoutException("The dial start trigger did not appear.");
                     Thread.Sleep(1);
                 }
             }
