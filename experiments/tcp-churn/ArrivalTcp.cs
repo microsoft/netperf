@@ -842,10 +842,10 @@ public static class ArrivalTcp
         serviceRequestPipelining=false;
         if(args.Length>=14){
             if(args[13]=="servicehot256:pipelined"){
-                // One MSS-sized response per exchange keeps a ~1 GbE path at a high exchange rate; pacing stays
-                // below link capacity because single-segment flights recover losses only by retransmission timeout.
-                if(size!=512 || responseSize!=1460 || role=="local")
-                    throw new ArgumentException("Hot service mode requires 512-byte requests and 1460-byte pipelined responses.");
+                // One MSS-sized response keeps the guest data path at a high exchange rate; 16 KiB responses suit hosts with
+                // high-bandwidth private links.
+                if(size!=512 || (responseSize!=1460 && responseSize!=16384) || role=="local")
+                    throw new ArgumentException("Hot service mode requires 512-byte requests and 1460- or 16384-byte pipelined responses.");
                 serviceWait=true;serviceRequestPipelining=true;exchangesPerConnection=256;
                 serviceDelayMinimumMilliseconds=50;serviceDelaySpanMilliseconds=81;
                 if(!noDelay)throw new ArgumentException("Pipelined service requests require explicit nodelay pacing.");
