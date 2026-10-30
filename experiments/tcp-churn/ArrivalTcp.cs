@@ -463,7 +463,7 @@ public static class ArrivalTcp
     private static long bindTicks,connectTicks,responseTicks,eofTicks;
     private static long dispatchTicks,maximumDispatchTicks;
     private static bool noDelay;
-    private static bool deferSourcePorts;
+    private static Dictionary<string,int[]> clusterPortCursors;
     private static int receiveBudgetBytes;
     private static int exchangesPerConnection=1;
     private static bool framedWrites;
@@ -748,14 +748,30 @@ public static class ArrivalTcp
         try {await SendCore(source,peer,port,data,expectedResponse,value=>phase=value).ConfigureAwait(false);}
         catch(Exception error) {RecordFirstError(error,"client-"+phase,peer.ToString());throw;}
     }
+    // A port-0 bind to an explicit address draws a globally unique port from the shared dynamic range, which caps
+    // a many-address producer near 16k concurrent connections. Cluster sources instead take monotonically
+    // increasing explicit ports below the dynamic range; explicit binds only conflict on the same address:port,
+    // so each owned source address has an independent port space and no 4-tuple is reused within a run.
+    private static void BindSource(Socket socket,string source)
+    {
+        int[] cursor;
+        if(clusterPortCursors==null || !clusterPortCursors.TryGetValue(source,out cursor)){
+            socket.Bind(new IPEndPoint(IPAddress.Parse(source),0));
+            return;
+        }
+        var address=IPAddress.Parse(source);
+        for(int attempt=0;;attempt++){
+            int port=Interlocked.Increment(ref cursor[0]);
+            if(port>=49152)throw new InvalidOperationException("A cluster source exhausted its explicit port span.");
+            try {socket.Bind(new IPEndPoint(address,port));return;}
+            catch(SocketException error) {if(error.SocketErrorCode!=SocketError.AddressAlreadyInUse || attempt>=64)throw;}
+        }
+    }
     private static async Task SendCore(string source,IPAddress peer,int port,byte[] data,byte[] expectedResponse,Action<string> setPhase)
     {
         long start=Stopwatch.GetTimestamp();
         using(var socket=new TcpClient(AddressFamily.InterNetwork)) {
-            // SO_REUSE_UNICASTPORT defers port choice to connect, so many cluster source addresses share the
-            // ephemeral range by 4-tuple instead of each explicit bind consuming a globally unique port.
-            if(deferSourcePorts)socket.Client.SetSocketOption(SocketOptionLevel.Socket,(SocketOptionName)0x3007,true);
-            socket.Client.Bind(new IPEndPoint(IPAddress.Parse(source),0));
+            BindSource(socket.Client,source);
             long bound=Stopwatch.GetTimestamp();Interlocked.Add(ref bindTicks,bound-start);
             socket.NoDelay=noDelay;
             if(framedWrites && socket.NoDelay)throw new InvalidOperationException("The requested Nagle setting did not verify.");
@@ -805,7 +821,10 @@ public static class ArrivalTcp
         if(args.Length>=12 && args[11]!="nodelay" && args[11]!="nagle")throw new ArgumentException("Unknown socket pacing.");
         noDelay=args.Length>=12 && args[11]=="nodelay";
         bool clusterSources=sources.Length>8;
-        deferSourcePorts=clusterSources;
+        if(clusterSources){
+            clusterPortCursors=new Dictionary<string,int[]>(StringComparer.Ordinal);
+            foreach(string source in sources)clusterPortCursors[source]=new int[]{20000};
+        }
         if(clusterSources){
             // Many sources are permitted only from the owned 198.19.64.0/22 cluster fixture.
             var distinct=new HashSet<string>(StringComparer.Ordinal);
