@@ -814,9 +814,9 @@ public static class ArrivalTcp
             if(role!="client" || peers.Length!=1 || sources.Length>1024)
                 throw new ArgumentException("Cluster sources require one target peer, client role and at most 1024 addresses.");
         }
-        // Hot service mode models a large node and may carry up to four times the ordinary connection bounds.
+        // Hot service mode models a large node and may carry up to eight times the ordinary connection bounds.
         bool hotScale=args.Length>=14 && args[13].StartsWith("servicehot256",StringComparison.Ordinal);
-        int countLimit=hotScale?32768:8192,concurrencyLimit=hotScale?16384:4096;
+        int countLimit=hotScale?65536:8192,concurrencyLimit=hotScale?32768:4096;
         if(count<1||count>countLimit||rate<1||rate>10000||size<1||size>1048576||responseSize<1||responseSize>1048576||port<1024||port>65535||
             sources.Length<1||(!clusterSources && sources.Length>8)||(double)count/rate>120||concurrency<1||concurrency>concurrencyLimit)
             throw new ArgumentException("Invalid bounded arrival workload.");
@@ -1038,7 +1038,7 @@ public static class ArrivalTcp
                 Console.Error.WriteLine("Usage: ArrivalTcp sources peer port count rate request-bytes output.json [role [response-bytes [seed [maximum-in-flight [nodelay|nagle [gc:heap-MiB:minimum-launched|dispatch:pool [exchanges:64[:framed]|idlekeepalive|servicewait64[:pipelined]|servicehot256:pipelined [fixture-ready-file]]]]]]]]");
                 return 2;
             }
-            // Hot-scale nodes carry up to 4x the connections, so they get a proportionally longer bounded deadline.
+            // Hot-scale nodes carry up to 8x the connections, so they get a longer bounded deadline.
             bool hotService=args.Length>=14 && args[13].StartsWith("servicehot256",StringComparison.Ordinal);
             if(!Run(args).Wait(TimeSpan.FromSeconds(hotService?330:150))){
                 WriteFailure(args,new TimeoutException("Arrival workload deadline exceeded."));
