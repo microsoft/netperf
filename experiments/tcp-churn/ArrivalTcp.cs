@@ -463,6 +463,7 @@ public static class ArrivalTcp
     private static long bindTicks,connectTicks,responseTicks,eofTicks;
     private static long dispatchTicks,maximumDispatchTicks;
     private static bool noDelay;
+    private static bool deferSourcePorts;
     private static int receiveBudgetBytes;
     private static int exchangesPerConnection=1;
     private static bool framedWrites;
@@ -750,7 +751,11 @@ public static class ArrivalTcp
     private static async Task SendCore(string source,IPAddress peer,int port,byte[] data,byte[] expectedResponse,Action<string> setPhase)
     {
         long start=Stopwatch.GetTimestamp();
-        using(var socket=new TcpClient(new IPEndPoint(IPAddress.Parse(source),0))) {
+        using(var socket=new TcpClient(AddressFamily.InterNetwork)) {
+            // SO_REUSE_UNICASTPORT defers port choice to connect, so many cluster source addresses share the
+            // ephemeral range by 4-tuple instead of each explicit bind consuming a globally unique port.
+            if(deferSourcePorts)socket.Client.SetSocketOption(SocketOptionLevel.Socket,(SocketOptionName)0x3007,true);
+            socket.Client.Bind(new IPEndPoint(IPAddress.Parse(source),0));
             long bound=Stopwatch.GetTimestamp();Interlocked.Add(ref bindTicks,bound-start);
             socket.NoDelay=noDelay;
             if(framedWrites && socket.NoDelay)throw new InvalidOperationException("The requested Nagle setting did not verify.");
@@ -800,6 +805,7 @@ public static class ArrivalTcp
         if(args.Length>=12 && args[11]!="nodelay" && args[11]!="nagle")throw new ArgumentException("Unknown socket pacing.");
         noDelay=args.Length>=12 && args[11]=="nodelay";
         bool clusterSources=sources.Length>8;
+        deferSourcePorts=clusterSources;
         if(clusterSources){
             // Many sources are permitted only from the owned 198.19.64.0/22 cluster fixture.
             var distinct=new HashSet<string>(StringComparer.Ordinal);
