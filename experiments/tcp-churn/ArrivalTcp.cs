@@ -805,7 +805,8 @@ public static class ArrivalTcp
     }
     private static async Task Run(string[] args)
     {
-        string[] sources=args[0].Split(',');
+        // '@file' supplies a comma-separated source list too long for one command line (thousands of cluster peers).
+        string[] sources=(args[0].StartsWith("@",StringComparison.Ordinal)?File.ReadAllText(args[0].Substring(1)).Trim():args[0]).Split(',');
         string[] peerTexts=args[1].Split(',');
         var peers=new IPAddress[peerTexts.Length];
         for(int i=0;i<peers.Length;i++)peers[i]=IPAddress.Parse(peerTexts[i]);
