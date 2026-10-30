@@ -1038,7 +1038,9 @@ public static class ArrivalTcp
                 Console.Error.WriteLine("Usage: ArrivalTcp sources peer port count rate request-bytes output.json [role [response-bytes [seed [maximum-in-flight [nodelay|nagle [gc:heap-MiB:minimum-launched|dispatch:pool [exchanges:64[:framed]|idlekeepalive|servicewait64[:pipelined]|servicehot256:pipelined [fixture-ready-file]]]]]]]]");
                 return 2;
             }
-            if(!Run(args).Wait(TimeSpan.FromSeconds(150))){
+            // Hot-scale nodes carry up to 4x the connections, so they get a proportionally longer bounded deadline.
+            bool hotService=args.Length>=14 && args[13].StartsWith("servicehot256",StringComparison.Ordinal);
+            if(!Run(args).Wait(TimeSpan.FromSeconds(hotService?330:150))){
                 WriteFailure(args,new TimeoutException("Arrival workload deadline exceeded."));
                 Console.Error.WriteLine("Arrival workload deadline exceeded.");return 3;
             }
