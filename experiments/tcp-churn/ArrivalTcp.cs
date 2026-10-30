@@ -826,18 +826,18 @@ public static class ArrivalTcp
             foreach(string source in sources)clusterPortCursors[source]=new int[]{20000};
         }
         if(clusterSources){
-            // Many sources are permitted only from the owned 198.19.64.0/22 cluster fixture.
+            // Many sources are permitted only from the owned 198.19.64.0/20 cluster fixture.
             var distinct=new HashSet<string>(StringComparer.Ordinal);
             foreach(string source in sources){
                 IPAddress parsed;
                 if(!IPAddress.TryParse(source,out parsed) || parsed.AddressFamily!=AddressFamily.InterNetwork ||
                     !distinct.Add(source))throw new ArgumentException("Cluster sources must be distinct IPv4 addresses.");
                 byte[] bytes=parsed.GetAddressBytes();
-                if(bytes[0]!=198 || bytes[1]!=19 || bytes[2]<64 || bytes[2]>67)
-                    throw new ArgumentException("Cluster sources must stay inside the owned 198.19.64.0/22 fixture.");
+                if(bytes[0]!=198 || bytes[1]!=19 || bytes[2]<64 || bytes[2]>79)
+                    throw new ArgumentException("Cluster sources must stay inside the owned 198.19.64.0/20 fixture.");
             }
-            if(role!="client" || peers.Length!=1 || sources.Length>1024)
-                throw new ArgumentException("Cluster sources require one target peer, client role and at most 1024 addresses.");
+            if(role!="client" || peers.Length!=1 || sources.Length>4096)
+                throw new ArgumentException("Cluster sources require one target peer, client role and at most 4096 addresses.");
         }
         // Hot service mode models a large node and may carry up to eight times the ordinary connection bounds.
         bool hotScale=args.Length>=14 && args[13].StartsWith("servicehot256",StringComparison.Ordinal);

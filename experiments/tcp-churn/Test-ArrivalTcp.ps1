@@ -98,7 +98,7 @@ try {
     foreach($case in @('outside-prefix','duplicate','server-role')){
         $rejectedOutput=Join-Path $directory 'rejected-cluster.json'
         $clusterSources=@(1..9|ForEach-Object{"198.19.64.$_"})
-        if($case -eq 'outside-prefix'){$clusterSources[8]='198.19.68.1'}
+        if($case -eq 'outside-prefix'){$clusterSources[8]='198.19.80.1'}
         if($case -eq 'duplicate'){$clusterSources[8]='198.19.64.1'}
         $info.ArgumentList.Clear()
         foreach($argument in @(($clusterSources -join ','),'127.0.0.2',[string]$port,'16','128','512',$rejectedOutput,
