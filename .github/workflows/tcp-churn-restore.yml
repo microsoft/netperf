@@ -1,0 +1,64 @@
+name: TCP churn owned-resource restore
+on:
+  pull_request:
+    paths:
+      - .github/workflows/tcp-churn-restore.yml
+      - experiments/tcp-churn/adapters/Invoke-OwnedGuestRestore.ps1
+  workflow_dispatch:
+    inputs:
+      restore:
+        description: Restore orphaned owned resources from their run snapshots; false only inventories counts
+        type: boolean
+        default: false
+      discard_recorder_temp_since_utc:
+        description: With restore, discard top-level WPR temporary ETL files from cancelled or failed owned recordings written since this UTC time
+        type: string
+        default: ''
+permissions:
+  contents: read
+jobs:
+  source-tests:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - shell: pwsh
+        run: |
+          $tokens=$null;$errors=$null
+          $null=[Management.Automation.Language.Parser]::ParseFile((Resolve-Path ./experiments/tcp-churn/adapters/Invoke-OwnedGuestRestore.ps1),[ref]$tokens,[ref]$errors)
+          if($errors.Count){throw ($errors|Out-String)}
+  restore:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    needs: source-tests
+    runs-on: [self-hosted, 'parent=rr1-netperf-26\localadminuser']
+    timeout-minutes: 15
+    concurrency:
+      group: tcp-churn-netperf-guest
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - shell: powershell
+        env:
+          GUEST_USER: ${{ secrets.VM_DUMMY_USERNAME }}
+          GUEST_PASSWORD: ${{ secrets.VM_DUMMY_PASSWORD }}
+          RESTORE: ${{ inputs.restore }}
+          DISCARD_SINCE: ${{ inputs.discard_recorder_temp_since_utc }}
+        run: |
+          $ErrorActionPreference='Stop'
+          if(!$env:GUEST_USER -or !$env:GUEST_PASSWORD){throw 'Configured VM credentials are required.'}
+          $credential=[pscredential]::new($env:GUEST_USER,(ConvertTo-SecureString $env:GUEST_PASSWORD -AsPlainText -Force))
+          Remove-Item Env:\GUEST_PASSWORD
+          $discard=@{}
+          if($env:DISCARD_SINCE){$discard.DiscardRecorderTempSinceUtc=[datetime]::Parse($env:DISCARD_SINCE,[Globalization.CultureInfo]::InvariantCulture,[Globalization.DateTimeStyles]::AdjustToUniversal)}
+          ./experiments/tcp-churn/adapters/Invoke-OwnedGuestRestore.ps1 -Credential $credential `
+            -ReportFile (Join-Path $env:RUNNER_TEMP "tcp-churn-restore-$env:GITHUB_RUN_ID.json") -Restore:($env:RESTORE -eq 'true') @discard
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
+        if: ${{ always() }}
+        with:
+          name: tcp-churn-restore-result
+          path: ${{ runner.temp }}\tcp-churn-restore-${{ github.run_id }}.json
+          if-no-files-found: warn
+          retention-days: 7

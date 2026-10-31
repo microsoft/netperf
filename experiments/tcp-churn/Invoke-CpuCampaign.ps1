@@ -1,0 +1,331 @@
+# Copyright (c) Microsoft Corporation.
+# SPDX-License-Identifier: MIT
+#Requires -Version 7.2
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory)][string]$Tools,
+    [Parameter(Mandatory)][string]$Diagnostics,
+    [Parameter(Mandatory)][string]$PublishDirectory,
+    [Parameter(Mandatory)][string]$AnalyzerDirectory,
+    [ValidateRange(15,120)][int]$Seconds=30,
+    [ValidateRange(1,8192)][int]$Connections=256,
+    [ValidateRange(1,200)][int]$MaximumBatches=200,
+    [ValidateRange(1,8)][int]$ClientWorkers=1,
+    [ValidateRange(1024,65336)][int]$BaseServerPort=53617,
+    [ValidateRange(65536,16777216)][int]$BytesPerConnection=65536,
+    [ValidateSet('public','private-lab-only')][string]$AnalysisSymbolScope='public',
+    [switch]$SynDrop,
+    [switch]$EstablishedOnly,
+    [string]$BarrierExecutable,
+    [ValidateRange(65536,16777216)][int]$RateLimitBytesPerSecond=1048576,
+    $PeerSession,
+    [string]$PeerRoot,
+    [string]$ClientInterface='duo1',
+    [string]$PeerInterface='duo2',
+    [string]$FixedClientAddress,
+    [string[]]$ClientAddresses=@(),
+    [string]$PeerAddress='192.168.1.12'
+)
+$ErrorActionPreference='Stop'
+Set-StrictMode -Version Latest
+if($Connections -gt 1024 -and -not $BarrierExecutable) { throw 'More than 1024 connections requires the bounded first-data barrier.' }
+if($EstablishedOnly -and ($SynDrop -or $null -ne $PeerSession -or $ClientWorkers -ne 1 -or $MaximumBatches -ne 1)) {
+    throw 'Established-only measurement requires one local healthy batch and worker.'
+}
+if($BarrierExecutable -and ($EstablishedOnly -or $SynDrop -or $null -ne $PeerSession -or $ClientWorkers -ne 1 -or $MaximumBatches -ne 1)) {
+    throw 'First-data barriers require one local healthy batch without other traffic modes.'
+}
+if($BarrierExecutable -and ($ClientAddresses.Count -eq 0 -or $BytesPerConnection -gt 1048576 -or
+    -not (Test-Path -LiteralPath $BarrierExecutable -PathType Leaf))) {
+    throw 'First-data barriers require supplied source addresses, a compiled helper and at most 1 MiB per connection.'
+}
+if($FixedClientAddress -and $ClientAddresses.Count) { throw 'Choose a fixed source or a source-address rotation, not both.' }
+if($ClientWorkers -gt 1 -and ($SynDrop -or $null -ne $PeerSession -or $ClientAddresses.Count -lt $ClientWorkers -or $MaximumBatches -ne 1)) {
+    throw 'Parallel healthy batches require local adapters, distinct supplied sources and MaximumBatches=1.'
+}
+if($ClientWorkers -gt 1 -and @($ClientAddresses|Select-Object -Unique).Count -ne $ClientAddresses.Count) {
+    throw 'Parallel healthy sources must be distinct.'
+}
+Import-Module (Join-Path $PSScriptRoot 'TcpChurn.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'adapters\WindowsCts.psm1') -Force
+$analyzer=Join-Path $AnalyzerDirectory 'CpuSamples.exe'
+if (-not (Test-Path -LiteralPath $analyzer -PathType Leaf)) { throw 'Source-built analyzer missing.' }
+$key=Get-Item -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters' -ErrorAction Stop
+$value=$key.GetValue('EnablePMTUBHDetect',$null)
+$provider=Get-WinEvent -ListProvider 'Microsoft-Windows-TCPIP' -ErrorAction Stop
+$keywords=0L
+$manifestEvents=@($provider.Events | ForEach-Object {
+    $task=if($null -eq $_.Task){''}else{$_.Task.Name}
+    if ($task -match '(?i)black|bhdetect|pmtu' -or $_.Description -match '(?i)black.?hole|full.?size.+ack' -or
+        $task -in @('TcpTcbSynSend','TcpDisconnectTcbRtoTimeout','TcpDataTransferRetransmitRound')) {
+        foreach ($keyword in $_.Keywords) { $keywords=$keywords -bor $keyword.Value }
+        [ordered]@{Id=$_.Id;Version=$_.Version;Task=$task;Description=$_.Description}
+    }
+})
+[ordered]@{
+    schema=1;bhRegistryOverridePresent=($null -ne $value);bhRegistryOverride=$value
+    registryDefaultInference='not-inferred';publicProviderEvents=$manifestEvents
+    publicProviderGuid=[string]$provider.Id;publicProbeKeywordMask=$keywords.ToString('X16')
+    fixtureRss=@(foreach($alias in @($ClientInterface)) {
+        Get-NetAdapterRss -Name $alias -ErrorAction Stop |
+            Select-Object Enabled,NumberOfReceiveQueues,MaxProcessors,BaseProcessorGroup,BaseProcessorNumber,MaxProcessorGroup,MaxProcessorNumber
+    })
+} | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $PublishDirectory 'tcp-state.json')
+$owned=$false; $failure=$null
+$eventOwned=$false
+$collector=$null
+$ready=Join-Path $Diagnostics 'probe-ready'
+$stop=Join-Path $Diagnostics 'probe-stop'
+$eventTrace=Join-Path $Diagnostics 'tcp-probes.etl'
+$blockRule='TcpChurnSynDrop-'+[guid]::NewGuid().ToString('N')
+$blockOwned=$false
+$trace=Join-Path $Diagnostics 'cpu.etl'
+$timing=[ordered]@{}
+$progress=[ordered]@{schema=1;stage='wpr-start';completedBatches=0;connections=0L;failureType=$null;failureCode=0;toolExitCode=0;failureReason='none';traceBytes=0L;profileStopped=$false}
+$totals=[ordered]@{ schema=1;workload='tcp-churn';outcome='collected';connections=0L;seconds=0.0;bytesSent=0L
+    connectionsPerSecond=0.0;megabitsPerSecond=0.0;adapterTransmitDelta=0L;adapterReceiveDelta=0L
+    cpuCoverage='not-measured';targetBranchCoverage='not-measured';mechanismVerified=$false;conclusion='collection-only' }
+try {
+    # Never cancel a pre-existing WPR session to take ownership.
+    $null=Invoke-TcpChurnTool -Program "$env:SystemRoot\System32\wpr.exe" -Arguments @('-start','CPU','-filemode') `
+        -Directory $Diagnostics -LogPrefix (Join-Path $Diagnostics 'wpr-start') -TimeoutSeconds 30
+    $owned=$true
+    $progress.stage='probes-start'
+    $collector=Start-TcpChurnCollector -Program $analyzer -Arguments @(
+        '--capture-probes',$eventTrace,(Join-Path $PublishDirectory 'tcp-state.json'),$ready,$stop,'300'
+    ) -Directory $Diagnostics -LogPrefix (Join-Path $Diagnostics 'probes')
+    $eventOwned=$true
+    $readiness=[Diagnostics.Stopwatch]::StartNew()
+    while (-not (Test-Path -LiteralPath $ready)) {
+        if ($collector.Process.HasExited -or $readiness.Elapsed.TotalSeconds -gt 20) { throw 'Exact probe collector did not become ready.' }
+        Start-Sleep -Milliseconds 100
+    }
+    $progress.stage='idle'
+    $timing.idleStart=[DateTime]::UtcNow.ToString('o')
+    Start-Sleep -Seconds 5
+    $timing.idleEnd=[DateTime]::UtcNow.ToString('o')
+    $timing.loadStart=[DateTime]::UtcNow.ToString('o')
+    $clock=[Diagnostics.Stopwatch]::StartNew()
+    $progress.stage='traffic'
+    $batch=0
+    do {
+        $directory=Join-Path $Diagnostics "batch-$batch"
+        New-Item -ItemType Directory -Path $directory -ErrorAction Stop | Out-Null
+        $source=if($FixedClientAddress){$FixedClientAddress}elseif($ClientAddresses.Count){
+            $ClientAddresses[$batch%$ClientAddresses.Count]
+        }else{"192.168.1.$(21+($batch%8))"}
+        $plan=New-TcpChurnPlan -ClientAddress $source -ServerAddress $PeerAddress `
+            -Port ($BaseServerPort+$batch) -Connections ([Math]::Min(1024,$Connections)) -Seconds ([Math]::Min(120,$Seconds+30)) `
+            -BytesPerConnection $BytesPerConnection
+        # Public documented socket option. No TCP global or registry setting is changed.
+        $plan.ClientArguments += '-PortScalability:on'
+        if ($null -ne $PeerSession) {
+            $adapter=New-RemoteWindowsCtsAdapter -Executable (Join-Path $Tools 'ctsTraffic.exe') -DiagnosticsDirectory $directory `
+                -ClientInterface $ClientInterface -PeerInterface $PeerInterface -PeerSession $PeerSession -PeerRoot $PeerRoot -DropSyn ([bool]$SynDrop)
+        } else {
+            $adapter=New-WindowsCtsAdapter -Executable (Join-Path $Tools 'ctsTraffic.exe') `
+                -DiagnosticsDirectory $directory -ClientInterface $ClientInterface -ServerInterface $PeerInterface
+        }
+        if ($SynDrop) {
+            $plan.ClientArguments=@($plan.ClientArguments|Where-Object{$_ -notlike '-iterations:*'})
+            $plan.ClientArguments+='-iterations:1'
+            if ($null -eq $PeerSession) {
+                $null=New-NetFirewallRule -Name $blockRule -DisplayName $blockRule -Direction Inbound `
+                    -Action Block -Protocol TCP -LocalPort $plan.Port -LocalAddress $plan.ServerAddress `
+                    -RemoteAddress $plan.ClientAddress -ErrorAction Stop
+                $blockOwned=$true
+            }
+            try {
+                $null=& $adapter.StartPeer $adapter.State $plan
+                if ($null -ne $PeerSession) { $progress['peerFirewall']=$adapter.State.PeerConfig|Select-Object OriginallyEnabledProfiles,TemporarilyEnabledProfiles }
+                $listen=[Diagnostics.Stopwatch]::StartNew()
+                while (-not (& $adapter.PeerReady $adapter.State $plan)) {
+                    if ($listen.Elapsed.TotalSeconds -gt 20) { throw 'Owned SYN-drop listener did not become ready.' }
+                    Start-Sleep -Milliseconds 100
+                }
+                $execution=& $adapter.RunClient $adapter.State $plan
+                $summary=ConvertFrom-CtsChurnOutput $execution.Text
+                $progress['synOutcomes']=$summary|Select-Object Completed,NetworkErrors,ProtocolErrors,Milliseconds
+                if ($summary.Completed -ne 0 -or $summary.ProtocolErrors -ne 0 -or
+                    $summary.NetworkErrors -ne $Connections -or $execution.ExitCode -ne $Connections -or
+                    $summary.Milliseconds -lt 3000) {
+                    throw 'SYN-drop outcomes do not match the deliberately blocked connection attempts.'
+                }
+                $totals.outcome='observed-syn-failures'
+                $totals['failedConnections']=$summary.NetworkErrors
+                $totals['fault']='scoped-silent-syn-drop'
+            } finally { $null=& $adapter.Close $adapter.State $plan }
+            break
+        }
+        if($BarrierExecutable) {
+            $control=Join-Path $directory 'barrier'
+            $null=New-Item -ItemType Directory -Path $control
+            $child=$null
+            try {
+                $child=Start-TcpChurnCollector -Program $BarrierExecutable -Arguments @(
+                    ($ClientAddresses -join ','),$PeerAddress,[string]$BaseServerPort,[string]$Connections,
+                    [string]$BytesPerConnection,$control
+                ) -Directory $directory -LogPrefix (Join-Path $directory 'barrier-process')
+                $readyClock=[Diagnostics.Stopwatch]::StartNew()
+                while(-not (Test-Path -LiteralPath (Join-Path $control 'ready'))) {
+                    if($child.Process.HasExited -or $readyClock.Elapsed.TotalSeconds -gt 90) { throw 'First-data connections did not reach the barrier.' }
+                    Start-Sleep -Milliseconds 50
+                }
+                $ownedConnections=@(Get-NetTCPConnection -State Established|Where-Object{
+                    $_.OwningProcess -eq $child.Process.Id -and $_.RemotePort -eq $BaseServerPort
+                }).Count
+                if($ownedConnections -ne $Connections) { throw 'Barrier connection count does not match the request.' }
+                $before=Get-NetAdapterStatistics -Name $ClientInterface
+                $beforePeer=Get-NetAdapterStatistics -Name $PeerInterface
+                $timing.loadStart=[DateTime]::UtcNow.ToString('o')
+                [IO.File]::WriteAllText((Join-Path $control 'go'),'go')
+                $wait=[Diagnostics.Stopwatch]::StartNew()
+                while(-not (Test-Path -LiteralPath (Join-Path $control 'done'))) {
+                    if($child.Process.HasExited -or $wait.Elapsed.TotalSeconds -gt $Seconds) { throw 'First-data verification did not finish in the measurement window.' }
+                    Start-Sleep -Milliseconds 10
+                }
+                Start-Sleep -Seconds 1
+                $timing.loadEnd=[DateTime]::UtcNow.ToString('o')
+                $summary=Get-Content -LiteralPath (Join-Path $control 'result.json') -Raw|ConvertFrom-Json
+                if($summary.connections -ne $Connections -or $summary.bytesSent -ne [long]$Connections*$BytesPerConnection -or
+                    $summary.networkErrors -ne 0 -or $summary.protocolErrors -ne 0) { throw 'Barrier payload verification failed.' }
+                $after=Get-NetAdapterStatistics -Name $ClientInterface
+                $afterPeer=Get-NetAdapterStatistics -Name $PeerInterface
+                $tx=$after.SentBytes-$before.SentBytes;$rx=$afterPeer.ReceivedBytes-$beforePeer.ReceivedBytes
+                if($tx -lt $summary.bytesSent -or $rx -lt $summary.bytesSent) { throw 'Barrier payload was not accounted for by the selected pair.' }
+                $summary|Add-Member -NotePropertyName preEstablishedConnections -NotePropertyValue $ownedConnections
+                $summary|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $PublishDirectory 'first-data.json')
+                [IO.File]::WriteAllText((Join-Path $control 'stop'),'stop')
+                if(-not $child.Process.WaitForExit(10000) -or $child.Process.ExitCode -ne 0) { throw 'Barrier process did not close cleanly.' }
+                $result=[pscustomobject]@{connections=$Connections;bytesSent=$summary.bytesSent;adapterTransmitDelta=$tx;adapterReceiveDelta=$rx}
+            } finally { if($null -ne $child) { Stop-TcpChurnCollector $child } }
+        } elseif($EstablishedOnly) {
+            $transferBytes=[long]$RateLimitBytesPerSecond*($Seconds+30)
+            $plan.ClientArguments=@($plan.ClientArguments|Where-Object{$_ -notlike '-iterations:*' -and $_ -notlike '-transfer:*'})
+            $plan.ServerArguments=@($plan.ServerArguments|Where-Object{$_ -notlike '-transfer:*'})
+            $plan.ClientArguments+=@('-iterations:1',"-transfer:$transferBytes","-RateLimit:$RateLimitBytesPerSecond")
+            $plan.ServerArguments+=@("-transfer:$transferBytes","-RateLimit:$RateLimitBytesPerSecond")
+            $steady=[ordered]@{start=$null;end=$null;seconds=$Seconds;establishedAtStart=0;establishedAtEnd=0
+                transmittedBytes=0L;receivedBytes=0L}
+            $result=Invoke-WindowsEstablishedTransfer -Adapter $adapter -Plan $plan -MeasurementState $steady -Measure {
+                param($state)
+                $state.start=[DateTime]::UtcNow.ToString('o')
+                Start-Sleep -Seconds $state.seconds
+                $state.end=[DateTime]::UtcNow.ToString('o')
+            }
+            $timing.loadStart=$steady.start;$timing.loadEnd=$steady.end
+            $steady|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $PublishDirectory 'steady-state.json')
+        } elseif($ClientWorkers -gt 1) {
+            $plans=@(foreach($worker in 0..($ClientWorkers-1)) {
+                $workerPlan=New-TcpChurnPlan -ClientAddress $ClientAddresses[$worker] -ServerAddress $PeerAddress `
+                    -Port ($BaseServerPort+$worker) -Connections $Connections -Seconds ([Math]::Min(120,$Seconds+30)) `
+                    -BytesPerConnection $BytesPerConnection -MaximumConnectionAttempts ([int][Math]::Floor(8192.0/$ClientWorkers))
+                $workerPlan.ClientArguments+='-PortScalability:on'
+                $workerPlan
+            })
+            $result=Invoke-WindowsChurnParallelBatch -Executable (Join-Path $Tools 'ctsTraffic.exe') `
+                -DiagnosticsDirectory $directory -ClientInterface $ClientInterface -ServerInterface $PeerInterface -Plans $plans
+        } else { $result=Invoke-TcpChurnExperiment -Plan $plan -Adapter $adapter }
+        foreach ($field in @('connections','bytesSent','adapterTransmitDelta','adapterReceiveDelta')) {
+            $totals[$field]+=$result.$field
+        }
+        $batch++
+        $progress.completedBatches=$batch
+        $progress.connections=$totals.connections
+    } while ($clock.Elapsed.TotalSeconds -lt $Seconds -and $batch -lt $MaximumBatches)
+    if(-not $EstablishedOnly -and -not $BarrierExecutable) { $timing.loadEnd=[DateTime]::UtcNow.ToString('o') }
+    $totals.seconds=$clock.Elapsed.TotalSeconds
+    $totals.connectionsPerSecond=$totals.connections/$totals.seconds
+    $totals.megabitsPerSecond=8.0*$totals.bytesSent/1000000.0/$totals.seconds
+} catch {
+    $failure=$_
+    $progress.failureType=$_.Exception.GetType().FullName
+    $progress.failureCode=$_.Exception.HResult
+    if ($_.Exception.Data.Contains('ToolExitCode')) { $progress.toolExitCode=[int]$_.Exception.Data['ToolExitCode'] }
+    foreach ($reason in @('Traffic command failed; diagnostics belong to the adapter.',
+        'Healthy churn did not complete error-free traffic.',
+        'Data was not accounted for on the selected adapters.',
+        'CTS client deadline exceeded.','CTS server exited while traffic was active.')) {
+        if ($_.Exception.Message -eq $reason) { $progress.failureReason=$reason }
+    }
+    $timing.loadEnd=[DateTime]::UtcNow.ToString('o')
+}
+finally {
+    if ($blockOwned) {
+        try { Remove-NetFirewallRule -Name $blockRule -ErrorAction Stop }
+        catch { if($null -eq $failure){$failure=$_}else{Write-Warning 'Owned SYN-drop rule cleanup also failed.'} }
+    }
+    if ($eventOwned) {
+        try {
+            [IO.File]::WriteAllText($stop,'stop')
+            if (-not $collector.Process.WaitForExit(20000)) { throw 'Exact probe collector did not stop.' }
+            if ($collector.Process.ExitCode -ne 0) { throw 'Exact probe collector failed.' }
+        } catch {
+            if ($null -eq $failure) { $failure=$_ }
+            else {
+                $combined=[AggregateException]::new('Traffic and owned probe stop failed.',[Exception[]]@($failure.Exception,$_.Exception))
+                $failure=[Management.Automation.ErrorRecord]::new($combined,'ProbeStopFailed',[Management.Automation.ErrorCategory]::CloseError,$null)
+            }
+            finally {
+                try { Stop-TcpChurnCollector $collector }
+                catch { if ($null -eq $failure) { $failure=$_ } else { Write-Warning 'Owned collector diagnostic cleanup also failed.' } }
+            }
+        }
+    }
+    if ($owned) {
+        try {
+            $null=Invoke-TcpChurnTool -Program "$env:SystemRoot\System32\wpr.exe" -Arguments @('-stop',$trace) `
+                -Directory $Diagnostics -LogPrefix (Join-Path $Diagnostics 'wpr-stop') -TimeoutSeconds 120
+            $progress.profileStopped=$true
+            $progress.traceBytes=(Get-Item -LiteralPath $trace).Length
+        } catch {
+            if ($null -ne $failure) { throw [AggregateException]::new('Campaign and owned WPR stop failed.',[Exception[]]@($failure.Exception,$_.Exception)) }
+            throw
+        }
+    }
+    $progress | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PublishDirectory 'cpu-progress.json')
+}
+$timing | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $Diagnostics 'intervals.json')
+if (-not $owned -or -not $progress.profileStopped) { throw $failure }
+if (-not $timing.Contains('loadStart')) { throw $failure }
+if ($eventOwned) {
+    $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @(
+        '--events',$eventTrace,(Join-Path $PublishDirectory 'tcp-events.json'),'interval',
+        $timing.loadStart,$timing.loadEnd,(Join-Path $PublishDirectory 'tcp-state.json')
+    ) -Directory $Diagnostics -LogPrefix (Join-Path $Diagnostics 'probe-analysis') -TimeoutSeconds 120
+}
+foreach ($interval in @('idle','load')) {
+    $progress.stage="analyze-$interval"
+    $progress | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PublishDirectory 'cpu-progress.json')
+    $null=Invoke-TcpChurnTool -Program $analyzer -Arguments @(
+        $trace,(Join-Path $PublishDirectory "cpu-$interval.json"),$timing["${interval}Start"],$timing["${interval}End"]
+    ) -Directory $Diagnostics -LogPrefix (Join-Path $Diagnostics "analysis-$interval") -TimeoutSeconds 300
+}
+$progress.stage='complete'
+$progress | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PublishDirectory 'cpu-progress.json')
+if ($null -ne $failure) { throw $failure }
+if ($SynDrop) {
+    [ordered]@{
+        schema=1;workload='tcp-churn';outcome='observed-syn-failures';fault='scoped-silent-syn-drop'
+        failedConnections=$totals.failedConnections;seconds=$totals.seconds
+        clientSeconds=$progress.synOutcomes.Milliseconds/1000.0;loadAndAnalysisSeconds=$clock.Elapsed.TotalSeconds
+        mechanismVerified=$false;conclusion='fault-observation-only'
+    } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $PublishDirectory 'result.json')
+    Import-Module (Join-Path $PSScriptRoot 'CpuEvidence.psm1') -Force
+    $evidence=Get-TcpChurnWaitEvidence `
+        -Cpu (Get-Content -LiteralPath (Join-Path $PublishDirectory 'cpu-load.json') -Raw|ConvertFrom-Json) `
+        -Events (Get-Content -LiteralPath (Join-Path $PublishDirectory 'tcp-events.json') -Raw|ConvertFrom-Json) `
+        -Outcome (Get-Content -LiteralPath (Join-Path $PublishDirectory 'result.json') -Raw|ConvertFrom-Json)
+    $evidence|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $PublishDirectory 'lock-evidence.json')
+    if ($null -ne $PeerSession -and (-not $evidence.verifiedFault -or -not $evidence.queuedWaitObserved)) {
+        throw 'The real-peer outage did not produce the required sampled queued-wait evidence.'
+    }
+} else {
+    Export-TcpChurnPublicResult -Result ([pscustomobject]$totals) -Path (Join-Path $PublishDirectory 'result.json')
+    Import-Module (Join-Path $PSScriptRoot 'CpuEvidence.psm1') -Force
+    $evidence=Get-TcpHealthyWaitEvidence `
+        -Cpu (Get-Content -LiteralPath (Join-Path $PublishDirectory 'cpu-load.json') -Raw|ConvertFrom-Json) `
+        -Events (Get-Content -LiteralPath (Join-Path $PublishDirectory 'tcp-events.json') -Raw|ConvertFrom-Json) `
+        -Outcome ([pscustomobject]$totals) -SymbolScope $AnalysisSymbolScope
+    $evidence|ConvertTo-Json -Depth 4|Set-Content -LiteralPath (Join-Path $PublishDirectory 'healthy-evidence.json')
+}

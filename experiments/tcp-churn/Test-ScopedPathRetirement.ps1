@@ -1,0 +1,402 @@
+# Copyright (c) Microsoft Corporation.
+# SPDX-License-Identifier: MIT
+#Requires -Version 7.2
+$ErrorActionPreference='Stop'
+$directory=Join-Path ([IO.Path]::GetTempPath()) ('path-retire-test-'+[guid]::NewGuid().ToString('N'))
+$null=New-Item -ItemType Directory -Path $directory
+$program=Join-Path $PSScriptRoot 'adapters\Invoke-ScopedPathRetirement.ps1'
+$checks=0
+try {
+    foreach($case in @('restore','already-absent','bad-data','changed-owner','changed-prefix','changed-default','remove-failure','overlap-route','overlap-address','restore-two','restore-partial-two','changed-second-owner',
+        'data-restore','data-restore-disabled','data-restore-two','data-restore-partial-two','data-changed-interface','data-changed-source-owner',
+        'restore-four','data-restore-four','data-changed-fourth-owner','data-restore-eight','data-restore-twelve','data-changed-twelfth-owner')){
+        $dataFile=Join-Path $directory 'data.clixml';$stateFile=Join-Path $directory 'state.clixml';$reportFile=Join-Path $directory 'report.json'
+        $data=@{interfaceGuid='test-interface';originalDhcpDisabled=$true
+            addresses=@('198.19.240.1','198.19.240.2','198.19.240.3','198.19.240.4')
+            originalDefaultKeys=@('5/192.0.2.254/10')}
+        if($case -eq 'bad-data'){$data.interfaceGuid='unowned-interface'}
+        $data|Export-Clixml -LiteralPath $dataFile
+        $twoSources=$case -in @('restore-two','restore-partial-two','changed-second-owner','data-restore-two','data-restore-partial-two')
+        $fourSources=$case -in @('restore-four','data-restore-four','data-changed-fourth-owner')
+        $manySourceCount=if($case -eq 'data-restore-eight'){8}elseif($case -in @('data-restore-twelve','data-changed-twelfth-owner')){12}else{0}
+        $separateData=$case.StartsWith('data-')
+        $unusedGuid='11111111-2222-3333-4444-555555555555'
+        $fixture=@{removes=0;policyWrites=0;bindingEnabled=($case -ne 'data-restore-disabled');enables=0
+            allowedSources=@('198.19.0.1');addresses=[Collections.Generic.List[object]]::new()
+            routes=[Collections.Generic.List[object]]::new()}
+        if($twoSources){$fixture.allowedSources+='198.19.0.2'}
+        if($fourSources){$fixture.allowedSources+=@('198.19.0.2','198.19.0.3','198.19.0.4')}
+        if($manySourceCount){$fixture.allowedSources=@(1..$manySourceCount|ForEach-Object{"198.19.0.$_"})}
+        $fixture.addresses.Add([pscustomobject]@{IPAddress='198.19.240.1';PrefixLength=29;SkipAsSource=$true;InterfaceIndex=5})
+        if($separateData){$fixture.addresses.Add([pscustomobject]@{IPAddress='198.19.255.254';PrefixLength=32;SkipAsSource=$true;InterfaceIndex=9})}
+        $fixture.routes.Add([pscustomobject]@{DestinationPrefix='0.0.0.0/0';NextHop='192.0.2.254';RouteMetric=10;InterfaceIndex=5})
+        if($case -eq 'changed-default'){$fixture.routes[0].NextHop='192.0.2.253'}
+        $restore=$case -notin @('bad-data','overlap-route','overlap-address')
+        if($restore){
+            $saved=@{interfaceGuid='test-interface';source='198.19.0.1';prefix='198.19.0.0/17';originalAbsent=$true
+                originalAddresses=@('198.19.240.1/29/True')}
+            if($twoSources -or $fourSources -or $manySourceCount){$saved.sources=$fixture.allowedSources}
+            if($separateData){
+                $saved.interfaceGuid=$unusedGuid;$saved.detachInterface=$true
+                $saved.originalAddresses=@('198.19.255.254/32/True')
+                $saved.populationInterfaceGuid='test-interface'
+                $saved.populationOriginalAddresses=@('198.19.240.1/29/True')
+            }
+            $saved|Export-Clixml -LiteralPath $stateFile
+        }
+        if($separateData -or $case -in @('restore','changed-owner','changed-prefix','remove-failure','overlap-address','restore-two','restore-partial-two','changed-second-owner','restore-four')){
+            $index=if($case -in @('changed-owner','data-changed-source-owner')){6}else{5}
+            $bits=if($case -eq 'changed-prefix'){24}else{17}
+            $fixture.addresses.Add([pscustomobject]@{IPAddress='198.19.0.1';PrefixLength=$bits;SkipAsSource=$true;InterfaceIndex=$index})
+            $fixture.routes.Add([pscustomobject]@{DestinationPrefix='198.19.0.0/17';NextHop='0.0.0.0';RouteMetric=256;InterfaceIndex=5})
+        }
+        if($case -in @('restore-two','changed-second-owner','data-restore-two')){
+            $fixture.addresses.Add([pscustomobject]@{IPAddress='198.19.0.2';PrefixLength=17;SkipAsSource=$true
+                InterfaceIndex=$(if($case -eq 'changed-second-owner'){6}else{5})})
+        }
+        if($fourSources){
+            foreach($address in @('198.19.0.2','198.19.0.3','198.19.0.4')){
+                $fixture.addresses.Add([pscustomobject]@{IPAddress=$address;PrefixLength=17;SkipAsSource=$true
+                    InterfaceIndex=$(if($case -eq 'data-changed-fourth-owner' -and $address -eq '198.19.0.4'){6}else{5})})
+            }
+        }
+        if($manySourceCount){
+            foreach($address in @($fixture.allowedSources|Select-Object -Skip 1)){
+                $fixture.addresses.Add([pscustomobject]@{IPAddress=$address;PrefixLength=17;SkipAsSource=$true
+                    InterfaceIndex=$(if($case -eq 'data-changed-twelfth-owner' -and $address -eq '198.19.0.12'){6}else{5})})
+            }
+        }
+        if($case -eq 'overlap-address'){$fixture.routes.RemoveAt(1)}
+        if($case -eq 'overlap-route'){
+            $fixture.routes.Add([pscustomobject]@{DestinationPrefix='198.18.0.0/15';NextHop='192.0.2.254';RouteMetric=10;InterfaceIndex=5})
+        }
+        $failed=$false
+        try {
+            & {
+                function Get-NetAdapter {
+                    [CmdletBinding()]param($Name)
+                    if($separateData -and $Name -ne 'test-data-interface'){
+                        return [pscustomobject]@{InterfaceGuid=$unusedGuid;ifIndex=9}
+                    }
+                    if($case -eq 'data-changed-interface'){return [pscustomobject]@{InterfaceGuid='changed-interface';ifIndex=5}}
+                    [pscustomobject]@{InterfaceGuid='test-interface';ifIndex=5}
+                }
+                function Get-NetIPAddress {
+                    [CmdletBinding()]param($InterfaceIndex,$AddressFamily,$PolicyStore)
+                    $fixture.addresses|Where-Object{-not $PSBoundParameters.ContainsKey('InterfaceIndex') -or $_.InterfaceIndex -eq $InterfaceIndex}
+                }
+                function Get-NetRoute {
+                    [CmdletBinding()]param($AddressFamily,$PolicyStore)
+                    $fixture.routes
+                }
+                function Get-NetIPInterface {
+                    [CmdletBinding()]param($InterfaceIndex,$AddressFamily)
+                    foreach($index in @(5,9)){
+                        if(-not $PSBoundParameters.ContainsKey('InterfaceIndex') -or $InterfaceIndex -eq $index){
+                            [pscustomobject]@{Dhcp='Disabled';InterfaceIndex=$index}
+                        }
+                    }
+                }
+                function Get-NetAdapterBinding {
+                    [CmdletBinding()]param($Name,$ComponentID)
+                    if(-not $separateData -or $Name -ne 'NetperfPath-abcdef123456' -or $ComponentID -ne 'ms_tcpip'){
+                        throw 'An unowned binding query was attempted.'
+                    }
+                    [pscustomobject]@{Enabled=$fixture.bindingEnabled}
+                }
+                function Enable-NetAdapterBinding {
+                    [CmdletBinding(SupportsShouldProcess=$true)]param($Name,$ComponentID)
+                    if(-not $separateData -or $Name -ne 'NetperfPath-abcdef123456' -or $ComponentID -ne 'ms_tcpip'){
+                        throw 'An unowned binding restoration was attempted.'
+                    }
+                    $fixture.enables++;$fixture.bindingEnabled=$true
+                }
+                function Set-NetIPInterface {
+                    [CmdletBinding()]param($InterfaceIndex,$AddressFamily,$Dhcp)
+                    if(-not $separateData -or $InterfaceIndex -ne 9 -or $Dhcp -ne 'Disabled'){
+                        throw 'An unowned policy change was attempted.'
+                    }
+                    $fixture.policyWrites++
+                }
+                function Remove-NetIPAddress {
+                    [CmdletBinding(SupportsShouldProcess=$true)]
+                    param($InterfaceIndex,$IPAddress,$PolicyStore)
+                    if($InterfaceIndex -ne 5 -or $IPAddress -notin $fixture.allowedSources -or $PolicyStore -ne 'ActiveStore'){
+                        throw 'An unowned address removal was attempted.'
+                    }
+                    $fixture.removes++
+                    if($case -eq 'remove-failure'){throw 'Synthetic removal failure.'}
+                    foreach($entry in @($fixture.addresses|Where-Object IPAddress -eq $IPAddress)){$null=$fixture.addresses.Remove($entry)}
+                    if(-not @($fixture.addresses|Where-Object{$_.IPAddress -in $fixture.allowedSources}).Count){
+                        foreach($entry in @($fixture.routes|Where-Object DestinationPrefix -eq '198.19.0.0/17')){$null=$fixture.routes.Remove($entry)}
+                    }
+                }
+                function New-NetIPAddress {throw 'Preflight tests must never mutate addresses.'}
+                $extra=if($restore){@{RestoreOnly=$true}}else{@{ReadyFile='unused';BeginFile='unused';StopFile='unused'}}
+                if($twoSources){$extra.PathCount=49152}
+                if($fourSources){$extra.PathCount=98304}
+                if($manySourceCount){$extra.PathCount=$manySourceCount*24576}
+                if($separateData){$extra.UnusedInterfaceGuid=$unusedGuid;$extra.PopulationInterfaceAlias='test-data-interface'}
+                $alias=if($separateData){'NetperfPath-abcdef123456'}else{'test-only-interface'}
+                & $program -InterfaceAlias $alias -DataStateFile $dataFile -StateFile $stateFile -ReportFile $reportFile @extra
+            }
+        }catch{
+            $pattern=switch($case){
+                bad-data {'requires owned receiver addresses'}
+                changed-owner {'changed ownership'}
+                changed-second-owner {'changed ownership'}
+                data-changed-interface {'must remain on the verified data interface'}
+                data-changed-source-owner {'changed ownership'}
+                data-changed-fourth-owner {'changed ownership'}
+                data-changed-twelfth-owner {'changed ownership'}
+                changed-prefix {'changed ownership'}
+                changed-default {'unchanged default routes'}
+                remove-failure {'Synthetic removal failure'}
+                overlap-route {'existing route overlaps'}
+                overlap-address {'existing address conflicts'}
+                default {'never-match-success-case'}
+            }
+            if($_.Exception.Message -notmatch $pattern){throw}
+            $failed=$true
+        }
+        if($failed -ne ($case -notin @('restore','already-absent','restore-two','restore-partial-two','data-restore','data-restore-disabled','data-restore-two','data-restore-partial-two','restore-four','data-restore-four','data-restore-eight','data-restore-twelve'))){throw "Unexpected retirement verdict: $case"}
+        if($case -in @('bad-data','changed-owner','changed-prefix','overlap-route','overlap-address','changed-second-owner','data-changed-interface','data-changed-source-owner','data-changed-fourth-owner','data-changed-twelfth-owner') -and
+            ($fixture.removes -or $fixture.policyWrites -or $fixture.enables)){
+            throw 'Rejected ownership or overlap mutated state.'
+        }
+        if($case -in @('restore','restore-two','restore-partial-two') -and
+            ($fixture.removes -ne $(if($case -eq 'restore-two'){2}else{1}) -or $fixture.addresses.Count -ne 1)){
+            throw 'The owned source was not exclusively retired.'
+        }
+        if($case -eq 'restore-four' -and ($fixture.removes -ne 4 -or $fixture.addresses.Count -ne 1)){
+            throw 'Four-source cleanup changed original addresses or missed owned sources.'
+        }
+        if($case -in @('data-restore','data-restore-disabled','data-restore-two','data-restore-partial-two','data-restore-four','data-restore-eight','data-restore-twelve') -and
+            ($fixture.removes -ne $(if($manySourceCount){$manySourceCount}elseif($case -eq 'data-restore-four'){4}elseif($case -eq 'data-restore-two'){2}else{1}) -or
+                $fixture.addresses.Count -ne 2 -or $fixture.policyWrites -ne 1 -or
+                $fixture.enables -ne $(if($case -eq 'data-restore-disabled'){1}else{0}))){
+            throw "Separate cache cleanup changed data/bootstrap ownership or policy: $case; removed=$($fixture.removes), addresses=$($fixture.addresses.Count), policyWrites=$($fixture.policyWrites), enables=$($fixture.enables)."
+        }
+        foreach($file in @($dataFile,$stateFile,$reportFile)){if(Test-Path -LiteralPath $file){Remove-Item -LiteralPath $file}}
+        $checks++
+    }
+    $tokens=$null;$errors=$null
+    $ast=[Management.Automation.Language.Parser]::ParseFile($program,[ref]$tokens,[ref]$errors)
+    if($errors.Count){throw ($errors|Out-String)}
+    $body=@($ast.FindAll({
+        param($node)
+        $node -is [Management.Automation.Language.TryStatementAst] -and
+            $node.Body.Extent.Text.Contains('$report.populationMilliseconds=')
+    },$true))
+    if($body.Count -ne 1){throw 'The actual cache-population lifecycle must be unique.'}
+    & {
+        $report=[ordered]@{}
+        $socket=[Net.Sockets.SocketException]::new(10055)
+        $aggregate=[AggregateException]::new('unpublishable test message',[Exception[]]@($socket))
+        $aggregate.Data['FixtureCreatedClients']=42
+        $aggregate.Data['FixtureConnectedPairs']=32
+        $catchCode=($body[0].CatchClauses[0].Body.Statements|ForEach-Object{$_.Extent.Text})-join "`n"
+        try{throw $aggregate}catch{
+            . ([scriptblock]::Create($catchCode))
+        }
+        if(@($report.failureCauses|Where-Object socketError -eq 10055).Count -ne 1 -or
+            @($report.failureCauses|Where-Object createdClients -eq 42).Count -ne 1 -or
+            ($report|ConvertTo-Json -Depth 5) -match 'unpublishable'){
+            throw 'The actual fixture failure serializer lost numeric socket/progress facts or exposed raw messages.'
+        }
+    }
+    $checks++
+    $statements=@($body[0].Body.Statements)
+    & {
+        $sources=@(1..12|ForEach-Object{"198.19.0.$_"})
+        $populationAdapter=@([pscustomobject]@{ifIndex=5})
+        $adapter=@([pscustomobject]@{ifIndex=9})
+        $writes=[Collections.Generic.List[string]]::new()
+        function New-NetIPAddress {
+            [CmdletBinding()]param($InterfaceIndex,$IPAddress,$PrefixLength,$SkipAsSource,$PolicyStore)
+            if($InterfaceIndex -ne 5 -or $IPAddress -notin $sources -or $PrefixLength -ne 17 -or
+                -not $SkipAsSource -or $PolicyStore -ne 'ActiveStore'){throw 'Cache population targeted the retired or unowned interface.'}
+            $writes.Add($IPAddress)
+        }
+        & ([scriptblock]::Create($statements[0].Extent.Text))
+        if($writes.Count -ne 12){throw 'The actual population lifecycle did not create all twelve owned data sources.'}
+    }
+    $checks++
+    $first=@($statements|Where-Object{$_.Extent.Text -eq '$report.measuredHeldPaths=Read-PathCount'})
+    $last=@($statements|Where-Object{$_.Extent.Text.StartsWith('$report.applyStartUtc=')})
+    if($first.Count -ne 1 -or $last.Count -ne 1){throw 'The actual socket-release lifecycle boundaries must be unique.'}
+    $lifecycle=($statements|Where-Object{
+        $_.Extent.StartOffset -ge $first[0].Extent.StartOffset -and $_.Extent.StartOffset -lt $last[0].Extent.StartOffset
+    }|ForEach-Object{$_.Extent.Text})-join "`n"
+    Add-Type -TypeDefinition @'
+using System;
+using System.Collections;
+using System.IO;
+public static class ArrivalTcp {
+    public static string ReadyPath;
+    public static bool ExpectedReady;
+    public static int Releases;
+    public static bool FailRelease;
+    public static int CountEstablishedConnections(int processId, int port) { return 16; }
+    public static void ReleaseIdlePathSockets(IList sockets) {
+        if (File.Exists(ReadyPath) != ExpectedReady || sockets.Count != 1)
+            throw new InvalidOperationException("The real lifecycle released sockets in the wrong phase.");
+        Releases++;
+        if (FailRelease) throw new IOException("Synthetic idle-socket release failure.");
+    }
+}
+'@
+    $cleanupRelease=$body[0].Finally.Statements[0]
+    foreach($phase in @('start','end','end-too-early','during','held-end','held-during')){
+        & {
+            $ReadyFile=Join-Path $directory 'ready';$BeginFile=Join-Path $directory 'begin'
+            $EndFile=if($phase -ne 'start'){Join-Path $directory 'end'}else{''}
+            $StopFile=Join-Path $directory 'stop';$PathCount=1024
+            [IO.File]::WriteAllText($BeginFile,'pre-collection-call')
+            $sockets=[Collections.ArrayList]::new();$null=$sockets.Add([object]::new())
+            $report=[ordered]@{};$fixture=@{Reads=0;Signals=[Collections.Generic.List[string]]::new()}
+            $ReceiverProcessId=42
+            $RetireDuringGc=$phase -in @('during','held-during')
+            $PopulationInterfaceAlias=if($phase.StartsWith('held-')){'owned-data-interface'}else{''}
+            $pathTiming=@{QueryMilliseconds=0;RowScanMilliseconds=0}
+            $wait=[Diagnostics.Stopwatch]::StartNew()
+            [ArrivalTcp]::ReadyPath=$ReadyFile;[ArrivalTcp]::ExpectedReady=($phase -eq 'start');[ArrivalTcp]::Releases=0
+            function Read-PathCount {
+                $fixture.Reads++
+                if($phase -ne 'start' -and $fixture.Reads -eq 2 -and
+                    ($sockets.Count -ne $(if($PopulationInterfaceAlias){1}else{0}) -or (Test-Path -LiteralPath $ReadyFile))){
+                    throw 'The requested socket-reference state must verify before traffic readiness.'
+                }
+                $PathCount
+            }
+            function Wait-ControlSignal {
+                param($File,$PollMilliseconds=5)
+                $fixture.Signals.Add($File)
+                if(-not(Test-Path -LiteralPath $ReadyFile)){throw 'Signals must never be awaited before traffic readiness.'}
+                if($phase -eq 'end-too-early' -and $File -eq $BeginFile){
+                    [IO.File]::WriteAllText($EndFile,'gc-completed-before-validation')
+                }
+                if($File -eq $EndFile){
+                    if($report.establishedAtSnapshot -ne 16 -or -not $report.snapshotCompletedUtc){
+                        throw 'Cache and cohort verification must finish before the GC-completion wait.'
+                    }
+                    [IO.File]::WriteAllText($EndFile,'actual-completed-gc')
+                }
+            }
+            $rejected=$false
+            try{& ([scriptblock]::Create($lifecycle))}catch{
+                if($phase -ne 'end-too-early' -or $_.Exception.Message -notmatch 'GC completed before cache and cohort verification'){throw}
+                $rejected=$true
+            }
+            if($rejected -ne ($phase -eq 'end-too-early')){throw 'An unaligned completed-GC snapshot was not rejected.'}
+            $observed=if($PopulationInterfaceAlias){$report.measuredHeldPathsAtSnapshot}else{$report.measuredReleasedPaths}
+            if([ArrivalTcp]::Releases -ne $(if($PopulationInterfaceAlias){0}else{1}) -or
+                $sockets.Count -ne $(if($PopulationInterfaceAlias){1}else{0}) -or $observed -ne $PathCount -or
+                $fixture.Reads -ne $(if($phase -ne 'start'){3}else{2}) -or
+                $fixture.Signals.Count -ne $(if($phase -in @('end','held-end')){2}else{1}) -or
+                $fixture.Signals[0] -ne $BeginFile -or
+                -not (Test-Path -LiteralPath $ReadyFile)){
+                throw 'The real retirement lifecycle did not preserve release/readiness/count verification.'
+            }
+            if($PopulationInterfaceAlias){
+                if($report.socketReleasePhase -ne 'after-workload'){throw 'Held cache references reported an early release.'}
+                [ArrivalTcp]::ExpectedReady=$true
+                & ([scriptblock]::Create($cleanupRelease.Extent.Text))
+                if([ArrivalTcp]::Releases -ne 1){throw 'The actual cleanup did not release the bounded idle sockets.'}
+            }
+        }
+        foreach($name in @('ready','begin','end')){
+            $file=Join-Path $directory $name
+            if(Test-Path -LiteralPath $file){Remove-Item -LiteralPath $file}
+        }
+        $checks++
+    }
+    & {
+        $PopulationInterfaceAlias='owned-data-interface'
+        $ReadyFile=Join-Path $directory 'ready'
+        [IO.File]::WriteAllText($ReadyFile,'ready')
+        [ArrivalTcp]::ReadyPath=$ReadyFile;[ArrivalTcp]::ExpectedReady=$true;[ArrivalTcp]::FailRelease=$true
+        $sockets=[Collections.ArrayList]::new();$null=$sockets.Add([object]::new())
+        $failure=$null;$releaseFailure=$null;$restoreFailure=$null
+        $fixture=@{Restores=0};$report=[ordered]@{}
+        $ReportFile=Join-Path $directory 'release-failure.json'
+        function Restore-Control {$fixture.Restores++}
+        try {
+            $cleanup=($body[0].Finally.Statements|ForEach-Object{$_.Extent.Text})-join "`n"
+            & ([scriptblock]::Create($cleanup))
+            if($fixture.Restores -ne 1 -or $report.outcome -ne 'failed' -or
+                -not $report.restored -or -not $report.socketReleaseFailureType){
+                throw 'An idle-socket release failure skipped restoration or was reported as success.'
+            }
+        }finally{[ArrivalTcp]::FailRelease=$false}
+    }
+    $checks++
+    $survival=@($ast.FindAll({
+        param($node)
+        $node -is [Management.Automation.Language.IfStatementAst] -and
+            $node.Clauses[0].Item1.Extent.Text -eq '$PopulationInterfaceAlias' -and
+            $node.Extent.Text.Contains('$report.postMaintenanceEnumeratedValidPaths=')
+    },$true))
+    if($survival.Count -ne 1){throw 'The actual post-maintenance source/reference validation must be unique.'}
+    & {
+        $PopulationInterfaceAlias='owned-data-interface';$sockets=@()
+        $failure=$null;$releaseFailure=$null;$restoreFailure=$null;$tcpReleaseFailure=$null
+        $referencedFixture=[pscustomobject]@{}
+        $referencedFixture|Add-Member ScriptMethod Dispose {throw 'Synthetic referenced TCP release failure.'}
+        $fixture=@{Restores=0};$report=[ordered]@{}
+        $ReportFile=Join-Path $directory 'tcp-release-failure.json'
+        function Restore-Control {$fixture.Restores++}
+        $cleanup=($body[0].Finally.Statements|ForEach-Object{$_.Extent.Text})-join "`n"
+        & ([scriptblock]::Create($cleanup))
+        if($fixture.Restores -ne 1 -or $report.outcome -ne 'failed' -or
+            -not $report.restored -or -not $report.referencedTcpReleaseFailureType){
+            throw 'Referenced TCP cleanup failure skipped address restoration or was reported as success.'
+        }
+    }
+    $checks++
+    foreach($case in @('zero-visible-rows','changed-socket','nonpreferred-source','referenced-zero-visible','referenced-changed')){
+        & {
+            $PopulationInterfaceAlias='owned-data-interface';$data=@{interfaceGuid='test-interface'}
+            $populationAdapter=@([pscustomobject]@{InterfaceGuid='test-interface';ifIndex=5})
+            $sources=@('198.19.0.1');$PathCount=2;$report=[ordered]@{}
+            $ReferencedTcpPaths=if($case.StartsWith('referenced-')){1024}else{0}
+            $referencedFixture=[pscustomobject]@{Count=1024}
+            $referencedFixture|Add-Member ScriptMethod VerifyHeld {if($case -eq 'referenced-changed'){throw 'Synthetic referenced TCP source changed.'}}
+            $sockets=@(1,2|ForEach-Object{[pscustomobject]@{Client=[pscustomobject]@{
+                IsBound=$true;LocalEndPoint=[pscustomobject]@{Address=[Net.IPAddress]::Parse('198.19.0.1')}}}})
+            if($case -eq 'changed-socket'){$sockets[1].Client.IsBound=$false}
+            function Get-NetAdapter {
+                [CmdletBinding()]param($Name)
+                [pscustomobject]@{InterfaceGuid='test-interface';ifIndex=6}
+            }
+            function Read-VerifiedOwnedAddresses {
+                param($Index,$RequireAll)
+                if($Index -ne 6 -or -not $RequireAll){throw 'Post-event source validation used stale interface identity.'}
+                [pscustomobject]@{AddressState=$(if($case -eq 'nonpreferred-source'){'Tentative'}else{'Preferred'})}
+            }
+            function Read-PathCount {
+                if($populationAdapter[0].ifIndex -ne 6){throw 'Post-event enumeration used a stale interface index.'}
+                0
+            }
+            $rejected=$false
+            try{& ([scriptblock]::Create($survival[0].Extent.Text))}catch{
+                if($_.Exception.Message -notmatch 'held UDP socket source changed|lost a preferred source|referenced TCP source changed'){throw}
+                $rejected=$true
+            }
+            if($rejected -ne ($case -notin @('zero-visible-rows','referenced-zero-visible'))){throw 'Post-event row visibility was confused with source/reference validity.'}
+            if(-not $rejected -and (-not $report.sourcePopulationPreserved -or
+                -not $report.heldSocketReferencesVerified -or $report.heldSocketsAtVerification -ne $(if($ReferencedTcpPaths){2048}else{2}) -or
+                $report.postMaintenanceEnumeratedValidPaths -ne 0 -or -not $report.populationInterfaceIndexChanged)){
+                throw 'Zero visible rows must remain an explicit observation with independently verified inputs.'
+            }
+        }
+        $checks++
+    }
+    Write-Host "Passed $checks source-retirement ownership, restoration and actual socket-release lifecycle cases; no network operations were performed."
+}finally{
+    foreach($name in @('data.clixml','state.clixml','report.json','release-failure.json','tcp-release-failure.json','ready','begin','end')){
+        $file=Join-Path $directory $name
+        if(Test-Path -LiteralPath $file){Remove-Item -LiteralPath $file}
+    }
+    Remove-Item -LiteralPath $directory -ErrorAction Stop
+}
