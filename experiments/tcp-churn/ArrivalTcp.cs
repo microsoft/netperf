@@ -677,6 +677,10 @@ public static class ArrivalTcp
         await stream.WriteAsync(data,0,4).ConfigureAwait(false);
         await stream.WriteAsync(data,4,data.Length-4).ConfigureAwait(false);
     }
+    private static bool IsHeldDescriptor(string descriptor)
+    {
+        return descriptor=="servicehold40:pipelined" || descriptor=="servicehold160:pipelined";
+    }
     private static async Task WritePacedServiceRequests(NetworkStream stream,byte[] data,int connectionOrdinal)
     {
         for(int exchange=0;exchange<exchangesPerConnection;exchange++){
@@ -847,7 +851,7 @@ public static class ArrivalTcp
         // Hot service mode models a large node and may carry up to eight times the ordinary connection bounds.
         bool hotScale=args.Length>=14 && args[13].StartsWith("servicehot256",StringComparison.Ordinal);
         // Held mode keeps a large, mostly idle population of long-lived connections established at once.
-        bool heldPopulation=args.Length>=14 && args[13]=="servicehold40:pipelined";
+        bool heldPopulation=args.Length>=14 && IsHeldDescriptor(args[13]);
         int countLimit=heldPopulation?262144:hotScale?65536:8192,concurrencyLimit=heldPopulation?262144:hotScale?32768:4096;
         if(count<1||count>countLimit||rate<1||rate>10000||size<1||size>1048576||responseSize<1||responseSize>1048576||port<1024||port>65535||
             sources.Length<1||(!clusterSources && sources.Length>8)||(double)count/rate>120||concurrency<1||concurrency>concurrencyLimit)
@@ -876,12 +880,17 @@ public static class ArrivalTcp
         serviceWait=false;
         serviceRequestPipelining=false;
         if(args.Length>=14){
-            if(args[13]=="servicehold40:pipelined"){
-                // Long-lived pooled connections: one small request per 1-2 s for about a minute each.
+            if(IsHeldDescriptor(args[13])){
+                // Long-lived pooled connections for about a minute each: hold40 sends one small request per 1-2 s;
+                // hold160 sends one per 250-500 ms, so service waits outlast the delayed-ACK timer more often.
                 if(size!=512 || (responseSize!=1460 && responseSize!=16384) || role=="local")
                     throw new ArgumentException("Held service mode requires 512-byte requests and 1460- or 16384-byte pipelined responses.");
-                serviceWait=true;serviceRequestPipelining=true;exchangesPerConnection=40;
-                serviceDelayMinimumMilliseconds=1000;serviceDelaySpanMilliseconds=1001;
+                serviceWait=true;serviceRequestPipelining=true;
+                if(args[13]=="servicehold160:pipelined"){
+                    exchangesPerConnection=160;serviceDelayMinimumMilliseconds=250;serviceDelaySpanMilliseconds=251;
+                }else{
+                    exchangesPerConnection=40;serviceDelayMinimumMilliseconds=1000;serviceDelaySpanMilliseconds=1001;
+                }
                 if(!noDelay)throw new ArgumentException("Pipelined service requests require explicit nodelay pacing.");
             }else if(args[13]=="servicehot256:pipelined"){
                 // One MSS-sized response keeps the guest data path at a high exchange rate; 16 KiB responses suit hosts with
@@ -1074,11 +1083,11 @@ public static class ArrivalTcp
         try {
             if((args.Length==8 || args.Length==9) && args[0]=="--route-epoch-dial")return RunRouteEpochDial(args);
             if(args.Length<7 || args.Length>15) {
-                Console.Error.WriteLine("Usage: ArrivalTcp sources peer port count rate request-bytes output.json [role [response-bytes [seed [maximum-in-flight [nodelay|nagle [gc:heap-MiB:minimum-launched|dispatch:pool [exchanges:64[:framed]|idlekeepalive|servicewait64[:pipelined]|servicehot256:pipelined|servicehold40:pipelined [fixture-ready-file]]]]]]]]");
+                Console.Error.WriteLine("Usage: ArrivalTcp sources peer port count rate request-bytes output.json [role [response-bytes [seed [maximum-in-flight [nodelay|nagle [gc:heap-MiB:minimum-launched|dispatch:pool [exchanges:64[:framed]|idlekeepalive|servicewait64[:pipelined]|servicehot256:pipelined|servicehold40:pipelined|servicehold160:pipelined [fixture-ready-file]]]]]]]]");
                 return 2;
             }
             // Hot-scale nodes carry up to 8x the connections, so they get a longer bounded deadline.
-            bool hotService=args.Length>=14 && (args[13].StartsWith("servicehot256",StringComparison.Ordinal) || args[13]=="servicehold40:pipelined");
+            bool hotService=args.Length>=14 && (args[13].StartsWith("servicehot256",StringComparison.Ordinal) || IsHeldDescriptor(args[13]));
             if(!Run(args).Wait(TimeSpan.FromSeconds(hotService?330:150))){
                 WriteFailure(args,new TimeoutException("Arrival workload deadline exceeded."));
                 Console.Error.WriteLine("Arrival workload deadline exceeded.");return 3;
