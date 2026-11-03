@@ -25,9 +25,12 @@ internal static class Program
         string.Equals(name, "tcpip", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(name, "tcpip.sys", StringComparison.OrdinalIgnoreCase);
 
+    // RTL scalable locks wait in KxWaitForLockOwnerShip; NDIS R/W locks inline into the
+    // caller and wait in KxWaitForSpinLockAndAcquire.
     private static bool IsPathRefreshWait(IEnumerable<string> frames) =>
         frames.Any(frame => frame.EndsWith("!TcpUpdatePathInfoTcb", StringComparison.Ordinal)) &&
-        frames.Any(frame => frame.IndexOf("!KxWaitForLockOwnerShip", StringComparison.OrdinalIgnoreCase) >= 0);
+        frames.Any(frame => frame.IndexOf("!KxWaitForLockOwnerShip", StringComparison.OrdinalIgnoreCase) >= 0 ||
+            frame.EndsWith("!KxWaitForSpinLockAndAcquire", StringComparison.OrdinalIgnoreCase));
 
     private static bool IsTimerPathRefreshWait(IEnumerable<string> frames) =>
         IsPathRefreshWait(frames) &&
@@ -163,6 +166,8 @@ internal static class Program
                 "nt!KiAcquireQueuedSpinLockInstrumented", "tcpip!TcpUpdatePathInfoTcb",
                 "tcpip!TcpTcbHeaderSend", "tcpip!TcpPeriodicTimeoutHandler" };
             if (!IsPathRefreshWait(delayedOutputWait) || !IsTimerPathRefreshWait(delayedOutputWait) ||
+                !IsPathRefreshWait(new[] { "nt!KxWaitForSpinLockAndAcquire", "nt!KeAcquireSpinLockRaiseToDpc",
+                    "tcpip!IpNlpQueryPathInformation", "tcpip!TcpUpdatePathInfoTcb" }) ||
                 IsPathRefreshWait(new[] { "nt!KeAcquireInStackQueuedSpinLock", "tcpip!TcpUpdatePathInfoTcb" }) ||
                 IsPathRefreshWait(new[] { "tcpip!TcpIsRttSampleInWaitInterval", "tcpip!TcpUpdatePathInfoTcb" }) ||
                 IsTimerPathRefreshWait(new[] { "nt!KxWaitForLockOwnerShip", "tcpip!TcpUpdatePathInfoTcb" }))
