@@ -85,32 +85,48 @@ jobs:
     steps:
     - name: Print Parameters
       if: ${{ github.event_name == 'repository_dispatch' }}
+      env:
+        DISPATCH_GUID: ${{ github.event.client_payload.guid }}
+        DISPATCH_SHA: ${{ github.event.client_payload.sha }}
+        DISPATCH_REF: ${{ github.event.client_payload.ref }}
+        DISPATCH_PR: ${{ github.event.client_payload.pr }}
+        DISPATCH_LOGS: ${{ github.event.client_payload.logs }}
+        DISPATCH_FILTER: ${{ github.event.client_payload.filter }}
       run: |
         echo "Parameters from repository_dispatch:"
-        echo "guid: ${{ github.event.client_payload.guid }}"
-        echo "sha: ${{ github.event.client_payload.sha }}"
-        echo "ref: ${{ github.event.client_payload.ref }}"
-        echo "pr: ${{ github.event.client_payload.pr }}"
-        echo "logs: ${{ github.event.client_payload.logs }}"
-        echo "filter: ${{ github.event.client_payload.filter }}"
+        echo "guid: $DISPATCH_GUID"
+        echo "sha: $DISPATCH_SHA"
+        echo "ref: $DISPATCH_REF"
+        echo "pr: $DISPATCH_PR"
+        echo "logs: $DISPATCH_LOGS"
+        echo "filter: $DISPATCH_FILTER"
     - name: Validate inputs for workflow dispatch
       if: ${{ github.event_name == 'workflow_dispatch' }}
+      env:
+        COMMIT_RESULTS: ${{ inputs.commit }}
+        TEST_REF: ${{ inputs.ref }}
       run: |
-        if [ "${{ inputs.commit }}" = "true" ] && [ "${{ inputs.ref }}" = "main" ]; then
+        if [ "$COMMIT_RESULTS" = "true" ] && [ "$TEST_REF" = "main" ]; then
           echo "Error: If commit is set to true, ref should not be 'main'"
           exit 1
         fi
     - name: Validate inputs for workflow call
       if: ${{ github.event_name == 'workflow_call' }}
+      env:
+        COMMIT_RESULTS: ${{ inputs.commit }}
+        TEST_REF: ${{ inputs.ref }}
       run: |
-        if [ "${{ inputs.commit }}" = "true" ] && [ "${{ inputs.ref }}" = "main" ]; then
+        if [ "$COMMIT_RESULTS" = "true" ] && [ "$TEST_REF" = "main" ]; then
           echo "Error: If commit is set to true, ref should not be 'main'"
           exit 1
         fi
     - name: Validate inputs for repository dispatch
       if: ${{ github.event_name == 'repository_dispatch' }}
+      env:
+        DISPATCH_REF: ${{ github.event.client_payload.ref }}
+        DISPATCH_PR: ${{ github.event.client_payload.pr }}
       run: |
-        if [ "${{ github.event.client_payload.ref }}" = "main" ] && [ '${{ github.event.client_payload.pr }}' = '' ]; then
+        if [ "$DISPATCH_REF" = "main" ] && [ -z "$DISPATCH_PR" ]; then
           echo "Repository dispatch on merge events must have ref set to a SHA instead of a branch name."
           exit 1
         fi
@@ -222,17 +238,15 @@ jobs:
       timeout-minutes: 40
       uses: ./netperfrepo/.github/actions/run-test-script
       with:
-        run-script-cmd: |
-          ./scripts/secnetperf.ps1 `
-          -LogProfile ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }} `
-          -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} `
-          -environment ${{ matrix.env }} `
-          -plat ${{env.OS}} `
-          -os ${{ matrix.os }} `
-          -arch ${{ matrix.arch }} `
-          -tls ${{ matrix.tls }} `
-          -io ${{ matrix.io }} `
-          -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
+        log-profile: ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }}
+        msquic-commit: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+        environment: ${{ matrix.env }}
+        platform: ${{ env.OS }}
+        os: ${{ matrix.os }}
+        arch: ${{ matrix.arch }}
+        tls: ${{ matrix.tls }}
+        io: ${{ matrix.io }}
+        filter: ${{ github.event.client_payload.filter || inputs.filter || '' }}
         matrix: '${{ toJson(matrix) }}'
         syncer-secret: ${{ secrets.NETPERF_SYNCER_SECRET }}
     - name: Stop 1ES Machine
@@ -313,19 +327,23 @@ jobs:
     - name: Run secnetperf
       shell: pwsh
       timeout-minutes: 80
+      env:
+        NETPERF_LOG_PROFILE: ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }}
+        NETPERF_MSQUIC_COMMIT: ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }}
+        NETPERF_FILTER: ${{ github.event.client_payload.filter || inputs.filter || '' }}
       run: |
           Import-Module ./netperfrepo/netperf-lib.psm1
           $env:netperf_remote_powershell_supported = $true
           ./scripts/secnetperf.ps1 `
-          -LogProfile ${{ github.event.client_payload.logs || inputs.logprofile || 'NULL' }} `
-          -MsQuicCommit ${{ github.event.client_payload.sha || github.event.client_payload.ref || inputs.ref || 'main' }} `
+          -LogProfile $env:NETPERF_LOG_PROFILE `
+          -MsQuicCommit $env:NETPERF_MSQUIC_COMMIT `
           -environment ${{ matrix.env }} `
           -plat ${{env.OS}} `
           -os ${{ matrix.os }} `
           -arch ${{ matrix.arch }} `
           -tls ${{ matrix.tls }} `
           -io ${{ matrix.io }} `
-          -filter '${{ github.event.client_payload.filter || inputs.filter || '' }}'
+          -filter $env:NETPERF_FILTER
     - name: Upload Test Results JSON
       if: ${{ always() }}
       uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3

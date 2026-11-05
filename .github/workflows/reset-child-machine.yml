@@ -10,10 +10,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Print input params
+        env:
+          PARENT_ID: ${{ github.event.client_payload.parent_id }}
+          TARGET_OS: ${{ github.event.client_payload.os }}
+          UNIQUE_ENV_STR: ${{ github.event.client_payload.unique_env_str }}
         run: |
-          echo "parent_id: ${{ github.event.client_payload.parent_id }}" # child id is parent id - 1.
-          echo "os: ${{ github.event.client_payload.os }}"
-          echo "unique_env_str: ${{ github.event.client_payload.unique_env_str }}"
+          echo "parent_id: $PARENT_ID" # child id is parent id - 1.
+          echo "os: $TARGET_OS"
+          echo "unique_env_str: $UNIQUE_ENV_STR"
 
   do-reset:
     name: Reset child Machine
@@ -22,14 +26,19 @@ jobs:
       - parent=${{ github.event.client_payload.parent_id }}
     steps:
       - name: RESET STATE (child)
+        env:
+          TARGET_OS: ${{ github.event.client_payload.os }}
         run: |
           # TODO: Eventually, for WS 2025, we want to instead CRUD the VMs, instead of simply reseting their checkpoints here.
-          $vmName = "netperf-${{ github.event.client_payload.os }}-client"
+          $vmName = "netperf-$($env:TARGET_OS)-client"
           $checkPointName = "LATEST"
           Restore-VMSnapshot -VMName $vmName -Name $checkPointName -Confirm:$false
       - name: Start VM, wait for online status, alert observer.
+        env:
+          TARGET_OS: ${{ github.event.client_payload.os }}
+          UNIQUE_ENV_STR: ${{ github.event.client_payload.unique_env_str }}
         run: |
-          $vmName = "netperf-${{ github.event.client_payload.os }}-client"
+          $vmName = "netperf-$($env:TARGET_OS)-client"
           Start-VM -Name $vmName
           while (-not (Get-VMNetworkAdapter -VMName $vmName).IPAddresses) {
             Write-Host "Waiting for VM to be online..."
@@ -47,7 +56,7 @@ jobs:
           $headers = @{
             "secret" = "${{ secrets.NETPERF_SYNCER_SECRET }}"
           }
-          $key = "${{ github.event.client_payload.unique_env_str }}_child_reset_done"
+          $key = "$($env:UNIQUE_ENV_STR)_child_reset_done"
           $value = whoami
           $api = "https://netperfapi.azurewebsites.net/setkeyvalue?key=$key&value=$value"
 

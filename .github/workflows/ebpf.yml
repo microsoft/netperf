@@ -51,10 +51,15 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
     - run: |
-        echo "guid: ${{ github.event.client_payload.guid }}"
-        echo "sha: ${{ github.event.client_payload.sha }}"
-        echo "ref: ${{ github.event.client_payload.ref }}"
-        echo "pr: ${{ github.event.client_payload.pr }}"
+        echo "guid: $DISPATCH_GUID"
+        echo "sha: $DISPATCH_SHA"
+        echo "ref: $DISPATCH_REF"
+        echo "pr: $DISPATCH_PR"
+      env:
+        DISPATCH_GUID: ${{ github.event.client_payload.guid }}
+        DISPATCH_SHA: ${{ github.event.client_payload.sha }}
+        DISPATCH_REF: ${{ github.event.client_payload.ref }}
+        DISPATCH_PR: ${{ github.event.client_payload.pr }}
 
   build_ebpf:
     name: Build ebpf-for-windows
