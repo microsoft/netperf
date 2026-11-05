@@ -349,17 +349,17 @@ jobs:
         Get-ChildItem -Path "artifacts_misc" -Recurse
       shell: pwsh
     - name: Upload downloaded artifacts (test results)
-      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: lab-test-results
         path: artifacts_test_results
     - name: Upload downloaded artifacts (logs)
-      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: lab-logs
         path: artifacts_logs
     - name: Upload downloaded artifacts (misc.)
-      uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: lab-misc
         path: artifacts_misc
